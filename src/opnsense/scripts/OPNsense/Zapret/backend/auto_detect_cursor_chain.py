@@ -1592,14 +1592,39 @@ class CursorChain:
             raise CursorChainRefused("learning_debug_cut_new_live_not_original")
         if _entry(archive):
             old_stat, old_data, _ = snapshot(archive)
-            if not same_old(old_stat, old_data, intent):
-                # Old positive bytes are still physically retained. No
-                # native attribution/ACK and no archive unlink are legal.
-                raise CursorChainRefused("learning_debug_cut_late_old_append")
+            old_size = intent["old_size"]
+            if ((old_stat.st_dev, old_stat.st_ino) !=
+                    (intent["old"]["device"], intent["old"]["inode"]) or
+                    len(old_data) < old_size or
+                    _digest(old_data[:old_size]) != intent["old_sha256"]):
+                raise CursorChainRefused("learning_debug_cut_old_prefix_changed")
             if not drained(archive, old_stat):
                 raise CursorChainRefused("learning_debug_cut_old_fd_not_drained")
+            late = old_data[old_size:]
+            # Native v1.0.7 may have opened the old inode between the
+            # last global FD census and rename. A fully written, strictly
+            # non-positive diagnostic suffix cannot name a discovered
+            # domain. Record its exact physical digest before retiring.
+            # Any positive, incomplete or non-ASCII suffix remains on
+            # disk with NO cursor advancement or invented attribution.
+            if late:
+                if (not late.endswith(b"\n") or b"\x00" in late or
+                        b" : adding to " in late):
+                    raise CursorChainRefused("learning_debug_cut_late_old_append")
+                try:
+                    late.decode("ascii")
+                except UnicodeDecodeError as exc:
+                    raise CursorChainRefused("learning_debug_cut_late_old_nonascii") from exc
+            retired_size = len(old_data)
+            retired_sha256 = _digest(old_data)
         elif not _entry(retire_file):
             raise CursorChainRefused("learning_debug_cut_missing_pre_retire_old")
+        else:
+            # Recover an already retired and unlinked old inode using
+            # the unchanged original write-once receipt below.
+            retired_record, _ = _load(retire_file, uid)
+            retired_size = retired_record.get("retained_size")
+            retired_sha256 = retired_record.get("retained_sha256")
         complete = dict(
             schema=3, kind="original-learning-debug-cut-complete",
             generation=proof.generation,
@@ -1611,11 +1636,17 @@ class CursorChain:
             generation=proof.generation,
             complete_sha256=_digest(_canonical(complete)),
             old_size=intent["old_size"], old_sha256=intent["old_sha256"],
+            retained_size=retired_size, retained_sha256=retired_sha256,
+            late_diagnostic_bytes=retired_size - intent["old_size"],
             ack_authorized=False)
         _write_once(last, DEBUG_CUT_RETIRE, _canonical(retired), uid)
         if _entry(archive):
             old_stat, old_data, _ = snapshot(archive)
-            if not same_old(old_stat, old_data, intent) or not drained(archive, old_stat):
+            if ((old_stat.st_dev, old_stat.st_ino) !=
+                    (intent["old"]["device"], intent["old"]["inode"]) or
+                    len(old_data) != retired_size or
+                    _digest(old_data) != retired_sha256 or
+                    not drained(archive, old_stat)):
                 raise CursorChainRefused("learning_debug_cut_old_changed_before_unlink")
             archive.unlink()
             _sync(last)
@@ -2176,7 +2207,18 @@ def _learning_debug_cut_receipts(slot, proof, tip, uid, *, allow_unsealed=False)
                 "complete_sha256": _digest(complete_raw),
                 "old_size": intent["old_size"],
                 "old_sha256": intent["old_sha256"],
+                "retained_size": retired.get("retained_size"),
+                "retained_sha256": retired.get("retained_sha256"),
+                "late_diagnostic_bytes": retired.get("late_diagnostic_bytes"),
                 "ack_authorized": False} or
+            type(retired.get("retained_size")) is not int or
+            not intent["old_size"] <= retired["retained_size"] <= MAX_DEBUG or
+            type(retired.get("late_diagnostic_bytes")) is not int or
+            retired["late_diagnostic_bytes"] != (
+                retired["retained_size"] - intent["old_size"]) or
+            not HEX64.fullmatch(str(retired.get("retained_sha256"))) or
+            (retired["late_diagnostic_bytes"] == 0 and
+             retired["retained_sha256"] != intent["old_sha256"]) or
             _entry(fresh_path)):
         raise CursorChainRefused("learning_debug_cut_not_fully_retired")
     if _entry(old_path):
