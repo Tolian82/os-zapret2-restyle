@@ -2890,6 +2890,119 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 preview_independent_positive(
                                     inspect_witness=lambda *_a, **_kw:
                                         FDState.BUSY)
+                            # STEP 15b3h2a: genuinely append native+debug
+                            # after THIRD P1, while the prior pinned
+                            # Found/managed remain intact. This is a source
+                            # WAL only; the STOPPED owner cannot write it.
+                            # No real dvtws2/Config FD owner is claimed by
+                            # this disposable native-fixture injection.
+                            import auto_detect_original_history_running_late as rl
+                            from unittest.mock import patch as late_patch
+                            saved_live_before = user_native.read_bytes()
+                            saved_debug_before = debug_path.read_bytes()
+                            late_slot = third_slot.parent / "00000003"
+                            self.assertFalse(late_slot.exists())
+                            def run_late(*, owner_proof=proof, witness=drained):
+                                with writer.exclusive_targets(), patch(
+                                        "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                        active_root), late_patch(
+                                        "auto_detect_original_history_running_late.attest_learning_running_generation",
+                                        return_value=owner_proof):
+                                    return rl.prepare_original_learning_running_late_source_locked(
+                                        writer, proof, self.work,
+                                        config_fd=cfg_fd, config_path=config_path,
+                                        attest=lambda: proof, inspect=witness)
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                run_late()
+                            self.assertFalse(late_slot.exists())
+                            late_name = "late.fourth.example.net"
+                            later_name = "after.fourth.example.net"
+                            try:
+                                with user_native.open("ab") as stream:
+                                    stream.write((late_name + "\n").encode())
+                                with debug_path.open("ab") as stream:
+                                    stream.write(native_debug(
+                                        user_num, late_name, str(user_native)))
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    run_late(owner_proof=None)
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    run_late(witness=lambda *_a, **_k: FDState.BUSY)
+                                self.assertFalse(late_slot.exists())
+                                # A failure AFTER the durable source intent
+                                # keeps it: exact owner replay must reuse
+                                # that receipt, not issue another plan.
+                                original_late_write = rl._write_once
+                                crashed_late = [False]
+                                def durable_late_crash(folder, name, raw, uid):
+                                    original_late_write(folder, name, raw, uid)
+                                    if name == rl.INTENT and not crashed_late[0]:
+                                        crashed_late[0] = True
+                                        raise RuntimeError(
+                                            "synthetic_late_after_source_fsync")
+                                with late_patch.object(
+                                        rl, "_write_once",
+                                        side_effect=durable_late_crash):
+                                    with self.assertRaisesRegex(
+                                            RuntimeError,
+                                            "synthetic_late_after_source_fsync"):
+                                        run_late()
+                                self.assertTrue(crashed_late[0])
+                                late_raw = (late_slot / rl.INTENT).read_bytes()
+                                sealed_late = json.loads(late_raw)
+                                self.assertEqual(sealed_late["sequence"], 3)
+                                self.assertEqual(
+                                    sealed_late["native_positive_observations"], [
+                                        {"native_number": user_num,
+                                         "hostlist": "user",
+                                         "hostname": late_name}])
+                                self.assertFalse(sealed_late[
+                                    "destination_commit_authorized"])
+                                self.assertFalse(sealed_late[
+                                    "native_pending_ack_authorized"])
+                                sealed_result = run_late()
+                                self.assertEqual(
+                                    sealed_result["source_intent_sha256"],
+                                    hashlib.sha256(late_raw).hexdigest())
+                                self.assertEqual(
+                                    sealed_result["frozen_positive_count"], 1)
+                                self.assertFalse(sealed_result[
+                                    "p1_destination_checkpoint_created"])
+                                self.assertFalse(sealed_result[
+                                    "generation_retired"])
+                                # Append AFTER the frozen cut must not be
+                                # incorporated into its immutable source.
+                                with user_native.open("ab") as stream:
+                                    stream.write((later_name + "\n").encode())
+                                with debug_path.open("ab") as stream:
+                                    stream.write(native_debug(
+                                        user_num, later_name, str(user_native)))
+                                self.assertEqual(run_late(), sealed_result)
+                                self.assertEqual(
+                                    (late_slot / rl.INTENT).read_bytes(), late_raw)
+                                self.assertEqual(len(sealed_late[
+                                    "native_positive_observations"]), 1)
+                                # Corrupted durable receipt rejects, never
+                                # silently overwrites it or writes Found.
+                                (late_slot / rl.INTENT).write_bytes(b"{}\n")
+                                try:
+                                    with self.assertRaises(V2OriginalConfigRefused):
+                                        run_late()
+                                finally:
+                                    (late_slot / rl.INTENT).write_bytes(late_raw)
+                                self.assertEqual(run_late(), sealed_result)
+                            finally:
+                                # Test fixture only, not production rollback:
+                                # restore identical live inode bytes; then
+                                # remove the disposable fourth source slot.
+                                user_native.write_bytes(saved_live_before)
+                                debug_path.write_bytes(saved_debug_before)
+                                if late_slot.exists():
+                                    for entry in late_slot.iterdir():
+                                        entry.unlink()
+                                    late_slot.rmdir()
+                            self.assertFalse(late_slot.exists())
+                            self.assertEqual(
+                                preview_independent_positive(), positive_baseline)
                             # STEP 15b3a: without a durable all-N guard
                             # the source-independent inspector MUST refuse
                             # even though independent OLD/Found/debug proof
