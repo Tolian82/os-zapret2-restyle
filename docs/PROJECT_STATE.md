@@ -1,6 +1,12 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## Current TZ6v4 source facts — 21 November 2026
+## Active acceptance — 22 November 2026
+
+On Draft PR #1209 exact code commit `dad093961841661f5dd7503949aa8d143cbf0b3a`, [disposable native OPNsense 26.7 run 44959470100](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44959470100) **PASS** for original FD9 schema3 Apply/Stop/Boot/Restart. Real official-Mk package and upstream v1.0.7 `dvtws2` launched one genuine engine with two learning N profiles, sealed original pretraffic+P2c running epoch, explicitly Stop-retired all N/debug to immutable terminal ready, then started/restarted with new generations and real PIDs while preserving the saved OPNsense Config; final Stop retired again. Original IPFW RST rules derive only from fully validated schema3 TCP learning sources; schema2 behavior is unchanged, and schema3 is enabled only by strict disposable CI flags. Exact-head P2b, P2e, P5c, native package upgrades and Stage1 PASS. The full CI completion remains an independent gate.
+
+**Outstanding:** real interrupted Stop/Boot/Recovery on disposable native owner; positive native YouTube/User discovery and Found→managed on the owner's provider; complete exact-head CI; final package and owner-live acceptance before main. Schema3 is **not** activated for ordinary production users; main `_108` and owner-installed `_107` unchanged, no `_109.pkg` published. The 21 Nov source-only section below is historical and its former Stop/Boot/launcher blocker is superseded by this verified uninterrupted native pass.
+
+## Retained source facts — 21 November 2026
 
 Candidate `_109` remains in Draft [PR #1209](https://github.com/Tolian82/os-zapret2-restyle/pull/1209); main is `_108`, owner-installed `_107.pkg` is unchanged, and no `_109.pkg` is published.
 
