@@ -1277,6 +1277,7 @@ def seal_original_learning_post_inode_seed_locked(
     from auto_detect_original_lock_handoff import (
         CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
     )
+    from auto_detect_queue import QueueSafetyError
 
     def qualified_owner():
         assert_inherited_config_fd(

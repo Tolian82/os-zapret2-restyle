@@ -1441,6 +1441,137 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertEqual(
                         physical_state()["profiles"][1]["phase"],
                         "prepared-unmodified")
+                    # Qualify TWO post-rename native files in the same
+                    # original all-N manifest. Per-N cursor bases must
+                    # remain durable, even after a partial write crash.
+                    youtube_num = learning[0][0]
+                    youtube_plan = json.loads(
+                        (journal / f"{youtube_num:03d}.json").read_bytes())
+                    youtube_pending = queue.pending / youtube_plan["pending_name"]
+                    user_pending = queue.pending / native_plan["pending_name"]
+                    for live_path, record, postimage in (
+                        (native, youtube_plan, b""),
+                        (user_native, native_plan, b"late.example.org\n"),
+                    ):
+                        created = queue._rotate_original_source(
+                            live_path,
+                            replacement=postimage,
+                            generation=proof.generation,
+                            expected_identity=(
+                                record["old_device"], record["old_inode"]),
+                            sealed_prefix=(
+                                record["sealed_end_offset"],
+                                record["sealed_end_sha256"]),
+                            expected_native_image=(
+                                record["full_preimage"]["size"],
+                                record["full_preimage"]["sha256"]),
+                            native_pending_name=record["pending_name"])
+                        self.assertEqual(created.name,
+                                         record["pending_name"])
+                    self.assertEqual(
+                        [item["phase"] for item in physical_state()["profiles"]],
+                        ["replaced-retained", "replaced-retained"])
+                    from auto_detect_original_v2_model import (
+                        seal_original_learning_post_inode_seed_locked,
+                    )
+                    def write_inode_seed(*, config_descriptor=cfg_fd):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return seal_original_learning_post_inode_seed_locked(
+                                writer, proof, self.work,
+                                config_fd=config_descriptor,
+                                config_path=config_path,
+                                attest=lambda: proof)
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        write_inode_seed(config_descriptor=-1)
+                    observed_root = journal / "observed"
+                    observed_crashes = [0]
+                    def crash_after_first_inode_seed(folder, name, raw, uid):
+                        normal_original_write_once(folder, name, raw, uid)
+                        if (folder.name == "observed" and
+                                observed_crashes[0] == 0):
+                            observed_crashes[0] += 1
+                            raise RuntimeError("injected_inode_seed_crash")
+                    with patch("auto_detect_epoch_receipts._write_once",
+                               side_effect=crash_after_first_inode_seed):
+                        with self.assertRaisesRegex(
+                                RuntimeError, "injected_inode_seed_crash"):
+                            write_inode_seed()
+                    self.assertEqual(len(list(observed_root.iterdir())), 1)
+                    self.assertEqual(
+                        [row["phase"] for row in physical_state()["profiles"]],
+                        ["replaced-retained", "replaced-retained"])
+                    sealed_seed = write_inode_seed()
+                    self.assertEqual(sealed_seed["seeds"], 2)
+                    self.assertFalse(sealed_seed["cursor_advanced"])
+                    self.assertFalse(sealed_seed["ack_authorized"])
+                    saved_seeds = {
+                        p.name: p.read_bytes()
+                        for p in observed_root.iterdir()}
+                    self.assertEqual(set(saved_seeds), names)
+                    self.assertEqual(write_inode_seed(), sealed_seed)
+                    self.assertEqual({
+                        p.name: p.read_bytes()
+                        for p in observed_root.iterdir()}, saved_seeds)
+                    for number, expected_pending in (
+                            (youtube_num, youtube_pending),
+                            (user_num, user_pending)):
+                        record = json.loads(
+                            (observed_root / f"{number:03d}.json").read_bytes())
+                        self.assertEqual(
+                            record["old_pending_name"],
+                            expected_pending.name)
+                        self.assertFalse(record["cursor_advanced"])
+                        self.assertFalse(record["ack_authorized"])
+                        self.assertEqual(
+                            record["old_pending_inode"]["cut_offset"],
+                            (youtube_plan if number == youtube_num
+                             else native_plan)["full_preimage"]["size"])
+                    # New tails NEVER move either immutable cursor base:
+                    # old-FD bytes and new-path bytes are still unprocessed.
+                    with user_pending.open("ab", buffering=0) as old:
+                        old.write(b"after-seal-old.example.net\n")
+                        os.fsync(old.fileno())
+                    with user_native.open("ab", buffering=0) as fresh:
+                        fresh.write(b"after-seal-new.example.net\n")
+                        os.fsync(fresh.fileno())
+                    tails = physical_state()
+                    self.assertGreater(
+                        tails["profiles"][1]["old_tail_size"], 0)
+                    self.assertGreater(
+                        tails["profiles"][1]["new_tail_size"], 0)
+                    self.assertEqual(write_inode_seed(), sealed_seed)
+                    self.assertEqual({
+                        p.name: p.read_bytes()
+                        for p in observed_root.iterdir()}, saved_seeds)
+                    # Post-seal inode reuse/substitution must refuse,
+                    # even with byte-identical content and matching tail.
+                    saved_live = data_root / ".post-seed-correct-inode"
+                    forged_live = data_root / ".post-seed-forged-inode"
+                    bytes_live = user_native.read_bytes()
+                    user_native.replace(saved_live)
+                    forged_live.write_bytes(bytes_live)
+                    forged_live.chmod(0o660)
+                    if os.geteuid() == 0:
+                        os.chown(forged_live, 0, writer_gid)
+                    forged_live.replace(user_native)
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        physical_state()
+                    user_native.replace(forged_live)
+                    saved_live.replace(user_native)
+                    self.assertEqual(
+                        physical_state()["profiles"][1]["phase"],
+                        "replaced-with-unprocessed-tails")
+                    # Only the disposable fixture restores original
+                    # native inode names; product may NOT use this to
+                    # bypass original pending-tail reconciliation.
+                    youtube_pending.replace(native)
+                    user_pending.replace(user_native)
+                    native.write_bytes(b"video.example.com\n")
+                    user_native.write_bytes(
+                        b"mail.example.org\nlate.example.org\n")
+                    self.assertEqual(queue.segments(), [])
                 for changed_exclude in ("example.com\n", "example.org\n"):
                     with self.assertRaises(V2OriginalConfigRefused):
                         compaction_preview(exclude=changed_exclude)
