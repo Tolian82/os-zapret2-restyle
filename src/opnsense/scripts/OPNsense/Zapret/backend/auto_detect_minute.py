@@ -361,7 +361,7 @@ def native_retired_ready() -> int:
             if mapping["schema"] == 3:
                 from auto_detect_owner import attest_retiring_learning_predecessor
                 from auto_detect_learning_retirement import retired_learning_stopped
-                from auto_detect_fd import probe_stopped_learning_pending_fd
+                from auto_detect_fd import probe_retiring_learning_pending_fd
                 from shared_apply_seal import WORK
                 import pwd
                 gid = pwd.getpwnam(ENGINE_USER).pw_gid
@@ -374,7 +374,7 @@ def native_retired_ready() -> int:
                     if (not retired_learning_stopped(
                             receipts, queue, proof, WORK / proof.generation,
                             attest=attest_retiring_learning_predecessor,
-                            inspect=probe_stopped_learning_pending_fd,
+                            inspect=probe_retiring_learning_pending_fd,
                             repair=False) or
                             attest_retiring_learning_predecessor() != proof):
                         raise MinuteRefused("retired_ready_learning_not_terminal")
