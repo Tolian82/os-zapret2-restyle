@@ -11,6 +11,9 @@ on:
       - scripts/test-auto-detect-storage-lifetime.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_v2_prepare.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_epoch_receipts.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_learning_gc.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_learning_retirement.py
+      - scripts/test-auto-detect-learning-retirement.py
       - scripts/test-p2i-original-preview-native.py
       - scripts/test-auto-detect-post-drop.py
       - scripts/test-auto-detect-fd9-launch.sh
