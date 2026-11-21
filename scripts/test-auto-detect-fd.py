@@ -143,7 +143,7 @@ class FDPortable(unittest.TestCase):
         from unittest.mock import Mock
         attest = Mock(return_value=SimpleNamespace(owner=self.owner))
         row = (f"root previous 991 7 {self.devid} {self.stat.st_ino} "
-               f"100600 8 w {self.segment}\\n")
+               f"100600 8 w {self.segment}\n")
         self.assertEqual(
             self.stopped_probe(FakeRunner(fstat=HEADER + row), attest,
                                learning=True), mod.FDState.BUSY)
