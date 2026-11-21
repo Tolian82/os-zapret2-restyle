@@ -846,9 +846,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertGreater(full_size, 2 * 1024 * 1024)
                     self.assertTrue(run())
                     from auto_detect_cursor_chain import CursorChain
-                    with queue.exclusive():
-                        tip = CursorChain(writer.receipts, queue).learning_tip(
-                            proof, self.work)
+                    # This entire source fixture ALREADY holds the
+                    # original P2a flock: do not acquire a second one.
+                    self.assertTrue(queue._held)
+                    tip = CursorChain(writer.receipts, queue).learning_tip(
+                        proof, self.work)
                     self.assertEqual(tip["debug"]["offset"], full_size)
                     self.assertEqual(
                         tip["state"][proof.learning[0][0]]["streams"][0]["offset"], 0)
