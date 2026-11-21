@@ -1145,6 +1145,60 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                  b"video.example.com\n")
                 self.assertEqual(user_native.read_bytes(),
                                  b"mail.example.org\n")
+                # Original STEP 5: the sealed Found + SAME-PID managed
+                # checkpoint qualifies precise native working rows for
+                # future compaction, NEVER an import-only cleanup/ACK.
+                # A new native append is preserved BYTE-FOR-BYTE: only
+                # the old attributed prefix can be considered removable.
+                from auto_detect_original_v2_model import (
+                    preview_learning_checkpoint_native_compaction_locked,
+                )
+                with user_native.open("ab", buffering=0) as producer:
+                    producer.write(b"late.example.org\n")
+                    os.fsync(producer.fileno())
+                def compaction_preview(*, exclude="", owner_witness=lambda: proof):
+                    with writer.exclusive_targets(), patch(
+                            "auto_detect_original_v2_model.COMMON_ACTIVE",
+                            active_root):
+                        return preview_learning_checkpoint_native_compaction_locked(
+                            writer, proof, self.work, owned_root=owned_dir,
+                            manual_hostlists={
+                                "youtube": "youtube.com\n", "user": ""},
+                            global_exclude=exclude, attest=owner_witness,
+                            inspect=drained,
+                            psl=self._tz6v4_psl_for_fixtures())
+                compact = compaction_preview()
+                self.assertFalse(compact["cleanup_authorized"])
+                self.assertFalse(compact["ack_authorized"])
+                self.assertEqual(
+                    [(item["hostlist"], item["removed"],
+                      item["replacement"]) for item in compact["profiles"]],
+                    [("youtube", ("video.example.com",), b""),
+                     ("user", ("mail.example.org",),
+                      b"late.example.org\n")])
+                for item in compact["profiles"]:
+                    source_bytes = item["path"].read_bytes()
+                    self.assertEqual(
+                        item["expected_native_image"],
+                        (len(source_bytes),
+                         hashlib.sha256(source_bytes).hexdigest()))
+                    self.assertEqual(
+                        (item["path"].stat().st_dev,
+                         item["path"].stat().st_ino),
+                        item["expected_identity"])
+                for changed_exclude in ("example.com\n", "example.org\n"):
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        compaction_preview(exclude=changed_exclude)
+                with self.assertRaises(V2OriginalConfigRefused):
+                    compaction_preview(owner_witness=lambda: None)
+                # No preflight is allowed to consume / ACK any input or
+                # rewrite the native/owned/managed file even when eligible.
+                self.assertEqual(user_native.read_bytes(),
+                                 b"mail.example.org\nlate.example.org\n")
+                self.assertEqual(native.read_bytes(),
+                                 b"video.example.com\n")
+                self.assertFalse((slot / "ack.json").exists())
+                user_native.write_bytes(b"mail.example.org\n")
                 # Checkpoint means the original event cannot be reapplied
                 # after an explicit GUI deletion of that permanent Found.
                 targets["youtube"].write_bytes(b"")
