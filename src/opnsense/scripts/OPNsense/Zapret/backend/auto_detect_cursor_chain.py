@@ -1268,6 +1268,10 @@ class CursorChain:
         """
         from auto_detect_original_v2_model import _native_rebind_stable_snapshot
         from auto_detect_owner import LearningGenerationProof
+        import sys
+        if sys.platform.startswith("freebsd"):
+            from voice_ipfw_adapter import require_lifecycle_lock
+            require_lifecycle_lock()  # Same original FD9; no independent worker.
         if (not isinstance(proof, LearningGenerationProof) or
                 not self.queue._held or not callable(attest) or
                 not callable(inspect) or attest() != proof):
