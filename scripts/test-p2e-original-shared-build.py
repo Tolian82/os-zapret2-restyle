@@ -5686,6 +5686,40 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.assertLess(applied.index('apply_runtime_probe "$_shared_apply_root/release"'),
                         finish_call)
 
+    def test_tz6v4_schema3_shared_apply_canary_stays_ci_only(self):
+        """Production retains P2h/schema2; schema3 gets exact FD9 native trial."""
+        service = (BACKEND.parent / "zapret_service.sh").read_text()
+        begin = service.index("shared_apply_prepare_service()\\n")
+        end = service.index("extra_resources_native_previous_owner_service()\\n", begin)
+        stage = service[begin:end]
+        for token in ('ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL',
+                      'ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE',
+                      'ZAPRET2_NATIVE_BUILD_CI', 'GITHUB_ACTIONS',
+                      'preflight-learning "$_shared_work" "$_shared_auto_digest"',
+                      'promote-learning "$_shared_work" "$_shared_auto_digest"',
+                      'verify-learning-active "$_shared_work" "$_shared_auto_digest"'):
+            self.assertIn(token, stage)
+        self.assertLess(stage.index('preflight-learning "$_shared_work"'),
+                        stage.index('promote-learning "$_shared_work"'))
+        self.assertLess(stage.index('promote-learning "$_shared_work"'),
+                        stage.index('verify-learning-active "$_shared_work"'))
+        self.assertLess(stage.index('verify-learning-active "$_shared_work"'),
+                        stage.index('shared_apply_bundle_service seal "$1"'))
+        self.assertIn('preview "$_shared_work" "$_shared_auto_digest"', stage)
+        self.assertIn('promote "$_shared_work" "$_shared_auto_digest"', stage)
+        applied = service[service.index("shared_apply_execute_service()\\n"):
+                          service.index("shared_apply_wan_save_service()\\n")]
+        self.assertIn('.schema | select(. == 2 or . == 3)', applied)
+        self.assertIn('case "$_shared_apply_native_schema" in', applied)
+        self.assertIn('auto_detect_origin_map.py" verify-active', applied)
+        self.assertIn('auto_detect_origin_map.py" verify-learning-active', applied)
+        self.assertLess(applied.index('auto_detect_origin_map.py" verify-learning-active'),
+                        applied.index('apply_runtime_probe "$_shared_apply_root/release"'))
+        self.assertLess(applied.index('auto_detect_origin_map.py" verify-learning-active'),
+                        applied.index('shared_apply_record_service prepared'))
+        # The original postlaunch owner chooses exact schema3 P2c attestation.
+        self.assertIn('_shared_epoch_verb=finish-learning-epoch', applied)
+
     def test_p2f_native_candidate_preview_and_promotion_precede_original_seal(self):
         service = (BACKEND.parent / "zapret_service.sh").read_text()
         begin = service.index("shared_apply_prepare_service()\n")

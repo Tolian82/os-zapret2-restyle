@@ -1312,17 +1312,35 @@ shared_apply_execute_service()
             *) _shared_apply_mode=0 ;;
         esac
     fi
-    # Re-read the original source-to-native profile mapping after seal:
-    # the promoted schema-2 map/args must still exactly bind this PHP
-    # candidate and the original generated profile order. The launcher
-    # retains its separate fail-closed original-FD9/epoch authorization.
+    # Re-read the original source-to-native profile mapping after seal.
+    # Each schema has a DIFFERENT independently authenticated verifier.
+    # Schema3 can never be accepted by the old schema2 observer verifier.
+    # This is before durable Apply preparation or service/IPFW mutation.
     if [ "$_shared_apply_mode" = 1 ] &&
        [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
-        if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-active \
-            "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
+        _shared_apply_native_schema=$(/usr/local/bin/jq -er \
+            '.schema | select(. == 2 or . == 3)' \
+            "$_shared_apply_root/release/auto-detect-generation.json") || {
             printf '%s\n' preflight-rejected=observer-generation
             return 0
-        fi
+        }
+        case "$_shared_apply_native_schema" in
+            2)
+                if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-active \
+                    "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
+                    printf '%s\n' preflight-rejected=observer-generation
+                    return 0
+                fi
+                ;;
+            3)
+                if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-learning-active \
+                    "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
+                    printf '%s\n' preflight-rejected=observer-generation
+                    return 0
+                fi
+                ;;
+            *) printf '%s\n' preflight-rejected=observer-generation; return 0 ;;
+        esac
     elif [ "$_shared_apply_mode" = 1 ] &&
          [ -f "$_shared_apply_root/release/auto-detect-source-map.json" ]; then
         # Source says Target Mode=auto, but the one protected schema-2
@@ -1984,11 +2002,11 @@ shared_apply_prepare_service()
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }
-    # P2: under the original FD9, reverify the native PHP candidate and
-    # original generated profiles BEFORE seal. The P2h no-action preview
-    # is promoted into the exact native argv/schema-2 owner once, without
-    # leaving an inert duplicate in the final release. Runtime still needs
-    # independent original-FD9 launch/epoch authorization (fail closed).
+    # The original FD9 and native PHP candidate must agree BEFORE seal.
+    # Schema2 is unchanged for users. Schema3's already implemented
+    # full-N producer/epoch route is only trial-enabled on disposable CI
+    # OPNsense until real running Stop/Boot/Recovery acceptance is complete.
+    # Neither path owns an extra process, Config writer, or lifecycle lock.
     if [ -f "$_shared_work/release/auto-detect-source-map.json" ]; then
         _shared_auto_page=$(/usr/local/bin/jq -er \
             '.page | select(.=="voice" or .=="strategies")' \
@@ -2016,12 +2034,50 @@ shared_apply_prepare_service()
             esac
         fi
         if [ "$_shared_auto_mode" = 1 ]; then
-            if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
-                preview "$_shared_work" "$_shared_auto_digest" >/dev/null ||
-               ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
-                promote "$_shared_work" "$_shared_auto_digest" >/dev/null; then
-                printf '%s\n' preflight-rejected=runtime-build
-                return 0
+            if [ "${ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL:-0}" = 1 ]; then
+                # A production/user shell must never silently enable an
+                # unaccepted schema3 owner merely by setting one variable.
+                # This is CI-only while full installed lifecycle is open.
+                if [ "${GITHUB_ACTIONS:-}" != true ] ||
+                   [ "${ZAPRET2_NATIVE_BUILD_CI:-0}" != 1 ] ||
+                   [ "${ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE:-0}" != 1 ]; then
+                    printf '%s\n' preflight-rejected=runtime-build
+                    return 0
+                fi
+                _shared_learning_preflight=$("$PYTHON_RUNTIME" \
+                    "$BACKEND_DIR/auto_detect_origin_map.py" preflight-learning \
+                    "$_shared_work" "$_shared_auto_digest") || {
+                    printf '%s\n' preflight-rejected=runtime-build
+                    return 0
+                }
+                # No eligible per-profile HOSTLIST means no learning epoch.
+                # Never replace it with an unqualified global observer.
+                if ! printf '%s\n' "$_shared_learning_preflight" | \
+                    /usr/local/bin/jq -e --arg id "$1" --arg digest "$_shared_auto_digest" \
+                    'select(.generation == $id and .native_candidate_sha256 == $digest and
+                        .evidence == "TZ6V4_ORIGINAL_FD9_LEARNING_PREFLIGHT_NONACTIVATING") |
+                     .learning_native_numbers | select(type == "array" and length > 0 and length <= 255)' \
+                    >/dev/null; then
+                    printf '%s\n' preflight-rejected=runtime-build
+                    return 0
+                fi
+                if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                    promote-learning "$_shared_work" "$_shared_auto_digest" >/dev/null ||
+                   ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                    verify-learning-active "$_shared_work" "$_shared_auto_digest" >/dev/null; then
+                    printf '%s\n' preflight-rejected=runtime-build
+                    return 0
+                fi
+            else
+                # Exact unchanged schema2 production route until native
+                # schema3 lifecycle is independently accepted.
+                if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                    preview "$_shared_work" "$_shared_auto_digest" >/dev/null ||
+                   ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                    promote "$_shared_work" "$_shared_auto_digest" >/dev/null; then
+                    printf '%s\n' preflight-rejected=runtime-build
+                    return 0
+                fi
             fi
         fi
     fi

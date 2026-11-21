@@ -5,6 +5,7 @@ on:
     paths:
       - src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_origin_map.py
+      - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py
       - scripts/test-p2e-original-shared-build.py
       - scripts/test-auto-detect-storage.py
