@@ -2014,6 +2014,14 @@ def _recover_learning_debug_cut_staged(receipts, proof):
                 raise CursorChainRefused("learning_debug_cut_foreign_chain_entry")
             continue
         _directory(slot, receipts.uid)
+        # Do not confiscate a different original WAL writer's temporary
+        # receipt. Only a physically identifiable cut staging directory
+        # belongs to this specialized original debug-cut recovery.
+        if not any(_entry(slot / name) for name in (
+                DEBUG_CUT_INTENT, DEBUG_CUT_COMPLETE,
+                DEBUG_CUT_RETIRE, DEBUG_CUT_ABORT,
+                DEBUG_CUT_FRESH, DEBUG_CUT_OLD)):
+            continue
         parts = sorted(path for path in slot.iterdir()
                        if re.fullmatch(r"\.[0-9a-f]{32}\.part", path.name))
         if not parts:
