@@ -4503,10 +4503,16 @@ def process_original_learning_cycle(
     chain = CursorChain(writer.receipts, writer.queue)
     with writer.exclusive_targets():
         _held(writer, proof, workspace, config_fd, config_path, attest)
+        # The same original FD4/FD9/P2a/GUI owner closes a cut interrupted
+        # BEFORE any next source WAL. On a normal idle minute a fully-ACKed
+        # 2-MiB debug file can be atomically replaced without stopping
+        # dvtws2 or IPFW; late old-FD bytes remain physically protected.
+        rotated = chain.rotate_learning_debug_once(
+            proof, workspace, attest=attest, inspect=inspect)
         chain.ensure_capacity(proof, workspace=workspace, attest=attest)
         prepared = chain.prepare_learning_cycle(proof, workspace, attest=attest, inspect=inspect)
     if prepared is None:
-        return False
+        return rotated
     sequence = prepared["sequence"]
     def prepare(*args, **kwargs):
         return chain.prepare_learning_cycle(proof, workspace, attest=attest, inspect=inspect)
