@@ -72,7 +72,7 @@ class FDPortable(unittest.TestCase):
                                         owner=self.owner, runner=runner,
                                         platform="freebsd15", **kwargs)
 
-    def stopped_probe(self, runner, attest, **kwargs):
+    def stopped_probe(self, runner, attest, *, learning=False, **kwargs):
         # The original FD9 epoch witness is injected only in this portable
         # parser fixture; the real method always imports the native one.
         original_fstat = os.fstat
@@ -88,9 +88,16 @@ class FDPortable(unittest.TestCase):
              mock.patch.object(mod.os, "fstat", side_effect=as_root), \
              mock.patch.dict(sys.modules, {
                  "auto_detect_owner": SimpleNamespace(
-                     attest_stopped_generation=attest)
+                     attest_stopped_generation=(
+                         attest if not learning else
+                         mock.Mock(side_effect=AssertionError("schema2_stop_called"))),
+                     attest_learning_stopped_generation=(
+                         attest if learning else
+                         mock.Mock(side_effect=AssertionError("schema3_stop_called")))
              }):
-            return mod.probe_stopped_pending_fd(
+            probe = (mod.probe_stopped_learning_pending_fd if learning
+                     else mod.probe_stopped_pending_fd)
+            return probe(
                 self.segment, self.stat.st_dev, self.stat.st_ino,
                 owner=self.owner, runner=runner, platform="freebsd15", **kwargs)
 
@@ -121,6 +128,34 @@ class FDPortable(unittest.TestCase):
         runner = FakeRunner()
         attest = Mock(side_effect=[SimpleNamespace(owner=self.owner), stale])
         self.assertEqual(self.stopped_probe(runner, attest), mod.FDState.UNKNOWN)
+        self.assertEqual(len(runner.commands), 1)
+
+    def test_stopped_learning_uses_exact_schema3_attester_not_legacy(self):
+        from unittest.mock import Mock
+        attest = Mock(return_value=SimpleNamespace(owner=self.owner))
+        runner = FakeRunner()
+        self.assertEqual(
+            self.stopped_probe(runner, attest, learning=True), mod.FDState.DRAINED)
+        self.assertEqual(attest.call_count, 2)
+        self.assertEqual([x[0] for x in runner.commands], ["/usr/bin/fstat"])
+
+    def test_stopped_learning_preserves_foreign_open_inode(self):
+        from unittest.mock import Mock
+        attest = Mock(return_value=SimpleNamespace(owner=self.owner))
+        row = (f"root previous 991 7 {self.devid} {self.stat.st_ino} "
+               f"100600 8 w {self.segment}\\n")
+        self.assertEqual(
+            self.stopped_probe(FakeRunner(fstat=HEADER + row), attest,
+                               learning=True), mod.FDState.BUSY)
+
+    def test_stopped_learning_refuses_changed_owner_during_census(self):
+        from unittest.mock import Mock
+        stale = SimpleNamespace(owner=mod.OwnerToken(
+            self.owner.pid + 1, self.owner.started, self.owner.executable))
+        runner = FakeRunner()
+        attest = Mock(side_effect=[SimpleNamespace(owner=self.owner), stale])
+        self.assertEqual(
+            self.stopped_probe(runner, attest, learning=True), mod.FDState.UNKNOWN)
         self.assertEqual(len(runner.commands), 1)
 
     def test_closed_inode_with_exact_owner_and_header(self):
