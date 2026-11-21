@@ -56,7 +56,7 @@ def _read_archive_plan(writer, proof):
     if archive.stat().st_dev != writer.queue.pending.stat().st_dev:
         raise V2OriginalConfigRefused("native_archive_cross_device_refused")
     names = set(os.listdir(archive))
-    expected_archives = {f"{n:03d}.txt" for n, _, _ in proof.learning}
+    expected_archives = {f"{n:03d}.txt" for n, _, _ in proof.learning} | {"history"}
     if names - (expected_archives | {"manifest.json"}):
         raise V2OriginalConfigRefused("native_archive_foreign_directory_entry")
     if "manifest.json" not in names:
@@ -150,6 +150,10 @@ def _read_archive_plan(writer, proof):
             raise V2OriginalConfigRefused(
                 "native_archive_old_image_or_inode_changed")
         current[number] = (physical, row)
+
+    if "history" in names:
+        _directory(archive / "history", uid)
+        expected_lines.add("history")
 
     expected_prepared = {
         "schema": 3,

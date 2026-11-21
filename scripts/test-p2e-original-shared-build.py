@@ -1807,6 +1807,24 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof,
                                 inspect=inspect_witness)
+                    from auto_detect_original_history import (
+                        seal_original_learning_independent_history_locked,
+                        read_original_learning_independent_history_locked,
+                    )
+                    def seal_independent_history():
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return seal_original_learning_independent_history_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof, inspect=drained)
+                    def read_independent_history():
+                        with writer.exclusive_targets():
+                            return read_original_learning_independent_history_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof)
                     self.assertFalse(second_slot.exists())
                     with self.assertRaises(V2OriginalConfigRefused):
                         archive_release_preview()
@@ -2602,6 +2620,57 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             self.assertEqual(
                                 (archive_folder / f"{user_num:03d}.txt").read_bytes(),
                                 observed_files[user_pending])
+                            # STEP 15a: create a write-once ALL-N historical
+                            # source image under the SAME protected archive.
+                            # A crash before its final manifest is resumable.
+                            history_root = archive_folder / "history"
+                            from unittest.mock import patch as patch_history
+                            import auto_detect_original_history as history_module
+                            saved_write_once = history_module._write_once
+                            history_crashed = [False]
+                            def crash_on_first_history_chunk(folder, name, raw, uid):
+                                saved_write_once(folder, name, raw, uid)
+                                if name == "00000.bin" and not history_crashed[0]:
+                                    history_crashed[0] = True
+                                    raise RuntimeError("synthetic_history_chunk_crash")
+                            with patch_history(
+                                    "auto_detect_original_history._write_once",
+                                    side_effect=crash_on_first_history_chunk):
+                                with self.assertRaisesRegex(
+                                        RuntimeError, "synthetic_history_chunk_crash"):
+                                    seal_independent_history()
+                            self.assertTrue(history_crashed[0])
+                            self.assertFalse(
+                                (history_root / "manifest.json").exists())
+                            history_sealed = seal_independent_history()
+                            self.assertEqual(
+                                history_sealed["profiles_sealed"], 2)
+                            self.assertFalse(history_sealed[
+                                "source_independent_transaction_replay_available"])
+                            self.assertFalse(history_sealed[
+                                "archive_unlink_authorized"])
+                            self.assertEqual(
+                                seal_independent_history(), history_sealed)
+                            history_image = read_independent_history()
+                            self.assertEqual(
+                                history_image["old_images"][youtube_num],
+                                observed_files[youtube_pending])
+                            self.assertEqual(
+                                history_image["old_images"][user_num],
+                                observed_files[user_pending])
+                            self.assertFalse(history_image[
+                                "archive_unlink_authorized"])
+                            chunk = history_root / f"{youtube_num:03d}" / "00000.bin"
+                            chunk_original = chunk.read_bytes()
+                            chunk.write_bytes(b"forged-history.example.net\n")
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                read_independent_history()
+                            # Only disposable test fixtures restore contents.
+                            chunk.write_bytes(chunk_original)
+                            self.assertEqual(
+                                read_independent_history(), history_image)
+                            self.assertEqual(
+                                archive_release_preview(), release_preview)
                             # Deliberately simulate a missing archived
                             # inode ONLY inside this disposable fixture:
                             # old first/second/third source replay must
@@ -2619,6 +2688,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                         V2OriginalConfigRefused,
                                         "native_archive_old_missing_without_archived_inode"):
                                     archive_release_preview()
+                                # Historical bytes remain readable WITHOUT the
+                                # OLD archive inode, but original transaction
+                                # replay is still safely blocked.
+                                self.assertEqual(
+                                    read_independent_history(), history_image)
                                 with self.assertRaises(
                                         V2OriginalConfigRefused):
                                     seal_third_slot()
@@ -2801,6 +2875,9 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 (archive_folder / f"{number:03d}.txt").rename(
                                     pending)
                             (archive_folder / "manifest.json").unlink()
+                            # The mirror is test-only; production cleanup is
+                            # intentionally NOT implemented or authorized.
+                            shutil.rmtree(history_root)
                             archive_folder.rmdir()
                             for receipt in ack_folder.iterdir():
                                 receipt.unlink()
