@@ -1711,7 +1711,127 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertEqual(
                         {p.name: p.read_bytes()
                          for p in observed_root.iterdir()}, saved_seeds)
+                    from auto_detect_original_v2_model import (
+                        prepare_original_learning_forward_second_slot_locked,
+                    )
+                    def seal_second_slot(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return prepare_original_learning_forward_second_slot_locked(
+                                writer, proof, self.work, config_fd=cfg_fd,
+                                config_path=config_path, attest=lambda: proof,
+                                inspect=inspect_witness)
+                    second_slot = slot.parent / "00000001"
+                    self.assertFalse(second_slot.exists())
+                    partial_second = [False]
+                    def abort_after_one_native(folder, name, data, uid):
+                        normal_original_write_once(folder, name, data, uid)
+                        if (folder.name == "native" and
+                                not partial_second[0]):
+                            partial_second[0] = True
+                            raise RuntimeError(
+                                "synthetic_forward_second_slot_crash")
+                    with patch("auto_detect_epoch_receipts._write_once",
+                               side_effect=abort_after_one_native):
+                        with self.assertRaisesRegex(
+                                RuntimeError,
+                                "synthetic_forward_second_slot_crash"):
+                            seal_second_slot()
+                    self.assertTrue(partial_second[0])
+                    self.assertFalse((second_slot / "intent.json").exists())
+                    self.assertEqual(len(list(
+                        (second_slot / "native").iterdir())), 1)
+                    # An interrupted INCOMPLETE slot cannot change its
+                    # already written N window just because the producer
+                    # later appended additional rows or debug positives.
+                    with user_native.open("ab", buffering=0) as producer:
+                        producer.write(b"partial-late.example.net\n")
+                        os.fsync(producer.fileno())
+                    with debug_path.open("ab", buffering=0) as debug:
+                        debug.write(native_debug(
+                            user_num, "partial-late.example.net",
+                            learning[1][2]))
+                        os.fsync(debug.fileno())
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        seal_second_slot()
+                    user_native.write_bytes(
+                        b"late.example.org\nafter-seal-new.example.net\n")
+                    debug_path.write_bytes(
+                        first_debug + second_debug + second_tail)
+                    second_result = seal_second_slot()
+                    self.assertEqual(second_result["sequence"], 1)
+                    self.assertEqual(second_result["profiles_count"], 2)
+                    self.assertEqual(second_result["observations_count"], 3)
+                    self.assertFalse(second_result["cursor_advanced"])
+                    self.assertFalse(second_result["commit_authorized"])
+                    self.assertFalse(second_result["ack_authorized"])
+                    self.assertEqual(
+                        set(p.name for p in second_slot.iterdir()),
+                        {"intent.json", "native"})
+                    per_native = {
+                        p.name: p.read_bytes() for p in
+                        (second_slot / "native").iterdir()}
+                    intent_second_raw = (
+                        second_slot / "intent.json").read_bytes()
+                    self.assertEqual(
+                        second_result["intent_sha256"],
+                        hashlib.sha256(intent_second_raw).hexdigest())
+                    self.assertEqual(seal_second_slot(), second_result)
+                    # After the durable second intent, appends on BOTH
+                    # native inodes and debug are permitted. Read-only
+                    # replay verifies historical source prefixes and
+                    # recovers EXACT old observations, not new candidates.
+                    with user_pending.open("ab", buffering=0) as old:
+                        old.write(b"later-old.example.net\n")
+                        os.fsync(old.fileno())
+                    with user_native.open("ab", buffering=0) as live:
+                        live.write(b"later-new.example.net\n")
+                        os.fsync(live.fileno())
+                    with debug_path.open("ab", buffering=0) as debug:
+                        debug.write(
+                            native_debug(user_num, "later-old.example.net",
+                                         learning[1][2]) +
+                            native_debug(user_num, "later-new.example.net",
+                                         learning[1][2]))
+                        os.fsync(debug.fileno())
+                    self.assertEqual(seal_second_slot(), second_result)
+                    self.assertEqual(
+                        {p.name: p.read_bytes() for p in
+                         (second_slot / "native").iterdir()}, per_native)
+                    self.assertEqual(
+                        (second_slot / "intent.json").read_bytes(),
+                        intent_second_raw)
+                    self.assertGreater(
+                        len(forward_preview()["observations"]),
+                        second_result["observations_count"])
+                    # Mutating already sealed old-source prefix MUST
+                    # refuse even if the new live inode remains available.
+                    former_old_data = user_pending.read_bytes()
+                    user_pending.write_bytes(
+                        b"forged.example.org\n" +
+                        former_old_data[len(b"mail.example.org\n"):])
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        seal_second_slot()
+                    user_pending.write_bytes(former_old_data)
+                    self.assertEqual(seal_second_slot(), second_result)
+                    self.assertFalse((second_slot / "destination").exists())
+                    self.assertFalse((second_slot / "ack.json").exists())
+                    # Disposable source-only fixture cleanup, never a
+                    # production rollback/unlink of original cursor WAL.
+                    # Clear late tails without altering the pinned inodes
+                    # to continue the independent first-slot test below.
+                    user_pending.write_bytes(
+                        b"mail.example.org\nlate.example.org\n"
+                        b"after-seal-old.example.net\n")
+                    user_native.write_bytes(
+                        b"late.example.org\nafter-seal-new.example.net\n")
                     debug_path.write_bytes(first_debug + second_debug)
+                    for disposable in (second_slot / "native").iterdir():
+                        disposable.unlink()
+                    (second_slot / "intent.json").unlink()
+                    (second_slot / "native").rmdir()
+                    second_slot.rmdir()
                     # Post-seal inode reuse/substitution must refuse,
                     # even with byte-identical content and matching tail.
                     saved_live = data_root / ".post-seed-correct-inode"
