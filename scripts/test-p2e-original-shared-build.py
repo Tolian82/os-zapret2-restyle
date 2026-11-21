@@ -2932,6 +2932,19 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 # keeps it: exact owner replay must reuse
                                 # that receipt, not issue another plan.
                                 original_late_write = rl._write_once
+                                # An interruption AFTER the durable empty
+                                # directory but BEFORE intent publication
+                                # must continue on that SAME empty slot.
+                                with late_patch.object(
+                                        rl, "_write_once",
+                                        side_effect=RuntimeError(
+                                            "synthetic_before_late_intent")):
+                                    with self.assertRaisesRegex(
+                                            RuntimeError,
+                                            "synthetic_before_late_intent"):
+                                        run_late()
+                                self.assertTrue(late_slot.is_dir())
+                                self.assertEqual(list(late_slot.iterdir()), [])
                                 crashed_late = [False]
                                 def durable_late_crash(folder, name, raw, uid):
                                     original_late_write(folder, name, raw, uid)
