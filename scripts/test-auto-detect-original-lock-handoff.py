@@ -170,7 +170,7 @@ class OriginalLockHandoffTests(unittest.TestCase):
             "ack_authorized": False,
         }
         with self.queue.exclusive():
-            with patch("voice_ipfw_adapter.require_lifecycle_lock"), \\
+            with patch("voice_ipfw_adapter.require_lifecycle_lock"), \
                  patch("auto_detect_original_lock_handoff.subprocess.run",
                        return_value=subprocess.CompletedProcess(
                            ["php"], 0, json.dumps(accepted).encode(), b"")) as run:
