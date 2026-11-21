@@ -1924,15 +1924,6 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             (second_slot / "ack.json").exists())
                         self.assertEqual(queue.segments(),
                                          [youtube_pending, user_pending])
-                        # This fixture alone restores its disposable P1
-                        # physical files before unrelated old-slot tests.
-                        # The real original product must NEVER erase a
-                        # checkpoint or reverse completed Found writes.
-                        targets["user"].write_bytes(b"example.org\n")
-                        next_active.write_bytes(before_next)
-                        for artifact in (second_slot / "destination").iterdir():
-                            artifact.unlink()
-                        (second_slot / "destination").rmdir()
                     # After the durable second intent, appends on BOTH
                     # native inodes and debug are permitted. Read-only
                     # replay verifies historical source prefixes and
@@ -1960,6 +1951,14 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertGreater(
                         len(forward_preview()["observations"]),
                         second_result["observations_count"])
+                    if not sys.platform.startswith("freebsd"):
+                        # Completed second P1 is immutable even if the
+                        # producer grows BOTH native tails and debug.
+                        # Replay cannot re-commit a later minute or
+                        # rewrite the managed image.
+                        self.assertEqual(
+                            forward_commit_fixture(), recovered_second)
+                        self.assertEqual(next_active.read_bytes(), after_next)
                     # Mutating already sealed old-source prefix MUST
                     # refuse even if the new live inode remains available.
                     former_old_data = user_pending.read_bytes()
@@ -1970,6 +1969,16 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         seal_second_slot()
                     user_pending.write_bytes(former_old_data)
                     self.assertEqual(seal_second_slot(), second_result)
+                    if not sys.platform.startswith("freebsd"):
+                        # Disposable fixture cleanup ONLY. No product
+                        # recovery removes completed original WAL or
+                        # reverts the valid second Found/managed image.
+                        targets["user"].write_bytes(b"example.org\n")
+                        next_active.write_bytes(before_next)
+                        for artifact in (
+                                second_slot / "destination").iterdir():
+                            artifact.unlink()
+                        (second_slot / "destination").rmdir()
                     self.assertFalse((second_slot / "destination").exists())
                     self.assertFalse((second_slot / "ack.json").exists())
                     # Disposable source-only fixture cleanup, never a
