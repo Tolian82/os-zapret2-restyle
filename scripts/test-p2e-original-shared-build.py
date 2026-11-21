@@ -1723,6 +1723,18 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 config_path=config_path, attest=lambda: proof,
                                 inspect=inspect_witness)
                     second_slot = slot.parent / "00000001"
+                    from auto_detect_original_v2_model import (
+                        seal_original_learning_forward_progress_locked,
+                    )
+                    def advance_second_cursor(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return seal_original_learning_forward_progress_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof,
+                                inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
                     partial_second = [False]
                     def abort_after_one_native(folder, name, data, uid):
@@ -1877,6 +1889,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         self.assertFalse(
                             (second_slot / "destination" /
                              "checkpoint.json").exists())
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            advance_second_cursor()
+                        self.assertFalse(
+                            (second_slot / "cursor-progress.json").exists())
                         self.assertIn(
                             b"example.net\n",
                             targets["user"].read_bytes())
@@ -1924,6 +1940,23 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             (second_slot / "ack.json").exists())
                         self.assertEqual(queue.segments(),
                                          [youtube_pending, user_pending])
+                        advanced = advance_second_cursor()
+                        self.assertTrue(advanced["cursor_advanced"])
+                        self.assertEqual(advanced["profiles_count"], 2)
+                        self.assertFalse(
+                            advanced["native_pending_ack_authorized"])
+                        self.assertFalse(
+                            advanced["native_cleanup_authorized"])
+                        self.assertFalse(advanced["generation_retired"])
+                        self.assertEqual(
+                            advance_second_cursor(), advanced)
+                        frozen_progress = (
+                            second_slot / "cursor-progress.json").read_bytes()
+                        self.assertEqual(
+                            advanced["progress_sha256"],
+                            hashlib.sha256(frozen_progress).hexdigest())
+                        self.assertEqual(queue.segments(),
+                                         [youtube_pending, user_pending])
                     # After the durable second intent, appends on BOTH
                     # native inodes and debug are permitted. Read-only
                     # replay verifies historical source prefixes and
@@ -1959,6 +1992,23 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         self.assertEqual(
                             forward_commit_fixture(), recovered_second)
                         self.assertEqual(next_active.read_bytes(), after_next)
+                        self.assertEqual(
+                            advance_second_cursor(), advanced)
+                        self.assertEqual(
+                            (second_slot / "cursor-progress.json").read_bytes(),
+                            frozen_progress)
+                        self.assertEqual(queue.segments(),
+                                         [youtube_pending, user_pending])
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            advance_second_cursor(
+                                inspect_witness=lambda *_a, **_k: FDState.BUSY)
+                        before_managed_progress = next_active.read_bytes()
+                        next_active.write_bytes(b"foreign.example.net\n")
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            advance_second_cursor()
+                        next_active.write_bytes(before_managed_progress)
+                        self.assertEqual(
+                            advance_second_cursor(), advanced)
                     # Mutating already sealed old-source prefix MUST
                     # refuse even if the new live inode remains available.
                     former_old_data = user_pending.read_bytes()
@@ -1967,6 +2017,9 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         former_old_data[len(b"mail.example.org\n"):])
                     with self.assertRaises(V2OriginalConfigRefused):
                         seal_second_slot()
+                    if not sys.platform.startswith("freebsd"):
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            advance_second_cursor()
                     user_pending.write_bytes(former_old_data)
                     self.assertEqual(seal_second_slot(), second_result)
                     if not sys.platform.startswith("freebsd"):
@@ -1983,6 +2036,9 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertFalse((second_slot / "ack.json").exists())
                     # Disposable source-only fixture cleanup, never a
                     # production rollback/unlink of original cursor WAL.
+                    progress_file = second_slot / "cursor-progress.json"
+                    if progress_file.exists():
+                        progress_file.unlink()
                     # Clear late tails without altering the pinned inodes
                     # to continue the independent first-slot test below.
                     user_pending.write_bytes(

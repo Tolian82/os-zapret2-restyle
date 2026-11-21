@@ -1807,6 +1807,37 @@ def preview_original_learning_forward_windows_locked(
         raise V2OriginalConfigRefused("learning_forward_original_window_refused") from exc
 
 
+def _original_learning_forward_progress_record(
+        intent: dict, source_raw: bytes, checkpoint_raw: bytes,
+        checkpoint: dict) -> dict:
+    """One durable cursor tip over the ORIGINAL N receipts, never a native ACK.
+
+    The second-slot per-N records carry every old/new inode cut. Their
+    ordered SHA/count and the committed original P2k2b checkpoint are the
+    only source of cursor authority; do not copy a possibly newer live size.
+    """
+    return {
+        "schema": 3, "kind": "original-learning-forward-cursor-progress",
+        "generation": intent["generation"], "sequence": 1,
+        "owner_pid": intent["owner_pid"],
+        "owner_start": intent["owner_start"],
+        "operation_id": intent["operation_id"],
+        "native_map_sha256": intent["native_map_sha256"],
+        "first_slot_sha256": intent["first_slot_sha256"],
+        "native_rebind_manifest_sha256":
+            intent["native_rebind_manifest_sha256"],
+        "source_intent_sha256": hashlib.sha256(source_raw).hexdigest(),
+        "destination_plan_sha256": checkpoint["plan_sha256"],
+        "destination_checkpoint_sha256":
+            hashlib.sha256(checkpoint_raw).hexdigest(),
+        "profiles_count": intent["profiles_count"],
+        "native_cursor_receipts_sha256": intent["profiles_sha256"],
+        "debug": intent["debug"],
+        "cursor_advanced": True, "native_pending_ack_authorized": False,
+        "native_cleanup_authorized": False, "generation_retired": False,
+    }
+
+
 def prepare_original_learning_forward_second_slot_locked(
         writer: DestinationCommit, proof, workspace: Path, *,
         config_fd: int, config_path: Path, attest,
@@ -1935,8 +1966,15 @@ def prepare_original_learning_forward_second_slot_locked(
         slot = chain / "00000001"
         if slot.exists() or slot.is_symlink():
             _directory(slot, writer.receipts.uid)
-            if set(os.listdir(slot)) - {"native", "intent.json", "destination"}:
+            if set(os.listdir(slot)) - {
+                    "native", "intent.json", "destination",
+                    "cursor-progress.json"}:
                 raise V2OriginalConfigRefused("learning_second_slot_foreign_journal")
+            if (slot / "cursor-progress.json").exists() or (
+                    slot / "cursor-progress.json").is_symlink():
+                if not (slot / "destination" / "checkpoint.json").exists():
+                    raise V2OriginalConfigRefused(
+                        "learning_second_slot_progress_without_checkpoint")
             if ((slot / "destination").exists() or
                     (slot / "destination").is_symlink()):
                 _directory(slot / "destination", writer.receipts.uid)
@@ -1982,8 +2020,11 @@ def prepare_original_learning_forward_second_slot_locked(
                     raise V2OriginalConfigRefused("learning_second_slot_corrupt_native_record")
                 rows.append(row)
             slot_names = set(os.listdir(slot))
-            if (slot_names not in ({"native", "intent.json"},
-                                   {"native", "intent.json", "destination"}) or
+            if (not {"native", "intent.json"}.issubset(slot_names) or
+                    slot_names - {"native", "intent.json", "destination",
+                                  "cursor-progress.json"} or
+                    ("cursor-progress.json" in slot_names and
+                     "destination" not in slot_names) or
                     set(os.listdir(native)) != set(expected_names) or
                     record_raw != _canonical(record)):
                 raise V2OriginalConfigRefused("learning_second_slot_incomplete_sealed_journal")
@@ -2003,6 +2044,36 @@ def prepare_original_learning_forward_second_slot_locked(
             if record != intent_for(replay, packed):
                 raise V2OriginalConfigRefused(
                     "learning_second_slot_original_manifest_drift")
+            if "cursor-progress.json" in slot_names:
+                # Cursor progress is meaningful ONLY after the same
+                # original destination WAL completed. A foreign or
+                # partially committed checkpoint never advances N.
+                _, plan_raw = qualified_destination_plan(
+                    slot, record, writer.receipts.uid,
+                    targets=writer.targets)
+                cp_raw = _read(
+                    slot / "destination" / "checkpoint.json",
+                    writer.receipts.uid)
+                cp = json.loads(cp_raw)
+                expected_cp = {
+                    "schema": 1,
+                    "kind": "destination-and-cursor-committed",
+                    "generation": proof.generation,
+                    "pending_name": "learning-00000001",
+                    "plan_sha256": hashlib.sha256(plan_raw).hexdigest(),
+                    "evidence": "learning-native-debug",
+                    "committed_cursor_offset": record["debug"]["end"],
+                    "committed_cursor_sha256":
+                        record["debug"]["end_sha256"],
+                    "ack_authorized": False,
+                }
+                if (cp != expected_cp or cp_raw != _canonical(cp) or
+                        _read(slot / "cursor-progress.json",
+                              writer.receipts.uid) != _canonical(
+                                  _original_learning_forward_progress_record(
+                                      record, record_raw, cp_raw, cp))):
+                    raise V2OriginalConfigRefused(
+                        "learning_second_slot_progress_not_source_bound")
             held()
             return {
                 "generation": proof.generation,
@@ -2070,6 +2141,156 @@ def prepare_original_learning_forward_second_slot_locked(
             DestinationRefused, DebugWindowRefused) as exc:
         raise V2OriginalConfigRefused(
             "learning_second_slot_original_source_or_journal_refused") from exc
+
+
+def seal_original_learning_forward_progress_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """Advance the ORIGINAL durable per-N cursor tip after second P2k2b.
+
+    SOURCE ONLY: the caller already holds original P2a, GUI/Found and
+    inherited PHP Config FD4; FD9/epoch and ALL native/debug P2b drains
+    are reattested by the existing second-slot source replay. The source
+    cuts are immutable even if both old pending and new live later grow.
+    Progress is not permission to unlink pending, compact live native
+    files, ACK the producer or retire a generation. No second queue,
+    Config writer, daemon, Apply or service restart is introduced.
+    """
+    import sys
+    from auto_detect_epoch_receipts import _canonical, _write_once
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+    from auto_detect_owner import LearningGenerationProof
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not writer.queue._held or
+            not getattr(writer, "_gui_held", False) or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(config_path, Path) or
+            not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not callable(attest) or not callable(inspect) or
+            (sys.platform.startswith("freebsd") and
+             (config_path != CONFIG_PATH or writer.receipts.uid != 0 or
+              writer.queue.uid != 0)) or attest() != proof):
+        raise V2OriginalConfigRefused(
+            "learning_forward_progress_original_fd4_fd9_required")
+
+    def held():
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=None if config_path == CONFIG_PATH
+            else writer.receipts.uid)
+        if attest() != proof:
+            raise V2OriginalConfigRefused(
+                "learning_forward_progress_owner_changed")
+
+    try:
+        held()
+        prepared = prepare_original_learning_forward_second_slot_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
+        slot = Path(prepared["slot"])
+        source_raw = _read(slot / "intent.json", writer.receipts.uid)
+        source = json.loads(source_raw)
+        if (prepared["sequence"] != 1 or
+                prepared["intent_sha256"] !=
+                hashlib.sha256(source_raw).hexdigest() or
+                source.get("kind") !=
+                "original-learning-forward-second-slot-prepared" or
+                source.get("generation") != proof.generation or
+                source.get("cursor_advanced") is not False or
+                source.get("ack_authorized") is not False):
+            raise V2OriginalConfigRefused(
+                "learning_forward_progress_source_not_sealed")
+        plan, plan_raw = qualified_destination_plan(
+            slot, source, writer.receipts.uid, targets=writer.targets)
+        cp_raw = _read(
+            slot / "destination" / "checkpoint.json",
+            writer.receipts.uid)
+        checkpoint = json.loads(cp_raw)
+        expected_cp = {
+            "schema": 1, "kind": "destination-and-cursor-committed",
+            "generation": proof.generation,
+            "pending_name": "learning-00000001",
+            "plan_sha256": hashlib.sha256(plan_raw).hexdigest(),
+            "evidence": "learning-native-debug",
+            "committed_cursor_offset": source["debug"]["end"],
+            "committed_cursor_sha256": source["debug"]["end_sha256"],
+            "ack_authorized": False,
+        }
+        if (checkpoint != expected_cp or
+                cp_raw != _canonical(checkpoint) or
+                plan.get("schema") != 3 or "live" not in plan):
+            raise V2OriginalConfigRefused(
+                "learning_forward_progress_checkpoint_not_committed")
+
+        # A completed journal is not enough if GUI/managed has since
+        # changed. Observe EVERY second-slot destination after-image,
+        # including a source absent from the first-slot write set.
+        def destinations_still_committed():
+            for name, row in plan["writes"].items():
+                data, _ = _target(
+                    writer.targets[name], writer.receipts.uid)
+                if (row["path"] != str(writer.targets[name]) or
+                        hashlib.sha256(data).hexdigest() != row["after"]):
+                    raise V2OriginalConfigRefused(
+                        "learning_forward_progress_found_changed")
+            for name, row in plan["live"].items():
+                path = (COMMON_ACTIVE / "managed" /
+                        ("hostlist-" + name + ".txt"))
+                data, _ = _target(path, writer.receipts.uid)
+                if (row["path"] != str(path) or
+                        hashlib.sha256(data).hexdigest() != row["after"]):
+                    raise V2OriginalConfigRefused(
+                        "learning_forward_progress_managed_changed")
+
+        destinations_still_committed()
+        progress = _canonical(_original_learning_forward_progress_record(
+            source, source_raw, cp_raw, checkpoint))
+        held()
+        # The preceding source replay includes independently drained
+        # P2b for EVERY old and new inode. Recheck before publishing and
+        # after fsync. Append-only tails are retained, not ACKed.
+        if (prepare_original_learning_forward_second_slot_locked(
+                writer, proof, workspace, config_fd=config_fd,
+                config_path=config_path, attest=attest,
+                inspect=inspect) != prepared):
+            raise V2OriginalConfigRefused(
+                "learning_forward_progress_source_changed_before_seal")
+        destinations_still_committed()
+        _write_once(
+            slot, "cursor-progress.json", progress, writer.receipts.uid)
+        if (_read(slot / "cursor-progress.json",
+                  writer.receipts.uid) != progress or
+                prepare_original_learning_forward_second_slot_locked(
+                    writer, proof, workspace, config_fd=config_fd,
+                    config_path=config_path, attest=attest,
+                    inspect=inspect) != prepared):
+            raise V2OriginalConfigRefused(
+                "learning_forward_progress_postseal_source_changed")
+        destinations_still_committed()
+        held()
+        return {
+            "generation": proof.generation, "sequence": 1,
+            "source_intent_sha256":
+                hashlib.sha256(source_raw).hexdigest(),
+            "progress_sha256": hashlib.sha256(progress).hexdigest(),
+            "profiles_count": source["profiles_count"],
+            "cursor_advanced": True, "native_pending_ack_authorized": False,
+            "native_cleanup_authorized": False, "generation_retired": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (ReceiptRefused, OriginalLockRefused, DestinationRefused,
+            OSError, ValueError, TypeError, KeyError, AttributeError,
+            UnicodeError, QueueSafetyError, DebugWindowRefused) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_forward_progress_source_or_checkpoint_refused") from exc
 
 
 def _recover_original_learning_partial_locked(
