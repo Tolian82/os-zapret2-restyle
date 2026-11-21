@@ -596,6 +596,248 @@ def preview_learning_checkpoint_native_compaction_locked(
             "learning_compaction_checkpoint_preview_refused") from exc
 
 
+def seal_original_learning_native_rebind_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path,
+        owned_root: Path, manual_hostlists: dict[str, str],
+        global_exclude: str, attest, inspect=probe_pending_fd,
+        psl: PublicSuffixList | None = None,
+) -> dict:
+    """Seal ONE cross-N native transition in the ORIGINAL first cursor slot.
+
+    This is the pre-mutation journal phase ONLY. Under original P2a+GUI,
+    genuine inherited Config FD4 and original FD9/P2b, write once one
+    bounded root-only receipt for each actual native profile, then ONE
+    aggregate manifest. The manifest is published LAST. Every selected
+    removed row is already in the original permanent Found→live managed
+    checkpoint. The original native P2a physical helper, same-PID list
+    reload and per-native pending ACK are NOT called or authorized here.
+
+    No second queue, runtime journal, separate Config writer or automatic
+    minute invocation. The same generation/cursor-chain-v2/00000000
+    already owns the original source and destination receipts.
+    """
+    import os
+    import re
+    import sys
+    from auto_detect_epoch_receipts import (
+        _canonical, _write_once, _directory, _sync,
+    )
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_cursor_chain import CursorChainRefused
+
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(config_path, Path) or
+            not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not writer.queue._held or
+            not getattr(writer, "_gui_held", False) or
+            not isinstance(owned_root, Path) or
+            not owned_root.is_absolute() or
+            not callable(attest) or not callable(inspect) or
+            (sys.platform.startswith("freebsd") and
+             (config_path != CONFIG_PATH or
+              writer.receipts.uid != 0 or writer.queue.uid != 0)) or
+            attest() != proof):
+        raise V2OriginalConfigRefused("learning_rebind_original_fd4_fd9_required")
+
+    def config_held() -> None:
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=None if config_path == CONFIG_PATH
+            else writer.receipts.uid)
+        if attest() != proof:
+            raise V2OriginalConfigRefused("learning_rebind_owner_changed")
+
+    try:
+        config_held()
+        if writer.queue.segments():
+            # No detached original pending may be lost behind a new plan.
+            raise V2OriginalConfigRefused("learning_rebind_existing_pending")
+        candidate = preview_learning_checkpoint_native_compaction_locked(
+            writer, proof, workspace, owned_root=owned_root,
+            manual_hostlists=manual_hostlists,
+            global_exclude=global_exclude, attest=attest, inspect=inspect,
+            psl=psl)
+        if (not candidate["profiles"] or
+                candidate["commit_authorized"] is not False or
+                candidate["cleanup_authorized"] is not False or
+                candidate["ack_authorized"] is not False):
+            raise V2OriginalConfigRefused("learning_rebind_no_qualified_profile")
+        slot = (writer.receipts.root / proof.generation /
+                "cursor-chain-v2" / "00000000")
+        _directory(slot, writer.receipts.uid)
+        intent_raw = _read(slot / "intent.json", writer.receipts.uid)
+        intent = json.loads(intent_raw)
+        if (hashlib.sha256(intent_raw).hexdigest() !=
+                candidate["source_intent_sha256"] or
+                len(intent["native"]) != len(proof.learning) or
+                not 1 <= len(proof.learning) <= 255):
+            raise V2OriginalConfigRefused("learning_rebind_intent_not_same_generation")
+        qualified = {item["native_number"]: item
+                     for item in candidate["profiles"]}
+        if (len(qualified) != len(candidate["profiles"]) or
+                set(qualified) - {row[0] for row in proof.learning}):
+            raise V2OriginalConfigRefused("learning_rebind_unqualified_profile_set")
+        packed: list[tuple[str, bytes]] = []
+        for index, (number, name, pathname) in enumerate(proof.learning):
+            source = intent["native"][index]
+            if ((source["native_number"], source["hostlist"],
+                 source["path"]) != (number, name, pathname) or
+                    source["device"] < 0 or source["inode"] <= 0):
+                raise V2OriginalConfigRefused("learning_rebind_origin_changed")
+            selected = qualified.get(number)
+            pending = None
+            expected_full = None
+            expected_after = None
+            removed = []
+            if selected is not None:
+                if (selected["hostlist"] != name or
+                        selected["path"] != Path(pathname) or
+                        selected["expected_identity"] !=
+                        (source["device"], source["inode"]) or
+                        selected["sealed_prefix"] !=
+                        (source["end_offset"], source["end_sha256"]) or
+                        not selected["removed"] or
+                        len(selected["removed"]) > 4096):
+                    raise V2OriginalConfigRefused(
+                        "learning_rebind_selected_source_changed")
+                expected_full = {
+                    "size": selected["expected_native_image"][0],
+                    "sha256": selected["expected_native_image"][1],
+                }
+                expected_after = {
+                    "size": len(selected["replacement"]),
+                    "sha256": hashlib.sha256(
+                        selected["replacement"]).hexdigest(),
+                }
+                removed = list(selected["removed"])
+                # Deterministic original pending name, bound to the immutable
+                # source and full preimage. A future physical phase can
+                # distinguish pre-link, post-link, post-replace and FD-tail
+                # states without guessing a random alias after a crash.
+                digest = hashlib.sha256(
+                    _canonical({
+                        "generation": proof.generation,
+                        "native_number": number,
+                        "intent": candidate["source_intent_sha256"],
+                        "checkpoint": candidate["checkpoint_sha256"],
+                        "source": expected_full,
+                    })).hexdigest()[:32]
+                pending = (
+                    f"native-{proof.generation}-{number}-{digest}.txt")
+            record = {
+                "schema": 3,
+                "kind": "original-learning-native-rebind-profile",
+                "generation": proof.generation,
+                "sequence": 0,
+                "native_number": number,
+                "hostlist": name,
+                "path": pathname,
+                "old_device": source["device"],
+                "old_inode": source["inode"],
+                "sealed_end_offset": source["end_offset"],
+                "sealed_end_sha256": source["end_sha256"],
+                "full_preimage": expected_full,
+                "replacement": expected_after,
+                "removed": removed,
+                "pending_name": pending,
+                "ack_authorized": False,
+            }
+            packed.append((f"{number:03d}.json", _canonical(record)))
+
+        # A bounded manifest covers ALL N records by their ordered digests.
+        # Even 255 profiles fit: each record is separately 16 KiB-bound.
+        total_hash = hashlib.sha256(
+            b"".join(hashlib.sha256(raw).digest()
+                     for _, raw in packed)).hexdigest()
+        manifest = {
+            "schema": 3,
+            "kind": "original-learning-native-rebind-manifest",
+            "generation": proof.generation,
+            "sequence": 0,
+            "owner_pid": proof.owner.pid,
+            "owner_start": proof.owner.started,
+            "native_map_sha256": proof.native_map_sha256,
+            "source_intent_sha256": candidate["source_intent_sha256"],
+            "checkpoint_sha256": candidate["checkpoint_sha256"],
+            "profiles_count": len(packed),
+            "profiles_sha256": total_hash,
+            "physical_rotation_authorized": False,
+            "ack_authorized": False,
+        }
+        encoded_manifest = _canonical(manifest)
+        folder = slot / "native-rebind"
+        if folder.exists() or folder.is_symlink():
+            _directory(folder, writer.receipts.uid)
+        else:
+            config_held()
+            folder.mkdir(mode=0o700)
+            _sync(slot)
+        allowed = {"manifest.json"} | {name for name, _ in packed}
+        listed = set(os.listdir(folder))
+        if listed - allowed:
+            raise V2OriginalConfigRefused("learning_rebind_foreign_receipts")
+        if "manifest.json" in listed and listed != allowed:
+            raise V2OriginalConfigRefused("learning_rebind_incomplete_manifest")
+        # Existing partial records may only resume with the IDENTICAL
+        # protected source/P1/checkpoint. Never rewrite old records, never
+        # reinterpret a new native suffix as an old completed transaction.
+        for name, raw in packed:
+            if name in listed and _read(
+                    folder / name, writer.receipts.uid) != raw:
+                raise V2OriginalConfigRefused("learning_rebind_prior_record_conflict")
+        if "manifest.json" in listed and _read(
+                folder / "manifest.json", writer.receipts.uid) != encoded_manifest:
+            raise V2OriginalConfigRefused("learning_rebind_prior_manifest_conflict")
+        # Publish individual N records only after the original Config/owner
+        # and prior receipts are re-attested, then fsync the single manifest.
+        config_held()
+        for name, raw in packed:
+            _write_once(folder, name, raw, writer.receipts.uid)
+        # Native writers do NOT take P2a: reject newly appended sources
+        # before publishing this manifest, with no unlink/replace/ACK.
+        second = preview_learning_checkpoint_native_compaction_locked(
+            writer, proof, workspace, owned_root=owned_root,
+            manual_hostlists=manual_hostlists, global_exclude=global_exclude,
+            attest=attest, inspect=inspect, psl=psl)
+        if (second != candidate or
+                set(os.listdir(folder)) -
+                ({name for name, _ in packed} | {"manifest.json"})):
+            raise V2OriginalConfigRefused("learning_rebind_source_changed_before_seal")
+        config_held()
+        _write_once(folder, "manifest.json", encoded_manifest,
+                    writer.receipts.uid)
+        if (_read(folder / "manifest.json", writer.receipts.uid) !=
+                encoded_manifest or
+                set(os.listdir(folder)) != allowed):
+            raise V2OriginalConfigRefused("learning_rebind_manifest_not_durable")
+        return {
+            "generation": proof.generation,
+            "manifest_sha256": hashlib.sha256(
+                encoded_manifest).hexdigest(),
+            "profiles_count": len(packed),
+            "rotation_count": len(qualified),
+            "physical_rotation_authorized": False,
+            "ack_authorized": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (OSError, ValueError, TypeError, KeyError, AttributeError,
+            ReceiptRefused, CursorChainRefused, OriginalLockRefused,
+            DestinationRefused, OwnedSourcesRefused, OriginalSourceRefused,
+            EffectiveKnownRefused, QueueSafetyError,
+            AutoDomainPolicyError, DomainPolicyError, DebugWindowRefused) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_rebind_original_journal_refused") from exc
+
+
 def _recover_original_learning_partial_locked(
         writer: DestinationCommit, proof, workspace: Path,
         slot: Path, intent: dict, *, owned_root: Path,

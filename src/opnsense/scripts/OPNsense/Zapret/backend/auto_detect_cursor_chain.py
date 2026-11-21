@@ -944,7 +944,12 @@ class CursorChain:
                 _directory(existing_slot, self.receipts.uid)
                 entries = set(os.listdir(existing_slot))
                 if "intent.json" in entries:
-                    if not entries.issubset({"intent.json", "destination"}):
+                    if not entries.issubset(
+                            {"intent.json", "destination", "native-rebind"}):
+                        # The separate native-rebind subfolder is part of
+                        # this SAME original first-slot cursor journal, not
+                        # a new queue or independent writer. Its manifest
+                        # is validated by the original Config/FD9 model.
                         raise CursorChainRefused("learning_first_slot_foreign_artifacts")
                     source_raw = _read(existing_slot / "intent.json",
                                        self.receipts.uid)

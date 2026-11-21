@@ -243,6 +243,7 @@ class DurableInbox:
             expected_identity: tuple[int, int] | None = None,
             sealed_prefix: tuple[int, str] | None = None,
             expected_native_image: tuple[int, str] | None = None,
+            native_pending_name: str | None = None,
     ) -> Path | None:
         """Same P2a protected hardlink→replace for one original source inode.
 
@@ -302,6 +303,11 @@ class DurableInbox:
                     sealed_prefix is None or
                     len(sealed_prefix) != 2 or
                     expected_native_image is None or
+                    (native_pending_name is not None and (
+                        type(native_pending_name) is not str or
+                        NATIVE_PENDING.fullmatch(native_pending_name) is None or
+                        not native_pending_name.startswith(
+                            f"native-{generation}-{found[2]}-"))) or
                     type(expected_native_image) is not tuple or
                     len(expected_native_image) != 2 or
                     type(expected_native_image[0]) is not int or
@@ -315,7 +321,8 @@ class DurableInbox:
                     re.fullmatch(r"[0-9a-f]{64}", sealed_prefix[1]) is None):
                 raise QueueSafetyError("native_source_original_epoch_required")
         elif (replacement or expected_identity is not None or
-              sealed_prefix is not None or expected_native_image is not None):
+              sealed_prefix is not None or expected_native_image is not None or
+              native_pending_name is not None):
             raise QueueSafetyError("original_raw_rotation_must_remain_unchanged")
         if is_native:
             if (old.st_dev, old.st_ino) != expected_identity:
@@ -423,8 +430,9 @@ class DurableInbox:
                 # Original P2a directory, distinct profile-bound retained
                 # class; never accepted by original raw acknowledge().
                 segment = self.pending / (
-                    f"native-{generation}-{found[2]}-"
-                    f"{secrets.token_hex(16)}.txt")
+                    native_pending_name if native_pending_name is not None
+                    else f"native-{generation}-{found[2]}-"
+                         f"{secrets.token_hex(16)}.txt")
             else:
                 suffix = (f"{cycle:08x}{sequence:06x}{secrets.token_hex(9)}"
                           if cycle is not None else secrets.token_hex(16))
@@ -437,7 +445,9 @@ class DurableInbox:
         if is_native and same and (
                 NATIVE_PENDING.fullmatch(same[0].name) is None or
                 not same[0].name.startswith(
-                    f"native-{generation}-{found[2]}-")):
+                    f"native-{generation}-{found[2]}-") or
+                (native_pending_name is not None and
+                 same[0].name != native_pending_name)):
             raise QueueSafetyError("native_foreign_pending_alias")
         # A new inode is fully synced before the live name is replaced.
         temp = self.root / (".new-inbox-" + secrets.token_hex(16))
