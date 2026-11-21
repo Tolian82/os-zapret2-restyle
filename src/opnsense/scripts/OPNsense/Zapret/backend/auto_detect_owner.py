@@ -738,7 +738,9 @@ def attest_reviewed_native_generation(operation_id: str, *,
 def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
                          child_pidfile: Path, monitor_pidfile: Path,
                          epoch_root: Path, runner, owner_uid: int,
-                         allow_transition: bool = False) -> GenerationProof:
+                         allow_transition: bool = False,
+                         learning_schema3: bool = False
+                         ) -> GenerationProof | LearningGenerationProof:
     """Attest the SAME immutable original owner after its process has exited.
 
     This is a strict FD9-only *stopped* counterpart to the running P2c
@@ -776,7 +778,22 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
     if (argv != _secure_bytes(active / "dvtws.args", MAX_ARGS, owner_uid) or
             mapping_raw != _secure_bytes(active / MAP_NAME, MAX_MAP, owner_uid)):
         raise GenerationRefused("stopped_active_release_not_same_owner")
-    mapping, profiles = _valid_map(mapping_raw, owner, argv)
+    original = source_bytes = None
+    if learning_schema3:
+        from auto_detect_origin_map import ORIGIN_FILE
+        original = _secure_bytes(
+            work / "release" / "dvtws.original.args", MAX_ARGS, owner_uid)
+        source_bytes = _secure_bytes(
+            work / "release" / ORIGIN_FILE, MAX_MAP, owner_uid)
+        if (_secure_bytes(active / "dvtws.original.args",
+                          MAX_ARGS, owner_uid) != original or
+                _secure_bytes(active / ORIGIN_FILE,
+                              MAX_MAP, owner_uid) != source_bytes):
+            raise GenerationRefused("stopped_learning_source_not_same_release")
+        learning = _valid_learning_active(
+            mapping_raw, owner, json.loads(source_bytes), original, argv)
+    else:
+        mapping, profiles = _valid_map(mapping_raw, owner, argv)
 
     receipts = EpochReceipts(epoch_root, owner_uid=owner_uid)
     folder = receipts._generation(owner["id"], create=False)
@@ -787,14 +804,21 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
             not _START.fullmatch(saved["owner_start"]) or
             saved.get("owner_executable") != CHILD_EXEC):
         raise GenerationRefused("stopped_original_birth_receipt_unavailable")
-    proof = GenerationProof(
-        OwnerToken(saved["owner_pid"], saved["owner_start"], CHILD_EXEC),
-        owner["id"], mapping["generation"], mapping["final_args_sha256"],
-        mapping["raw_path"], mapping["debug_path"],
-        mapping["observer_native_number"], profiles)
-    # This checks the ORIGINAL pretraffic + postlaunch epoch and precise
-    # sealed PID/birth/argv/profile map, not a new synthetic identity.
-    receipts._epoch(proof)
+    if learning_schema3:
+        proof = LearningGenerationProof(
+            OwnerToken(saved["owner_pid"], saved["owner_start"], CHILD_EXEC),
+            owner["id"], owner["id"], owner["candidate"],
+            hashlib.sha256(argv).hexdigest(),
+            hashlib.sha256(mapping_raw).hexdigest(), learning)
+        # Original immutable receipts only; never open mutable old N.
+        receipts.verify_learning_stopped_epoch(proof, workspace=work)
+    else:
+        proof = GenerationProof(
+            OwnerToken(saved["owner_pid"], saved["owner_start"], CHILD_EXEC),
+            owner["id"], mapping["generation"], mapping["final_args_sha256"],
+            mapping["raw_path"], mapping["debug_path"],
+            mapping["observer_native_number"], profiles)
+        receipts._epoch(proof)
 
     def no_engine_or_monitor() -> bool:
         if (child_pidfile.exists() or child_pidfile.is_symlink() or
@@ -827,6 +851,15 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
     if (SharedApplyOperation(journal, owner=owner_uid).read() != record or
             _secure_bytes(active / "dvtws.args", MAX_ARGS, owner_uid) != argv or
             _secure_bytes(active / MAP_NAME, MAX_MAP, owner_uid) != mapping_raw or
+            (learning_schema3 and
+             (_secure_bytes(active / "dvtws.original.args",
+                            MAX_ARGS, owner_uid) != original or
+              _secure_bytes(active / ORIGIN_FILE,
+                            MAX_MAP, owner_uid) != source_bytes or
+              _secure_bytes(work / "release" / "dvtws.original.args",
+                            MAX_ARGS, owner_uid) != original or
+              _secure_bytes(work / "release" / ORIGIN_FILE,
+                            MAX_MAP, owner_uid) != source_bytes)) or
             not no_engine_or_monitor()):
         raise GenerationRefused("stopped_original_owner_changed")
     return proof
@@ -859,6 +892,42 @@ def attest_stopped_generation(*,
             SharedOperationError, SharedBundleError, ExclusionError) as exc:
         raise GenerationRefused("stopped_original_owner_not_attested") from exc
 
+
+
+
+def attest_learning_stopped_generation(*,
+                                       journal: Path = Path("/var/db/zapret2/shared-apply"),
+                                       work_root: Path = WORK,
+                                       active: Path = COMMON_ACTIVE,
+                                       child_pidfile: Path = CHILD_PID,
+                                       monitor_pidfile: Path = MONITOR_PID,
+                                       epoch_root: Path = Path("/var/db/zapret2/auto-detect-epochs"),
+                                       runner=subprocess.run) -> LearningGenerationProof:
+    """STEP 15b3c: optional read-only STOPPED schema3 historical owner.
+
+    Existing lifecycle lock, original terminal Apply, sealed source/map,
+    exact original epoch and no engine/supervisor: NEVER a second writer.
+    Operator Stop never calls this additional proof. No ACK/unlink/retire.
+    """
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise GenerationRefused("native_root_learning_stopped_fd9_required")
+    try:
+        from auto_detect_epoch_receipts import ReceiptRefused
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        proof = _attest_stopped_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            epoch_root=epoch_root, runner=runner, owner_uid=0,
+            learning_schema3=True)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("stopped_learning_owner_not_schema3")
+        return proof
+    except (OSError, ValueError, TypeError, UnicodeError,
+            subprocess.SubprocessError, SharedOperationError,
+            SharedBundleError, ExclusionError, ReceiptRefused) as exc:
+        raise GenerationRefused(
+            "stopped_learning_original_owner_not_attested") from exc
 
 
 def attest_retiring_predecessor(*,

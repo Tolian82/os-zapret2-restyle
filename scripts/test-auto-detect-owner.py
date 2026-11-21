@@ -26,7 +26,7 @@ sys.path.insert(0, str(BACKEND))
 import auto_detect_owner as owner_mod
 from shared_apply_seal import SharedBundleError, create_seal
 from shared_apply_operation import SharedOperationError
-from auto_detect_epoch_receipts import EpochReceipts
+from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
 from auto_detect_queue import DurableInbox
 
 EXE = owner_mod.CHILD_EXEC
@@ -628,6 +628,181 @@ class OwnerGenerationTests(unittest.TestCase):
         self._write(self.active / "dvtws.args", "--port=999\n")
         with self.assertRaises(owner_mod.GenerationRefused):
             self.stopped_witness()
+
+    def _stopped_learning_fixture(self):
+        """Source fixture: immutable *original-format* schema3 receipts."""
+        from auto_detect_epoch_receipts import _canonical, EMPTY_HASH
+        from shared_apply_seal import verify_seal
+        from auto_detect_origin_map import ORIGIN_FILE
+
+        producer = self.work_root.parent / "native-learning"
+        producer.mkdir(mode=0o700)
+        (producer / "pending").mkdir(mode=0o700)
+        paths = [producer / "inbox.txt", producer / "debug.log",
+                 producer / f"learning-{OP_ID}-2.txt"]
+        for path in paths:
+            self._write(path, "")
+        learning = ((2, "youtube", str(paths[2])),)
+        self.argv = self.argv.replace(f"--hostlist-auto={RAW}",
+                                      f"--hostlist-auto={paths[2]}")
+        self.map = {
+            "schema": 3, "activation_authorized": True,
+            "generation": OP_ID, "evidence": owner_mod.LEARNING_ACTIVE,
+        }
+        original = "--port=989\n--filter-tcp=443\n"
+        source = '{"schema":1,"evidence":"source-only"}\n'
+        for root in (self.active, self.release):
+            self._write(root / "dvtws.original.args", original)
+            self._write(root / ORIGIN_FILE, source)
+        self.refresh()
+        seal = verify_seal(self.work, owner=UID)
+        zero_files = [
+            {"name": path.name, "device": path.stat().st_dev,
+             "inode": path.stat().st_ino, "nlink": 1}
+            for path in paths]
+        self.epochs = self.work_root.parent / "epochs"
+        self.epochs.mkdir(mode=0o700)
+        folder = self.epochs / OP_ID
+        folder.mkdir(mode=0o700)
+        zero = {
+            "schema": 3, "kind": "original-fd9-learning-pretraffic-zero",
+            "generation": OP_ID, "owner_candidate_sha256": CANDIDATE,
+            "release_seal_sha256": hashlib.sha256(
+                _canonical(seal)).hexdigest(),
+            "original_args_sha256": hashlib.sha256(
+                original.encode()).hexdigest(),
+            "final_args_sha256": hashlib.sha256(
+                self.argv.encode()).hexdigest(),
+            "native_map_sha256": hashlib.sha256(
+                (self.release / owner_mod.MAP_NAME).read_bytes()).hexdigest(),
+            "source_map_sha256": hashlib.sha256(
+                source.encode()).hexdigest(),
+            "witness_sha256": "c" * 64,
+            "files": zero_files,
+            "learning": [
+                {"native_number": 2, "hostlist": "youtube",
+                 "path": str(paths[2]),
+                 "device": zero_files[2]["device"],
+                 "inode": zero_files[2]["inode"],
+                 "offset": 0, "prefix_sha256": EMPTY_HASH}],
+            "ack_authorized": False,
+        }
+        zero_bytes = _canonical(zero)
+        self._write(folder / "pretraffic.json", zero_bytes.decode())
+        proof = owner_mod.LearningGenerationProof(
+            owner_mod.OwnerToken(PID, START, EXE), OP_ID, OP_ID,
+            CANDIDATE, zero["final_args_sha256"],
+            zero["native_map_sha256"], learning)
+        epoch = {
+            "schema": 3, "kind": "original-native-learning-epoch",
+            "generation": OP_ID, "operation_id": OP_ID,
+            "owner_candidate_sha256": CANDIDATE,
+            "final_args_sha256": proof.final_args_sha256,
+            "native_map_sha256": proof.native_map_sha256,
+            "pretraffic_sha256": hashlib.sha256(zero_bytes).hexdigest(),
+            "owner_pid": PID, "owner_start": START,
+            "owner_executable": EXE, "files": zero_files,
+            "learning": zero["learning"], "ack_authorized": False,
+        }
+        self._write(folder / "epoch.json", _canonical(epoch).decode())
+        self.child.unlink()
+        self.monitor.unlink()
+        self.ps.stopped = True
+        return proof, producer, folder
+
+    def _stopped_learning_witness(self, producer, learning):
+        with patch("auto_detect_storage.ROOT", producer):
+            with patch.object(owner_mod, "_valid_learning_active",
+                              return_value=learning):
+                return owner_mod._attest_stopped_core(
+                    journal=self.journal, work_root=self.work_root,
+                    active=self.active, child_pidfile=self.child,
+                    monitor_pidfile=self.monitor, epoch_root=self.epochs,
+                    runner=self.ps, owner_uid=UID, learning_schema3=True)
+
+    def test_stopped_learning_original_epoch_and_no_process_reattested(self):
+        proof, producer, folder = self._stopped_learning_fixture()
+        before = {n: (folder / n).read_bytes()
+                  for n in ("pretraffic.json", "epoch.json")}
+        self.assertEqual(
+            self._stopped_learning_witness(producer, proof.learning), proof)
+        self.assertTrue(any("-A" in cmd for cmd in self.ps.commands))
+        self.assertEqual(
+            {n: (folder / n).read_bytes() for n in before}, before)
+        with self.assertRaises(owner_mod.GenerationRefused):
+            # Legacy schema2 NEVER accepts a schema3 stopped epoch.
+            self.stopped_witness()
+        self.ps.stopped = False
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self._stopped_learning_witness(producer, proof.learning)
+        self.ps.stopped = True
+        self._write(self.child, str(PID) + "\n")
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self._stopped_learning_witness(producer, proof.learning)
+        self.child.unlink()
+        self.ps.stopped_rows = f"777 {MONITOR}\n"
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self._stopped_learning_witness(producer, proof.learning)
+        self.ps.stopped_rows = "0 [kernel]\n1 /sbin/init\n77 /bin/ps\n"
+        self.assertEqual(
+            self._stopped_learning_witness(producer, proof.learning), proof)
+        # No OLD or NEW archive bytes are opened; this is a historical
+        # PID/epoch check, not a cleanup/ACK or active-engine operation.
+        for entry in producer.iterdir():
+            if entry.is_file():
+                entry.unlink()
+        self.assertEqual(
+            self._stopped_learning_witness(producer, proof.learning), proof)
+
+    def test_stopped_learning_refuses_foreign_receipt_map_and_phase(self):
+        from auto_detect_epoch_receipts import _canonical
+        proof, producer, folder = self._stopped_learning_fixture()
+        def refuses():
+            with self.assertRaises((owner_mod.GenerationRefused,
+                                    ReceiptRefused)):
+                self._stopped_learning_witness(producer, proof.learning)
+        epoch_path = folder / "epoch.json"
+        zero_path = folder / "pretraffic.json"
+        original_epoch = epoch_path.read_bytes()
+        original_zero = zero_path.read_bytes()
+        altered = json.loads(original_epoch)
+        altered["ack_authorized"] = True
+        self._write(epoch_path, _canonical(altered).decode())
+        refuses()
+        self._write(epoch_path, original_epoch.decode())
+        altered = json.loads(original_zero)
+        altered["learning"][0]["native_number"] = 3
+        self._write(zero_path, _canonical(altered).decode())
+        refuses()
+        self._write(zero_path, original_zero.decode())
+        self._write(self.active / "dvtws.original.args", "--port=999\n")
+        refuses()
+        self._write(self.active / "dvtws.original.args",
+                    (self.release / "dvtws.original.args").read_text())
+        self.record["phase"] = "prepared"
+        self._write(self.journal / "operation.json",
+                    json.dumps(self.record) + "\n")
+        refuses()
+
+    def test_stopped_learning_public_attester_never_authorizes_cleanup(self):
+        proof, _, _ = self._stopped_learning_fixture()
+        with patch.object(owner_mod.sys, "platform", "linux"):
+            with self.assertRaises(owner_mod.GenerationRefused):
+                owner_mod.attest_learning_stopped_generation()
+        with patch.object(owner_mod.sys, "platform", "freebsd15"):
+            with patch.object(owner_mod.os, "geteuid", return_value=0):
+                with patch("voice_ipfw_adapter.require_lifecycle_lock") as held:
+                    with patch.object(owner_mod, "_attest_stopped_core",
+                                      return_value=proof) as core:
+                        self.assertEqual(
+                            owner_mod.attest_learning_stopped_generation(),
+                            proof)
+                        self.assertTrue(held.called)
+                        self.assertTrue(
+                            core.call_args.kwargs["learning_schema3"])
+                        core.return_value = object()
+                        with self.assertRaises(owner_mod.GenerationRefused):
+                            owner_mod.attest_learning_stopped_generation()
 
     def test_nonroot_or_offtarget_public_api_refuses(self):
         # The public path is strict; these positive synthetic fixture checks
