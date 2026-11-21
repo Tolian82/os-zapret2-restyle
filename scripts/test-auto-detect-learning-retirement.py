@@ -293,5 +293,34 @@ class StoppedLearningRetirementTests(unittest.TestCase):
         ]), 4)
 
 
+    def test_tampered_surviving_old_inode_blocks_gc_replay(self):
+        tips = self._completed_learning_history()
+        from auto_detect_epoch_receipts import ReceiptRefused
+        first = next(iter(tips))
+        original_sync = __import__("auto_detect_learning_gc")._sync
+        hit = False
+
+        def interrupted_archive_unlink(path):
+            nonlocal hit
+            original_sync(path)
+            if not hit and Path(path).name == "learning-retirement":
+                hit = True
+                raise OSError("injected-mid-archive-unlink")
+        with patch("auto_detect_learning_gc._sync",
+                   side_effect=interrupted_archive_unlink):
+            with self.assertRaises(OSError):
+                self._prune_learning_history(tips)
+        tombstone = self.epoch_root / (".gc3-" + first)
+        self.assertTrue(tombstone.exists())
+        surviving = tombstone / "learning-retirement" / (
+            f"old-learning-{first}-1.txt")
+        self.assertTrue(surviving.exists())
+        self._file(surviving, b"changed-surviving-old-inode\n")
+        with self.assertRaises((ReceiptRefused, RuntimeError)):
+            self._prune_learning_history(tips)
+        self.assertTrue(tombstone.exists())
+        self.assertTrue(surviving.exists())
+
+
 if __name__ == "__main__":
     unittest.main()
