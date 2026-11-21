@@ -380,6 +380,220 @@ def preview_original_learning_p1_locked(
         raise V2OriginalConfigRefused("original_learning_p1_preview_refused") from exc
 
 
+def preview_learning_checkpoint_native_compaction_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        owned_root: Path, manual_hostlists: dict[str, str],
+        global_exclude: str, attest, inspect=probe_pending_fd,
+        psl: PublicSuffixList | None = None,
+) -> dict:
+    """Read-only ORIGINAL FD9/P2a/GUI checkpoint → exact per-N removal proof.
+
+    The PHP caller must additionally hold genuine Config::lock/FD4, and
+    supply its LOCKED current manual/exclude values. This internal function
+    is deliberately NOT a production entry point, does not call native
+    rotation, and never grants cleanup/ACK. It derives candidates solely
+    from the original durable first-slot observation and a completed
+    Found+managed WAL, never from raw debug text or file-name guesses.
+
+    Only a hostname in the SEALED native prefix whose PSL root was added
+    to the SAME known Found AND the active managed image may be proposed
+    for removal. Later native bytes remain verbatim and must accompany a
+    full-image digest/size when a future original FD9 mutation uses P2a.
+    """
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_original_v2_source import (
+        attest_original_learning_sealed_prefix_locked,
+    )
+    from auto_detect_epoch_receipts import _canonical
+    from auto_detect_debug_window import _read_exact, _raw_hosts
+    from domain_policy import _list_entries
+    if (not isinstance(writer, DestinationCommit) or
+            not writer.queue._held or not getattr(writer, "_gui_held", False)
+            or not isinstance(proof, LearningGenerationProof) or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(owned_root, Path) or not owned_root.is_absolute() or
+            not isinstance(manual_hostlists, dict) or
+            set(manual_hostlists) != set(KNOWN_HOSTLISTS) or
+            not callable(attest) or not callable(inspect) or
+            set(writer.targets) != {"auto", *KNOWN_HOSTLISTS} or
+            any(writer.targets[name] != owned_root / (name + ".txt")
+                for name in KNOWN_HOSTLISTS) or attest() != proof):
+        raise V2OriginalConfigRefused("learning_compaction_original_locks_required")
+    try:
+        # Reuse the SAME immutable original cursor slot, FD9/epoch/P2b.
+        # Its first source still pins the prelaunch inode numbers, even
+        # though dvtws2 may have appended more rows in the same files.
+        sealed = CursorChain(writer.receipts, writer.queue).prepare_learning_first_slot(
+            proof, workspace, attest=attest, inspect=inspect)
+        slot = sealed["slot"]
+        intent_raw = _read(slot / "intent.json", writer.receipts.uid)
+        intent = json.loads(intent_raw)
+        plan, plan_raw = qualified_destination_plan(
+            slot, intent, writer.receipts.uid, targets=writer.targets)
+        saved_cp = json.loads(_read(
+            slot / "destination" / "checkpoint.json", writer.receipts.uid))
+        expected_cp = {
+            "schema": 1, "kind": "destination-and-cursor-committed",
+            "generation": proof.generation,
+            "pending_name": "learning-00000000",
+            "plan_sha256": hashlib.sha256(plan_raw).hexdigest(),
+            "evidence": "learning-native-debug",
+            "committed_cursor_offset": intent["debug_end_offset"],
+            "committed_cursor_sha256": intent["debug_end_sha256"],
+            "ack_authorized": False,
+        }
+        if (saved_cp != expected_cp or
+                plan.get("schema") != 3 or
+                "live" not in plan or
+                plan["source_intent_sha256"] !=
+                hashlib.sha256(intent_raw).hexdigest() or
+                not any(plan["writes"].get(name, {}).get("add")
+                        for name in KNOWN_HOSTLISTS) or
+                attest() != proof):
+            raise V2OriginalConfigRefused("learning_compaction_checkpoint_unqualified")
+        owned = read_owned(owned_root, owner_uid=writer.receipts.uid)
+        if owned is None:
+            raise V2OriginalConfigRefused("learning_compaction_owned_ledger_missing")
+        shared_bytes, _ = _target(writer.targets["auto"], writer.receipts.uid)
+        for name, change in plan["writes"].items():
+            data, _ = _target(writer.targets[name], writer.receipts.uid)
+            if (change["path"] != str(writer.targets[name]) or
+                    hashlib.sha256(data).hexdigest() != change["after"]):
+                raise V2OriginalConfigRefused("learning_compaction_gui_postimage_changed")
+        canonical = {}
+        for name in KNOWN_HOSTLISTS:
+            normal = normalize(manual_hostlists[name], name)["normalized"]
+            canonical[name] = normal + ("\n" if normal else "")
+        expected_managed = compose_known(canonical, owned)
+        active_now = {}
+        for name in KNOWN_HOSTLISTS:
+            active_path = COMMON_ACTIVE / "managed" / ("hostlist-" + name + ".txt")
+            data, _ = _target(active_path, writer.receipts.uid)
+            if data != expected_managed[name].encode("utf-8"):
+                raise V2OriginalConfigRefused("learning_compaction_active_managed_diverged")
+            active_now[name] = data
+        for name, row in plan["live"].items():
+            live_path = COMMON_ACTIVE / "managed" / ("hostlist-" + name + ".txt")
+            if (row["path"] != str(live_path) or
+                    hashlib.sha256(active_now[name]).hexdigest() != row["after"]):
+                raise V2OriginalConfigRefused("learning_compaction_sealed_live_changed")
+
+        # The current canonical P1 policy must still accept the ORIGINAL
+        # observations with exactly the SAME owner source. New negatives,
+        # shared ambiguity, global excludes, or policy drift veto removal.
+        current_p1 = preview_learning_p1_effects(
+            intent["observations"], manual_hostlists, owned,
+            shared_bytes.decode("utf-8"), global_exclude, psl=psl)
+        if (current_p1["effects"] or current_p1["excluded"] or
+                current_p1["commit_authorized"] is not False or
+                current_p1["cleanup_authorized"] is not False):
+            raise V2OriginalConfigRefused("learning_compaction_policy_changed")
+        psl_obj = psl if psl is not None else PublicSuffixList.load()
+        routes = {
+            (row["root"], row["destination"])
+            for row in current_p1["routes"] if row["reason"] == "attributed"
+        }
+        exact_rows = {
+            name: {
+                row[0] for row in _list_entries(owned[name], name)
+                if not row[1] and not row[2]
+            }
+            for name in KNOWN_HOSTLISTS
+        }
+        eligible = {
+            name: set(plan["writes"].get(name, {}).get("add", [])) &
+                  exact_rows[name]
+            for name in KNOWN_HOSTLISTS
+        }
+        # Require the actual sealed managed-change WAL for that source.
+        # Already-covered rows and shared/ambiguous routes remain native;
+        # this first-slot preflight never retroactively treats them as new.
+        for name in KNOWN_HOSTLISTS:
+            if name not in plan["live"]:
+                eligible[name] = set()
+        originals = {
+            (row["hostname"], row["hostlist"])
+            for row in intent["observations"]
+        }
+        proposed = []
+        for index, (number, name, pathname) in enumerate(proof.learning):
+            source = intent["native"][index]
+            if ((source["native_number"], source["hostlist"],
+                 source["path"]) != (number, name, pathname)):
+                raise V2OriginalConfigRefused("learning_compaction_profile_map_changed")
+            st, data = _read_exact(
+                Path(pathname), owner_uid=writer.receipts.uid,
+                writer_gid=writer.queue.writer_gid)
+            end = source["end_offset"]
+            if ((st.st_dev, st.st_ino) !=
+                    (source["device"], source["inode"]) or
+                    not 0 <= end <= len(data) or
+                    hashlib.sha256(data[:end]).hexdigest() !=
+                    source["end_sha256"] or
+                    (data and not data.endswith(b"\n"))):
+                raise V2OriginalConfigRefused("learning_compaction_native_source_changed")
+            prefix = data[:end]
+            old_hosts = _raw_hosts(prefix) if prefix else []
+            late = data[end:]
+            if late:
+                _raw_hosts(late)
+            kept = []
+            removed = []
+            for hostname in old_hosts:
+                root = psl_obj.registrable_domain(hostname)
+                if (root in eligible[name] and
+                        (root, name) in routes and
+                        (hostname, name) in originals):
+                    removed.append(hostname)
+                else:
+                    kept.append(hostname)
+            replacement = (
+                ("".join(host + "\n" for host in kept)).encode("ascii") +
+                late)
+            if removed:
+                if len(replacement) >= len(data):
+                    raise V2OriginalConfigRefused(
+                        "learning_compaction_postimage_not_smaller")
+                proposed.append({
+                    "native_number": number, "hostlist": name,
+                    "path": Path(pathname),
+                    "expected_identity": (st.st_dev, st.st_ino),
+                    "sealed_prefix": (end, source["end_sha256"]),
+                    "expected_native_image": (
+                        len(data), hashlib.sha256(data).hexdigest()),
+                    "replacement": replacement,
+                    "removed": tuple(removed),
+                })
+        # Never let a partial cross-N read authorize a later mutation
+        # without another original epoch/P2b qualification.
+        verified = attest_original_learning_sealed_prefix_locked(
+            writer.queue, writer.receipts, proof, workspace, intent,
+            attest=attest, inspect=inspect)
+        if (verified["source_intent_sha256"] !=
+                hashlib.sha256(intent_raw).hexdigest() or
+                attest() != proof):
+            raise V2OriginalConfigRefused("learning_compaction_original_epoch_raced")
+        return {
+            "generation": proof.generation,
+            "source_intent_sha256": hashlib.sha256(intent_raw).hexdigest(),
+            "checkpoint_sha256": hashlib.sha256(
+                _canonical(saved_cp)).hexdigest(),
+            "profiles": proposed,
+            "commit_authorized": False,
+            "cleanup_authorized": False,
+            "ack_authorized": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (OSError, ValueError, TypeError, KeyError, AttributeError,
+            ReceiptRefused, OriginalSourceRefused, CursorChainRefused,
+            DestinationRefused, OwnedSourcesRefused, EffectiveKnownRefused,
+            AutoDomainPolicyError, DomainPolicyError) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_compaction_checkpoint_preview_refused") from exc
+
+
 def _recover_original_learning_partial_locked(
         writer: DestinationCommit, proof, workspace: Path,
         slot: Path, intent: dict, *, owned_root: Path,
