@@ -668,6 +668,15 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.native_cycle_case = "rollover"
         self.test_tz6v4_independent_native_minute_cycles()
 
+    def test_tz6v4_diagnostic_only_highwater_advances_one_original_wal(self):
+        """A >2 MiB no-positive debug suffix must not stall eight minutes."""
+        self.native_cycle_case = "diagnostic-highwater"
+        self.test_tz6v4_independent_native_minute_cycles()
+
+    def test_tz6v4_malformed_positive_is_not_skipped_as_diagnostic(self):
+        self.native_cycle_case = "foreign-positive"
+        self.test_tz6v4_independent_native_minute_cycles()
+
     def _exercise_independent_cycles(self, writer, proof, queue, owned_dir,
                                      native_debug, drained):
         import fcntl
@@ -812,6 +821,42 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertEqual(youtube.read_bytes(), b"")
                 self.assertEqual(queue.segments(), [])
                 self.assertFalse(run())
+                if case == "foreign-positive":
+                    # The first non-native "adding to" must not be treated
+                    # as a diagnostic-only source ACK; preserve every byte.
+                    with debug.open("ab") as out:
+                        out.write(b"native : untrusted.example : adding to /tmp/foreign\\n")
+                    from auto_detect_cursor_chain import CursorChainRefused
+                    with self.assertRaises(CursorChainRefused):
+                        run()
+                    self.assertEqual(
+                        debug.read_bytes()[-len(b"/tmp/foreign\\n"):],
+                        b"/tmp/foreign\\n")
+                    self.assertFalse((root / "00000001" / "ack.json").exists())
+                    return
+                if case == "diagnostic-highwater":
+                    # The original one-PHP/FD9 WAL still commits/ACKs the
+                    # unchanged N cursors. All bytes are real on disk and
+                    # no worker, engine signal or Config mutation is faked.
+                    diagnostic = b"2026-11-21 : native diagnostic without discovery\\n"
+                    count = (2 * 1024 * 1024) // len(diagnostic) + 2
+                    with debug.open("ab") as out:
+                        out.write(diagnostic * count)
+                    full_size = debug.stat().st_size
+                    self.assertGreater(full_size, 2 * 1024 * 1024)
+                    self.assertTrue(run())
+                    from auto_detect_cursor_chain import CursorChain
+                    with queue.exclusive():
+                        tip = CursorChain(writer.receipts, queue).learning_tip(
+                            proof, self.work)
+                    self.assertEqual(tip["debug"]["offset"], full_size)
+                    self.assertEqual(
+                        tip["state"][proof.learning[0][0]]["streams"][0]["offset"], 0)
+                    self.assertEqual(
+                        tip["state"][proof.learning[1][0]]["streams"][0]["offset"], 0)
+                    self.assertEqual(writer.targets["user"].read_bytes(), b"")
+                    self.assertTrue((root / "00000001" / "ack.json").exists())
+                    self.assertFalse(run())
                 user.write_bytes(b"mail.example.org\n")
                 with debug.open("ab") as out:
                     out.write(native_debug(proof.learning[1][0],
