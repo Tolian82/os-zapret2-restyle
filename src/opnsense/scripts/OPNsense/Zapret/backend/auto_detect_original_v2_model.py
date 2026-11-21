@@ -1110,10 +1110,20 @@ def inspect_original_learning_native_rebind_locked(
                         hashlib.sha256(data[:end]).hexdigest() !=
                         record["sealed_end_sha256"]):
                     raise V2OriginalConfigRefused("learning_rebind_inspector_untouched_profile_drift")
+                # Unselected N profiles may also have genuine new native
+                # append rows AFTER the first committed cursor slot.
+                # They are never silently claimed processed.
+                unread = data[end:]
+                if unread:
+                    _raw_hosts(unread)
                 observations.append({
                     "native_number": number, "hostlist": name,
-                    "phase": "untouched", "old_tail_size": 0,
-                    "new_tail_size": 0, "inode_seed": None,
+                    "phase": "untouched",
+                    "old_tail_size": len(unread),
+                    "old_tail_sha256": hashlib.sha256(unread).hexdigest(),
+                    "new_tail_size": 0,
+                    "new_tail_sha256": hashlib.sha256(b"").hexdigest(),
+                    "inode_seed": None,
                 })
                 continue
             if not retained_path.exists() and not retained_path.is_symlink():
@@ -1126,7 +1136,13 @@ def inspect_original_learning_native_rebind_locked(
                         hashlib.sha256(data[:end]).hexdigest() !=
                         record["sealed_end_sha256"]):
                     raise V2OriginalConfigRefused("learning_rebind_inspector_missing_old_pending")
-                phase, old_tail, new_tail = "prepared-unmodified", b"", b""
+                # The first-slot cursor ended at 'end', NOT at the later
+                # full P1 image. P1's compaction snapshot may already
+                # contain undiscovered late rows; never mark them read.
+                old_tail, new_tail = data[end:], b""
+                if old_tail:
+                    _raw_hosts(old_tail)
+                phase = "prepared-unmodified"
             else:
                 pinned, old_data, pinned_witness = _native_rebind_stable_snapshot(
                     retained_path, writer.receipts.uid,
@@ -1141,7 +1157,10 @@ def inspect_original_learning_native_rebind_locked(
                         hashlib.sha256(old_data[:end]).hexdigest() !=
                         record["sealed_end_sha256"]):
                     raise V2OriginalConfigRefused("learning_rebind_inspector_retained_preimage_changed")
-                old_tail = old_data[known["size"]:]
+                # In particular, rows appended AFTER the original
+                # committed source cursor but BEFORE the compaction P1
+                # snapshot belong to the still-unprocessed old tail.
+                old_tail = old_data[end:]
                 if old_tail:
                     _raw_hosts(old_tail)
                 if (st.st_dev, st.st_ino) == old:
@@ -1159,15 +1178,23 @@ def inspect_original_learning_native_rebind_locked(
                             hashlib.sha256(data[:after["size"]]).hexdigest() !=
                             after["sha256"]):
                         raise V2OriginalConfigRefused("learning_rebind_inspector_new_live_image_diverged")
-                    new_tail = data[after["size"]:]
+                    # The replacement may include rows copied from the
+                    # old unprocessed tail; no proof that ANY of those
+                    # rows were processed in this cursor slot. Seed the
+                    # new physical inode at ZERO, never at postimage end.
+                    # Future original P1/ACK must deduplicate/reconcile
+                    # cross-inode observations rather than skip them.
+                    new_tail = data
                     if new_tail:
                         _raw_hosts(new_tail)
                     phase = ("replaced-retained" if not old_tail and not new_tail
                              else "replaced-with-unprocessed-tails")
-            # This is ONLY the durable physical inode BASELINE. The
-            # retained old append tail starts at full_preimage.size, and
-            # the new live append tail starts at replacement.size. They
-            # remain UNPROCESSED, even when this seed is durable.
+            # This is ONLY the durable physical inode BASELINE.
+            # The old unprocessed tail starts at original FIRST-SLOT end,
+            # not the later P1 full preimage boundary. The NEW file's
+            # initial replacement may itself contain unprocessed old rows,
+            # therefore NEW cursor starts at ZERO. Both tails remain
+            # UNPROCESSED after the seed is written.
             inode_seed = None
             if phase.startswith("replaced-"):
                 inode_seed = {
@@ -1183,14 +1210,16 @@ def inspect_original_learning_native_rebind_locked(
                     "old_pending_name": pending_name,
                     "old_pending_inode": {
                         "device": old[0], "inode": old[1],
-                        "cut_offset": known["size"],
-                        "cut_sha256": known["sha256"],
+                        "cut_offset": end,
+                        "cut_sha256": record["sealed_end_sha256"],
                     },
+                    "old_pending_proven_preimage": known,
                     "new_live_inode": {
                         "device": st.st_dev, "inode": st.st_ino,
-                        "cut_offset": record["replacement"]["size"],
-                        "cut_sha256": record["replacement"]["sha256"],
+                        "cut_offset": 0,
+                        "cut_sha256": hashlib.sha256(b"").hexdigest(),
                     },
+                    "new_live_proven_postimage": record["replacement"],
                     "cursor_advanced": False,
                     "ack_authorized": False,
                 }
@@ -1260,9 +1289,11 @@ def seal_original_learning_post_inode_seed_locked(
     Records live INSIDE the original first-slot native-rebind/observed
     journal. They prove that the expected native postimage is now at an
     actual new inode, while the ORIGINAL old inode remains in P2a pending.
-    The cut offsets are strictly the PREVIOUSLY authorized preimage and
-    replacement sizes. Every byte appended after either cut is UNPROCESSED
-    and no cursor is advanced by writing these records.
+    The old cut offset is the committed FIRST native source slot end,
+    and the NEW native inode always begins at offset ZERO. The expected
+    complete preimage and replacement remain independent verified image
+    witnesses, NOT cursor advances. Every newer/unclaimed row (even one
+    already copied into the replacement) is UNPROCESSED.
 
     A crash after any individual write is recoverable solely by the
     original manifest/owner and an identical live inode; a later append
