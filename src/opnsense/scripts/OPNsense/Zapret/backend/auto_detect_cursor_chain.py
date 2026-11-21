@@ -1368,6 +1368,248 @@ class CursorChain:
             "ack_authorized": False,
         }
 
+    def rotate_learning_debug_once(self, proof, workspace, *,
+                                   attest, inspect=probe_pending_fd):
+        """One original-FD9/P2a/Config-locked 2-MiB debug inode cut.
+
+        Only fully ACKed diagnostic bytes may be cut; neither dvtws2 nor
+        IPFW is signaled. Before the atomic name replacement, a write-once
+        intent seals the old ACK cursor and already-fsynced new zero inode.
+        After replacement, a second all-PID old-FD scan and immutable
+        retirement receipt must precede physical archive unlink. Recovery
+        reuses this exact intent; a late old-inode append fails CLOSED with
+        the old archive intact rather than dropping native attribution.
+        """
+        from auto_detect_original_v2_model import _native_rebind_stable_snapshot
+        from auto_detect_owner import LearningGenerationProof
+        from auto_detect_queue import _stat_regular
+        import sys
+        if sys.platform.startswith("freebsd"):
+            from voice_ipfw_adapter import require_lifecycle_lock
+            require_lifecycle_lock()
+        if (not isinstance(proof, LearningGenerationProof) or
+                not self.queue._held or self.queue.writer_gid is None or
+                not callable(attest) or not callable(inspect) or
+                attest() != proof):
+            raise CursorChainRefused("learning_debug_cut_original_fd9_required")
+        self.queue._verify()
+        tip = self.learning_tip(
+            proof, workspace, allow_unfinished_debug_cut=True)
+        if tip["sequence"] == 0 or tip["intent"] is not None:
+            return False
+        last = tip["root"] / f'{tip["sequence"] - 1:08d}'
+        _directory(last, self.receipts.uid)
+        live = self.queue.root / "debug.log"
+        fresh = last / DEBUG_CUT_FRESH
+        archive = last / DEBUG_CUT_OLD
+        intent_file = last / DEBUG_CUT_INTENT
+        complete_file = last / DEBUG_CUT_COMPLETE
+        retire_file = last / DEBUG_CUT_RETIRE
+        abort_file = last / DEBUG_CUT_ABORT
+        uid, gid = self.receipts.uid, self.queue.writer_gid
+
+        def snapshot(path, *, links=(1,)):
+            return _native_rebind_stable_snapshot(
+                path, uid, gid, allowed_links=links)
+
+        def same_old(st, data, intent):
+            return ((st.st_dev, st.st_ino) ==
+                        (intent["old"]["device"], intent["old"]["inode"]) and
+                    len(data) == intent["old_size"] and
+                    _digest(data) == intent["old_sha256"])
+
+        def drained(path, st):
+            return (inspect(path, st.st_dev, st.st_ino, owner=proof.owner,
+                            writer_gid=gid) is FDState.DRAINED and
+                    attest() == proof)
+
+        def abort_without_cut(intent):
+            # An old-debug append won before os.replace. Preserve the
+            # unchanged live *name* and all newly appended bytes; remove
+            # only a private alias/empty candidate, then write a durable
+            # abort receipt. The next original WAL can consume that tail.
+            named = _stat_regular(live, uid, max_size=MAX_DEBUG, writer_gid=gid)
+            if (named.st_dev, named.st_ino) != (
+                    intent["old"]["device"], intent["old"]["inode"]):
+                raise CursorChainRefused("learning_debug_cut_abort_after_replace")
+            if _entry(archive):
+                alias = _stat_regular(
+                    archive, uid, max_size=MAX_DEBUG, writer_gid=gid)
+                if ((alias.st_dev, alias.st_ino) !=
+                        (named.st_dev, named.st_ino) or
+                        alias.st_nlink != 2 or named.st_nlink != 2):
+                    raise CursorChainRefused("learning_debug_cut_foreign_abort_alias")
+                archive.unlink()
+                _sync(last)
+            if _entry(fresh):
+                prepared, data, _ = snapshot(fresh)
+                if (data or (prepared.st_dev, prepared.st_ino) !=
+                        (intent["new"]["device"], intent["new"]["inode"])):
+                    raise CursorChainRefused("learning_debug_cut_foreign_abort_fresh")
+                fresh.unlink()
+                _sync(last)
+            abort = dict(
+                schema=3, kind="original-learning-debug-cut-aborted",
+                generation=proof.generation,
+                intent_sha256=_digest(_canonical(intent)),
+                ack_authorized=False)
+            _write_once(last, DEBUG_CUT_ABORT, _canonical(abort), uid)
+            return False
+
+        # The original _write_once record is authoritative. A crashed
+        # unsealed fresh inode has NEVER been published as debug.log:
+        # recheck it against the live inode, remove only that empty temp.
+        if not _entry(intent_file):
+            if _entry(fresh):
+                staged, data, _ = snapshot(fresh)
+                current = _stat_regular(
+                    live, uid, max_size=MAX_DEBUG, writer_gid=gid)
+                if (data or (staged.st_dev, staged.st_ino) ==
+                        (current.st_dev, current.st_ino) or
+                        not drained(fresh, staged)):
+                    raise CursorChainRefused("learning_debug_cut_unsealed_temp_busy")
+                fresh.unlink()
+                _sync(last)
+            candidate = self.learning_debug_highwater_candidate(
+                proof, workspace, attest=attest, inspect=inspect)
+            if candidate is None:
+                return False
+            # Last ACK is the same immutable original cursor after the
+            # read-only high-water proof. No source side effects have run.
+            tip = self.learning_tip(proof, workspace)
+            if (tip["previous_ack_sha256"] != candidate["previous_ack_sha256"] or
+                    tip["debug"] != candidate["debug"]):
+                raise CursorChainRefused("learning_debug_cut_ack_moved_before_intent")
+            fd = os.open(fresh, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                         os.O_NOFOLLOW, 0o660)
+            try:
+                current = os.fstat(fd)
+                if current.st_uid != uid or current.st_gid != gid:
+                    os.fchown(fd, uid, gid)
+                os.fchmod(fd, 0o660)
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            _sync(last)
+            new_st, data, _ = snapshot(fresh)
+            if data:
+                raise CursorChainRefused("learning_debug_cut_new_not_empty")
+            new = dict(path=str(live), device=new_st.st_dev,
+                       inode=new_st.st_ino, offset=0,
+                       prefix_sha256=EMPTY_HASH)
+            intent = dict(
+                schema=3, kind="original-learning-debug-cut-intent",
+                generation=proof.generation,
+                sequence=tip["sequence"] - 1, cycle=tip["cycle"],
+                previous_ack_sha256=tip["previous_ack_sha256"],
+                native_map_sha256=proof.native_map_sha256,
+                final_args_sha256=proof.final_args_sha256,
+                old=tip["debug"], new=new,
+                old_size=candidate["debug"]["offset"],
+                old_sha256=candidate["debug"]["prefix_sha256"],
+                native_sha256=candidate["native_sha256"],
+                cut_authorized=False, ack_authorized=False)
+            _write_once(last, DEBUG_CUT_INTENT, _canonical(intent), uid)
+        else:
+            intent, raw = _load(intent_file, uid)
+            if raw != _canonical(intent):
+                raise CursorChainRefused("learning_debug_cut_intent_not_canonical")
+            if _entry(abort_file):
+                # The immutable abort permits only normal source replay;
+                # never re-use its prepared inode or ACK slot.
+                self.learning_tip(proof, workspace)
+                return False
+
+        if _entry(abort_file):
+            self.learning_tip(proof, workspace)
+            return False
+        if not _entry(complete_file) or not _entry(retire_file):
+            # Revalidate the exact immutable original ACK and owner without
+            # trusting the potentially replaced live debug name.
+            if (tip["previous_ack_sha256"] != intent["previous_ack_sha256"] or
+                    tip["debug"] != intent["old"] or attest() != proof):
+                raise CursorChainRefused("learning_debug_cut_original_ack_changed")
+        active = _stat_regular(live, uid, max_size=MAX_DEBUG, writer_gid=gid)
+        if (active.st_dev, active.st_ino) == (
+                intent["old"]["device"], intent["old"]["inode"]):
+            # Before the physical cut, old/source/new must remain exactly
+            # stable. Native append wins by aborting this cut, not by
+            # suppressing a line or reattributing it to a new log.
+            old_stat, old_data, _ = snapshot(live, links=(1, 2))
+            if not same_old(old_stat, old_data, intent):
+                return abort_without_cut(intent)
+            if not _entry(archive):
+                if not drained(live, old_stat):
+                    raise CursorChainRefused("learning_debug_cut_old_fd_busy")
+                staged, data, _ = snapshot(fresh)
+                if (data or (staged.st_dev, staged.st_ino) != (
+                        intent["new"]["device"], intent["new"]["inode"])):
+                    raise CursorChainRefused("learning_debug_cut_new_candidate_changed")
+                os.link(live, archive, follow_symlinks=False)
+                _sync(last)
+            alias = _stat_regular(
+                archive, uid, max_size=MAX_DEBUG, writer_gid=gid)
+            if (alias.st_dev, alias.st_ino) != (
+                    old_stat.st_dev, old_stat.st_ino) or alias.st_nlink != 2:
+                raise CursorChainRefused("learning_debug_cut_pre_replace_alias_changed")
+            old_stat, old_data, _ = snapshot(live, links=(2,))
+            if not same_old(old_stat, old_data, intent):
+                return abort_without_cut(intent)
+            if attest() != proof:
+                raise CursorChainRefused("learning_debug_cut_owner_changed_before_replace")
+            os.replace(fresh, live)
+            _sync(self.queue.root)
+            _sync(last)
+        else:
+            if (active.st_dev, active.st_ino) != (
+                    intent["new"]["device"], intent["new"]["inode"]):
+                raise CursorChainRefused("learning_debug_cut_foreign_live_inode")
+            if _entry(fresh):
+                raise CursorChainRefused("learning_debug_cut_orphan_fresh_after_replace")
+
+        # Physical replace happened. Keep the original old inode under
+        # a private name until all-PID FD drain proves no late writer.
+        active = _stat_regular(live, uid, max_size=MAX_DEBUG, writer_gid=gid)
+        if ((active.st_dev, active.st_ino) !=
+                (intent["new"]["device"], intent["new"]["inode"]) or
+                active.st_nlink != 1 or attest() != proof):
+            raise CursorChainRefused("learning_debug_cut_new_live_not_original")
+        if _entry(archive):
+            old_stat, old_data, _ = snapshot(archive)
+            if not same_old(old_stat, old_data, intent):
+                # Old positive bytes are still physically retained. No
+                # native attribution/ACK and no archive unlink are legal.
+                raise CursorChainRefused("learning_debug_cut_late_old_append")
+            if not drained(archive, old_stat):
+                raise CursorChainRefused("learning_debug_cut_old_fd_not_drained")
+        elif not _entry(retire_file):
+            raise CursorChainRefused("learning_debug_cut_missing_pre_retire_old")
+        complete = dict(
+            schema=3, kind="original-learning-debug-cut-complete",
+            generation=proof.generation,
+            intent_sha256=_digest(_canonical(intent)),
+            new=intent["new"], ack_authorized=False)
+        _write_once(last, DEBUG_CUT_COMPLETE, _canonical(complete), uid)
+        retired = dict(
+            schema=3, kind="original-learning-debug-cut-retired",
+            generation=proof.generation,
+            complete_sha256=_digest(_canonical(complete)),
+            old_size=intent["old_size"], old_sha256=intent["old_sha256"],
+            ack_authorized=False)
+        _write_once(last, DEBUG_CUT_RETIRE, _canonical(retired), uid)
+        if _entry(archive):
+            old_stat, old_data, _ = snapshot(archive)
+            if not same_old(old_stat, old_data, intent) or not drained(archive, old_stat):
+                raise CursorChainRefused("learning_debug_cut_old_changed_before_unlink")
+            archive.unlink()
+            _sync(last)
+        final_tip = self.learning_tip(proof, workspace)
+        if (final_tip["debug"] != intent["new"] or
+                final_tip["previous_ack_sha256"] != tip["previous_ack_sha256"] or
+                attest() != proof):
+            raise CursorChainRefused("learning_debug_cut_final_cursor_not_durable")
+        return True
+
     def _ensure_learning_capacity(self, proof, workspace, *, attest):
         """The original .next/.old anchor swap, carrying ALL N cursors.
 
