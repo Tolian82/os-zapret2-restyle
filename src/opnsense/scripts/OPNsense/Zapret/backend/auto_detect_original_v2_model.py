@@ -909,6 +909,7 @@ def inspect_original_learning_native_rebind_locked(
         CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
     )
     from auto_detect_owner import LearningGenerationProof
+    from auto_detect_destination_commit import _file_identity
     from auto_detect_queue import QueueSafetyError, NATIVE_PENDING
     from auto_detect_debug_window import _raw_hosts, DebugWindowRefused
 
