@@ -198,7 +198,7 @@ case "$2" in
             printf '%s\n' p2k8i3:ffffffffffffffffffffffffffffffff:1:fake:1
             exit 0
         }
-        printf 'p2k8i3:%s:1:fake:1:2:1:3:4:1:5:6:1\n' "$generation"
+        printf '%s\n' 'p2k8i3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:1:fake:1:2:1:3:4:1:5:6:1'
         ;;
     seal-learning-epoch)
         printf '%s\n' seal-learning-epoch >> "$EVENTS"
