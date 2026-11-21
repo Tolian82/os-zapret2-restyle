@@ -1577,6 +1577,96 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertEqual({
                         p.name: p.read_bytes()
                         for p in observed_root.iterdir()}, saved_seeds)
+                    # Forward N-native preview: source-only. The
+                    # unchanged original P2a/Config/GUI FD9 + original
+                    # P2b must pair every NEW domain with the same-profile
+                    # native "adding to" debug emitted after first slot.
+                    # Merely reading a native list never authorizes P1.
+                    from auto_detect_original_v2_model import (
+                        preview_original_learning_forward_windows_locked,
+                    )
+                    def forward_preview(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return preview_original_learning_forward_windows_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof,
+                                inspect=inspect_witness)
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        forward_preview()
+                    second_tail = (
+                        native_debug(user_num, "late.example.org", learning[1][2]) +
+                        native_debug(user_num, "after-seal-old.example.net",
+                                     learning[1][2]) +
+                        native_debug(user_num, "after-seal-new.example.net",
+                                     learning[1][2]))
+                    # Two physically different file paths contain the ONE
+                    # late domain, but it has exactly ONE genuine debug
+                    # positive in the post-first-slot stream.
+                    debug_path.write_bytes(
+                        first_debug + second_debug + second_tail)
+                    forward = forward_preview()
+                    self.assertTrue(forward["p2b_drained"])
+                    self.assertFalse(forward["commit_authorized"])
+                    self.assertFalse(forward["ack_authorized"])
+                    self.assertEqual(forward["deduped_cross_inode"], 1)
+                    self.assertEqual(forward["observations"], [
+                        {"hostname": "after-seal-new.example.net",
+                         "hostlist": "user"},
+                        {"hostname": "after-seal-old.example.net",
+                         "hostlist": "user"},
+                        {"hostname": "late.example.org", "hostlist": "user"},
+                    ])
+                    self.assertEqual(
+                        forward["native"][1]["old_start"],
+                        len(b"mail.example.org\n"))
+                    self.assertEqual(forward["native"][1]["new_start"], 0)
+                    self.assertEqual(
+                        forward["native"][1]["new_end"],
+                        len(b"late.example.org\n"
+                            b"after-seal-new.example.net\n"))
+                    self.assertEqual(forward_preview(), forward)
+                    self.assertEqual(
+                        forward["debug"]["start"],
+                        len(first_debug + second_debug))
+                    # A debug event alone cannot advance any source:
+                    # the native row may not have been persisted yet.
+                    debug_path.write_bytes(
+                        first_debug + second_debug + second_tail +
+                        native_debug(user_num, "absent.example.net",
+                                     learning[1][2]))
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        forward_preview()
+                    # Wrong native number/path is NEVER guessed from domain.
+                    debug_path.write_bytes(
+                        first_debug + second_debug +
+                        native_debug(youtube_num, "late.example.org",
+                                     learning[1][2]) +
+                        second_tail)
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        forward_preview()
+                    # Native with no matching after-slot positive must
+                    # remain unread (not silently folded or auto-ACKed).
+                    debug_path.write_bytes(first_debug + second_debug)
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        forward_preview()
+                    debug_path.write_bytes(
+                        first_debug + second_debug + second_tail)
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        forward_preview(
+                            inspect_witness=lambda *_args, **_kwargs:
+                                FDState.BUSY)
+                    self.assertEqual(forward_preview(), forward)
+                    self.assertFalse((slot / "00000001").exists())
+                    self.assertFalse((slot / "ack.json").exists())
+                    # No new cursor, destination plan or native ACK exists
+                    # simply because the original P2b preview passed.
+                    self.assertEqual(
+                        {p.name: p.read_bytes()
+                         for p in observed_root.iterdir()}, saved_seeds)
+                    debug_path.write_bytes(first_debug + second_debug)
                     # Post-seal inode reuse/substitution must refuse,
                     # even with byte-identical content and matching tail.
                     saved_live = data_root / ".post-seed-correct-inode"
