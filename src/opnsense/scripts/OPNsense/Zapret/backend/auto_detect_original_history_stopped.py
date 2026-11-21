@@ -34,7 +34,7 @@ from auto_detect_owner import (
     attest_learning_stopped_generation,
 )
 from auto_detect_destination_commit import (
-    DestinationRefused, qualified_destination_plan,
+    DestinationRefused, qualified_destination_plan, _target, _file_identity,
 )
 from auto_detect_debug_window import DebugWindowRefused
 from auto_detect_queue import QueueSafetyError
@@ -246,6 +246,135 @@ def preview_original_learning_stopped_guard_locked(
             DebugWindowRefused) as exc:
         raise V2OriginalConfigRefused(
             "stopped_history_independent_original_proof_refused") from exc
+
+
+
+def _current_original_final_destinations(writer, proof, expected_post_sha):
+    """Compare real Found/managed with original final physical postimages.
+
+    Do not use original WAL after hashes alone; GUI could replace a file
+    with identical bytes and a different inode after last checkpoint. A
+    currently missing regular file is a divergence, while a symlink,
+    hardlink or untrusted file is an explicit refusal, not a repair case.
+    No source is modified even if exact original physical postimages remain.
+    """
+    raw = _read(_history_root(writer, proof) / "postimages.json",
+                writer.receipts.uid)
+    if _digest(raw) != expected_post_sha:
+        raise V2OriginalConfigRefused(
+            "stopped_reconciliation_historical_postimage_changed")
+    record = json.loads(raw)
+    rows = record.get("destinations")
+    if (type(rows) is not list or not 1 <= len(rows) <= 18 or
+            len({r.get("target") for r in rows if type(r) is dict}) != len(rows)):
+        raise V2OriginalConfigRefused(
+            "stopped_reconciliation_invalid_original_targets")
+    results = []
+    for row in rows:
+        if type(row) is not dict or type(row.get("target")) is not str:
+            raise V2OriginalConfigRefused(
+                "stopped_reconciliation_unqualified_original_row")
+        key = row["target"]
+        if ":" not in key:
+            raise V2OriginalConfigRefused(
+                "stopped_reconciliation_unqualified_original_name")
+        kind, name = key.split(":", 1)
+        path = (writer.targets.get(name) if kind == "writes" else
+                original_model.COMMON_ACTIVE / "managed" /
+                f"hostlist-{name}.txt" if kind == "live"
+                and name in ("youtube", "user") else None)
+        if path is None or row.get("path") != str(path):
+            raise V2OriginalConfigRefused(
+                "stopped_reconciliation_foreign_original_destination")
+        try:
+            data, current = _target(path, writer.receipts.uid)
+        except DestinationRefused as exc:
+            # Distinguish ordinary missing target after explicit GUI/Stop
+            # from a hostile symlink, hardlink or unsafe file type.
+            if not isinstance(exc.__cause__, FileNotFoundError):
+                raise
+            if path.exists() or path.is_symlink():
+                raise V2OriginalConfigRefused(
+                    "stopped_reconciliation_missing_target_raced") from exc
+            results.append((key, "missing"))
+            continue
+        expected = tuple(row.get(k) for k in (
+            "device", "inode", "ctime_ns", "mtime_ns", "size"))
+        identity = _file_identity(current)
+        results.append((key, "exact" if
+                        _digest(data) == row.get("sha256") and
+                        identity == expected else "changed"))
+    return tuple(results)
+
+
+def preview_original_learning_stopped_destination_reconciliation_locked(
+        writer, proof, workspace, *, config_fd, config_path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """STEP 15b3e: classify current destination state; never replay old WAL.
+
+    All THREE original DestinationCommit checkpoints precede archive
+    publication; post-archive source loss cannot create an uncommitted CAS.
+    Therefore no new DestinationCommit writer, automatic GUI data undo, or
+    post-OLD-inode replay is needed or authorized here. A manual deletion
+    or same-byte foreign inode is a conflict, NOT a reason to re-add rows.
+
+    This is deliberately optional and NOT connected to operator Stop.
+    """
+    try:
+        _held(writer, proof, workspace, config_fd, config_path, attest)
+        before = preview_original_learning_stopped_guard_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
+        if (before.get("all_three_original_historical_wal_checkpoints_verified")
+                is not True or
+                before.get("stopped_original_owner_freshly_reattested")
+                is not True or
+                before.get("source_independent_transaction_replay_available")
+                is not False or
+                before.get("archive_unlink_authorized") is not False):
+            raise V2OriginalConfigRefused(
+                "stopped_reconciliation_original_wal_not_qualified")
+        first = _current_original_final_destinations(
+            writer, proof, before["historical_final_postimages_sha256"])
+        second = _current_original_final_destinations(
+            writer, proof, before["historical_final_postimages_sha256"])
+        after = preview_original_learning_stopped_guard_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
+        _held(writer, proof, workspace, config_fd, config_path, attest)
+        if first != second or before != after or len(first) != before[
+                "historical_final_destinations_count"]:
+            raise V2OriginalConfigRefused(
+                "stopped_reconciliation_current_destinations_raced")
+        conflicts = [
+            {"target": target, "state": state}
+            for target, state in first if state != "exact"
+        ]
+        return {
+            **after,
+            "historical_wal_all_destination_commits_complete": True,
+            "post_archive_destination_transaction_replay_required": False,
+            "current_destinations_match_original_physical_postimages":
+                not conflicts,
+            "current_final_destinations_inode_pinned": not conflicts,
+            "current_destinations_checked_count": len(first),
+            "current_destination_conflicts": conflicts,
+            "automatic_repair_authorized": False,
+            "source_independent_transaction_replay_available": False,
+            "archive_unlink_authorized": False,
+            "physical_old_archive_cleanup_authorized": False,
+            "native_pending_ack_authorized": False,
+            "generation_retired": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (OSError, ValueError, KeyError, TypeError, AttributeError,
+            UnicodeError, ReceiptRefused, DestinationRefused,
+            GenerationRefused, OriginalLockRefused,
+            QueueSafetyError, DebugWindowRefused) as exc:
+        raise V2OriginalConfigRefused(
+            "stopped_reconciliation_original_destination_refused") from exc
 
 
 def main():

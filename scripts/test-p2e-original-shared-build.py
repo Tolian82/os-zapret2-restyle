@@ -1898,6 +1898,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 attest=lambda: proof, inspect=inspect_witness)
                     from auto_detect_original_history_stopped import (
                         preview_original_learning_stopped_guard_locked,
+                        preview_original_learning_stopped_destination_reconciliation_locked,
                     )
                     def preview_original_stopped_guard(*, inspect_witness=drained):
                         with writer.exclusive_targets(), patch(
@@ -1907,6 +1908,16 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 writer, proof, self.work,
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof, inspect=inspect_witness)
+                    def preview_original_destination_reconcile(
+                            *, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return (
+                                preview_original_learning_stopped_destination_reconciliation_locked(
+                                    writer, proof, self.work,
+                                    config_fd=cfg_fd, config_path=config_path,
+                                    attest=lambda: proof, inspect=inspect_witness))
                     self.assertFalse(second_slot.exists())
                     with self.assertRaises(V2OriginalConfigRefused):
                         archive_release_preview()
@@ -2949,6 +2960,141 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             self.assertEqual(stopped_calls[0], 2)
                             self.assertTrue(stopped[
                                 "stopped_original_owner_freshly_reattested"])
+                            # STEP 15b3e — all 3 checkpointed CAS are already
+                            # committed, so no original post-archive
+                            # transaction replay is necessary or safe.
+                            from auto_detect_destination_commit import (
+                                _target as strict_original_target,
+                                DestinationRefused as OriginalTargetRefused,
+                            )
+                            from types import SimpleNamespace
+                            import json as original_json
+                            with stop_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    return_value=proof):
+                                original_reconciled = (
+                                    preview_original_destination_reconcile())
+                            self.assertTrue(original_reconciled[
+                                "historical_wal_all_destination_commits_complete"])
+                            self.assertFalse(original_reconciled[
+                                "post_archive_destination_transaction_replay_required"])
+                            self.assertTrue(original_reconciled[
+                                "current_destinations_match_original_physical_postimages"])
+                            self.assertEqual(original_reconciled[
+                                "current_destination_conflicts"], [])
+                            self.assertTrue(original_reconciled[
+                                "current_final_destinations_inode_pinned"])
+                            self.assertEqual(original_reconciled[
+                                "current_destinations_checked_count"],
+                                stopped["historical_final_destinations_count"])
+                            for forbidden in (
+                                    "automatic_repair_authorized",
+                                    "archive_unlink_authorized",
+                                    "native_pending_ack_authorized",
+                                    "generation_retired"):
+                                self.assertFalse(original_reconciled[forbidden])
+                            # Same bytes from DIFFERENT inode is NOT
+                            # original final postimage (GUI delete/recreate).
+                            original_saved_rows = original_json.loads(
+                                final_postimage_path.read_bytes())["destinations"]
+                            chosen_row = original_saved_rows[0]
+                            chosen_path = Path(chosen_row["path"])
+                            def fake_target_same_bytes_new_inode(path, uid):
+                                raw, st = strict_original_target(path, uid)
+                                if Path(path) == chosen_path:
+                                    return raw, SimpleNamespace(
+                                        st_dev=st.st_dev, st_ino=st.st_ino + 99,
+                                        st_ctime_ns=st.st_ctime_ns,
+                                        st_mtime_ns=st.st_mtime_ns,
+                                        st_size=st.st_size)
+                                return raw, st
+                            with stop_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    return_value=proof), stop_patch(
+                                    "auto_detect_original_history_stopped._target",
+                                    side_effect=fake_target_same_bytes_new_inode):
+                                displaced = preview_original_destination_reconcile()
+                            self.assertFalse(displaced[
+                                "current_destinations_match_original_physical_postimages"])
+                            self.assertFalse(displaced[
+                                "current_final_destinations_inode_pinned"])
+                            self.assertEqual(displaced[
+                                "current_destination_conflicts"], [{
+                                    "target": chosen_row["target"], "state": "changed"}])
+                            self.assertFalse(displaced["automatic_repair_authorized"])
+                            self.assertFalse(displaced["native_pending_ack_authorized"])
+                            def fake_target_manual_edit(path, uid):
+                                raw, st = strict_original_target(path, uid)
+                                if Path(path) == chosen_path:
+                                    return raw + b"manually-deleted.example\n", st
+                                return raw, st
+                            with stop_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    return_value=proof), stop_patch(
+                                    "auto_detect_original_history_stopped._target",
+                                    side_effect=fake_target_manual_edit):
+                                edited = preview_original_destination_reconcile()
+                            self.assertEqual(edited[
+                                "current_destination_conflicts"], [{
+                                    "target": chosen_row["target"], "state": "changed"}])
+                            self.assertFalse(edited["automatic_repair_authorized"])
+                            # Missing physical target is a conflict. Only a
+                            # genuine FileNotFound error, with no new name
+                            # racing into place, may be classified missing.
+                            original_path_exists = Path.exists
+                            def missing_path_only(path):
+                                if path == chosen_path:
+                                    return False
+                                return original_path_exists(path)
+                            def fake_target_missing(path, uid):
+                                if Path(path) == chosen_path:
+                                    try:
+                                        raise FileNotFoundError(
+                                            "simulated_stopped_gui_delete")
+                                    except FileNotFoundError as exc:
+                                        raise OriginalTargetRefused(
+                                            "destination_read_failed") from exc
+                                return strict_original_target(path, uid)
+                            with stop_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    return_value=proof), stop_patch(
+                                    "auto_detect_original_history_stopped._target",
+                                    side_effect=fake_target_missing), stop_patch.object(
+                                    Path, "exists", new=missing_path_only):
+                                missing_gui_file = (
+                                    preview_original_destination_reconcile())
+                            self.assertEqual(missing_gui_file[
+                                "current_destination_conflicts"], [{
+                                    "target": chosen_row["target"], "state": "missing"}])
+                            self.assertFalse(missing_gui_file["automatic_repair_authorized"])
+                            # Changed between two snapshots: refuse, not
+                            # claim durable recovery of an old WAL.
+                            current_reads = [0]
+                            def fake_target_race(path, uid):
+                                raw, st = strict_original_target(path, uid)
+                                if Path(path) == chosen_path:
+                                    current_reads[0] += 1
+                                    if current_reads[0] == 2:
+                                        return raw + b"changed\n", st
+                                return raw, st
+                            with stop_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    return_value=proof), stop_patch(
+                                    "auto_detect_original_history_stopped._target",
+                                    side_effect=fake_target_race):
+                                with self.assertRaisesRegex(
+                                        V2OriginalConfigRefused,
+                                        "stopped_reconciliation_current_destinations_raced"):
+                                    preview_original_destination_reconcile()
+                            with stop_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    return_value=proof), stop_patch(
+                                    "auto_detect_original_history_stopped._target",
+                                    side_effect=OriginalTargetRefused(
+                                        "foreign_or_symlink_destination")):
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_destination_reconcile()
+
                             self.assertTrue(stopped[
                                 "all_three_original_historical_wal_checkpoints_verified"])
                             self.assertEqual(stopped["old_archive_state"],
@@ -3002,6 +3148,9 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     self.assertEqual(
                                         preview_original_stopped_guard(),
                                         stopped)
+                                    self.assertEqual(
+                                        preview_original_destination_reconcile(),
+                                        original_reconciled)
                                 with self.assertRaises(V2OriginalConfigRefused):
                                     preview_original_release_guard()
                             finally:
@@ -3144,6 +3293,17 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 self.assertEqual(
                                     stopped_partial["old_archive_state"],
                                     "partially-missing")
+                                with stop_patch(
+                                        "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                        return_value=proof):
+                                    still_reconciled = (
+                                        preview_original_destination_reconcile())
+                                self.assertEqual(still_reconciled[
+                                    "old_archive_state"], "partially-missing")
+                                self.assertTrue(still_reconciled[
+                                    "current_destinations_match_original_physical_postimages"])
+                                self.assertFalse(still_reconciled[
+                                    "native_pending_ack_authorized"])
                                 self.assertEqual(
                                     stopped_partial["missing_old_native_numbers"],
                                     [youtube_num])
@@ -3180,6 +3340,17 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                         gone = preview_original_stopped_guard()
                                     self.assertEqual(
                                         gone["old_archive_state"], "all-missing")
+                                    with stop_patch(
+                                            "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                            return_value=proof):
+                                        no_old_reconcile = (
+                                            preview_original_destination_reconcile())
+                                    self.assertEqual(no_old_reconcile[
+                                        "old_archive_state"], "all-missing")
+                                    self.assertTrue(no_old_reconcile[
+                                        "historical_wal_all_destination_commits_complete"])
+                                    self.assertFalse(no_old_reconcile[
+                                        "archive_unlink_authorized"])
                                     self.assertFalse(gone["archive_unlink_authorized"])
                                     self.assertEqual(
                                         sorted(all_missing_guard[
