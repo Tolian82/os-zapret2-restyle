@@ -1202,6 +1202,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 # Checkpoint means the original event cannot be reapplied
                 # after an explicit GUI deletion of that permanent Found.
                 targets["youtube"].write_bytes(b"")
+                with self.assertRaises(V2OriginalConfigRefused):
+                    compaction_preview()
                 if sys.platform.startswith("freebsd"):
                     with writer.exclusive_targets():
                         repeated = writer._locked_commit(

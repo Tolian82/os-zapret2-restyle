@@ -19,7 +19,8 @@ from typing import Callable
 from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
                                       _checkpoint, _evidence_unchanged,
                                       _completed_debug_evidence_unchanged)
-from auto_detect_debug_window import ADD, MAX_RAW, MAX_WINDOW, _raw_hosts, _read_exact, _hostname
+from auto_detect_debug_window import (ADD, MAX_RAW, MAX_WINDOW, _raw_hosts,
+                                      _read_exact, _hostname, DebugWindowRefused)
 from auto_detect_destination_commit import (DestinationCommit, DestinationRefused,
                                             _edit, _target, qualified_destination_plan)
 from auto_detect_epoch_receipts import ReceiptRefused, _read
@@ -589,7 +590,8 @@ def preview_learning_checkpoint_native_compaction_locked(
     except (OSError, ValueError, TypeError, KeyError, AttributeError,
             ReceiptRefused, OriginalSourceRefused, CursorChainRefused,
             DestinationRefused, OwnedSourcesRefused, EffectiveKnownRefused,
-            AutoDomainPolicyError, DomainPolicyError) as exc:
+            AutoDomainPolicyError, DomainPolicyError,
+            DebugWindowRefused) as exc:
         raise V2OriginalConfigRefused(
             "learning_compaction_checkpoint_preview_refused") from exc
 
