@@ -216,6 +216,29 @@ def probe_stopped_learning_pending_fd(
         attest_owner=learning_owner_still_quiescent)
 
 
+def probe_retiring_learning_pending_fd(
+        segment: Path, device_id: int, inode: int, *,
+        owner: OwnerToken, runner=subprocess.run,
+        platform: str | None = None,
+        writer_gid: int | None = None) -> FDState:
+    """Same global all-PID P2b for original schema3 prepared predecessor.
+
+    After an explicit Stop, the next original Apply moves the *journal*
+    from committed into prepared/activating. The current old-generation
+    attester must accept only that exact independently sealed predecessor:
+    a plain committed-only stopped proof cannot authenticate this phase.
+    No process restart or independent file owner is introduced.
+    """
+    def predecessor_still_quiescent() -> bool:
+        from auto_detect_owner import attest_retiring_learning_predecessor
+        return attest_retiring_learning_predecessor().owner == owner
+
+    return _probe_original_inode(
+        segment, device_id, inode, owner=owner, runner=runner,
+        platform=platform, writer_gid=writer_gid,
+        attest_owner=predecessor_still_quiescent)
+
+
 def main() -> int:
     raise SystemExit("P2b native FD probe is not a standalone production worker")
 
