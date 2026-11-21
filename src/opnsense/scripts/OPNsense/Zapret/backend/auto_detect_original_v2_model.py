@@ -3625,7 +3625,7 @@ def _original_stopped_learning_live_preimages(
     canonical = {}
     for name in KNOWN_HOSTLISTS:
         normalized = normalize(manual_hostlists[name], name)["normalized"]
-        canonical[name] = normalized + ("\\n" if normalized else "")
+        canonical[name] = normalized + ("\n" if normalized else "")
     composed = compose_known(canonical, old_owned)
     live = {}
     pinned = {}
