@@ -200,6 +200,86 @@ class MinuteIngressContract(unittest.TestCase):
         legacy.assert_not_called()
         self.assertEqual(output.getvalue(), 'auto-detect-minute=processed\n')
 
+    def test_learning_pre_stop_uses_only_original_fd9_epoch_and_cannot_authorize_old_retirement(self):
+        from types import SimpleNamespace
+        from auto_detect_owner import LearningGenerationProof
+        from shared_apply_seal import WORK
+        generation = 'a' * 32
+        proof = LearningGenerationProof(
+            OwnerToken(4242, 'Sun Nov 15 08:00:00 2026', '/tmp/dvtws2'),
+            generation, generation, 'b' * 64, 'c' * 64, 'd' * 64,
+            ((3, 'youtube', str(minute.QUEUE_ROOT /
+                                ('learning-' + generation + '-3.txt'))),))
+        from auto_detect_cursor_chain import CursorChain
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock') as fd9, \
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":3}'), \
+             patch('pwd.getpwnam', return_value=SimpleNamespace(pw_gid=65534)), \
+             patch.object(minute, 'attest_running_generation') as legacy, \
+             patch.object(minute, 'attest_learning_running_generation',
+                          return_value=proof) as running, \
+             patch.object(minute, 'DurableInbox') as queue_type, \
+             patch.object(minute, 'EpochReceipts') as receipts_type, \
+             patch('auto_detect_cursor_chain.CursorChain') as chain_type:
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                self.assertEqual(minute.native_retire_preflight(), 0)
+            self.assertEqual(out.getvalue(),
+                             'auto-detect-retire=original-learning-running-attested\\n')
+            self.assertEqual(err.getvalue(), '')
+            fd9.assert_called_once_with()
+            legacy.assert_not_called()
+            self.assertEqual(running.call_count, 2)
+            queue_type.assert_called_once_with(minute.QUEUE_ROOT,
+                                               owner_uid=0, writer_gid=65534)
+            receipts_type.assert_called_once_with(owner_uid=0, writer_gid=65534)
+            chain_type.assert_called_once_with(receipts_type.return_value,
+                                               queue_type.return_value)
+            chain_type.return_value.learning_epoch.assert_called_once_with(
+                proof, WORK / generation)
+            queue_type.return_value.rotate.assert_not_called()
+            queue_type.return_value.acknowledge.assert_not_called()
+
+            # A missing/mismatched original epoch must refuse before any
+            # schema2 P1/physical retirement, not downgrade to old raw.
+            chain_type.return_value.learning_epoch.side_effect = RuntimeError('bad epoch')
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                self.assertEqual(minute.native_retire_preflight(), 69)
+            self.assertEqual(out.getvalue(), '')
+            self.assertIn('auto-detect-retire-refused=RuntimeError', err.getvalue())
+            legacy.assert_not_called()
+
+    def test_original_schema2_pre_stop_keeps_existing_owner_and_drift_path(self):
+        from types import SimpleNamespace
+        proof = GenerationProof(
+            OwnerToken(4242, 'Sun Nov 15 08:00:00 2026', '/tmp/dvtws2'),
+            'a' * 32, 'a' * 32, 'b' * 64,
+            str(RAW_PATH), str(DEBUG_PATH), 1,
+            ((0, 'unknown-native-default', None), (1, 'observer', None)),
+        )
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock'), \
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":2}'), \
+             patch('pwd.getpwnam', return_value=SimpleNamespace(pw_gid=65534)), \
+             patch.object(minute, 'attest_running_generation', return_value=proof) as legacy, \
+             patch.object(minute, 'attest_learning_running_generation') as learning, \
+             patch.object(minute, 'qualified_current_source'), \
+             patch.object(minute, 'DurableInbox') as queue_type, \
+             patch.object(minute, 'EpochReceipts') as receipts_type:
+            receipts_type.return_value.verify_stop_only_epoch.return_value = False
+            out = io.StringIO()
+            with redirect_stdout(out):
+                self.assertEqual(minute.native_retire_preflight(), 0)
+            self.assertEqual(out.getvalue(),
+                             'auto-detect-retire=original-running-attested\\n')
+            self.assertEqual(legacy.call_count, 2)
+            learning.assert_not_called()
+            receipts_type.return_value.verify_stop_only_epoch.assert_called_once()
+            queue_type.return_value.acknowledge.assert_not_called()
+
     def test_native_tick_denied_without_inherited_fd9_before_source_read(self):
         with patch.object(minute.sys, 'platform', 'freebsd15'), \
              patch.object(minute.os, 'geteuid', return_value=0), \
