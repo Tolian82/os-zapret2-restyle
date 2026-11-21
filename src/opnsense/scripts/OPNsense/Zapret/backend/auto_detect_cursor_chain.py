@@ -2186,6 +2186,29 @@ def _learning_debug_cut_receipts(slot, proof, tip, uid, *, allow_unsealed=False)
             intent["ack_authorized"] is not False):
         raise CursorChainRefused("learning_debug_cut_not_original_ack")
     digest = _digest(intent_raw)
+    rollback_path = slot / DEBUG_CUT_ROLLBACK
+    backup_path = slot / DEBUG_CUT_ROLLBACK_NEW
+    rollback = None
+    if _entry(rollback_path):
+        rollback, rollback_raw = _load(rollback_path, uid)
+        if (rollback_raw != _canonical(rollback) or set(rollback) != {
+                "schema", "kind", "generation", "intent_sha256",
+                "old_retained_size", "old_retained_sha256",
+                "positive_events", "ack_authorized"} or
+                rollback["schema"] != 3 or
+                rollback["kind"] != "original-learning-debug-cut-rollback" or
+                rollback["generation"] != proof.generation or
+                rollback["intent_sha256"] != digest or
+                type(rollback["old_retained_size"]) is not int or
+                not intent["old_size"] < rollback["old_retained_size"] <= MAX_DEBUG or
+                not HEX64.fullmatch(str(rollback["old_retained_sha256"])) or
+                type(rollback["positive_events"]) is not int or
+                not 1 <= rollback["positive_events"] <= 32 or
+                rollback["ack_authorized"] is not False or
+                _entry(complete_path) or _entry(retire_path)):
+            raise CursorChainRefused("learning_debug_cut_rollback_receipt_changed")
+    elif _entry(backup_path):
+        raise CursorChainRefused("learning_debug_cut_orphan_rollback_new")
     if _entry(abort_path):
         abort, raw = _load(abort_path, uid)
         if (raw != _canonical(abort) or abort != {
@@ -2193,9 +2216,15 @@ def _learning_debug_cut_receipts(slot, proof, tip, uid, *, allow_unsealed=False)
                 "generation": proof.generation, "intent_sha256": digest,
                 "ack_authorized": False} or
                 any(_entry(path) for path in
-                    (complete_path, retire_path, fresh_path, old_path))):
+                    (complete_path, retire_path, fresh_path, old_path,
+                     backup_path))):
             raise CursorChainRefused("learning_debug_cut_abort_ambiguous")
         return False
+    if rollback is not None:
+        # The only successful rollback is a final, immutable abort.
+        # Until then the original minute holds the old/new paths and
+        # refuses any normal source WAL; all post-cut bytes remain safe.
+        return None
     if not _entry(complete_path) or not _entry(retire_path):
         return None
     complete, complete_raw = _load(complete_path, uid)
