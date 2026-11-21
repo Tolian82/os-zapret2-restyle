@@ -1181,7 +1181,7 @@ class CursorChain:
             raise CursorChainRefused("learning_cycle_original_epoch_changed")
         return folder, seed, encoded
 
-    def learning_tip(self, proof, workspace):
+    def learning_tip(self, proof, workspace, *, allow_unfinished_debug_cut=False):
         folder, seed, epoch_raw = self.learning_epoch(proof, workspace)
         root = folder / CHAIN
         state = {}
@@ -1265,6 +1265,16 @@ class CursorChain:
             result.update(sequence=sequence + 1, state=progress,
                           debug=ack["debug"], previous_ack_sha256=_digest(ack_raw),
                           slot=None, intent=None)
+            cut = _learning_debug_cut_receipts(
+                slot, proof, result, self.receipts.uid)
+            if cut is None:
+                if _entry(slot / DEBUG_CUT_INTENT):
+                    if not allow_unfinished_debug_cut or name != max(entries):
+                        raise CursorChainRefused("learning_debug_cut_incomplete_owner_epoch")
+                    result["debug_cut_pending"] = slot
+                    return result
+            elif cut is not False:
+                result["debug"] = cut
         return result
 
     def learning_debug_highwater_candidate(self, proof, workspace, *,
@@ -1719,6 +1729,104 @@ def _learning_native_records(folder, intent, uid, *, progress=False):
     if not progress and _learning_records_digest(result) != intent["native_sha256"]:
         raise CursorChainRefused("learning_cycle_source_N_digest_changed")
     return result
+
+
+
+def _entry(path):
+    return path.exists() or path.is_symlink()
+
+
+def _learning_debug_cut_receipts(slot, proof, tip, uid):
+    """Verify immutable ACK→debug-inode transition, never infer it from FS.
+
+    No receipt: no cut. Incomplete cut: original minute refuses until the
+    exact original held-FD9 owner completes/aborts it. Only a retired
+    old inode grants the successor debug cursor. Prior cuts remain linked
+    through the same original cycle and ACK history, including rollover.
+    """
+    intent_path = slot / DEBUG_CUT_INTENT
+    complete_path = slot / DEBUG_CUT_COMPLETE
+    retire_path = slot / DEBUG_CUT_RETIRE
+    abort_path = slot / DEBUG_CUT_ABORT
+    fresh_path = slot / DEBUG_CUT_FRESH
+    old_path = slot / DEBUG_CUT_OLD
+    if not _entry(intent_path):
+        if any(_entry(path) for path in
+               (complete_path, retire_path, abort_path, old_path)):
+            raise CursorChainRefused("learning_debug_cut_orphan_receipt")
+        # A prepared but unsealed empty inode is recovered only by the
+        # original cut owner, never by an ordinary ACK/Config reader.
+        if _entry(fresh_path):
+            raise CursorChainRefused("learning_debug_cut_unsealed_fresh")
+        return None
+    intent, intent_raw = _load(intent_path, uid)
+    expected = {
+        "schema", "kind", "generation", "sequence", "cycle",
+        "previous_ack_sha256", "native_map_sha256", "final_args_sha256",
+        "old", "new", "old_size", "old_sha256", "native_sha256",
+        "cut_authorized", "ack_authorized"}
+    previous = tip["debug"]
+    candidate_new = intent.get("new")
+    if (set(intent) != expected or intent["schema"] != 3 or
+            intent["kind"] != "original-learning-debug-cut-intent" or
+            intent["generation"] != proof.generation or
+            intent["sequence"] != tip["sequence"] - 1 or
+            intent["cycle"] != tip["cycle"] or
+            intent["previous_ack_sha256"] != tip["previous_ack_sha256"] or
+            intent["native_map_sha256"] != proof.native_map_sha256 or
+            intent["final_args_sha256"] != proof.final_args_sha256 or
+            intent["native_sha256"] != _learning_records_digest(tip["state"]) or
+            intent["old"] != previous or
+            type(intent["old_size"]) is not int or
+            intent["old_size"] < MAX_DEBUG // 2 or
+            intent["old_size"] > MAX_DEBUG or
+            intent["old_size"] != previous["offset"] or
+            intent["old_sha256"] != previous["prefix_sha256"] or
+            not isinstance(candidate_new, dict) or
+            set(candidate_new) != set(previous) or
+            candidate_new["path"] != previous["path"] or
+            type(candidate_new["device"]) is not int or
+            type(candidate_new["inode"]) is not int or
+            candidate_new["device"] < 0 or candidate_new["inode"] <= 0 or
+            (candidate_new["device"], candidate_new["inode"]) ==
+                (previous["device"], previous["inode"]) or
+            candidate_new["offset"] != 0 or
+            candidate_new["prefix_sha256"] != EMPTY_HASH or
+            intent["cut_authorized"] is not False or
+            intent["ack_authorized"] is not False):
+        raise CursorChainRefused("learning_debug_cut_not_original_ack")
+    digest = _digest(intent_raw)
+    if _entry(abort_path):
+        abort, raw = _load(abort_path, uid)
+        if (raw != _canonical(abort) or abort != {
+                "schema": 3, "kind": "original-learning-debug-cut-aborted",
+                "generation": proof.generation, "intent_sha256": digest,
+                "ack_authorized": False} or
+                any(_entry(path) for path in
+                    (complete_path, retire_path, fresh_path, old_path))):
+            raise CursorChainRefused("learning_debug_cut_abort_ambiguous")
+        return False
+    if not _entry(complete_path) or not _entry(retire_path):
+        return None
+    complete, complete_raw = _load(complete_path, uid)
+    retired, retired_raw = _load(retire_path, uid)
+    if (complete_raw != _canonical(complete) or
+            complete != {
+                "schema": 3, "kind": "original-learning-debug-cut-complete",
+                "generation": proof.generation, "intent_sha256": digest,
+                "new": candidate_new, "ack_authorized": False} or
+            retired_raw != _canonical(retired) or
+            retired != {
+                "schema": 3, "kind": "original-learning-debug-cut-retired",
+                "generation": proof.generation,
+                "complete_sha256": _digest(complete_raw),
+                "old_size": intent["old_size"],
+                "old_sha256": intent["old_sha256"],
+                "ack_authorized": False} or
+            _entry(fresh_path) or _entry(old_path)):
+        raise CursorChainRefused("learning_debug_cut_not_fully_retired")
+    return candidate_new
+
 
 
 def _learning_checked_anchor(root, proof, epoch_raw, uid):
