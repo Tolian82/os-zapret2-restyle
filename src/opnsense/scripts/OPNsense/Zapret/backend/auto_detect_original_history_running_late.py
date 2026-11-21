@@ -210,10 +210,15 @@ def prepare_original_learning_running_late_source_locked(
         expected = _source_receipt(writer, proof, second, positive)
         chain, third, slot = _paths(writer, proof)
         uid = writer.receipts.uid
-        if slot.exists() or slot.is_symlink():
+        slot_preexisting = slot.exists() or slot.is_symlink()
+        if slot_preexisting:
             _directory(slot, uid)
-            if set(os.listdir(slot)) != {INTENT}:
+            contents = set(os.listdir(slot))
+            if contents - {INTENT}:
                 raise V2OriginalConfigRefused("running_late_unexpected_fourth_slot")
+        else:
+            contents = set()
+        if contents == {INTENT}:
             saved_raw = _read(slot / INTENT, uid)
             saved = json.loads(saved_raw)
             if saved_raw != _canonical(saved):
@@ -237,6 +242,9 @@ def prepare_original_learning_running_late_source_locked(
             raw = saved_raw
             frozen = saved
         else:
+            # A crash between mkdir+fsync and the FIRST intent link is a
+            # qualified empty-slot replay, not an invented completed WAL.
+            # Any foreign entry or a conflicting saved intent still fails.
             raw = _canonical(expected)
             if (attest_learning_running_generation() != proof or
                     _positive_snapshot_once(writer, proof, inspect) != first or
@@ -244,9 +252,12 @@ def prepare_original_learning_running_late_source_locked(
                         writer, proof, workspace, **args) != positive):
                 raise V2OriginalConfigRefused("running_late_source_raced_before_seal")
             _held(writer, proof, workspace, config_fd, config_path, attest)
-            slot.mkdir(mode=0o700)
-            _sync(chain)
+            if not slot_preexisting:
+                slot.mkdir(mode=0o700)
+                _sync(chain)
             _directory(slot, uid)
+            if os.listdir(slot):
+                raise V2OriginalConfigRefused("running_late_empty_slot_raced")
             _write_once(slot, INTENT, raw, uid)
             frozen = expected
         _frozen_prefix_still_exists(writer, proof, frozen, inspect)
