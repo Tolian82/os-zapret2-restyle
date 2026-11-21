@@ -839,6 +839,366 @@ def seal_original_learning_native_rebind_locked(
             "learning_rebind_original_journal_refused") from exc
 
 
+def _native_rebind_stable_snapshot(path: Path, uid: int, writer_gid: int,
+                                   *, allowed_links: tuple[int, ...]) -> tuple:
+    """A read-only, bounded, no-follow native inode witness (1 or 2 links).
+
+    Original native learning files are written by a non-cooperating dvtws2
+    process. Never infer that the P2a flock serializes its append. The
+    stable named/open/named inode, metadata and content are all required;
+    the caller must still re-attest the all-N snapshot and the owner.
+    """
+    import os
+    import stat
+    from auto_detect_queue import _stat_regular, MAX_SEGMENT
+
+    def identity(st):
+        return (st.st_dev, st.st_ino, st.st_size, st.st_ctime_ns,
+                st.st_mtime_ns, st.st_nlink, st.st_uid, st.st_gid,
+                stat.S_IMODE(st.st_mode))
+
+    before = _stat_regular(path, uid, max_size=MAX_SEGMENT,
+                           writer_gid=writer_gid)
+    if before.st_nlink not in allowed_links:
+        raise V2OriginalConfigRefused("native_rebind_unexpected_hardlinks")
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        opened = os.fstat(fd)
+        if identity(opened) != identity(before):
+            raise V2OriginalConfigRefused("native_rebind_open_inode_changed")
+        data = bytearray()
+        while len(data) < before.st_size:
+            part = os.read(fd, min(65536, before.st_size - len(data)))
+            if not part:
+                raise V2OriginalConfigRefused("native_rebind_short_read")
+            data.extend(part)
+        closed = os.fstat(fd)
+    finally:
+        os.close(fd)
+    named = _stat_regular(path, uid, max_size=MAX_SEGMENT,
+                          writer_gid=writer_gid)
+    if (identity(before) != identity(closed) or
+            identity(closed) != identity(named) or
+            len(data) != before.st_size or
+            (data and not data.endswith(b"\n")) or
+            b"\r" in data or b"\x00" in data):
+        raise V2OriginalConfigRefused("native_rebind_unstable_or_incomplete_content")
+    return before, bytes(data), identity(named)
+
+
+def inspect_original_learning_native_rebind_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+) -> dict:
+    """Read-only original cross-N PREPARED→physical-state observation.
+
+    Does NOT call prepare_learning_first_slot(): its old-epoch root-inode
+    requirement intentionally refuses AFTER any physical rename. Instead,
+    read the immutable source/checkpoint/manifest under the SAME original
+    P2a+GUI+inherited Config FD and exact current FD9 generation. Require
+    retention of the old inode and its complete preimage even when a new
+    live native inode was installed; keep old-FD and new-path append suffix
+    separate. No post-swap cursor, native ACK or product permission.
+    """
+    import os
+    import re
+    import sys
+    from auto_detect_epoch_receipts import _canonical, _directory
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_queue import QueueSafetyError, NATIVE_PENDING
+    from auto_detect_debug_window import _raw_hosts, DebugWindowRefused
+
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not writer.queue._held or
+            not getattr(writer, "_gui_held", False) or
+            type(writer.queue.writer_gid) is not int or
+            writer.queue.writer_gid <= 0 or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(config_path, Path) or
+            not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not callable(attest) or
+            (sys.platform.startswith("freebsd") and
+             (config_path != CONFIG_PATH or
+              writer.receipts.uid != 0 or writer.queue.uid != 0)) or
+            attest() != proof):
+        raise V2OriginalConfigRefused("learning_rebind_inspector_original_owner_required")
+
+    def held():
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=None if config_path == CONFIG_PATH
+            else writer.receipts.uid)
+        if attest() != proof:
+            raise V2OriginalConfigRefused("learning_rebind_inspector_owner_changed")
+
+    try:
+        held()
+        writer.queue._verify()
+        slot = (writer.receipts.root / proof.generation /
+                "cursor-chain-v2" / "00000000")
+        folder = slot / "native-rebind"
+        _directory(slot, writer.receipts.uid)
+        _directory(folder, writer.receipts.uid)
+        intent_raw = _read(slot / "intent.json", writer.receipts.uid)
+        intent = json.loads(intent_raw)
+        epoch_raw = _read(
+            writer.receipts.root / proof.generation / "epoch.json",
+            writer.receipts.uid)
+        plan, plan_raw = qualified_destination_plan(
+            slot, intent, writer.receipts.uid, targets=writer.targets)
+        checkpoint_raw = _read(
+            slot / "destination" / "checkpoint.json", writer.receipts.uid)
+        checkpoint = json.loads(checkpoint_raw)
+        manifest_raw = _read(folder / "manifest.json", writer.receipts.uid)
+        manifest = json.loads(manifest_raw)
+        if (intent.get("schema") != 3 or
+                intent.get("kind") != "original-learning-cursor-prepared" or
+                intent.get("generation") != proof.generation or
+                intent.get("operation_id") != proof.operation_id or
+                intent.get("owner_pid") != proof.owner.pid or
+                intent.get("owner_start") != proof.owner.started or
+                intent.get("owner_candidate_sha256") !=
+                proof.owner_candidate_sha256 or
+                intent.get("final_args_sha256") != proof.final_args_sha256 or
+                intent.get("native_map_sha256") != proof.native_map_sha256 or
+                intent.get("epoch_sha256") != hashlib.sha256(epoch_raw).hexdigest() or
+                len(intent.get("native", [])) != len(proof.learning) or
+                not 1 <= len(proof.learning) <= 255 or
+                plan.get("schema") != 3 or
+                "live" not in plan or
+                plan.get("source_intent_sha256") !=
+                hashlib.sha256(intent_raw).hexdigest()):
+            raise V2OriginalConfigRefused("learning_rebind_inspector_original_intent_drift")
+        expected_cp = {
+            "schema": 1, "kind": "destination-and-cursor-committed",
+            "generation": proof.generation,
+            "pending_name": "learning-00000000",
+            "plan_sha256": hashlib.sha256(plan_raw).hexdigest(),
+            "evidence": "learning-native-debug",
+            "committed_cursor_offset": intent["debug_end_offset"],
+            "committed_cursor_sha256": intent["debug_end_sha256"],
+            "ack_authorized": False,
+        }
+        if checkpoint != expected_cp:
+            raise V2OriginalConfigRefused("learning_rebind_inspector_checkpoint_changed")
+        # Post-commit GUI edits or active managed changes invalidate the
+        # old source plan, even if the old root-only receipt still exists.
+        for name, change in plan["writes"].items():
+            data, _ = _target(writer.targets[name], writer.receipts.uid)
+            if (change["path"] != str(writer.targets[name]) or
+                    hashlib.sha256(data).hexdigest() != change["after"]):
+                raise V2OriginalConfigRefused("learning_rebind_inspector_found_diverged")
+        for name, change in plan["live"].items():
+            path = COMMON_ACTIVE / "managed" / ("hostlist-" + name + ".txt")
+            data, _ = _target(path, writer.receipts.uid)
+            if (change["path"] != str(path) or
+                    hashlib.sha256(data).hexdigest() != change["after"]):
+                raise V2OriginalConfigRefused("learning_rebind_inspector_managed_diverged")
+        file_names = [f"{number:03d}.json"
+                      for number, _, _ in proof.learning]
+        if set(os.listdir(folder)) != set(file_names) | {"manifest.json"}:
+            raise V2OriginalConfigRefused("learning_rebind_inspector_incomplete_manifest")
+        raw_rows = [_read(folder / name, writer.receipts.uid)
+                    for name in file_names]
+        source_sha = hashlib.sha256(intent_raw).hexdigest()
+        checkpoint_sha = hashlib.sha256(
+            _canonical(checkpoint)).hexdigest()
+        expected_manifest = {
+            "schema": 3,
+            "kind": "original-learning-native-rebind-manifest",
+            "generation": proof.generation,
+            "sequence": 0,
+            "owner_pid": proof.owner.pid,
+            "owner_start": proof.owner.started,
+            "native_map_sha256": proof.native_map_sha256,
+            "source_intent_sha256": source_sha,
+            "checkpoint_sha256": checkpoint_sha,
+            "profiles_count": len(file_names),
+            "profiles_sha256": hashlib.sha256(b"".join(
+                hashlib.sha256(x).digest() for x in raw_rows)).hexdigest(),
+            "physical_rotation_authorized": False,
+            "ack_authorized": False,
+        }
+        if (manifest != expected_manifest or
+                manifest_raw != _canonical(manifest)):
+            raise V2OriginalConfigRefused("learning_rebind_inspector_manifest_mismatch")
+        rows = [json.loads(x) for x in raw_rows]
+        selected_pending: set[str] = set()
+        for i, (number, name, pathname) in enumerate(proof.learning):
+            row, first = rows[i], intent["native"][i]
+            source_fields = {
+                "schema": 3, "kind": "original-learning-native-rebind-profile",
+                "generation": proof.generation, "sequence": 0,
+                "native_number": number, "hostlist": name, "path": pathname,
+                "old_device": first["device"], "old_inode": first["inode"],
+                "sealed_end_offset": first["end_offset"],
+                "sealed_end_sha256": first["end_sha256"],
+                "ack_authorized": False,
+            }
+            if (raw_rows[i] != _canonical(row) or
+                    set(row) != set(source_fields) | {
+                        "full_preimage", "replacement", "removed", "pending_name"
+                    } or any(row.get(k) != v for k, v in source_fields.items())):
+                raise V2OriginalConfigRefused("learning_rebind_inspector_profile_mismatch")
+            full, replacement, pending, removed = (
+                row["full_preimage"], row["replacement"],
+                row["pending_name"], row["removed"])
+            if full is None:
+                if (replacement is not None or pending is not None or
+                        removed != []):
+                    raise V2OriginalConfigRefused("learning_rebind_inspector_unselected_changed")
+                continue
+            if (not isinstance(full, dict) or
+                    set(full) != {"size", "sha256"} or
+                    type(full["size"]) is not int or
+                    not first["end_offset"] <= full["size"] <= 4*1024*1024 or
+                    type(full["sha256"]) is not str or
+                    re.fullmatch(r"[0-9a-f]{64}", full["sha256"]) is None or
+                    not isinstance(replacement, dict) or
+                    set(replacement) != {"size", "sha256"} or
+                    type(replacement["size"]) is not int or
+                    not 0 <= replacement["size"] < full["size"] or
+                    type(replacement["sha256"]) is not str or
+                    re.fullmatch(r"[0-9a-f]{64}", replacement["sha256"]) is None or
+                    type(removed) is not list or
+                    not 1 <= len(removed) <= 4096 or
+                    any(type(s) is not str for s in removed) or
+                    type(pending) is not str or
+                    NATIVE_PENDING.fullmatch(pending) is None):
+                raise V2OriginalConfigRefused("learning_rebind_inspector_invalid_profile_image")
+            digest = hashlib.sha256(
+                _canonical({
+                    "generation": proof.generation,
+                    "native_number": number, "intent": source_sha,
+                    "checkpoint": checkpoint_sha,
+                    "source": full,
+                })).hexdigest()[:32]
+            if pending != f"native-{proof.generation}-{number}-{digest}.txt":
+                raise V2OriginalConfigRefused("learning_rebind_inspector_pending_not_bound")
+            selected_pending.add(pending)
+        if {p.name for p in writer.queue.segments()} - selected_pending:
+            raise V2OriginalConfigRefused("learning_rebind_inspector_foreign_pending")
+        snapshots = {}
+        observations = []
+        for index, (number, name, pathname) in enumerate(proof.learning):
+            record = rows[index]
+            old = (record["old_device"], record["old_inode"])
+            live = Path(pathname)
+            if live.parent != writer.queue.root:
+                raise V2OriginalConfigRefused("learning_rebind_inspector_foreign_live_root")
+            st, data, witness = _native_rebind_stable_snapshot(
+                live, writer.receipts.uid, writer.queue.writer_gid,
+                allowed_links=(1, 2))
+            snapshots[live] = (witness, hashlib.sha256(data).hexdigest())
+            end = record["sealed_end_offset"]
+            known = record["full_preimage"]
+            pending_name = record["pending_name"]
+            retained_path = (writer.queue.pending / pending_name
+                             if pending_name is not None else None)
+            if retained_path is None:
+                if ((st.st_dev, st.st_ino) != old or st.st_nlink != 1 or
+                        end > len(data) or
+                        hashlib.sha256(data[:end]).hexdigest() !=
+                        record["sealed_end_sha256"]):
+                    raise V2OriginalConfigRefused("learning_rebind_inspector_untouched_profile_drift")
+                observations.append({
+                    "native_number": number, "hostlist": name,
+                    "phase": "untouched", "old_tail_size": 0,
+                    "new_tail_size": 0,
+                })
+                continue
+            if not retained_path.exists() and not retained_path.is_symlink():
+                # This is PREPARED and no hardlink exists, OR the original
+                # retained source was lost. A renamed new inode is forbidden.
+                if ((st.st_dev, st.st_ino) != old or st.st_nlink != 1 or
+                        len(data) != known["size"] or
+                        hashlib.sha256(data).hexdigest() != known["sha256"] or
+                        end > len(data) or
+                        hashlib.sha256(data[:end]).hexdigest() !=
+                        record["sealed_end_sha256"]):
+                    raise V2OriginalConfigRefused("learning_rebind_inspector_missing_old_pending")
+                phase, old_tail, new_tail = "prepared-unmodified", b"", b""
+            else:
+                pinned, old_data, pinned_witness = _native_rebind_stable_snapshot(
+                    retained_path, writer.receipts.uid,
+                    writer.queue.writer_gid, allowed_links=(1, 2))
+                snapshots[retained_path] = (
+                    pinned_witness, hashlib.sha256(old_data).hexdigest())
+                if ((pinned.st_dev, pinned.st_ino) != old or
+                        len(old_data) < known["size"] or
+                        hashlib.sha256(old_data[:known["size"]]).hexdigest() !=
+                        known["sha256"] or
+                        end > len(old_data) or
+                        hashlib.sha256(old_data[:end]).hexdigest() !=
+                        record["sealed_end_sha256"]):
+                    raise V2OriginalConfigRefused("learning_rebind_inspector_retained_preimage_changed")
+                old_tail = old_data[known["size"]:]
+                if old_tail:
+                    _raw_hosts(old_tail)
+                if (st.st_dev, st.st_ino) == old:
+                    if (st.st_nlink != 2 or pinned.st_nlink != 2 or
+                            data != old_data):
+                        raise V2OriginalConfigRefused("learning_rebind_inspector_broken_hardlink")
+                    phase = ("linked-unreplaced" if not old_tail
+                             else "linked-source-grew")
+                    new_tail = b""
+                else:
+                    if st.st_nlink != 1 or pinned.st_nlink != 1:
+                        raise V2OriginalConfigRefused("learning_rebind_inspector_unexpected_post_swap_links")
+                    after = record["replacement"]
+                    if (len(data) < after["size"] or
+                            hashlib.sha256(data[:after["size"]]).hexdigest() !=
+                            after["sha256"]):
+                        raise V2OriginalConfigRefused("learning_rebind_inspector_new_live_image_diverged")
+                    new_tail = data[after["size"]:]
+                    if new_tail:
+                        _raw_hosts(new_tail)
+                    phase = ("replaced-retained" if not old_tail and not new_tail
+                             else "replaced-with-unprocessed-tails")
+            observations.append({
+                "native_number": number,
+                "hostlist": name, "phase": phase,
+                "old_tail_size": len(old_tail),
+                "old_tail_sha256": hashlib.sha256(old_tail).hexdigest(),
+                "new_tail_size": len(new_tail),
+                "new_tail_sha256": hashlib.sha256(new_tail).hexdigest(),
+            })
+        # Re-attest all N files (including retained hardlinks) at the end,
+        # NOT just the last profile: dvtws2 can append without P2a lock.
+        if {p.name for p in writer.queue.segments()} - selected_pending:
+            raise V2OriginalConfigRefused("learning_rebind_inspector_pending_changed")
+        for path, (witness, sha) in snapshots.items():
+            _, content, after = _native_rebind_stable_snapshot(
+                path, writer.receipts.uid, writer.queue.writer_gid,
+                allowed_links=(1, 2))
+            if witness != after or hashlib.sha256(content).hexdigest() != sha:
+                raise V2OriginalConfigRefused("learning_rebind_inspector_all_n_race")
+        held()
+        return {
+            "schema": 3,
+            "kind": "original-learning-native-rebind-inspection",
+            "generation": proof.generation,
+            "manifest_sha256": hashlib.sha256(manifest_raw).hexdigest(),
+            "profiles": observations,
+            "physical_rotation_authorized": False,
+            "ack_authorized": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (OSError, ValueError, TypeError, KeyError, AttributeError,
+            ReceiptRefused, OriginalLockRefused, DestinationRefused,
+            OwnedSourcesRefused, EffectiveKnownRefused, QueueSafetyError,
+            DebugWindowRefused) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_rebind_original_physical_inspection_refused") from exc
+
+
 def _recover_original_learning_partial_locked(
         writer: DestinationCommit, proof, workspace: Path,
         slot: Path, intent: dict, *, owned_root: Path,
