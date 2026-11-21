@@ -1015,6 +1015,36 @@ def inspect_original_learning_native_rebind_locked(
                     "live" not in forward_plan):
                 raise V2OriginalConfigRefused(
                     "learning_rebind_inspector_forward_wal_unqualified")
+        # A third same-generation transaction may advance the SECOND
+        # checkpoint's after-images, but ONLY through its own already
+        # protected and source-bound original destination plan. Merely
+        # seeing a third source intent MUST NOT relax GUI/CAS guards.
+        third_plan = None
+        if forward_plan is not None:
+            third_slot = slot.parent / "00000002"
+            third_plan_path = third_slot / "destination" / "plan.json"
+            if third_plan_path.exists() or third_plan_path.is_symlink():
+                _directory(third_slot, writer.receipts.uid)
+                third_raw = _read(
+                    third_slot / "intent.json", writer.receipts.uid)
+                third_source = json.loads(third_raw)
+                third_plan, _ = qualified_destination_plan(
+                    third_slot, third_source, writer.receipts.uid,
+                    targets=writer.targets)
+                if (third_source.get("sequence") != 2 or
+                        third_source.get("generation") != proof.generation or
+                        third_source.get("owner_pid") != proof.owner.pid or
+                        third_source.get("owner_start") !=
+                        proof.owner.started or "live" not in third_plan):
+                    raise V2OriginalConfigRefused(
+                        "learning_rebind_inspector_third_plan_not_original")
+
+        def original_pin(row, st):
+            return _file_identity(st) == (
+                row["before_device"], row["before_inode"],
+                row["before_ctime_ns"], row["before_mtime_ns"],
+                row["before_size"])
+
         def matches_target(name, path, expected_after, *, managed=False):
             data, st = _target(path, writer.receipts.uid)
             digest = hashlib.sha256(data).hexdigest()
@@ -1022,19 +1052,46 @@ def inspect_original_learning_native_rebind_locked(
                 return True
             if forward_plan is None:
                 return False
-            item = forward_plan["live" if managed else "writes"].get(name)
-            if (item is None or item["path"] != str(path) or
-                    item["before"] != expected_after):
+            kind = "live" if managed else "writes"
+            prior = forward_plan[kind].get(name)
+            next_before = expected_after
+            if prior is not None:
+                if (prior["path"] != str(path) or
+                        prior["before"] != expected_after):
+                    return False
+                next_before = prior["after"]
+                if (digest == prior["after"] or
+                        (digest == prior["before"] and
+                         original_pin(prior, st))):
+                    return True
+            if third_plan is None:
                 return False
-            if digest == item["after"]:
+            successor = third_plan[kind].get(name)
+            return (successor is not None and
+                    successor["path"] == str(path) and
+                    successor["before"] == next_before and
+                    (digest == successor["after"] or
+                     (digest == successor["before"] and
+                      original_pin(successor, st))))
+
+        def matches_transition(name, path, prior, *, managed=False):
+            data, st = _target(path, writer.receipts.uid)
+            digest = hashlib.sha256(data).hexdigest()
+            if prior["path"] != str(path):
+                return False
+            if (digest == prior["after"] or
+                    (digest == prior["before"] and original_pin(prior, st))):
                 return True
-            # A second-slot CAS not yet performed must still have the
-            # ORIGINAL protected preimage inode, never just its bytes.
-            return (digest == item["before"] and
-                    _file_identity(st) == (
-                        item["before_device"], item["before_inode"],
-                        item["before_ctime_ns"], item["before_mtime_ns"],
-                        item["before_size"]))
+            if third_plan is None:
+                return False
+            successor = third_plan[
+                "live" if managed else "writes"].get(name)
+            return (successor is not None and
+                    successor["path"] == str(path) and
+                    successor["before"] == prior["after"] and
+                    (digest == successor["after"] or
+                     (digest == successor["before"] and
+                      original_pin(successor, st))))
         # Post-commit GUI edits or active managed changes invalidate the
         # old source plan, even if the old root-only receipt still exists.
         for name, change in plan["writes"].items():
@@ -1053,29 +1110,14 @@ def inspect_original_learning_native_rebind_locked(
             # by the first slot (e.g. newly discovered shared auto).
             for name, item in forward_plan["writes"].items():
                 path = writer.targets[name]
-                data, st = _target(path, writer.receipts.uid)
-                digest = hashlib.sha256(data).hexdigest()
-                if (item["path"] != str(path) or
-                        (digest != item["after"] and
-                         (digest != item["before"] or
-                          _file_identity(st) != (
-                              item["before_device"], item["before_inode"],
-                              item["before_ctime_ns"], item["before_mtime_ns"],
-                              item["before_size"])))):
+                if not matches_transition(name, path, item):
                     raise V2OriginalConfigRefused(
                         "learning_rebind_inspector_forward_found_unsafe")
             for name, item in forward_plan["live"].items():
                 path = (COMMON_ACTIVE / "managed" /
                         ("hostlist-" + name + ".txt"))
-                data, st = _target(path, writer.receipts.uid)
-                digest = hashlib.sha256(data).hexdigest()
-                if (item["path"] != str(path) or
-                        (digest != item["after"] and
-                         (digest != item["before"] or
-                          _file_identity(st) != (
-                              item["before_device"], item["before_inode"],
-                              item["before_ctime_ns"], item["before_mtime_ns"],
-                              item["before_size"])))):
+                if not matches_transition(
+                        name, path, item, managed=True):
                     raise V2OriginalConfigRefused(
                         "learning_rebind_inspector_forward_live_unsafe")
         file_names = [f"{number:03d}.json"
@@ -2251,19 +2293,51 @@ def seal_original_learning_forward_progress_locked(
         # changed. Observe EVERY second-slot destination after-image,
         # including a source absent from the first-slot write set.
         def destinations_still_committed():
+            third_slot = slot.parent / "00000002"
+            third_plan_path = third_slot / "destination" / "plan.json"
+            third_plan = None
+            if third_plan_path.exists() or third_plan_path.is_symlink():
+                third_raw = _read(
+                    third_slot / "intent.json", writer.receipts.uid)
+                third_source = json.loads(third_raw)
+                third_plan, _ = qualified_destination_plan(
+                    third_slot, third_source, writer.receipts.uid,
+                    targets=writer.targets)
+                if (third_source.get("generation") != proof.generation or
+                        third_source.get("sequence") != 2 or
+                        "live" not in third_plan):
+                    raise V2OriginalConfigRefused(
+                        "learning_progress_third_plan_unqualified")
+            def committed(name, path, row, kind):
+                data, st = _target(path, writer.receipts.uid)
+                digest = hashlib.sha256(data).hexdigest()
+                if row["path"] != str(path):
+                    return False
+                if digest == row["after"]:
+                    return True
+                if third_plan is None:
+                    return False
+                later = third_plan[kind].get(name)
+                if (later is None or later["path"] != str(path) or
+                        later["before"] != row["after"]):
+                    return False
+                return (digest == later["after"] or
+                        (digest == later["before"] and
+                         _file_identity(st) == (
+                             later["before_device"],
+                             later["before_inode"],
+                             later["before_ctime_ns"],
+                             later["before_mtime_ns"],
+                             later["before_size"])))
             for name, row in plan["writes"].items():
-                data, _ = _target(
-                    writer.targets[name], writer.receipts.uid)
-                if (row["path"] != str(writer.targets[name]) or
-                        hashlib.sha256(data).hexdigest() != row["after"]):
+                if not committed(
+                        name, writer.targets[name], row, "writes"):
                     raise V2OriginalConfigRefused(
                         "learning_forward_progress_found_changed")
             for name, row in plan["live"].items():
                 path = (COMMON_ACTIVE / "managed" /
                         ("hostlist-" + name + ".txt"))
-                data, _ = _target(path, writer.receipts.uid)
-                if (row["path"] != str(path) or
-                        hashlib.sha256(data).hexdigest() != row["after"]):
+                if not committed(name, path, row, "live"):
                     raise V2OriginalConfigRefused(
                         "learning_forward_progress_managed_changed")
 
@@ -2469,13 +2543,18 @@ def _recover_original_learning_partial_locked(
         # Reuse ONE original P2a/P2b source attester. The second slot has
         # TWO immutable native inode cursors, and must not be examined by
         # the first-slot single-inode prefix attester.
-        if intent.get("sequence") == 1:
+        if intent.get("sequence") in (1, 2):
             if config_fd is None or config_path is None:
                 raise V2OriginalConfigRefused(
                     "learning_forward_partial_requires_original_config_fd")
-            answer = prepare_original_learning_forward_second_slot_locked(
-                writer, proof, workspace, config_fd=config_fd,
-                config_path=config_path, attest=attest, inspect=inspect)
+            if intent["sequence"] == 1:
+                answer = prepare_original_learning_forward_second_slot_locked(
+                    writer, proof, workspace, config_fd=config_fd,
+                    config_path=config_path, attest=attest, inspect=inspect)
+            else:
+                answer = prepare_original_learning_third_slot_locked(
+                    writer, proof, workspace, config_fd=config_fd,
+                    config_path=config_path, attest=attest, inspect=inspect)
             return {
                 "source_intent_sha256": answer["intent_sha256"],
                 "p2b_drained": True,

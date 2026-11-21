@@ -223,9 +223,20 @@ def prepare_third_source_locked(
             preview()
             slot.mkdir(mode=0o700)
             _sync(chain)
-        if set(os.listdir(slot)) - {"native", "intent.json"}:
+        names_slot = set(os.listdir(slot))
+        if names_slot - {"native", "intent.json", "destination"}:
             raise V2OriginalConfigRefused(
                 "original_third_source_foreign_destination")
+        if "destination" in names_slot:
+            if "intent.json" not in names_slot:
+                raise V2OriginalConfigRefused(
+                    "original_third_source_destination_before_intent")
+            journal = slot / "destination"
+            _directory(journal, uid)
+            if set(os.listdir(journal)) - {
+                    "plan.json", "checkpoint.json"}:
+                raise V2OriginalConfigRefused(
+                    "original_third_source_foreign_destination_files")
         native = slot / "native"
         if native.exists() or native.is_symlink():
             _directory(native, uid)
@@ -246,7 +257,9 @@ def prepare_third_source_locked(
             encoded = _read(destination, uid)
             record = json.loads(encoded)
             if (encoded != _canonical(record) or
-                    set(os.listdir(slot)) != {"native", "intent.json"} or
+                    set(os.listdir(slot)) not in (
+                        {"native", "intent.json"},
+                        {"native", "intent.json", "destination"}) or
                     set(os.listdir(native)) != allowed):
                 raise V2OriginalConfigRefused(
                     "original_third_source_not_complete")
