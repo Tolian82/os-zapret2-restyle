@@ -1002,7 +1002,9 @@ def inspect_original_learning_native_rebind_locked(
                 raise V2OriginalConfigRefused("learning_rebind_inspector_managed_diverged")
         file_names = [f"{number:03d}.json"
                       for number, _, _ in proof.learning]
-        if set(os.listdir(folder)) != set(file_names) | {"manifest.json"}:
+        entries = set(os.listdir(folder))
+        required = set(file_names) | {"manifest.json"}
+        if entries not in (required, required | {"observed"}):
             raise V2OriginalConfigRefused("learning_rebind_inspector_incomplete_manifest")
         raw_rows = [_read(folder / name, writer.receipts.uid)
                     for name in file_names]
@@ -1086,6 +1088,7 @@ def inspect_original_learning_native_rebind_locked(
             raise V2OriginalConfigRefused("learning_rebind_inspector_foreign_pending")
         snapshots = {}
         observations = []
+        observed_seed_by_name = {}
         for index, (number, name, pathname) in enumerate(proof.learning):
             record = rows[index]
             old = (record["old_device"], record["old_inode"])
@@ -1110,7 +1113,7 @@ def inspect_original_learning_native_rebind_locked(
                 observations.append({
                     "native_number": number, "hostlist": name,
                     "phase": "untouched", "old_tail_size": 0,
-                    "new_tail_size": 0,
+                    "new_tail_size": 0, "inode_seed": None,
                 })
                 continue
             if not retained_path.exists() and not retained_path.is_symlink():
@@ -1161,6 +1164,37 @@ def inspect_original_learning_native_rebind_locked(
                         _raw_hosts(new_tail)
                     phase = ("replaced-retained" if not old_tail and not new_tail
                              else "replaced-with-unprocessed-tails")
+            # This is ONLY the durable physical inode BASELINE. The
+            # retained old append tail starts at full_preimage.size, and
+            # the new live append tail starts at replacement.size. They
+            # remain UNPROCESSED, even when this seed is durable.
+            inode_seed = None
+            if phase.startswith("replaced-"):
+                inode_seed = {
+                    "schema": 3,
+                    "kind": "original-learning-native-inode-seed",
+                    "generation": proof.generation,
+                    "sequence": 0,
+                    "native_number": number,
+                    "hostlist": name,
+                    "live_path": pathname,
+                    "manifest_sha256": hashlib.sha256(
+                        manifest_raw).hexdigest(),
+                    "old_pending_name": pending_name,
+                    "old_pending_inode": {
+                        "device": old[0], "inode": old[1],
+                        "cut_offset": known["size"],
+                        "cut_sha256": known["sha256"],
+                    },
+                    "new_live_inode": {
+                        "device": st.st_dev, "inode": st.st_ino,
+                        "cut_offset": record["replacement"]["size"],
+                        "cut_sha256": record["replacement"]["sha256"],
+                    },
+                    "cursor_advanced": False,
+                    "ack_authorized": False,
+                }
+                observed_seed_by_name[f"{number:03d}.json"] = inode_seed
             observations.append({
                 "native_number": number,
                 "hostlist": name, "phase": phase,
@@ -1168,7 +1202,25 @@ def inspect_original_learning_native_rebind_locked(
                 "old_tail_sha256": hashlib.sha256(old_tail).hexdigest(),
                 "new_tail_size": len(new_tail),
                 "new_tail_sha256": hashlib.sha256(new_tail).hexdigest(),
+                "inode_seed": inode_seed,
             })
+        # If any previous original write-once physical seeds exist,
+        # verify EACH against the exact live/retained inode and manifest.
+        # A stale seeded profile cannot be silently re-rooted after
+        # restart or an unexpected second rename.
+        observed_folder = folder / "observed"
+        if observed_folder.exists() or observed_folder.is_symlink():
+            _directory(observed_folder, writer.receipts.uid)
+            observed_names = set(os.listdir(observed_folder))
+            if not observed_names.issubset(observed_seed_by_name):
+                raise V2OriginalConfigRefused(
+                    "learning_rebind_inspector_foreign_or_stale_seed")
+            for seed_name in observed_names:
+                if _read(observed_folder / seed_name,
+                         writer.receipts.uid) != _canonical(
+                             observed_seed_by_name[seed_name]):
+                    raise V2OriginalConfigRefused(
+                        "learning_rebind_inspector_prior_seed_drift")
         # Re-attest all N files (including retained hardlinks) at the end,
         # NOT just the last profile: dvtws2 can append without P2a lock.
         if {p.name for p in writer.queue.segments()} - selected_pending:
@@ -1197,6 +1249,113 @@ def inspect_original_learning_native_rebind_locked(
             DebugWindowRefused) as exc:
         raise V2OriginalConfigRefused(
             "learning_rebind_original_physical_inspection_refused") from exc
+
+
+def seal_original_learning_post_inode_seed_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+) -> dict:
+    """Write-once original per-N post-rename inode baseline, never tail ACK.
+
+    Records live INSIDE the original first-slot native-rebind/observed
+    journal. They prove that the expected native postimage is now at an
+    actual new inode, while the ORIGINAL old inode remains in P2a pending.
+    The cut offsets are strictly the PREVIOUSLY authorized preimage and
+    replacement sizes. Every byte appended after either cut is UNPROCESSED
+    and no cursor is advanced by writing these records.
+
+    A crash after any individual write is recoverable solely by the
+    original manifest/owner and an identical live inode; a later append
+    is tolerated, but a second rename or lost old pending is refused.
+    This import-only primitive MUST NOT call rotate(), unlink(), ACK or
+    the installed minute/Apply/launcher.
+    """
+    import os
+    from auto_detect_epoch_receipts import (
+        _canonical, _directory, _write_once, _sync,
+    )
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+
+    def qualified_owner():
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=None if config_path == CONFIG_PATH
+            else writer.receipts.uid)
+        if attest() != proof:
+            raise V2OriginalConfigRefused(
+                "learning_inode_seed_original_owner_changed")
+    try:
+        # The inspector checks genuine original P2a+GUI+Config FD4,
+        # source/checkpoint/manifest, all N live and pending inodes, then
+        # reads them ALL a second time for concurrent native appends.
+        before = inspect_original_learning_native_rebind_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest)
+        seeds = {
+            f'{row["native_number"]:03d}.json': row["inode_seed"]
+            for row in before["profiles"] if row["inode_seed"] is not None
+        }
+        if (not seeds or
+                before["physical_rotation_authorized"] is not False or
+                before["ack_authorized"] is not False):
+            raise V2OriginalConfigRefused(
+                "learning_inode_seed_no_proven_physical_rotation")
+        slot = (writer.receipts.root / proof.generation /
+                "cursor-chain-v2" / "00000000")
+        folder = slot / "native-rebind"
+        _directory(folder, writer.receipts.uid)
+        observed = folder / "observed"
+        qualified_owner()
+        if observed.exists() or observed.is_symlink():
+            _directory(observed, writer.receipts.uid)
+        else:
+            observed.mkdir(mode=0o700)
+            _sync(folder)
+        names = set(os.listdir(observed))
+        if names - set(seeds):
+            raise V2OriginalConfigRefused(
+                "learning_inode_seed_foreign_or_replaced_profile")
+        for name, row in seeds.items():
+            if name in names and _read(
+                    observed / name, writer.receipts.uid) != _canonical(row):
+                raise V2OriginalConfigRefused(
+                    "learning_inode_seed_previous_inode_changed")
+        qualified_owner()
+        for name, row in sorted(seeds.items()):
+            _write_once(observed, name, _canonical(row),
+                        writer.receipts.uid)
+        # Late append may grow either inode after the first cut: it is
+        # deliberately NOT an alteration of the immutable cursor BASE.
+        # Recheck all N and prior recorded seeds before reporting success.
+        after = inspect_original_learning_native_rebind_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest)
+        if (after["manifest_sha256"] != before["manifest_sha256"] or
+                {f'{row["native_number"]:03d}.json': row["inode_seed"]
+                 for row in after["profiles"] if row["inode_seed"] is not None}
+                != seeds or
+                set(os.listdir(observed)) != set(seeds)):
+            raise V2OriginalConfigRefused(
+                "learning_inode_seed_changed_during_commit")
+        qualified_owner()
+        return {
+            "schema": 3,
+            "kind": "original-learning-post-inode-seeded",
+            "generation": proof.generation,
+            "manifest_sha256": after["manifest_sha256"],
+            "seeds": len(seeds),
+            "cursor_advanced": False,
+            "ack_authorized": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (OSError, ValueError, TypeError, KeyError, AttributeError,
+            ReceiptRefused, OriginalLockRefused,
+            DestinationRefused, QueueSafetyError) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_inode_seed_original_transaction_refused") from exc
 
 
 def _recover_original_learning_partial_locked(
