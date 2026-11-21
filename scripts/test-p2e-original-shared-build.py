@@ -1896,6 +1896,17 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 writer, proof, self.work,
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof, inspect=inspect_witness)
+                    from auto_detect_original_history_stopped import (
+                        preview_original_learning_stopped_guard_locked,
+                    )
+                    def preview_original_stopped_guard(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return preview_original_learning_stopped_guard_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof, inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
                     with self.assertRaises(V2OriginalConfigRefused):
                         archive_release_preview()
@@ -2921,6 +2932,81 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 seal_original_release_guard(), sealed_guard)
                             self.assertEqual(
                                 preview_original_release_guard(), sealed_guard)
+                            # STEP 15b3d: independently check original
+                            # STOPPED schema3 + immutable WAL and guard.
+                            # This does not claim physical postimage/current
+                            # NEW positive evidence, so permissions stay false.
+                            from auto_detect_owner import GenerationRefused
+                            from unittest.mock import patch as stop_patch
+                            stopped_calls = [0]
+                            def genuine_stopped():
+                                stopped_calls[0] += 1
+                                return proof
+                            with stop_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    side_effect=genuine_stopped):
+                                stopped = preview_original_stopped_guard()
+                            self.assertEqual(stopped_calls[0], 2)
+                            self.assertTrue(stopped[
+                                "stopped_original_owner_freshly_reattested"])
+                            self.assertTrue(stopped[
+                                "all_three_original_historical_wal_checkpoints_verified"])
+                            self.assertEqual(stopped["old_archive_state"],
+                                             "all-retained")
+                            self.assertEqual(
+                                stopped["historical_final_postimages_sha256"],
+                                final_postimages["postimages_sha256"])
+                            for forbidden in (
+                                    "current_new_native_and_debug_verified",
+                                    "current_final_destinations_inode_pinned",
+                                    "new_positive_debug_attribution_verified",
+                                    "archive_unlink_authorized",
+                                    "native_pending_ack_authorized",
+                                    "generation_retired",
+                                    "physical_old_archive_cleanup_authorized",
+                                    "source_independent_transaction_replay_available",
+                                    "owner_lifecycle_mutation_authorized"):
+                                self.assertIs(stopped[forbidden], False)
+                            with stop_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    return_value=proof):
+                                self.assertEqual(preview_original_stopped_guard(),
+                                                 stopped)
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_stopped_guard(
+                                        inspect_witness=lambda *_a, **_kw:
+                                            FDState.BUSY)
+                            with stop_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    side_effect=GenerationRefused(
+                                        "engine_is_running")):
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_stopped_guard()
+                            with stop_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    side_effect=(proof, None)):
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_stopped_guard()
+                            # Mock STOPPED engine file teardown in
+                            # disposable fixture: move, never unlink.
+                            # The source-only STOPPED join must not
+                            # reopen disappearing live NEW/debug paths.
+                            moved_new = self.root / "test-only-stopped-new.txt"
+                            moved_debug = self.root / "test-only-stopped-debug.log"
+                            user_native.rename(moved_new)
+                            debug_path.rename(moved_debug)
+                            try:
+                                with stop_patch(
+                                        "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                        return_value=proof):
+                                    self.assertEqual(
+                                        preview_original_stopped_guard(),
+                                        stopped)
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_release_guard()
+                            finally:
+                                moved_debug.rename(debug_path)
+                                moved_new.rename(user_native)
                             # STEP 15b3b: unlike the caller-supplied
                             # original FD9 attest(), this independent gate
                             # calls the real native schema3 process/census
@@ -2984,6 +3070,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             guard_backup = release_path.read_bytes()
                             release_path.write_bytes(b"{}\n")
                             try:
+                                with stop_patch(
+                                        "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                        return_value=proof):
+                                    with self.assertRaises(V2OriginalConfigRefused):
+                                        preview_original_stopped_guard()
                                 with self.assertRaises(V2OriginalConfigRefused):
                                     preview_original_release_guard()
                                 with self.assertRaises(V2OriginalConfigRefused):
@@ -3046,6 +3137,18 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                         preview_original_owner_live()[
                                             "old_archive_state"],
                                         "partially-missing")
+                                with stop_patch(
+                                        "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                        return_value=proof):
+                                    stopped_partial = preview_original_stopped_guard()
+                                self.assertEqual(
+                                    stopped_partial["old_archive_state"],
+                                    "partially-missing")
+                                self.assertEqual(
+                                    stopped_partial["missing_old_native_numbers"],
+                                    [youtube_num])
+                                self.assertFalse(
+                                    stopped_partial["native_pending_ack_authorized"])
                                 self.assertEqual(
                                     partial_guard["missing_old_native_numbers"],
                                     [youtube_num])
@@ -3071,6 +3174,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                             preview_original_owner_live()[
                                                 "old_archive_state"],
                                             "all-missing")
+                                    with stop_patch(
+                                            "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                            return_value=proof):
+                                        gone = preview_original_stopped_guard()
+                                    self.assertEqual(
+                                        gone["old_archive_state"], "all-missing")
+                                    self.assertFalse(gone["archive_unlink_authorized"])
                                     self.assertEqual(
                                         sorted(all_missing_guard[
                                             "missing_old_native_numbers"]),
