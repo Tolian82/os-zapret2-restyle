@@ -277,7 +277,12 @@ def _retire_files(receipts, queue, proof, folder, plan, attest, inspect,
                     raise LearningRetirementRefused("stopped_learning_original_owner_changed")
                 os.replace(temp, live)
                 _sync(queue.root)
-            _fresh_debug(live, receipts, queue)
+            if not _fresh_debug(live, receipts, queue):
+                raise LearningRetirementRefused("stopped_learning_debug_not_replaced")
+            fresh, _, _ = _image(live, receipts, queue)
+            if fresh[:2] == old[:2]:
+                raise LearningRetirementRefused("stopped_learning_debug_old_inode_reused")
+            _drained(live, fresh, proof, queue, inspect)
         elif _entry(live):
             raise LearningRetirementRefused("stopped_learning_native_not_retired")
         if attest() != proof:
@@ -326,6 +331,8 @@ def retired_learning_stopped(receipts: EpochReceipts, queue: DurableInbox,
         raise LearningRetirementRefused("stopped_learning_old_native_name_remains")
     if not _fresh_debug(queue.root / "debug.log", receipts, queue):
         raise LearningRetirementRefused("stopped_learning_new_debug_missing")
+    new_debug, _, _ = _image(queue.root / "debug.log", receipts, queue)
+    _drained(queue.root / "debug.log", new_debug, proof, queue, inspect)
     expected_ready = {
         "schema": 3, "kind": "original-stopped-learning-terminal-ready",
         "generation": proof.generation,
