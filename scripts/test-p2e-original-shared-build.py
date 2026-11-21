@@ -3239,6 +3239,99 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 self.assertEqual(len(parked_old_for_restore),
                                                  len(proof.learning))
                                 self.assertTrue((retire_dir / "complete.json").exists())
+                                # STEP 15b3g: still-physical NEW/debug MUST
+                                # be assessed separately from OLD retirement.
+                                # These are original P2e files, not a daemon
+                                # or a real installed owner; only the real
+                                # FreeBSD entrypoint can attest STOPPED.
+                                import auto_detect_original_history_stop_new as sn
+                                def preview_stopped_NEW(*, witness=drained):
+                                    with writer.exclusive_targets(), patch(
+                                            "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                            active_root), retire_patch(
+                                            "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                            return_value=proof), retire_patch(
+                                            "auto_detect_original_history_stop_new.attest_learning_stopped_generation",
+                                            return_value=proof):
+                                        return sn.preview_original_learning_stopped_NEW_tail_locked(
+                                            writer, proof, self.work,
+                                            config_fd=cfg_fd,
+                                            config_path=config_path,
+                                            attest=lambda: proof,
+                                            inspect=witness)
+                                remaining_empty = preview_stopped_NEW()
+                                self.assertTrue(remaining_empty[
+                                    "original_OLD_archive_physically_retired"])
+                                self.assertTrue(remaining_empty[
+                                    "all_NEW_native_and_debug_physically_pinned"])
+                                self.assertEqual(remaining_empty[
+                                    "remaining_new_state"], "no-unread-native-bytes")
+                                self.assertEqual(remaining_empty[
+                                    "remaining_new_native_bytes"], 0)
+                                self.assertEqual(remaining_empty[
+                                    "remaining_positive_native_observations"], [])
+                                self.assertFalse(remaining_empty[
+                                    "native_pending_ack_authorized"])
+                                self.assertFalse(remaining_empty[
+                                    "generation_retired"])
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_stopped_NEW(
+                                        witness=lambda *_a, **_kw: FDState.BUSY)
+                                # A paired NEW native+debug positive after
+                                # the third sealed cut is NOT consumed by
+                                # physically completing the OLD archive.
+                                # Inject only the protected source reader's
+                                # return as a synthetic branch case; do not
+                                # mutate live fixture inodes or Found.
+                                observed_NEW = sn._positive_snapshot_once(
+                                    writer, proof, drained)
+                                invented_tail = dict(observed_NEW)
+                                invented_tail["native_bytes_after_third"] = (
+                                    len(b"fresh.example.net\\n"))
+                                invented_tail["debug_bytes_after_third"] = 74
+                                invented_tail["positive"] = ((
+                                    user_num, "user", "fresh.example.net"),)
+                                with retire_patch.object(
+                                        sn, "_positive_snapshot_once",
+                                        return_value=invented_tail):
+                                    pending_NEW = preview_stopped_NEW()
+                                self.assertEqual(pending_NEW[
+                                    "remaining_new_state"], "unconsumed-native-events")
+                                self.assertEqual(pending_NEW[
+                                    "remaining_positive_native_observations"], [
+                                        {"native_number": user_num,
+                                         "hostlist": "user",
+                                         "hostname": "fresh.example.net"}])
+                                self.assertFalse(pending_NEW[
+                                    "remaining_new_events_committed_to_found"])
+                                self.assertFalse(pending_NEW[
+                                    "native_pending_ack_authorized"])
+                                # Two different physical snapshots are not
+                                # one admissible exact cut.
+                                with retire_patch.object(
+                                        sn, "_positive_snapshot_once",
+                                        side_effect=[observed_NEW, invented_tail]):
+                                    with self.assertRaises(V2OriginalConfigRefused):
+                                        preview_stopped_NEW()
+                                saved_complete = (retire_dir / "complete.json").read_bytes()
+                                (retire_dir / "complete.json").write_bytes(b"{}\\n")
+                                try:
+                                    with self.assertRaises(V2OriginalConfigRefused):
+                                        preview_stopped_NEW()
+                                finally:
+                                    (retire_dir / "complete.json").write_bytes(
+                                        saved_complete)
+                                # A vanished NEW inode must never be treated
+                                # as an empty tail or permission to ACK.
+                                moved_live = self.root / "test-only-NEW-absent.txt"
+                                user_native.rename(moved_live)
+                                try:
+                                    with self.assertRaises(V2OriginalConfigRefused):
+                                        preview_stopped_NEW()
+                                finally:
+                                    moved_live.rename(user_native)
+                                self.assertEqual(preview_stopped_NEW()[
+                                    "remaining_new_state"], "no-unread-native-bytes")
                                 for field in ("native_pending_ack_authorized",
                                               "generation_retired",
                                               "operator_stop_may_be_blocked",
