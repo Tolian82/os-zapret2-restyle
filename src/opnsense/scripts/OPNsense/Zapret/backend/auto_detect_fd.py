@@ -194,6 +194,28 @@ def probe_stopped_pending_fd(segment: Path, device_id: int, inode: int, *,
         attest_owner=old_owner_still_quiescent)
 
 
+def probe_stopped_learning_pending_fd(
+        segment: Path, device_id: int, inode: int, *,
+        owner: OwnerToken, runner=subprocess.run,
+        platform: str | None = None,
+        writer_gid: int | None = None) -> FDState:
+    """Exact schema3 STOPPED owner around the SAME global P2b FD census.
+
+    Schema2's old stopped attester intentionally rejects native-N schema3.
+    Never borrow its proof or treat a dead engine PID as sufficient: the
+    existing independent original schema3 stopped attester must prove the
+    sealed N map, unchanged FD9 journal and zero real engine/supervisor.
+    """
+    def learning_owner_still_quiescent() -> bool:
+        from auto_detect_owner import attest_learning_stopped_generation
+        return attest_learning_stopped_generation().owner == owner
+
+    return _probe_original_inode(
+        segment, device_id, inode, owner=owner, runner=runner,
+        platform=platform, writer_gid=writer_gid,
+        attest_owner=learning_owner_still_quiescent)
+
+
 def main() -> int:
     raise SystemExit("P2b native FD probe is not a standalone production worker")
 
