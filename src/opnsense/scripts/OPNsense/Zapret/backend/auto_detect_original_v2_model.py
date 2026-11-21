@@ -2898,7 +2898,7 @@ def commit_with_original_learning_third_slot(
     """Original schema3 third-slot P1 -> SAME Found/managed P2k2b WAL.
 
     This import-only primitive is NOT connected to Apply, minute, or
-    dvtws2. Never infer observations after the durable 00000001 intent:
+    dvtws2. Never infer observations after the durable 00000002 intent:
     the original forward source reattests exactly its immutable old
     pending/new live/debug cuts, even while newer writes grow each inode.
     The ONE existing P2a/GUI/PHP inherited Config FD4 and owner FD9
@@ -2945,7 +2945,7 @@ def commit_with_original_learning_third_slot(
                 "learning_forward_original_config_owner_changed")
 
     def original_third_source():
-        result = prepare_original_learning_forward_third_slot_locked(
+        result = prepare_original_learning_third_slot_locked(
             writer, proof, workspace, config_fd=config_fd,
             config_path=config_path, attest=attest, inspect=inspect)
         if (result["sequence"] != 2 or
