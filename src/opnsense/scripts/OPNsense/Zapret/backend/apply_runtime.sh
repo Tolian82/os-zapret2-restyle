@@ -26,6 +26,7 @@ apply_runtime_observer_preflight()
     [ -d "$1" ] && [ ! -L "$1" ] &&
     [ -f "$1/dvtws.args" ] && [ ! -L "$1/dvtws.args" ] || return 69
     _apply_observer_map="$1/auto-detect-generation.json"
+    _apply_native_schema=
     if ! /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto([=-]|[[:space:]]|$)' "$1/dvtws.args"; then
         # An active generation map without original native argv is untrusted.
         # P2h's inert preview has a DIFFERENT file name.
@@ -41,12 +42,24 @@ apply_runtime_observer_preflight()
     # Read-only: the original sealed native candidate must match this
     # release byte-for-byte BEFORE any durable Apply record or process stop.
     # Producer creation and fresh-inode checks belong solely to FD9 launcher.
-    _apply_authorized=$("$PYTHON_RUNTIME" \
-        "$BACKEND_DIR/auto_detect_post_drop.py" authorize "$1") || {
-        common_error "shared Apply: native observer release not authorized"
-        return 69
-    }
-    [ "$_apply_authorized" = original-fd9-observer=authorized ] || return 69
+    # A schema3 active map cannot take the schema2 single-observer path.
+    # Schema is only a dispatcher hint; each native command independently
+    # verifies the exact sealed original candidate, argv and FD9 owner.
+    _apply_native_schema=$(/usr/local/bin/jq -er \
+        '.schema | select(. == 2 or . == 3)' "$_apply_observer_map") || return 69
+    case "$_apply_native_schema" in
+        2)
+            _apply_authorized=$("$PYTHON_RUNTIME" \
+                "$BACKEND_DIR/auto_detect_post_drop.py" authorize "$1") || return 69
+            [ "$_apply_authorized" = original-fd9-observer=authorized ] || return 69
+            ;;
+        3)
+            _apply_authorized=$("$PYTHON_RUNTIME" \
+                "$BACKEND_DIR/auto_detect_post_drop.py" authorize-learning "$1") || return 69
+            [ "$_apply_authorized" = original-fd9-learning-release=authorized ] || return 69
+            ;;
+        *) return 69 ;;
+    esac
 }
 
 apply_runtime_original_launcher_once()
@@ -63,20 +76,35 @@ apply_runtime_original_launcher_once()
         case "$6" in ""|*[!a-f0-9]*) return 69 ;; esac
         case "$7" in ""|*[!a-f0-9]*) return 69 ;; esac
         [ "${#6}" -eq 32 ] && [ "${#7}" -eq 64 ] || return 69
-        # The exact original native producer is prepared/verified only
-        # under this same held FD9, after read-only release authorization.
-        # Existing raw/debug/pending inodes are never truncated or migrated.
-        _apply_producer=$("$PYTHON_RUNTIME" \
-            "$BACKEND_DIR/auto_detect_post_drop.py" prepare) || return 69
-        [ "$_apply_producer" = original-fd9-producer=prepared ] || return 69
-        # The immutable empty pretraffic epoch is fsynced BEFORE dvtws2.
-        # Any unprocessed previous-generation event refuses before launch.
-        _apply_observer_witness=$("$PYTHON_RUNTIME" \
-            "$BACKEND_DIR/auto_detect_post_drop.py" capture) || return 69
-        case "$_apply_observer_witness" in p2k8i:*) ;; *) return 69 ;; esac
-        _apply_observer_seed=$("$PYTHON_RUNTIME" \
-            "$BACKEND_DIR/auto_detect_post_drop.py" seal-epoch "$6" "$7") || return 69
-        [ "$_apply_observer_seed" = original-fd9-pretraffic=sealed ] || return 69
+        # Exactly one verified original FD9 producer cohort and immutable
+        # pretraffic epoch, BEFORE starting the only dvtws2. The schema3
+        # capture carries all N native identities, not a single raw inode.
+        case "$_apply_native_schema" in
+            2)
+                _apply_producer=$("$PYTHON_RUNTIME" \
+                    "$BACKEND_DIR/auto_detect_post_drop.py" prepare) || return 69
+                [ "$_apply_producer" = original-fd9-producer=prepared ] || return 69
+                _apply_observer_witness=$("$PYTHON_RUNTIME" \
+                    "$BACKEND_DIR/auto_detect_post_drop.py" capture) || return 69
+                case "$_apply_observer_witness" in p2k8i:*) ;; *) return 69 ;; esac
+                _apply_observer_seed=$("$PYTHON_RUNTIME" \
+                    "$BACKEND_DIR/auto_detect_post_drop.py" seal-epoch "$6" "$7") || return 69
+                [ "$_apply_observer_seed" = original-fd9-pretraffic=sealed ] || return 69
+                ;;
+            3)
+                _apply_producer=$("$PYTHON_RUNTIME" \
+                    "$BACKEND_DIR/auto_detect_post_drop.py" prepare-learning "$ACTIVE_DIR") || return 69
+                [ "$_apply_producer" = original-fd9-learning-producer=prepared ] || return 69
+                _apply_observer_witness=$("$PYTHON_RUNTIME" \
+                    "$BACKEND_DIR/auto_detect_post_drop.py" capture-learning "$ACTIVE_DIR") || return 69
+                case "$_apply_observer_witness" in "p2k8i3:$6:"*) ;; *) return 69 ;; esac
+                _apply_observer_seed=$("$PYTHON_RUNTIME" \
+                    "$BACKEND_DIR/auto_detect_post_drop.py" seal-learning-epoch \
+                    "$6" "$7" "$_apply_observer_witness") || return 69
+                [ "$_apply_observer_seed" = original-fd9-learning-pretraffic=sealed ] || return 69
+                ;;
+            *) return 69 ;;
+        esac
     else
         # An ordinary/preview release may never create an active epoch.
         [ "$#" -eq 5 ] || return 69
@@ -90,16 +118,34 @@ apply_runtime_original_launcher_once()
         # Exact original PID/birth/absolute executable and original producer
         # inodes must survive --user=nobody and finish root reownership BEFORE
         # existing shared firewall_shared_runtime install.
-        _apply_observer_result=$("$PYTHON_RUNTIME" \
-            "$BACKEND_DIR/auto_detect_post_drop.py" restore \
-            "$_apply_observer_witness" "$_apply_observer_pid" "$DVTWS_BIN") || {
-            launcher_stop "$CHILD_PIDFILE" 5
-            return 70
-        }
-        [ "$_apply_observer_result" = original-fd9-postdrop=attested ] || {
-            launcher_stop "$CHILD_PIDFILE" 5
-            return 70
-        }
+        case "$_apply_native_schema" in
+            2)
+                _apply_observer_result=$("$PYTHON_RUNTIME" \
+                    "$BACKEND_DIR/auto_detect_post_drop.py" restore \
+                    "$_apply_observer_witness" "$_apply_observer_pid" "$DVTWS_BIN") || {
+                    launcher_stop "$CHILD_PIDFILE" 5
+                    return 70
+                }
+                [ "$_apply_observer_result" = original-fd9-postdrop=attested ] || {
+                    launcher_stop "$CHILD_PIDFILE" 5
+                    return 70
+                }
+                ;;
+            3)
+                _apply_observer_result=$("$PYTHON_RUNTIME" \
+                    "$BACKEND_DIR/auto_detect_post_drop.py" restore-learning \
+                    "$_apply_observer_witness" "$_apply_observer_pid" \
+                    "$DVTWS_BIN" "$6" "$7") || {
+                    launcher_stop "$CHILD_PIDFILE" 5
+                    return 70
+                }
+                [ "$_apply_observer_result" = original-fd9-learning-postdrop=attested ] || {
+                    launcher_stop "$CHILD_PIDFILE" 5
+                    return 70
+                }
+                ;;
+            *) launcher_stop "$CHILD_PIDFILE" 5; return 70 ;;
+        esac
     fi
 }
 
