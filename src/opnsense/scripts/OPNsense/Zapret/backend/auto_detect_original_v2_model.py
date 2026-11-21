@@ -1390,6 +1390,294 @@ def seal_original_learning_post_inode_seed_locked(
             "learning_inode_seed_original_transaction_refused") from exc
 
 
+def preview_original_learning_forward_windows_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """Read-only original P2a/FD4/FD9/P2b cross-N forward native cut.
+
+    The FIRST committed source cursor, not P1's later full native snapshot,
+    defines unread OLD-pending bytes. Every NEW live inode is unread from
+    offset ZERO. Duplicated copies between old/native are folded by exact
+    native profile/hostlist/hostname, and ONLY a strictly matching genuine
+    later positive debug event can qualify a distinct unprocessed domain.
+    Never attribute based on hostname, list filename, PSL or debug alone.
+
+    No independent queue, Config owner, P1 writer, new epoch, ACK, cursor
+    fsync, hostlist edit or production minute invocation exists here.
+    The original destination/active checkpoint and all N post-rename seeds
+    must already be durable. Source-only until a forward WAL transaction
+    and actual same-engine native/P2b retirement are implemented.
+    """
+    import os
+    import sys
+    from auto_detect_epoch_receipts import _canonical, _directory
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+    from auto_detect_queue import QueueSafetyError, MAX_SEGMENT
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_fd import FDState
+    from auto_detect_debug_window import (
+        _read_exact, _raw_hosts, _hostname, ADD,
+        MAX_WINDOW, MAX_RAW, MAX_EVENTS,
+    )
+
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not writer.queue._held or not getattr(writer, "_gui_held", False) or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(config_path, Path) or not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not callable(attest) or not callable(inspect) or
+            (sys.platform.startswith("freebsd") and
+             (config_path != CONFIG_PATH or writer.receipts.uid != 0 or
+              writer.queue.uid != 0)) or attest() != proof):
+        raise V2OriginalConfigRefused(
+            "learning_forward_original_fd4_fd9_owner_required")
+    uid, gid = writer.receipts.uid, writer.queue.writer_gid
+
+    def held() -> None:
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=None if config_path == CONFIG_PATH else uid)
+        if attest() != proof:
+            raise V2OriginalConfigRefused("learning_forward_owner_changed")
+
+    def read_candidate() -> dict:
+        original = inspect_original_learning_native_rebind_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest)
+        if (original["ack_authorized"] is not False or
+                original["physical_rotation_authorized"] is not False or
+                len(original["profiles"]) != len(proof.learning)):
+            raise V2OriginalConfigRefused("learning_forward_original_inspection_unqualified")
+        slot = (writer.receipts.root / proof.generation /
+                "cursor-chain-v2" / "00000000")
+        folder = slot / "native-rebind"
+        observed = folder / "observed"
+        _directory(observed, uid)
+        intent_raw = _read(slot / "intent.json", uid)
+        intent = json.loads(intent_raw)
+        manifest = _read(folder / "manifest.json", uid)
+        if (original["manifest_sha256"] != hashlib.sha256(manifest).hexdigest() or
+                intent.get("schema") != 3 or
+                intent.get("generation") != proof.generation or
+                len(intent["native"]) != len(proof.learning)):
+            raise V2OriginalConfigRefused("learning_forward_original_intent_changed")
+        original_debug_end = intent["debug_end_offset"]
+        debug_path = writer.queue.root / "debug.log"
+        debug_stat, debug_bytes = _read_exact(
+            debug_path, owner_uid=uid, writer_gid=gid)
+        if ((debug_stat.st_dev, debug_stat.st_ino) !=
+                (intent["debug_device"], intent["debug_inode"]) or
+                type(original_debug_end) is not int or
+                not 0 <= original_debug_end <= len(debug_bytes) or
+                hashlib.sha256(debug_bytes[:original_debug_end]).hexdigest()
+                != intent["debug_end_sha256"] or
+                (debug_bytes and not debug_bytes.endswith(b"\n"))):
+            raise V2OriginalConfigRefused("learning_forward_original_debug_cursor_drift")
+        later_debug = debug_bytes[original_debug_end:]
+        if len(later_debug) > MAX_WINDOW:
+            raise V2OriginalConfigRefused("learning_forward_debug_window_limit")
+        # Retain an exact immutable cursor for each native inode, including
+        # the ORIGINAL old pending even when a write occurred before P1's
+        # full-image compaction snapshot, and the NEW live at ZERO.
+        pinned_sources = [(debug_path, debug_stat.st_dev, debug_stat.st_ino)]
+        native_cursors = []
+        seen_raw: dict[tuple[int, str, str], set[str]] = {}
+        previously_processed: set[tuple[int, str, str]] = set()
+        candidate_unique: set[tuple[int, str, str]] = set()
+        total_unread = 0
+        native_by_debug_path = {}
+        for index, (number, name, pathname) in enumerate(proof.learning):
+            first = intent["native"][index]
+            physical = original["profiles"][index]
+            if ((first["native_number"], first["hostlist"], first["path"]) !=
+                    (number, name, pathname) or
+                    (physical["native_number"], physical["hostlist"]) !=
+                    (number, name)):
+                raise V2OriginalConfigRefused("learning_forward_changed_native_map")
+            path = Path(pathname)
+            if path.parent != writer.queue.root or path in native_by_debug_path:
+                raise V2OriginalConfigRefused("learning_forward_foreign_profile_path")
+            native_by_debug_path[pathname] = (number, name)
+            live_st, live_data, _ = _native_rebind_stable_snapshot(
+                path, uid, gid, allowed_links=(1,))
+            pinned_sources.append((path, live_st.st_dev, live_st.st_ino))
+            prior_end = first["end_offset"]
+            expected_old = (first["device"], first["inode"])
+            seed_name = f"{number:03d}.json"
+            path_old = None
+            if physical["phase"] == "untouched":
+                if (seed_name in os.listdir(observed) or
+                        (live_st.st_dev, live_st.st_ino) != expected_old or
+                        prior_end > len(live_data) or
+                        hashlib.sha256(live_data[:prior_end]).hexdigest() !=
+                        first["end_sha256"]):
+                    raise V2OriginalConfigRefused("learning_forward_untouched_source_changed")
+                old_prefix, old_tail, new_rows = (
+                    live_data[:prior_end], live_data[prior_end:], b"")
+                native_cursors.append({
+                    "native_number": number, "hostlist": name,
+                    "old_path": pathname, "old_device": live_st.st_dev,
+                    "old_inode": live_st.st_ino, "old_start": prior_end,
+                    "old_end": len(live_data),
+                    "old_end_sha256": hashlib.sha256(live_data).hexdigest(),
+                    "new_path": None, "new_device": None, "new_inode": None,
+                    "new_start": None, "new_end": None,
+                    "new_end_sha256": None,
+                })
+            elif physical["phase"].startswith("replaced-"):
+                seed_raw = _read(observed / seed_name, uid)
+                seed = json.loads(seed_raw)
+                if (seed_raw != _canonical(physical["inode_seed"]) or
+                        seed != physical["inode_seed"] or
+                        seed["manifest_sha256"] != original["manifest_sha256"] or
+                        seed["old_pending_inode"]["cut_offset"] != prior_end or
+                        seed["old_pending_inode"]["cut_sha256"] !=
+                        first["end_sha256"] or
+                        seed["new_live_inode"]["cut_offset"] != 0 or
+                        seed["new_live_inode"]["cut_sha256"] !=
+                        hashlib.sha256(b"").hexdigest() or
+                        (live_st.st_dev, live_st.st_ino) !=
+                        (seed["new_live_inode"]["device"],
+                         seed["new_live_inode"]["inode"])):
+                    raise V2OriginalConfigRefused("learning_forward_unqualified_inode_seed")
+                path_old = writer.queue.pending / seed["old_pending_name"]
+                if path_old not in writer.queue.segments():
+                    raise V2OriginalConfigRefused("learning_forward_old_pending_not_retained")
+                old_st, old_data, _ = _native_rebind_stable_snapshot(
+                    path_old, uid, gid, allowed_links=(1,))
+                if ((old_st.st_dev, old_st.st_ino) != expected_old or
+                        prior_end > len(old_data) or
+                        hashlib.sha256(old_data[:prior_end]).hexdigest() !=
+                        first["end_sha256"]):
+                    raise V2OriginalConfigRefused("learning_forward_old_preimage_mismatch")
+                pinned_sources.append((path_old, old_st.st_dev, old_st.st_ino))
+                old_prefix, old_tail, new_rows = (
+                    old_data[:prior_end], old_data[prior_end:], live_data)
+                native_cursors.append({
+                    "native_number": number, "hostlist": name,
+                    "old_path": str(path_old), "old_device": old_st.st_dev,
+                    "old_inode": old_st.st_ino, "old_start": prior_end,
+                    "old_end": len(old_data),
+                    "old_end_sha256": hashlib.sha256(old_data).hexdigest(),
+                    "new_path": pathname, "new_device": live_st.st_dev,
+                    "new_inode": live_st.st_ino, "new_start": 0,
+                    "new_end": len(live_data),
+                    "new_end_sha256": hashlib.sha256(live_data).hexdigest(),
+                })
+            else:
+                # PREPARED / linked-unreplaced is not a qualified second
+                # post-rename source cut. Never silently treat old aliases
+                # as independent native cursors.
+                raise V2OriginalConfigRefused("learning_forward_incomplete_native_rebind")
+            total_unread += len(old_tail) + len(new_rows)
+            if total_unread > MAX_RAW:
+                raise V2OriginalConfigRefused("learning_forward_native_raw_window_limit")
+            # First-slot observations are already accounted. Reading a
+            # new physical image must not replay those entries as a new
+            # discovery; all other new distinct rows still need debug.
+            prior_hosts = _raw_hosts(old_prefix) if old_prefix else []
+            unread_old = _raw_hosts(old_tail) if old_tail else []
+            unread_new = _raw_hosts(new_rows) if new_rows else []
+            for host in prior_hosts:
+                previously_processed.add((number, name, host))
+            for host in unread_old:
+                seen_raw.setdefault((number, name, host), set()).add("old")
+            for host in unread_new:
+                seen_raw.setdefault((number, name, host), set()).add("new")
+        for key in seen_raw:
+            if key not in previously_processed:
+                candidate_unique.add(key)
+        # Exact post-first-slot positive provenance, never spelling or
+        # copying a late raw line from one inode into the other.
+        debug_unique = set()
+        for line in later_debug.splitlines(keepends=True):
+            if not line.endswith(b"\n"):
+                raise V2OriginalConfigRefused("learning_forward_incomplete_debug_line")
+            try:
+                event_text = line[:-1].decode("ascii")
+            except UnicodeError as exc:
+                raise V2OriginalConfigRefused(
+                    "learning_forward_debug_not_ascii") from exc
+            if " : adding to " not in event_text:
+                continue
+            match = ADD.fullmatch(event_text)
+            if match is None or not _hostname(match["host"]):
+                raise V2OriginalConfigRefused("learning_forward_unqualified_positive")
+            profile = native_by_debug_path.get(match["path"])
+            if profile is None or int(match["profile"]) != profile[0]:
+                raise V2OriginalConfigRefused("learning_forward_foreign_positive")
+            key = (profile[0], profile[1], match["host"])
+            if key not in seen_raw:
+                # Debug was emitted BEFORE native append: cannot use it
+                # to advance, especially on an unpaired/foreign profile.
+                raise V2OriginalConfigRefused("learning_forward_debug_not_in_native")
+            debug_unique.add(key)
+            if len(debug_unique) > MAX_EVENTS:
+                raise V2OriginalConfigRefused("learning_forward_event_limit")
+        if not candidate_unique.issubset(debug_unique):
+            raise V2OriginalConfigRefused("learning_forward_native_lacks_debug_provenance")
+        # Every duplicate old/new row has one authenticated original
+        # profile; never collapse across YouTube and User.
+        observations = [
+            {"hostname": host, "hostlist": name}
+            for number, name, host in sorted(candidate_unique)
+        ]
+        return {
+            "generation": proof.generation,
+            "first_slot_sha256": hashlib.sha256(intent_raw).hexdigest(),
+            "manifest_sha256": original["manifest_sha256"],
+            "debug": {
+                "device": debug_stat.st_dev, "inode": debug_stat.st_ino,
+                "start": original_debug_end,
+                "start_sha256": intent["debug_end_sha256"],
+                "end": len(debug_bytes),
+                "end_sha256": hashlib.sha256(debug_bytes).hexdigest(),
+            },
+            "native": native_cursors,
+            "observations": observations,
+            "deduped_cross_inode": sum(
+                1 for key, paths in seen_raw.items()
+                if len(paths) == 2 and key not in previously_processed),
+            "sources": pinned_sources,
+            "p2b_drained": False,
+            "commit_authorized": False,
+            "ack_authorized": False,
+        }
+
+    try:
+        held()
+        before = read_candidate()
+        # Independently probe the ORIGINAL P2b whole-machine FD state of
+        # ALL original native paths, retained pending and debug inode.
+        # Busy old dvtws2 FDs cause a REFUSAL, not SIGSTOP/SIGCONT.
+        for path, device, inode in before["sources"]:
+            if (attest() != proof or
+                    inspect(path, device, inode, owner=proof.owner,
+                            writer_gid=gid) is not FDState.DRAINED or
+                    attest() != proof):
+                raise V2OriginalConfigRefused("learning_forward_original_p2b_not_drained")
+        after = read_candidate()
+        if before != after:
+            raise V2OriginalConfigRefused("learning_forward_changed_during_p2b")
+        held()
+        result = {key: value for key, value in after.items()
+                  if key != "sources"}
+        result["p2b_drained"] = True
+        return result
+    except V2OriginalConfigRefused:
+        raise
+    except (OSError, ValueError, TypeError, KeyError, AttributeError,
+            ReceiptRefused, OriginalLockRefused, QueueSafetyError,
+            DestinationRefused, DebugWindowRefused) as exc:
+        raise V2OriginalConfigRefused("learning_forward_original_window_refused") from exc
+
+
 def _recover_original_learning_partial_locked(
         writer: DestinationCommit, proof, workspace: Path,
         slot: Path, intent: dict, *, owned_root: Path,
