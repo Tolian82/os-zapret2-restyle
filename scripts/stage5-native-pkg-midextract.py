@@ -96,16 +96,16 @@ def native_pkg_group_states(pgid):
         ["/bin/ps", "-ax", "-o", "pid=", "-o", "pgid=", "-o", "stat="],
         capture_output=True, text=True, timeout=5, check=False)
     if result.returncode != 0 or len(result.stdout) > 256 * 1024:
-        return ()
+        return None
     states = []
     for line in result.stdout.splitlines():
         fields = line.split()
         if len(fields) != 3:
-            return ()
+            return None
         try:
             group = int(fields[1])
         except ValueError:
-            return ()
+            return None
         if group == pgid:
             states.append(fields[2])
     return tuple(states)
@@ -119,9 +119,10 @@ def native_pkg_group_frozen(pgid):
 
 def native_pkg_group_exited(pgid):
     # Zombies have already lost their file descriptors and cannot unlink
-    # anything. No live process from the original isolated group may remain.
-    return all(state.startswith("Z")
-               for state in native_pkg_group_states(pgid))
+    # anything. A failed or truncated ps snapshot is NOT proof of exit.
+    states = native_pkg_group_states(pgid)
+    return states is not None and all(state.startswith("Z")
+                                      for state in states)
 
 
 def select_native_witnesses(root, stage, run, need):
