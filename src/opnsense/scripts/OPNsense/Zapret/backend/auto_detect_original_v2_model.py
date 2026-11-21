@@ -2164,6 +2164,7 @@ def seal_original_learning_forward_progress_locked(
         CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
     )
     from auto_detect_owner import LearningGenerationProof
+    from auto_detect_queue import QueueSafetyError
     if (not isinstance(writer, DestinationCommit) or
             not isinstance(proof, LearningGenerationProof) or
             not writer.queue._held or
