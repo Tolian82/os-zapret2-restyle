@@ -187,6 +187,29 @@ case "$2" in
         [ "${FAIL_PREPARE:-0}" = 0 ] || exit 69
         printf '%s\n' original-fd9-producer=prepared
         ;;
+    prepare-learning)
+        printf '%s\n' prepare-learning >> "$EVENTS"
+        [ "${FAIL_PREPARE:-0}" = 0 ] || exit 69
+        printf '%s\n' original-fd9-learning-producer=prepared
+        ;;
+    capture-learning)
+        printf '%s\n' capture-learning >> "$EVENTS"
+        [ "${FAIL_LEARNING_WIRE:-0}" = 0 ] || {
+            printf '%s\n' p2k8i3:ffffffffffffffffffffffffffffffff:1:fake:1
+            exit 0
+        }
+        printf 'p2k8i3:%s:1:fake:1:2:1:3:4:1:5:6:1\n' "$generation"
+        ;;
+    seal-learning-epoch)
+        printf '%s\n' seal-learning-epoch >> "$EVENTS"
+        [ "${FAIL_SEED:-0}" = 0 ] || exit 69
+        printf '%s\n' original-fd9-learning-pretraffic=sealed
+        ;;
+    restore-learning)
+        printf '%s\n' restore-learning >> "$EVENTS"
+        [ "${FAIL_RESTORE:-0}" = 0 ] || exit 69
+        printf '%s\n' original-fd9-learning-postdrop=attested
+        ;;
     capture)
         printf '%s\n' capture >> "$EVENTS"
         printf '%s\n' p2k8i:1:2:1:3:4:1
@@ -211,7 +234,15 @@ MOCK
 chmod 700 "$TEMP_DIR/mock-python"
 PYTHON_RUNTIME="$TEMP_DIR/mock-python"
 export EVENTS
-apply_runtime_observer_preflight() { printf '%s\n' preflight >> "$EVENTS"; }
+apply_runtime_observer_preflight()
+{
+    printf '%s\n' preflight >> "$EVENTS"
+    _apply_native_schema=2
+    if [ -f "$ACTIVE_DIR/auto-detect-generation.json" ] &&
+       grep -Eq '"schema"[[:space:]]*:[[:space:]]*3' "$ACTIVE_DIR/auto-detect-generation.json"; then
+        _apply_native_schema=3
+    fi
+}
 printf '%s\n' '--port=989' \
     '--hostlist-auto=/var/db/zapret2-auto-detect/inbox.txt' > "$ACTIVE_DIR/dvtws.args"
 generation=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -251,6 +282,62 @@ fi
     fail "FAILED_PREPARE_DID_NOT_REFUSE_BEFORE_CAPTURE_AND_ENGINE"
 unset FAIL_PREPARE
 printf 'P2_FD9_FAILED_PREPARE_REFUSES_BEFORE_ENGINE=PASS\n'
+
+# TZ_6v4: same original FD9, but the promoted schema3 map chooses a full
+# N-inbox pretraffic witness. These are SYNTHETIC shell/command-order
+# checks: real map attestation, Config FD4, and FreeBSD FD/PID are separate.
+printf '%s\n' '--port=989' '--hostlist-auto=/var/db/zapret2-auto-detect/learning-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-1.txt' > "$ACTIVE_DIR/dvtws.args"
+printf '%s\n' '{"schema":3}' > "$ACTIVE_DIR/auto-detect-generation.json"
+: > "$EVENTS"
+if apply_runtime_original_launcher_once "$DVTWS_BIN" \
+   "$ACTIVE_DIR/dvtws.args" "$CHILD_PIDFILE" "$DVTWS_LOG" 5; then
+    fail "LEARNING_WITHOUT_ORIGINAL_OWNER_CANDIDATE_STARTED"
+fi
+[ "$(cat "$EVENTS")" = preflight ] ||
+    fail "LEARNING_MISSING_CANDIDATE_TOUCHED_PRODUCER_OR_ENGINE"
+: > "$EVENTS"
+apply_runtime_original_launcher_once "$DVTWS_BIN" \
+    "$ACTIVE_DIR/dvtws.args" "$CHILD_PIDFILE" "$DVTWS_LOG" 5 \
+    "$generation" "$candidate" || fail "SCHEMA3_ORIGINAL_LAUNCH_REFUSED"
+expected=$(printf 'preflight\nprepare-learning\ncapture-learning\nseal-learning-epoch\nlaunch\nrestore-learning')
+[ "$(cat "$EVENTS")" = "$expected" ] ||
+    fail "LEARNING_FD9_N_PRETRAFFIC_POSTDROP_ORDER"
+printf 'TZ6V4_ORIGINAL_FD9_LEARNING_LAUNCH_CHAIN=PASS\n'
+: > "$EVENTS"
+FAIL_LEARNING_WIRE=1
+export FAIL_LEARNING_WIRE
+if apply_runtime_original_launcher_once "$DVTWS_BIN" \
+   "$ACTIVE_DIR/dvtws.args" "$CHILD_PIDFILE" "$DVTWS_LOG" 5 \
+   "$generation" "$candidate"; then
+    fail "FOREIGN_LEARNING_WITNESS_STARTED_ENGINE"
+fi
+[ "$(cat "$EVENTS")" = "$(printf 'preflight\nprepare-learning\ncapture-learning')" ] ||
+    fail "FOREIGN_LEARNING_WITNESS_DID_NOT_REFUSE_PRE_LAUNCH"
+unset FAIL_LEARNING_WIRE
+: > "$EVENTS"
+FAIL_SEED=1
+export FAIL_SEED
+if apply_runtime_original_launcher_once "$DVTWS_BIN" \
+   "$ACTIVE_DIR/dvtws.args" "$CHILD_PIDFILE" "$DVTWS_LOG" 5 \
+   "$generation" "$candidate"; then
+    fail "FAILED_LEARNING_EPOCH_STARTED_ENGINE"
+fi
+[ "$(cat "$EVENTS")" = "$(printf 'preflight\nprepare-learning\ncapture-learning\nseal-learning-epoch')" ] ||
+    fail "FAILED_LEARNING_EPOCH_TOUCHED_ENGINE"
+unset FAIL_SEED
+: > "$EVENTS"
+FAIL_RESTORE=1
+export FAIL_RESTORE
+if apply_runtime_original_launcher_once "$DVTWS_BIN" \
+   "$ACTIVE_DIR/dvtws.args" "$CHILD_PIDFILE" "$DVTWS_LOG" 5 \
+   "$generation" "$candidate"; then
+    fail "FAILED_LEARNING_POSTDROP_ACCEPTED"
+fi
+[ "$(cat "$EVENTS")" = "$(printf 'preflight\nprepare-learning\ncapture-learning\nseal-learning-epoch\nlaunch\nrestore-learning\nstop')" ] ||
+    fail "FAILED_LEARNING_POSTDROP_DID_NOT_STOP_ONE_ENGINE"
+unset FAIL_RESTORE
+rm -f "$ACTIVE_DIR/auto-detect-generation.json"
+printf 'TZ6V4_FD9_LEARNING_FAILURES_FAIL_CLOSED=PASS\n'
 # A fully retired original may pass the SAME read-only predecessor gate,
 # but only with the authenticated FD9/epoch verifier's exact ready receipt.
 printf '%s\n' '--port=989' \
