@@ -3306,6 +3306,108 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     "remaining_new_events_committed_to_found"])
                                 self.assertFalse(pending_NEW[
                                     "native_pending_ack_authorized"])
+                                # STEP 15b3h1: feed the established
+                                # STOPPED positive source to the ORIGINAL
+                                # PSL/IDNA/exclude/Found P1 (no new parser,
+                                # no WAL writer, no post-STOPPED live owner).
+                                # The original fixture has already
+                                # committed example.net in user Found.
+                                import auto_detect_original_history_stop_p1 as sp
+                                def stopped_p1(*, candidate=None, exclude=""):
+                                    def preview():
+                                        return sp.preview_original_learning_stopped_NEW_p1_locked(
+                                            writer, proof, self.work,
+                                            config_fd=cfg_fd,
+                                            config_path=config_path,
+                                            owned_root=owned_dir,
+                                            manual_hostlists={
+                                                "youtube": "youtube.com\n",
+                                                "user": "",
+                                            },
+                                            global_exclude=exclude,
+                                            attest=lambda: proof,
+                                            inspect=drained,
+                                            psl=self._tz6v4_psl_for_fixtures())
+                                    with writer.exclusive_targets(), patch(
+                                            "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                            active_root), retire_patch(
+                                            "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                            return_value=proof), retire_patch(
+                                            "auto_detect_original_history_stop_new.attest_learning_stopped_generation",
+                                            return_value=proof):
+                                        if candidate is None:
+                                            return preview()
+                                        with retire_patch.object(
+                                                sp,
+                                                "preview_original_learning_stopped_NEW_tail_locked",
+                                                return_value=candidate):
+                                            return preview()
+                                no_new_p1 = stopped_p1()
+                                self.assertFalse(no_new_p1[
+                                    "p1_projection_available"])
+                                self.assertEqual(no_new_p1["found_effects"], {})
+                                self.assertFalse(no_new_p1[
+                                    "native_pending_ack_authorized"])
+                                already_found_p1 = stopped_p1(candidate=pending_NEW)
+                                self.assertTrue(already_found_p1[
+                                    "p1_projection_available"])
+                                self.assertEqual(already_found_p1[
+                                    "found_effects"], {})
+                                self.assertFalse(already_found_p1[
+                                    "stopped_p1_wal_checkpoint_created"])
+                                # New positive from the already qualified
+                                # N/path is distinct from old handled rows:
+                                # the sole original P1 proposes correct
+                                # eTLD+1 for User and its managed digest.
+                                other_NEW = dict(pending_NEW)
+                                other_NEW["remaining_positive_native_observations"] = [
+                                    {"native_number": user_num,
+                                     "hostlist": "user",
+                                     "hostname": "late.newbrand.net"}]
+                                proposed_new = stopped_p1(candidate=other_NEW)
+                                self.assertEqual(proposed_new["found_effects"], {
+                                    "user": {"add": ["newbrand.net"], "remove": []}})
+                                self.assertEqual(
+                                    set(proposed_new["managed_after_sha256"]),
+                                    {"youtube", "user"})
+                                for forbidden in (
+                                        "current_generation_managed_write_authorized",
+                                        "stopped_p1_wal_checkpoint_created",
+                                        "native_pending_ack_authorized",
+                                        "native_cleanup_authorized",
+                                        "generation_retired",
+                                        "operator_stop_may_be_blocked"):
+                                    self.assertFalse(proposed_new[forbidden])
+                                excluded_new = stopped_p1(
+                                    candidate=other_NEW,
+                                    exclude="newbrand.net\n")
+                                self.assertEqual(excluded_new["found_effects"], {})
+                                foreign_new = dict(other_NEW)
+                                foreign_new["remaining_positive_native_observations"] = [
+                                    {"native_number": user_num + 77,
+                                     "hostlist": "user",
+                                     "hostname": "late.newbrand.net"}]
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    stopped_p1(candidate=foreign_new)
+                                # Distinguish a stable original STOPPED
+                                # source from a new native write between
+                                # P1 calculation and its final owner proof.
+                                with writer.exclusive_targets(), retire_patch.object(
+                                        sp, "preview_original_learning_stopped_NEW_tail_locked",
+                                        side_effect=[other_NEW, pending_NEW]):
+                                    with self.assertRaises(V2OriginalConfigRefused):
+                                        sp.preview_original_learning_stopped_NEW_p1_locked(
+                                            writer, proof, self.work,
+                                            config_fd=cfg_fd,
+                                            config_path=config_path,
+                                            owned_root=owned_dir,
+                                            manual_hostlists={
+                                                "youtube": "youtube.com\n",
+                                                "user": ""},
+                                            global_exclude="",
+                                            attest=lambda: proof,
+                                            inspect=drained,
+                                            psl=self._tz6v4_psl_for_fixtures())
                                 # Two different physical snapshots are not
                                 # one admissible exact cut.
                                 with retire_patch.object(
