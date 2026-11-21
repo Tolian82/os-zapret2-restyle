@@ -164,24 +164,90 @@ def erase_completed_learning(receipts: EpochReceipts, queue: DurableInbox,
             CursorChain(receipts, queue)._erase_old_tree(child)
         elif child.name == RETIRE_DIR:
             _directory(child, receipts.uid)
-            for log in sorted(child.iterdir()):
-                name = log.name
-                is_source = (name == "old-debug.log" or
-                             re.fullmatch(
-                                 r"old-learning-" + generation +
-                                 r"-[1-9][0-9]{0,2}\.txt", name) is not None)
-                if name not in ARCHIVE_RECEIPTS and not is_source:
+            names = set(os.listdir(child))
+            intent_path = child / INTENT
+            ready_path = child / READY
+            if INTENT not in names:
+                # Intent is always deleted LAST; if absent, all physical
+                # sources and the ready receipt must already be gone.
+                if names:
+                    raise ReceiptRefused("historical_learning_tombstone_lost_intent")
+            else:
+                raw = _read(intent_path, receipts.uid)
+                try:
+                    plan = json.loads(raw)
+                except (ValueError, TypeError, UnicodeError) as exc:
+                    raise ReceiptRefused("historical_learning_tombstone_intent_changed") from exc
+                if (raw != _canonical(plan) or
+                        type(plan) is not dict or
+                        plan.get("schema") != 3 or
+                        plan.get("kind") != "original-stopped-learning-terminal-intent" or
+                        plan.get("generation") != generation or
+                        type(plan.get("sources")) is not list or
+                        not 2 <= len(plan["sources"]) <= 256):
+                    raise ReceiptRefused("historical_learning_tombstone_intent_changed")
+                original = {}
+                for row in plan["sources"]:
+                    if (type(row) is not dict or
+                            set(row) != {"name", "native_number", "image"} or
+                            type(row["name"]) is not str or
+                            type(row["native_number"]) is not int or
+                            type(row["image"]) is not list or
+                            len(row["image"]) != 4 or
+                            any(type(v) is not int or v < 0
+                                for v in row["image"][:3]) or
+                            type(row["image"][3]) is not str or
+                            re.fullmatch(r"[0-9a-f]{64}", row["image"][3]) is None):
+                        raise ReceiptRefused("historical_learning_tombstone_source_changed")
+                    name = row["name"]
+                    if name == "debug.log":
+                        if row["native_number"] != 0:
+                            raise ReceiptRefused("historical_learning_invalid_debug_archive")
+                    else:
+                        match = re.fullmatch(
+                            r"learning-" + generation + r"-([1-9][0-9]{0,2})\.txt",
+                            name)
+                        if (match is None or
+                                row["native_number"] != int(match.group(1))):
+                            raise ReceiptRefused("historical_learning_invalid_native_archive")
+                    archived_name = "old-" + name
+                    if archived_name in original:
+                        raise ReceiptRefused("historical_learning_duplicate_archive")
+                    original[archived_name] = row["image"]
+                if ("old-debug.log" not in original or
+                        names - (set(original) | ARCHIVE_RECEIPTS)):
                     raise ReceiptRefused("historical_learning_foreign_retired_file")
-                info = log.lstat()
-                if (not stat.S_ISREG(info.st_mode) or
-                        info.st_uid != receipts.uid or info.st_nlink != 1 or
-                        stat.S_IMODE(info.st_mode) != (
-                            0o660 if is_source else 0o600) or
-                        (is_source and info.st_gid != queue.writer_gid) or
-                        (is_source and info.st_size > MAX_NATIVE)):
-                    raise ReceiptRefused("historical_learning_untrusted_retired_file")
-                log.unlink()
-            _sync(child)
+                if READY in names:
+                    ready_raw = _read(ready_path, receipts.uid)
+                    try:
+                        ready = json.loads(ready_raw)
+                    except (ValueError, TypeError, UnicodeError) as exc:
+                        raise ReceiptRefused("historical_learning_tombstone_ready_changed") from exc
+                    if (ready_raw != _canonical(ready) or
+                            ready.get("schema") != 3 or
+                            ready.get("kind") != "original-stopped-learning-terminal-ready" or
+                            ready.get("generation") != generation or
+                            ready.get("intent_sha256") != hashlib.sha256(raw).hexdigest()):
+                        raise ReceiptRefused("historical_learning_tombstone_ready_changed")
+                elif any(name in names for name in original):
+                    # Ready may only disappear after the final source.
+                    raise ReceiptRefused("historical_learning_ready_missing_before_sources")
+                # A partial .gc3- is already approved for removal, but every
+                # surviving source must STILL match its original immutable
+                # byte image. Do not discard a changed inode after a crash.
+                for name, expected_image in sorted(original.items()):
+                    if name in names:
+                        _image(child / name, receipts, queue,
+                               expected=expected_image)
+                for name in sorted(original):
+                    if name in names:
+                        (child / name).unlink()
+                        _sync(child)
+                if READY in names:
+                    ready_path.unlink()
+                    _sync(child)
+                intent_path.unlink()
+                _sync(child)
             child.rmdir()
             _sync(tombstone)
         elif child.name in RECEIPTS:
