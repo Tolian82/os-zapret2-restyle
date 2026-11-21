@@ -1268,7 +1268,6 @@ class CursorChain:
         """
         from auto_detect_original_v2_model import _native_rebind_stable_snapshot
         from auto_detect_owner import LearningGenerationProof
-        from auto_detect_original_v2_prepare import DEBUG_HIGH_WATERMARK
         if (not isinstance(proof, LearningGenerationProof) or
                 not self.queue._held or not callable(attest) or
                 not callable(inspect) or attest() != proof):
@@ -1320,7 +1319,7 @@ class CursorChain:
             snapshots = current
             if attest() != proof:
                 raise CursorChainRefused("learning_debug_cut_owner_raced")
-        if snapshots[str(debug_path)][2] < DEBUG_HIGH_WATERMARK:
+        if snapshots[str(debug_path)][2] < MAX_DEBUG // 2:
             return None
         if self.learning_tip(proof, workspace) != tip or attest() != proof:
             raise CursorChainRefused("learning_debug_cut_anchor_changed")
