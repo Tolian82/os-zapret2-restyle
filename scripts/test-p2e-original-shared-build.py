@@ -1214,6 +1214,36 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 else:
                     with self.assertRaises(V2OriginalConfigRefused):
                         seal_native_transition(config_descriptor=-1)
+                    # Crash AFTER the first original write-once profile,
+                    # BEFORE the aggregate manifest. The same immutable
+                    # source may resume; NO partial journal grants rotation.
+                    from auto_detect_epoch_receipts import (
+                        _write_once as normal_original_write_once,
+                    )
+                    injected = [0]
+                    def fail_after_first_profile(folder, name, raw, uid):
+                        normal_original_write_once(folder, name, raw, uid)
+                        if (folder.name == "native-rebind" and
+                                name != "manifest.json" and
+                                injected[0] == 0):
+                            injected[0] += 1
+                            raise RuntimeError(
+                                "synthetic_native_rebind_profile_crash")
+                    with patch(
+                            "auto_detect_epoch_receipts._write_once",
+                            side_effect=fail_after_first_profile):
+                        with self.assertRaisesRegex(
+                                RuntimeError, "synthetic_native_rebind_profile_crash"):
+                            seal_native_transition()
+                    pending_journal = slot / "native-rebind"
+                    self.assertEqual(
+                        len(list(pending_journal.iterdir())), 1)
+                    self.assertFalse(
+                        (pending_journal / "manifest.json").exists())
+                    self.assertEqual(queue.segments(), [])
+                    self.assertEqual(
+                        user_native.read_bytes(),
+                        b"mail.example.org\nlate.example.org\n")
                     result = seal_native_transition()
                     self.assertEqual(result["profiles_count"], 2)
                     self.assertEqual(result["rotation_count"], 2)
