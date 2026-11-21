@@ -47,7 +47,9 @@ class DurableInboxTests(unittest.TestCase):
                     native, replacement=b"stay.example.org\n",
                     generation=generation,
                     expected_identity=(initial.st_dev, initial.st_ino),
-                    sealed_prefix=(cut, prefix))
+                    sealed_prefix=(cut, prefix),
+                    expected_native_image=(
+                        len(source), hashlib.sha256(source).hexdigest()))
                 producer.write(b"new-after-rename.example.net\n")
                 os.fsync(producer.fileno())
             self.assertIsNotNone(pending)
@@ -100,7 +102,9 @@ class DurableInboxTests(unittest.TestCase):
                     self.queue._rotate_original_source(
                         native, replacement=b"keep.example.com\n",
                         generation=generation, expected_identity=identity,
-                        sealed_prefix=prefix)
+                        sealed_prefix=prefix,
+                        expected_native_image=(
+                            len(original), hashlib.sha256(original).hexdigest()))
             pending = self.queue.segments()
             self.assertEqual(len(pending), 1)
             self.assertRegex(
@@ -114,12 +118,49 @@ class DurableInboxTests(unittest.TestCase):
             recovered = self.queue._rotate_original_source(
                 native, replacement=b"keep.example.com\nracing.example.net\n",
                 generation=generation, expected_identity=identity,
-                sealed_prefix=prefix)
+                sealed_prefix=prefix,
+                expected_native_image=(
+                    len(original + late),
+                    hashlib.sha256(original + late).hexdigest()))
             self.assertEqual(recovered, pending[0])
             self.assertEqual(native.read_bytes(),
                              b"keep.example.com\nracing.example.net\n")
             self.assertEqual(recovered.read_bytes(), original + late)
             self.assertEqual(recovered.stat().st_nlink, 1)
+
+    def test_original_native_full_snapshot_changed_after_p1_refuses(self):
+        import hashlib
+        generation = "e" * 32
+        path = self.root / ("learning-" + generation + "-5.txt")
+        initial = b"known.example.com\nkeep.example.net\n"
+        path.write_bytes(initial)
+        before = path.stat()
+        prefix_size = len(b"known.example.com\n")
+        sealed = (prefix_size,
+                  hashlib.sha256(initial[:prefix_size]).hexdigest())
+        with self.queue.exclusive():
+            # A producer can append AFTER original P1 authorizes removal,
+            # yet BEFORE _rotate_original_source() even opens the file.
+            # Prefix/dev/ino still match: only the FULL snapshot catches it.
+            with path.open("ab") as producer:
+                producer.write(b"late.example.org\n")
+                producer.flush()
+                os.fsync(producer.fileno())
+            with self.assertRaisesRegex(
+                    queue.QueueSafetyError, "native_full_preimage_changed"):
+                self.queue._rotate_original_source(
+                    path, replacement=b"keep.example.net\n",
+                    generation=generation,
+                    expected_identity=(before.st_dev, before.st_ino),
+                    sealed_prefix=sealed,
+                    expected_native_image=(
+                        len(initial), hashlib.sha256(initial).hexdigest()))
+            self.assertEqual(
+                path.read_bytes(),
+                initial + b"late.example.org\n")
+            self.assertEqual(self.queue.segments(), [])
+            self.assertEqual(queue._identity(path),
+                             (before.st_dev, before.st_ino))
 
     def test_original_native_refuses_bad_epoch_and_non_subset(self):
         import hashlib
@@ -147,13 +188,18 @@ class DurableInboxTests(unittest.TestCase):
                 with self.assertRaises(queue.QueueSafetyError):
                     self.queue._rotate_original_source(
                         native, replacement=replacement,
-                        generation=generation, **kwargs)
+                        generation=generation,
+                        expected_native_image=(
+                            len(body), hashlib.sha256(body).hexdigest()),
+                        **kwargs)
             with self.assertRaisesRegex(
                     queue.QueueSafetyError,
                     "native_compaction_must_shrink_hostlist"):
                 self.queue._rotate_original_source(
                     native, replacement=body, generation=generation,
-                    expected_identity=identity, sealed_prefix=prefix)
+                    expected_identity=identity, sealed_prefix=prefix,
+                    expected_native_image=(
+                        len(body), hashlib.sha256(body).hexdigest()))
             self.assertEqual(self.queue.segments(), [])
             self.assertEqual(native.read_bytes(), body)
 
@@ -178,7 +224,9 @@ class DurableInboxTests(unittest.TestCase):
                     self.queue._rotate_original_source(
                         native, replacement=b"keep.example.com\n",
                         generation=generation, expected_identity=identity,
-                        sealed_prefix=prefix)
+                        sealed_prefix=prefix,
+                        expected_native_image=(
+                            len(initial), hashlib.sha256(initial).hexdigest()))
             pending = self.queue.segments()
             self.assertEqual(len(pending), 1)
             self.assertEqual(queue._identity(pending[0]), identity)
@@ -194,7 +242,11 @@ class DurableInboxTests(unittest.TestCase):
             restored = self.queue._rotate_original_source(
                 native, replacement=b"keep.example.com\nlate.example.com\n",
                 generation=generation, expected_identity=identity,
-                sealed_prefix=prefix)
+                sealed_prefix=prefix,
+                expected_native_image=(
+                    len(initial + b"late.example.com\n"),
+                    hashlib.sha256(
+                        initial + b"late.example.com\n").hexdigest()))
             self.assertEqual(restored, pending[0])
             self.assertEqual(native.read_bytes(),
                              b"keep.example.com\nlate.example.com\n")

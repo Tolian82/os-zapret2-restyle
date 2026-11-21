@@ -242,12 +242,14 @@ class DurableInbox:
             cycle: int | None = None, sequence: int | None = None,
             expected_identity: tuple[int, int] | None = None,
             sealed_prefix: tuple[int, str] | None = None,
+            expected_native_image: tuple[int, str] | None = None,
     ) -> Path | None:
         """Same P2a protected hardlink→replace for one original source inode.
 
         The ordinary raw inbox uses the ORIGINAL public rotate(), unchanged.
         A native learning source MUST be one of this producer generation's
-        original root files with original epoch dev/inode and sealed PREFIX.
+        original root files with original epoch dev/inode, sealed PREFIX and
+        EXACT full source SHA/size already authorized by the P1 snapshot.
         The caller (original Config+FD9/GUI WAL owner) must qualify any
         removed known rows and a durable Found+managed checkpoint BEFORE
         calling this INTERNAL physical primitive. No such product caller is
@@ -299,12 +301,21 @@ class DurableInbox:
                         for item in expected_identity) or
                     sealed_prefix is None or
                     len(sealed_prefix) != 2 or
+                    expected_native_image is None or
+                    type(expected_native_image) is not tuple or
+                    len(expected_native_image) != 2 or
+                    type(expected_native_image[0]) is not int or
+                    not 0 <= expected_native_image[0] <= MAX_SEGMENT or
+                    type(expected_native_image[1]) is not str or
+                    re.fullmatch(r"[0-9a-f]{64}",
+                                 expected_native_image[1]) is None or
                     type(sealed_prefix[0]) is not int or
                     not 0 <= sealed_prefix[0] <= MAX_SEGMENT or
                     type(sealed_prefix[1]) is not str or
                     re.fullmatch(r"[0-9a-f]{64}", sealed_prefix[1]) is None):
                 raise QueueSafetyError("native_source_original_epoch_required")
-        elif replacement or expected_identity is not None or sealed_prefix is not None:
+        elif (replacement or expected_identity is not None or
+              sealed_prefix is not None or expected_native_image is not None):
             raise QueueSafetyError("original_raw_rotation_must_remain_unchanged")
         if is_native:
             if (old.st_dev, old.st_ino) != expected_identity:
@@ -327,6 +338,15 @@ class DurableInbox:
                 old_bytes = bytes(old_bytes)
             finally:
                 os.close(fd_probe)
+            # Prefix-only evidence authenticates a historical event, NOT
+            # the full working file chosen by original P1 for compaction.
+            # Never accept an append that happened between P1's source
+            # snapshot and this physical mutation, even when it leaves
+            # generation, device, inode and historical prefix unchanged.
+            if (len(old_bytes) != expected_native_image[0] or
+                    hashlib.sha256(old_bytes).hexdigest() !=
+                    expected_native_image[1]):
+                raise QueueSafetyError("native_full_preimage_changed")
             if (len(old_bytes) != old.st_size or
                     old.st_size and not old_bytes.endswith(b"\n") or
                     sealed_prefix[0] > len(old_bytes) or
