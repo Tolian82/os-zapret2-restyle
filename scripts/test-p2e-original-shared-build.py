@@ -858,7 +858,6 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         tip["state"][proof.learning[1][0]]["streams"][0]["offset"], 0)
                     self.assertEqual(writer.targets["user"].read_bytes(), b"")
                     self.assertTrue((root / "00000001" / "ack.json").exists())
-                    self.assertFalse(run())
                     from auto_detect_cursor_chain import CursorChainRefused
                     from auto_detect_fd import FDState
                     chain = CursorChain(writer.receipts, queue)
@@ -899,7 +898,30 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertEqual((managed / "hostlist-user.txt").read_bytes(),
                                  b"example.org\n")
                 self.assertEqual(user.read_bytes(), b"")
-                self.assertFalse(run())
+                if case == "diagnostic-highwater":
+                    # Native User has been committed AFTER the original
+                    # highwater candidate became stale. The next original
+                    # FD9/P2a cycle can now make a safe physical debug cut.
+                    old_inode = debug.stat().st_ino
+                    self.assertTrue(run())
+                    self.assertNotEqual(debug.stat().st_ino, old_inode)
+                    self.assertEqual(debug.read_bytes(), b"")
+                    previous_slot = root / "00000002"
+                    for receipt in ("debug-cut-intent.json",
+                                    "debug-cut-complete.json",
+                                    "debug-cut-retire.json"):
+                        self.assertTrue((previous_slot / receipt).is_file())
+                    self.assertFalse(
+                        (previous_slot / "debug-cut-retained.log").exists())
+                    self.assertFalse(
+                        (previous_slot / "debug-cut-fresh.log").exists())
+                    new_tip = chain.learning_tip(proof, self.work)
+                    self.assertEqual(new_tip["debug"]["offset"], 0)
+                    self.assertEqual(new_tip["debug"]["inode"],
+                                     debug.stat().st_ino)
+                    self.assertFalse(run())
+                else:
+                    self.assertFalse(run())
                 root = writer.receipts.root / proof.generation / "cursor-chain-v2"
                 self.assertTrue((root / "00000000" / "ack.json").exists())
                 self.assertTrue((root / "00000001" / "ack.json").exists())
