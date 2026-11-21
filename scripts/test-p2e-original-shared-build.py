@@ -5692,7 +5692,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         begin = service.index("shared_apply_prepare_service()\n")
         end = service.index("extra_resources_native_previous_owner_service()\n", begin)
         stage = service[begin:end]
-        stage_flat = " ".join(line.strip().rstrip("\\") for line in stage.splitlines())
+        stage_flat = " ".join(" ".join(line.strip().rstrip("\\") for line in stage.splitlines()).split())
         for token in ('ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL',
                       'ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE',
                       'ZAPRET2_NATIVE_BUILD_CI', 'GITHUB_ACTIONS',
