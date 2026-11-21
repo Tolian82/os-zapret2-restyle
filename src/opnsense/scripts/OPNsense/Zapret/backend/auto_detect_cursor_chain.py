@@ -1318,6 +1318,16 @@ class CursorChain:
         debug_path = Path(debug_cursor["path"])
         if debug_path != self.queue.root / "debug.log":
             raise CursorChainRefused("learning_debug_cut_foreign_debug_path")
+        # The 2-MiB high-water gate is a safe read-only negative shortcut.
+        # Avoid two full all-N filesystem/P2b censuses on every ordinary
+        # idle minute below threshold. Any *actual* cut still performs both
+        # complete independent snapshots and FD/owner proof passes.
+        from auto_detect_queue import _stat_regular
+        highwater = _stat_regular(
+            debug_path, self.receipts.uid, max_size=MAX_DEBUG,
+            writer_gid=self.queue.writer_gid)
+        if highwater.st_size < MAX_DEBUG // 2:
+            return None
         snapshots = {}
         # Native appenders ignore the original P2a flock. Independently
         # verify the exact same full images twice, including P2b all-PID
