@@ -45,6 +45,8 @@ DEBUG_CUT_INTENT = "debug-cut-intent.json"
 DEBUG_CUT_COMPLETE = "debug-cut-complete.json"
 DEBUG_CUT_RETIRE = "debug-cut-retire.json"
 DEBUG_CUT_ABORT = "debug-cut-abort.json"
+DEBUG_CUT_ROLLBACK = "debug-cut-rollback.json"
+DEBUG_CUT_ROLLBACK_NEW = "debug-cut-rollback-new.log"
 DEBUG_CUT_FRESH = "debug-cut-fresh.log"
 DEBUG_CUT_OLD = "debug-cut-retained.log"
 
@@ -318,7 +320,8 @@ class CursorChain:
                     entry.rmdir()
                 elif entry.name in {"intent.json", "ack.json", "recovery.json",
                                        DEBUG_CUT_INTENT, DEBUG_CUT_COMPLETE,
-                                       DEBUG_CUT_RETIRE, DEBUG_CUT_ABORT}:
+                                       DEBUG_CUT_RETIRE, DEBUG_CUT_ABORT,
+                                       DEBUG_CUT_ROLLBACK}:
                     self._check_old_file(entry)
                     entry.unlink()
                 elif entry.name in {"native", "progress"}:
@@ -2061,6 +2064,7 @@ def _recover_learning_debug_cut_staged(receipts, proof):
         if not any(_entry(slot / name) for name in (
                 DEBUG_CUT_INTENT, DEBUG_CUT_COMPLETE,
                 DEBUG_CUT_RETIRE, DEBUG_CUT_ABORT,
+                DEBUG_CUT_ROLLBACK, DEBUG_CUT_ROLLBACK_NEW,
                 DEBUG_CUT_FRESH, DEBUG_CUT_OLD)):
             continue
         parts = sorted(path for path in slot.iterdir()
@@ -2137,7 +2141,8 @@ def _learning_debug_cut_receipts(slot, proof, tip, uid, *, allow_unsealed=False)
     old_path = slot / DEBUG_CUT_OLD
     if not _entry(intent_path):
         if any(_entry(path) for path in
-               (complete_path, retire_path, abort_path, old_path)):
+               (complete_path, retire_path, abort_path, old_path,
+             slot / DEBUG_CUT_ROLLBACK, slot / DEBUG_CUT_ROLLBACK_NEW)):
             raise CursorChainRefused("learning_debug_cut_orphan_receipt")
         # A prepared but unsealed empty inode is recovered only by the
         # original cut owner, never by an ordinary ACK/Config reader.
