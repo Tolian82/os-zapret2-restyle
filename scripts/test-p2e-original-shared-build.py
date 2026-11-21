@@ -1336,7 +1336,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     os.link(user_native, retained)
                     self.assertEqual(
                         physical_state()["profiles"][1]["phase"],
-                        "linked-unreplaced")
+                        "linked-source-grew")
                     self.assertEqual(retained.stat().st_nlink, 2)
                     # Now simulate ONLY the disposable P2a file primitive,
                     # not a product call / verified live dvtws2 transaction.
@@ -1358,7 +1358,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         self.assertEqual(rotated, retained)
                         self.assertEqual(
                             [r["phase"] for r in physical_state()["profiles"]],
-                            ["prepared-unmodified", "replaced-retained"])
+                            ["prepared-unmodified",
+                             "replaced-with-unprocessed-tails"])
                         old_writer.write(b"oldlate.example.net\n")
                         os.fsync(old_writer.fileno())
                     with user_native.open("ab", buffering=0) as new_writer:
@@ -1371,10 +1372,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                          "replaced-with-unprocessed-tails"])
                     self.assertEqual(
                         observed["profiles"][1]["old_tail_size"],
-                        len(b"oldlate.example.net\n"))
+                        len(b"late.example.org\noldlate.example.net\n"))
                     self.assertEqual(
                         observed["profiles"][1]["new_tail_size"],
-                        len(b"newlate.example.net\n"))
+                        len(b"late.example.org\nnewlate.example.net\n"))
                     self.assertFalse(observed["ack_authorized"])
                     self.assertEqual(
                         retained.read_bytes(),
@@ -1470,7 +1471,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                          record["pending_name"])
                     self.assertEqual(
                         [item["phase"] for item in physical_state()["profiles"]],
-                        ["replaced-retained", "replaced-retained"])
+                        ["replaced-retained",
+                         "replaced-with-unprocessed-tails"])
                     from auto_detect_original_v2_model import (
                         seal_original_learning_post_inode_seed_locked,
                     )
@@ -1501,7 +1503,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertEqual(len(list(observed_root.iterdir())), 1)
                     self.assertEqual(
                         [row["phase"] for row in physical_state()["profiles"]],
-                        ["replaced-retained", "replaced-retained"])
+                        ["replaced-retained",
+                         "replaced-with-unprocessed-tails"])
                     sealed_seed = write_inode_seed()
                     self.assertEqual(sealed_seed["seeds"], 2)
                     self.assertFalse(sealed_seed["cursor_advanced"])
@@ -1527,7 +1530,36 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         self.assertEqual(
                             record["old_pending_inode"]["cut_offset"],
                             (youtube_plan if number == youtube_num
+                             else native_plan)["sealed_end_offset"])
+                        self.assertEqual(
+                            record["new_live_inode"]["cut_offset"], 0)
+                        self.assertEqual(
+                            record["new_live_inode"]["cut_sha256"],
+                            hashlib.sha256(b"").hexdigest())
+                        self.assertEqual(
+                            record["old_pending_proven_preimage"]["size"],
+                            (youtube_plan if number == youtube_num
                              else native_plan)["full_preimage"]["size"])
+                        self.assertEqual(
+                            record["new_live_proven_postimage"]["size"],
+                            (youtube_plan if number == youtube_num
+                             else native_plan)["replacement"]["size"])
+                    # The late domain was present in P1's FULL image
+                    # but NOT in the original first-slot observations.
+                    # It must remain unprocessed on BOTH physical paths.
+                    user_before = json.loads(
+                        (observed_root / f"{user_num:03d}.json").read_bytes())
+                    self.assertEqual(
+                        user_before["old_pending_inode"]["cut_offset"],
+                        len(b"mail.example.org\n"))
+                    self.assertLess(
+                        user_before["old_pending_inode"]["cut_offset"],
+                        user_before["old_pending_proven_preimage"]["size"])
+                    self.assertGreater(
+                        user_before["new_live_proven_postimage"]["size"], 0)
+                    self.assertEqual(
+                        physical_state()["profiles"][1]["new_tail_size"],
+                        len(b"late.example.org\n"))
                     # New tails NEVER move either immutable cursor base:
                     # old-FD bytes and new-path bytes are still unprocessed.
                     with user_pending.open("ab", buffering=0) as old:
