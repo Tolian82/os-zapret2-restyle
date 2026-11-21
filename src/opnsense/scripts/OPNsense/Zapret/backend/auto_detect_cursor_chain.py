@@ -1257,6 +1257,91 @@ class CursorChain:
                           slot=None, intent=None)
         return result
 
+    def learning_debug_highwater_candidate(self, proof, workspace, *,
+                                           attest, inspect=probe_pending_fd):
+        """Read-only original FD9/P2a proof before a future schema3 debug cut.
+
+        This does NOT replace, truncate, retire, or authorize replacing the
+        debug inode. A physical cut must durably journal its *separate* old
+        and new cursors before os.replace; reusing the schema2 raw-first
+        path would lose native profile attribution. No extra worker exists.
+        """
+        from auto_detect_original_v2_model import _native_rebind_stable_snapshot
+        from auto_detect_owner import LearningGenerationProof
+        from auto_detect_original_v2_prepare import DEBUG_HIGH_WATERMARK
+        if (not isinstance(proof, LearningGenerationProof) or
+                not self.queue._held or not callable(attest) or
+                not callable(inspect) or attest() != proof):
+            raise CursorChainRefused("learning_debug_cut_original_owner_required")
+        self.queue._verify()
+        tip = self.learning_tip(proof, workspace)
+        if tip["slot"] is not None or tip["intent"] is not None:
+            # An unfinished original destination WAL always takes priority.
+            return None
+        if tip["sequence"] == 0:
+            # A zero-cut epoch alone is not proof of a durable postlaunch
+            # source ACK; require an immutable completed original slot.
+            return None
+        expected_pending = {Path(cursor["path"])
+                            for row in tip["state"].values()
+                            for cursor in row["streams"]
+                            if Path(cursor["path"]).parent == self.queue.pending}
+        if set(self.queue.segments()) != expected_pending:
+            raise CursorChainRefused("learning_debug_cut_foreign_pending")
+        debug_cursor = tip["debug"]
+        debug_path = Path(debug_cursor["path"])
+        if debug_path != self.queue.root / "debug.log":
+            raise CursorChainRefused("learning_debug_cut_foreign_debug_path")
+        snapshots = {}
+        # Native appenders ignore the original P2a flock. Independently
+        # verify the exact same full images twice, including P2b all-PID
+        # FD drainage and running original owner before AND after.
+        for _ in range(2):
+            current = {}
+            cursors = [debug_cursor]
+            cursors.extend(cursor for row in tip["state"].values()
+                           for cursor in row["streams"])
+            for cursor in cursors:
+                path = Path(cursor["path"])
+                st, data, identity = _native_rebind_stable_snapshot(
+                    path, self.receipts.uid, self.queue.writer_gid,
+                    allowed_links=(1,))
+                _learning_prefix(cursor, st, data)
+                if cursor["offset"] != len(data):
+                    # A partial debug line or unmatched native append can
+                    # never be suppressed merely to bound diagnostic size.
+                    return None
+                if inspect(path, st.st_dev, st.st_ino, owner=proof.owner,
+                           writer_gid=self.queue.writer_gid) is not FDState.DRAINED:
+                    raise CursorChainRefused("learning_debug_cut_native_fd_busy")
+                current[str(path)] = (identity, _digest(data), len(data))
+            if snapshots and snapshots != current:
+                raise CursorChainRefused("learning_debug_cut_snapshot_raced")
+            snapshots = current
+            if attest() != proof:
+                raise CursorChainRefused("learning_debug_cut_owner_raced")
+        if snapshots[str(debug_path)][2] < DEBUG_HIGH_WATERMARK:
+            return None
+        if self.learning_tip(proof, workspace) != tip or attest() != proof:
+            raise CursorChainRefused("learning_debug_cut_anchor_changed")
+        return {
+            "schema": 3,
+            "kind": "original-learning-debug-highwater-candidate",
+            "generation": proof.generation,
+            "native_map_sha256": proof.native_map_sha256,
+            "final_args_sha256": proof.final_args_sha256,
+            "cycle": tip["cycle"],
+            "next_sequence": tip["sequence"],
+            "previous_ack_sha256": tip["previous_ack_sha256"],
+            "debug": debug_cursor,
+            "debug_image_sha256": snapshots[str(debug_path)][1],
+            "native_sha256": _learning_records_digest(tip["state"]),
+            "source_fully_acked": True,
+            "p2b_drained": True,
+            "cut_authorized": False,
+            "ack_authorized": False,
+        }
+
     def _ensure_learning_capacity(self, proof, workspace, *, attest):
         """The original .next/.old anchor swap, carrying ALL N cursors.
 
