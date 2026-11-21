@@ -677,6 +677,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.native_cycle_case = "debug-cut-crash"
         self.test_tz6v4_independent_native_minute_cycles()
 
+    def test_tz6v4_debug_cut_recovers_fsynced_intent_part(self):
+        self.native_cycle_case = "debug-cut-part"
+        self.test_tz6v4_independent_native_minute_cycles()
+
     def test_tz6v4_debug_cut_repeats_after_next_original_ack(self):
         self.native_cycle_case = "debug-cut-repeat"
         self.test_tz6v4_independent_native_minute_cycles()
@@ -847,7 +851,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertFalse((root / "00000001" / "ack.json").exists())
                     return
                 if case in ("diagnostic-highwater", "debug-cut-crash",
-                            "debug-cut-repeat", "debug-cut-late-old"):
+                            "debug-cut-repeat", "debug-cut-late-old", "debug-cut-part"):
                     # The original one-PHP/FD9 WAL still commits/ACKs the
                     # unchanged N cursors. All bytes are real on disk and
                     # no worker, engine signal or Config mutation is faked.
@@ -901,7 +905,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     out.write(native_debug(proof.learning[1][0],
                                            "mail.example.org", str(user)))
                 if case in ("diagnostic-highwater", "debug-cut-crash",
-                            "debug-cut-repeat", "debug-cut-late-old"):
+                            "debug-cut-repeat", "debug-cut-late-old", "debug-cut-part"):
                     # A newly appended real native hostname makes the
                     # previously qualified candidate obsolete before P1.
                     self.assertIsNone(chain.learning_debug_highwater_candidate(
@@ -913,12 +917,28 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                  b"example.org\n")
                 self.assertEqual(user.read_bytes(), b"")
                 if case in ("diagnostic-highwater", "debug-cut-crash",
-                            "debug-cut-repeat", "debug-cut-late-old"):
+                            "debug-cut-repeat", "debug-cut-late-old", "debug-cut-part"):
                     # Native User has been committed AFTER the original
                     # highwater candidate became stale. The next original
                     # FD9/P2a cycle can now make a safe physical debug cut.
                     old_inode = debug.stat().st_ino
                     previous_slot = root / "00000002"
+                    if case == "debug-cut-part":
+                        import auto_detect_cursor_chain as cursors
+                        original_link = os.link
+                        def interrupted_cut_receipt(source, target, *args, **kwargs):
+                            if Path(target).name == cursors.DEBUG_CUT_INTENT:
+                                raise OSError("injected_before_debug_intent_link")
+                            return original_link(source, target, *args, **kwargs)
+                        with patch.object(cursors.os, "link", interrupted_cut_receipt):
+                            with self.assertRaises(OSError):
+                                run()
+                        staged = [p for p in previous_slot.iterdir()
+                                  if p.name.endswith(".part")]
+                        self.assertEqual(len(staged), 1)
+                        self.assertTrue((previous_slot / cursors.DEBUG_CUT_FRESH).exists())
+                        self.assertFalse((previous_slot / cursors.DEBUG_CUT_INTENT).exists())
+                        self.assertEqual(debug.stat().st_ino, old_inode)
                     if case in ("debug-cut-crash", "debug-cut-late-old"):
                         import auto_detect_cursor_chain as cursors
                         original_replace = os.replace
@@ -984,7 +1004,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertTrue((root / "00000000" / "ack.json").exists())
                 self.assertTrue((root / "00000001" / "ack.json").exists())
                 if case in ("diagnostic-highwater", "debug-cut-crash",
-                            "debug-cut-repeat", "debug-cut-late-old"):
+                            "debug-cut-repeat", "debug-cut-late-old", "debug-cut-part"):
                     self.assertTrue((root / "00000002" / "ack.json").exists())
                     if case == "debug-cut-repeat":
                         self.assertTrue((root / "00000003" / "ack.json").exists())
