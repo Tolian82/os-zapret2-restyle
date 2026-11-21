@@ -4566,7 +4566,8 @@ def _complete_original_learning_cycle_locked(
 
 def process_original_learning_cycle(
         writer, proof, workspace, *, config_fd, config_path, owned_root,
-        manual_hostlists, global_exclude, attest, inspect=probe_pending_fd, psl=None):
+        manual_hostlists, global_exclude, attest, inspect=probe_pending_fd,
+        psl=None, stopped=False):
     """One original Config/FD9/P2a minute, independent native N streams.
 
     The shared original P1/DestinationCommit handles every destination and
@@ -4575,17 +4576,26 @@ def process_original_learning_cycle(
     changes process state or manipulates firewall rules.
     """
     from auto_detect_original_history import _held
+    if type(stopped) is not bool:
+        raise V2OriginalConfigRefused("learning_cycle_invalid_owner_lifecycle")
     chain = CursorChain(writer.receipts, writer.queue)
     with writer.exclusive_targets():
         _held(writer, proof, workspace, config_fd, config_path, attest)
-        # The same original FD4/FD9/P2a/GUI owner closes a cut interrupted
-        # BEFORE any next source WAL. On a normal idle minute a fully-ACKed
-        # 2-MiB debug file can be atomically replaced without stopping
-        # dvtws2 or IPFW; late old-FD bytes remain physically protected.
-        rotated = chain.rotate_learning_debug_once(
-            proof, workspace, attest=attest, inspect=inspect)
+        if stopped and sys.platform.startswith("freebsd"):
+            from auto_detect_owner import attest_learning_stopped_generation
+            if attest_learning_stopped_generation() != proof:
+                raise V2OriginalConfigRefused("learning_cycle_not_stopped_owner")
+        # A RUNNING dvtws2 may use the original owner to rotate a fully
+        # ACKed 2-MiB diagnostic inode. A STOPPED generation must first
+        # finish its remaining native/Config/P1 WAL without inventing a
+        # new live log or treating a stopped PID as a running collector.
+        rotated = False
+        if not stopped:
+            rotated = chain.rotate_learning_debug_once(
+                proof, workspace, attest=attest, inspect=inspect)
         chain.ensure_capacity(proof, workspace=workspace, attest=attest)
-        prepared = chain.prepare_learning_cycle(proof, workspace, attest=attest, inspect=inspect)
+        prepared = chain.prepare_learning_cycle(
+            proof, workspace, attest=attest, inspect=inspect)
     if prepared is None:
         return rotated
     sequence = prepared["sequence"]
@@ -4595,7 +4605,7 @@ def process_original_learning_cycle(
         writer, proof, workspace, config_fd=config_fd, config_path=config_path,
         owned_root=owned_root, manual_hostlists=manual_hostlists,
         global_exclude=global_exclude, attest=attest, inspect=inspect, psl=psl,
-        sequence=sequence, prepare=prepare)
+        sequence=sequence, prepare=prepare, stopped=stopped)
     slot = prepared["slot"]
     intent = json.loads(_read(slot / "intent.json", writer.receipts.uid))
     with writer.exclusive_targets():
