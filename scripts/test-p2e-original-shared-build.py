@@ -1304,6 +1304,112 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         user_native.read_bytes(),
                         b"mail.example.org\nlate.example.org\n")
                     self.assertEqual(queue.segments(), [])
+                    # Physical-state read is not a cursor advancement:
+                    # the immutable original manifest survives a native
+                    # rename, whereas first-slot zero-epoch reader would
+                    # correctly reject an inode replacement.
+                    from auto_detect_original_v2_model import (
+                        inspect_original_learning_native_rebind_locked,
+                    )
+                    def physical_state(*, config_descriptor=cfg_fd):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return inspect_original_learning_native_rebind_locked(
+                                writer, proof, self.work,
+                                config_fd=config_descriptor,
+                                config_path=config_path, attest=lambda: proof)
+                    initial_physical = physical_state()
+                    self.assertEqual(
+                        [row["phase"] for row in initial_physical["profiles"]],
+                        ["prepared-unmodified", "prepared-unmodified"])
+                    self.assertFalse(
+                        initial_physical["physical_rotation_authorized"])
+                    self.assertFalse(initial_physical["ack_authorized"])
+                    user_num = learning[1][0]
+                    native_plan = json.loads(
+                        (journal / f"{user_num:03d}.json").read_bytes())
+                    self.assertEqual(native_plan["hostlist"], "user")
+                    retained = queue.pending / native_plan["pending_name"]
+                    # A crash between original hardlink() and rename()
+                    # leaves TWO names for the same old inode.
+                    os.link(user_native, retained)
+                    self.assertEqual(
+                        physical_state()["profiles"][1]["phase"],
+                        "linked-unreplaced")
+                    self.assertEqual(retained.stat().st_nlink, 2)
+                    # Now simulate ONLY the disposable P2a file primitive,
+                    # not a product call / verified live dvtws2 transaction.
+                    with user_native.open("ab", buffering=0) as old_writer:
+                        rotated = queue._rotate_original_source(
+                            user_native,
+                            replacement=b"late.example.org\n",
+                            generation=proof.generation,
+                            expected_identity=(
+                                native_plan["old_device"],
+                                native_plan["old_inode"]),
+                            sealed_prefix=(
+                                native_plan["sealed_end_offset"],
+                                native_plan["sealed_end_sha256"]),
+                            expected_native_image=(
+                                native_plan["full_preimage"]["size"],
+                                native_plan["full_preimage"]["sha256"]),
+                            native_pending_name=native_plan["pending_name"])
+                        self.assertEqual(rotated, retained)
+                        self.assertEqual(
+                            [r["phase"] for r in physical_state()["profiles"]],
+                            ["prepared-unmodified", "replaced-retained"])
+                        old_writer.write(b"oldlate.example.net\n")
+                        os.fsync(old_writer.fileno())
+                    with user_native.open("ab", buffering=0) as new_writer:
+                        new_writer.write(b"newlate.example.net\n")
+                        os.fsync(new_writer.fileno())
+                    observed = physical_state()
+                    self.assertEqual(
+                        [r["phase"] for r in observed["profiles"]],
+                        ["prepared-unmodified",
+                         "replaced-with-unprocessed-tails"])
+                    self.assertEqual(
+                        observed["profiles"][1]["old_tail_size"],
+                        len(b"oldlate.example.net\n"))
+                    self.assertEqual(
+                        observed["profiles"][1]["new_tail_size"],
+                        len(b"newlate.example.net\n"))
+                    self.assertFalse(observed["ack_authorized"])
+                    self.assertEqual(
+                        retained.read_bytes(),
+                        b"mail.example.org\nlate.example.org\n"
+                        b"oldlate.example.net\n")
+                    self.assertEqual(
+                        user_native.read_bytes(),
+                        b"late.example.org\nnewlate.example.net\n")
+                    # Losing the retained old inode after a rename must
+                    # fail closed even if the new live bytes are intact.
+                    held_away = data_root / ".retained-old-inode-test"
+                    retained.replace(held_away)
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        physical_state()
+                    held_away.replace(retained)
+                    # Native working content mismatch is not permission to
+                    # reconstruct from an unverified inode or to ACK old FD.
+                    new_bytes = user_native.read_bytes()
+                    user_native.write_bytes(b"forged.example.org\n")
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        physical_state()
+                    user_native.write_bytes(new_bytes)
+                    self.assertEqual(
+                        physical_state()["profiles"][1]["phase"],
+                        "replaced-with-unprocessed-tails")
+                    # Restore the original OLD inode only in this disposable
+                    # test fixture; production MUST retain both until its
+                    # future qualified cursor+ACK lifecycle is implemented.
+                    retained.replace(user_native)
+                    user_native.write_bytes(
+                        b"mail.example.org\nlate.example.org\n")
+                    self.assertEqual(queue.segments(), [])
+                    self.assertEqual(
+                        physical_state()["profiles"][1]["phase"],
+                        "prepared-unmodified")
                 for changed_exclude in ("example.com\n", "example.org\n"):
                     with self.assertRaises(V2OriginalConfigRefused):
                         compaction_preview(exclude=changed_exclude)
