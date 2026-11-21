@@ -689,6 +689,14 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.native_cycle_case = "debug-cut-late-old"
         self.test_tz6v4_independent_native_minute_cycles()
 
+    def test_tz6v4_stopped_owner_original_p1_cas(self):
+        self.native_cycle_case = "stopped-cas"
+        self.test_tz6v4_independent_native_minute_cycles()
+
+    def test_tz6v4_stopped_owner_refuses_foreign_managed_preimage(self):
+        self.native_cycle_case = "stopped-cas-drift"
+        self.test_tz6v4_independent_native_minute_cycles()
+
     def test_tz6v4_debug_cut_replays_late_old_native_positive(self):
         self.native_cycle_case = "debug-cut-late-positive"
         self.test_tz6v4_independent_native_minute_cycles()
@@ -930,7 +938,21 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     # previously qualified candidate obsolete before P1.
                     self.assertIsNone(chain.learning_debug_highwater_candidate(
                         proof, self.work, attest=lambda: proof, inspect=drained))
-                self.assertTrue(run())
+                if case == "stopped-cas-drift":
+                    # STOPPED P1 may not resurrect a GUI-edited managed
+                    # image or pretend that an old engine still runs.
+                    physical = managed / "hostlist-user.txt"
+                    baseline = physical.read_bytes()
+                    physical.write_bytes(b"foreign.example\n")
+                    with self.assertRaisesRegex(
+                            V2OriginalConfigRefused,
+                            "learning_stopped_managed_manual_found_drift"):
+                        run(stopped=True)
+                    self.assertEqual(user.read_bytes(), b"mail.example.org\n")
+                    self.assertEqual(writer.targets["user"].read_bytes(), b"")
+                    physical.write_bytes(baseline)
+                self.assertTrue(run(stopped=case in
+                                    ("stopped-cas", "stopped-cas-drift")))
                 self.assertEqual(writer.targets["user"].read_bytes(),
                                  b"example.org\n")
                 self.assertEqual((managed / "hostlist-user.txt").read_bytes(),
