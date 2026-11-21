@@ -1186,6 +1186,94 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         (item["path"].stat().st_dev,
                          item["path"].stat().st_ino),
                         item["expected_identity"])
+                # The first-slot durable cross-N receipt is the ONLY
+                # original generation journal for future native rebind.
+                # First the original permanent+active checkpoint exists;
+                # then per-N records, then the aggregate manifest LAST.
+                from auto_detect_original_v2_model import (
+                    seal_original_learning_native_rebind_locked,
+                )
+                def seal_native_transition(*, config_descriptor=cfg_fd):
+                    with writer.exclusive_targets(), patch(
+                            "auto_detect_original_v2_model.COMMON_ACTIVE",
+                            active_root):
+                        return seal_original_learning_native_rebind_locked(
+                            writer, proof, self.work,
+                            config_fd=config_descriptor,
+                            config_path=config_path, owned_root=owned_dir,
+                            manual_hostlists={
+                                "youtube": "youtube.com\n", "user": ""},
+                            global_exclude="", attest=lambda: proof,
+                            inspect=drained,
+                            psl=self._tz6v4_psl_for_fixtures())
+                if sys.platform.startswith("freebsd"):
+                    with self.assertRaisesRegex(
+                            V2OriginalConfigRefused,
+                            "learning_rebind_original_fd4_fd9_required"):
+                        seal_native_transition()
+                else:
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        seal_native_transition(config_descriptor=-1)
+                    result = seal_native_transition()
+                    self.assertEqual(result["profiles_count"], 2)
+                    self.assertEqual(result["rotation_count"], 2)
+                    self.assertFalse(result["physical_rotation_authorized"])
+                    self.assertFalse(result["ack_authorized"])
+                    journal = slot / "native-rebind"
+                    names = {f"{number:03d}.json"
+                             for number, _, _ in proof.learning}
+                    self.assertEqual(
+                        {p.name for p in journal.iterdir()},
+                        names | {"manifest.json"})
+                    data = json.loads((journal / "manifest.json").read_bytes())
+                    self.assertEqual(data["schema"], 3)
+                    self.assertEqual(data["profiles_count"], 2)
+                    self.assertFalse(data["ack_authorized"])
+                    perprofile = [
+                        (journal / f"{number:03d}.json").read_bytes()
+                        for number, _, _ in proof.learning
+                    ]
+                    self.assertEqual(
+                        data["profiles_sha256"],
+                        hashlib.sha256(b"".join(
+                            hashlib.sha256(raw).digest()
+                            for raw in perprofile)).hexdigest())
+                    for record in map(json.loads, perprofile):
+                        self.assertEqual(record["schema"], 3)
+                        self.assertFalse(record["ack_authorized"])
+                        self.assertEqual(
+                            record["generation"], proof.generation)
+                        self.assertRegex(
+                            record["pending_name"],
+                            r"^native-" + proof.generation +
+                            r"-[0-9]+-[0-9a-f]{32}\.txt$")
+                    before_records = {
+                        p.name: p.read_bytes() for p in journal.iterdir()}
+                    self.assertEqual(seal_native_transition(), result)
+                    self.assertEqual(
+                        before_records,
+                        {p.name: p.read_bytes() for p in journal.iterdir()})
+                    # First-slot source replay recognizes native-rebind
+                    # as belonging to the SAME original cursor journal.
+                    self.assertEqual(
+                        chain.prepare_learning_first_slot(
+                            proof, self.work, attest=lambda: proof,
+                            inspect=drained)["intent_sha256"],
+                        saved["intent_sha256"])
+                    # If dvtws2 appends after durable plan publish, that
+                    # old plan is NOT refreshed to guess a new postimage.
+                    with user_native.open("ab") as producer:
+                        producer.write(b"new.example.org\n")
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        seal_native_transition()
+                    user_native.write_bytes(
+                        b"mail.example.org\nlate.example.org\n")
+                    self.assertEqual(before_records, {
+                        p.name: p.read_bytes() for p in journal.iterdir()})
+                    self.assertEqual(
+                        user_native.read_bytes(),
+                        b"mail.example.org\nlate.example.org\n")
+                    self.assertEqual(queue.segments(), [])
                 for changed_exclude in ("example.com\n", "example.org\n"):
                     with self.assertRaises(V2OriginalConfigRefused):
                         compaction_preview(exclude=changed_exclude)

@@ -628,6 +628,7 @@ def seal_original_learning_native_rebind_locked(
     )
     from auto_detect_owner import LearningGenerationProof
     from auto_detect_cursor_chain import CursorChainRefused
+    from auto_detect_queue import QueueSafetyError
 
     if (not isinstance(writer, DestinationCommit) or
             not isinstance(proof, LearningGenerationProof) or

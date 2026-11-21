@@ -162,6 +162,45 @@ class DurableInboxTests(unittest.TestCase):
             self.assertEqual(queue._identity(path),
                              (before.st_dev, before.st_ino))
 
+    def test_native_pending_name_binds_original_manifest_and_profile(self):
+        import hashlib
+        gen = "e" * 32
+        path = self.root / ("learning-" + gen + "-6.txt")
+        content = b"known.example.org\nkeep.example.com\n"
+        path.write_bytes(content)
+        st = path.stat()
+        cut = len(b"known.example.org\n")
+        pending_name = f"native-{gen}-6-" + "1" * 32 + ".txt"
+        wrong_profile = f"native-{gen}-7-" + "1" * 32 + ".txt"
+        kwargs = {
+            "generation": gen,
+            "expected_identity": (st.st_dev, st.st_ino),
+            "sealed_prefix": (
+                cut, hashlib.sha256(content[:cut]).hexdigest()),
+            "expected_native_image": (
+                len(content), hashlib.sha256(content).hexdigest()),
+        }
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(
+                    queue.QueueSafetyError,
+                    "native_source_original_epoch_required"):
+                self.queue._rotate_original_source(
+                    path, replacement=b"keep.example.com\n",
+                    native_pending_name=wrong_profile, **kwargs)
+            retained = self.queue._rotate_original_source(
+                path, replacement=b"keep.example.com\n",
+                native_pending_name=pending_name, **kwargs)
+            self.assertEqual(retained.name, pending_name)
+            self.assertEqual(retained.read_bytes(), content)
+            self.assertEqual(path.read_bytes(), b"keep.example.com\n")
+            with self.assertRaisesRegex(
+                    queue.QueueSafetyError,
+                    "native_pending_requires_qualified_ack"):
+                self.queue.acknowledge(
+                    retained, drained=lambda *_: True,
+                    committed=lambda _: True)
+            self.assertTrue(retained.exists())
+
     def test_original_native_refuses_bad_epoch_and_non_subset(self):
         import hashlib
         generation = "b" * 32
