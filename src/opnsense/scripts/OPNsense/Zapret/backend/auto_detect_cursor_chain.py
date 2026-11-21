@@ -316,7 +316,9 @@ class CursorChain:
                         self._check_old_file(child)
                         child.unlink()
                     entry.rmdir()
-                elif entry.name in {"intent.json", "ack.json", "recovery.json"}:
+                elif entry.name in {"intent.json", "ack.json", "recovery.json",
+                                       DEBUG_CUT_INTENT, DEBUG_CUT_COMPLETE,
+                                       DEBUG_CUT_RETIRE, DEBUG_CUT_ABORT}:
                     self._check_old_file(entry)
                     entry.unlink()
                 elif entry.name in {"native", "progress"}:
@@ -1266,7 +1268,8 @@ class CursorChain:
                           debug=ack["debug"], previous_ack_sha256=_digest(ack_raw),
                           slot=None, intent=None)
             cut = _learning_debug_cut_receipts(
-                slot, proof, result, self.receipts.uid)
+                slot, proof, result, self.receipts.uid,
+                allow_unsealed=allow_unfinished_debug_cut)
             if cut is None:
                 if _entry(slot / DEBUG_CUT_INTENT):
                     if not allow_unfinished_debug_cut or name != max(entries):
@@ -1736,7 +1739,7 @@ def _entry(path):
     return path.exists() or path.is_symlink()
 
 
-def _learning_debug_cut_receipts(slot, proof, tip, uid):
+def _learning_debug_cut_receipts(slot, proof, tip, uid, *, allow_unsealed=False):
     """Verify immutable ACK→debug-inode transition, never infer it from FS.
 
     No receipt: no cut. Incomplete cut: original minute refuses until the
@@ -1756,7 +1759,7 @@ def _learning_debug_cut_receipts(slot, proof, tip, uid):
             raise CursorChainRefused("learning_debug_cut_orphan_receipt")
         # A prepared but unsealed empty inode is recovered only by the
         # original cut owner, never by an ordinary ACK/Config reader.
-        if _entry(fresh_path):
+        if _entry(fresh_path) and not allow_unsealed:
             raise CursorChainRefused("learning_debug_cut_unsealed_fresh")
         return None
     intent, intent_raw = _load(intent_path, uid)
@@ -1823,8 +1826,12 @@ def _learning_debug_cut_receipts(slot, proof, tip, uid):
                 "old_size": intent["old_size"],
                 "old_sha256": intent["old_sha256"],
                 "ack_authorized": False} or
-            _entry(fresh_path) or _entry(old_path)):
+            _entry(fresh_path)):
         raise CursorChainRefused("learning_debug_cut_not_fully_retired")
+    if _entry(old_path):
+        # Crash after a durable retirement receipt but before unlink:
+        # the original FD9 owner must recheck P2b and remove the archive.
+        return None
     return candidate_new
 
 
