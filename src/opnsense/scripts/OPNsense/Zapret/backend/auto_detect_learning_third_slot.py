@@ -224,9 +224,18 @@ def prepare_third_source_locked(
             slot.mkdir(mode=0o700)
             _sync(chain)
         names_slot = set(os.listdir(slot))
-        if names_slot - {"native", "intent.json", "destination"}:
+        if names_slot - {
+                "native", "intent.json", "destination",
+                "cursor-progress.json"}:
             raise V2OriginalConfigRefused(
                 "original_third_source_foreign_destination")
+        if "cursor-progress.json" in names_slot and (
+                "intent.json" not in names_slot or
+                "destination" not in names_slot or
+                not (slot / "destination" /
+                     "checkpoint.json").exists()):
+            raise V2OriginalConfigRefused(
+                "original_third_source_progress_without_checkpoint")
         if "destination" in names_slot:
             if "intent.json" not in names_slot:
                 raise V2OriginalConfigRefused(
@@ -259,7 +268,9 @@ def prepare_third_source_locked(
             if (encoded != _canonical(record) or
                     set(os.listdir(slot)) not in (
                         {"native", "intent.json"},
-                        {"native", "intent.json", "destination"}) or
+                        {"native", "intent.json", "destination"},
+                        {"native", "intent.json", "destination",
+                         "cursor-progress.json"}) or
                     set(os.listdir(native)) != allowed):
                 raise V2OriginalConfigRefused(
                     "original_third_source_not_complete")

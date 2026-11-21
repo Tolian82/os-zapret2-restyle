@@ -2498,6 +2498,219 @@ def prepare_original_learning_third_slot_locked(
         config_path=config_path, attest=attest, inspect=inspect)
 
 
+def _original_learning_third_progress_record(
+        intent: dict, source_raw: bytes, checkpoint_raw: bytes,
+        checkpoint: dict, postimages: dict) -> dict:
+    """One ORIGINAL, read-only post-P1 third N cursor receipt; never ACK.
+
+    The physical destination postimage is pinned separately from the
+    original WAL checkpoint so a later GUI same-content inode replacement
+    cannot impersonate the post-commit state of this cursor tip.
+    """
+    return {
+        "schema": 3, "kind": "original-learning-third-cursor-progress",
+        "generation": intent["generation"], "sequence": 2,
+        "owner_pid": intent["owner_pid"],
+        "owner_start": intent["owner_start"],
+        "operation_id": intent["operation_id"],
+        "native_map_sha256": intent["native_map_sha256"],
+        "first_slot_sha256": intent["first_slot_sha256"],
+        "native_rebind_manifest_sha256":
+            intent["native_rebind_manifest_sha256"],
+        "previous_source_intent_sha256":
+            intent["previous_source_intent_sha256"],
+        "previous_cursor_progress_sha256":
+            intent["previous_cursor_progress_sha256"],
+        "source_intent_sha256": hashlib.sha256(source_raw).hexdigest(),
+        "destination_plan_sha256": checkpoint["plan_sha256"],
+        "destination_checkpoint_sha256":
+            hashlib.sha256(checkpoint_raw).hexdigest(),
+        "profiles_count": intent["profiles_count"],
+        "native_cursor_receipts_sha256": intent["profiles_sha256"],
+        "native_observations_sha256":
+            intent["native_observations_sha256"],
+        "observations_sha256": intent["observations_sha256"],
+        "debug": intent["debug"],
+        "destination_postimages": postimages,
+        "cursor_advanced": True,
+        "native_pending_ack_authorized": False,
+        "native_cleanup_authorized": False,
+        "generation_retired": False,
+    }
+
+
+def seal_original_learning_third_progress_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """Commit immutable third N logical cursor after original third P1.
+
+    SOURCE ONLY. Reuse original P2a + GUI/Found + inherited Config FD4
+    and FD9/P2b, ORIGINAL third intent and original destination WAL. The
+    cursor tip binds every retained old/new N inode cut, debug cut,
+    prior second tip, third plan/checkpoint and physically observed
+    Found/managed after-inode identity. No ACK, unlink, native compaction,
+    runtime service changes, generation retirement or Config writer.
+    """
+    import sys
+    from auto_detect_epoch_receipts import _canonical, _write_once
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_queue import QueueSafetyError
+    from auto_detect_destination_commit import _file_identity
+
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not writer.queue._held or
+            not getattr(writer, "_gui_held", False) or
+            not isinstance(workspace, Path) or
+            not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(config_path, Path) or
+            not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not callable(attest) or not callable(inspect) or
+            (sys.platform.startswith("freebsd") and
+             (config_path != CONFIG_PATH or
+              writer.receipts.uid != 0 or writer.queue.uid != 0)) or
+            attest() != proof):
+        raise V2OriginalConfigRefused(
+            "learning_third_progress_original_fd4_fd9_required")
+
+    uid = writer.receipts.uid
+
+    def held():
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=None if config_path == CONFIG_PATH else uid)
+        if attest() != proof:
+            raise V2OriginalConfigRefused(
+                "learning_third_progress_owner_changed")
+
+    def original_source():
+        return prepare_original_learning_third_slot_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
+
+    def all_postimages(plan):
+        # Before writing any cursor receipt, verify the exact physical
+        # third after-image for every CAS destination, including both
+        # permanent Found and current active managed HOSTLIST files.
+        pinned = {}
+        for kind in ("writes", "live"):
+            grouped = {}
+            for name, row in sorted(plan[kind].items()):
+                if kind == "writes":
+                    path = writer.targets[name]
+                else:
+                    path = (COMMON_ACTIVE / "managed" /
+                            ("hostlist-" + name + ".txt"))
+                data, st = _target(path, uid)
+                digest = hashlib.sha256(data).hexdigest()
+                if (row["path"] != str(path) or
+                        digest != row["after"] or
+                        not st.st_ino or not st.st_nlink == 1):
+                    raise V2OriginalConfigRefused(
+                        "learning_third_progress_destination_not_after")
+                device, inode, ctime, mtime, size = _file_identity(st)
+                grouped[name] = {
+                    "path": str(path), "sha256": digest,
+                    "device": device, "inode": inode,
+                    "ctime_ns": ctime, "mtime_ns": mtime,
+                    "size": size,
+                }
+            pinned[kind] = grouped
+        return pinned
+
+    try:
+        held()
+        prepared = original_source()
+        slot = Path(prepared["slot"])
+        source_raw = _read(slot / "intent.json", uid)
+        source = json.loads(source_raw)
+        if (prepared.get("sequence") != 2 or
+                prepared.get("intent_sha256") !=
+                hashlib.sha256(source_raw).hexdigest() or
+                source.get("kind") !=
+                "original-learning-third-slot-prepared" or
+                source.get("generation") != proof.generation or
+                source.get("cursor_advanced") is not False or
+                source.get("ack_authorized") is not False or
+                source.get("commit_authorized") is not False):
+            raise V2OriginalConfigRefused(
+                "learning_third_progress_source_unsealed")
+        # This is still the existing DestinationCommit and its original
+        # source-bound plan codec, not a fresh second writer.
+        plan, plan_raw = qualified_destination_plan(
+            slot, source, uid, targets=writer.targets)
+        cp_raw = _read(
+            slot / "destination" / "checkpoint.json", uid)
+        checkpoint = json.loads(cp_raw)
+        expected_cp = {
+            "schema": 1, "kind": "destination-and-cursor-committed",
+            "generation": proof.generation,
+            "pending_name": "learning-00000002",
+            "plan_sha256": hashlib.sha256(plan_raw).hexdigest(),
+            "evidence": "learning-native-debug",
+            "committed_cursor_offset": source["debug"]["end"],
+            "committed_cursor_sha256": source["debug"]["end_sha256"],
+            "ack_authorized": False,
+        }
+        if (cp_raw != _canonical(checkpoint) or
+                checkpoint != expected_cp or
+                plan.get("schema") != 3 or
+                "live" not in plan or
+                plan.get("source_intent_sha256") !=
+                hashlib.sha256(source_raw).hexdigest() or
+                plan.get("previous_cursor_progress_sha256") !=
+                source["previous_cursor_progress_sha256"]):
+            raise V2OriginalConfigRefused(
+                "learning_third_progress_checkpoint_not_committed")
+
+        # Even a checkpointed third plan must not override a later GUI
+        # modification; compare physical identities, not just byte SHA.
+        pinned = all_postimages(plan)
+        progress = _canonical(_original_learning_third_progress_record(
+            source, source_raw, cp_raw, checkpoint, pinned))
+        held()
+        if (original_source() != prepared or
+                all_postimages(plan) != pinned):
+            raise V2OriginalConfigRefused(
+                "learning_third_progress_source_or_postimages_raced")
+        _write_once(
+            slot, "cursor-progress.json", progress, uid)
+        if (_read(slot / "cursor-progress.json", uid) != progress or
+                original_source() != prepared or
+                all_postimages(plan) != pinned):
+            raise V2OriginalConfigRefused(
+                "learning_third_progress_postseal_drift")
+        held()
+        return {
+            "generation": proof.generation, "sequence": 2,
+            "source_intent_sha256": hashlib.sha256(source_raw).hexdigest(),
+            "progress_sha256": hashlib.sha256(progress).hexdigest(),
+            "destination_plan_sha256":
+                hashlib.sha256(plan_raw).hexdigest(),
+            "destination_checkpoint_sha256":
+                hashlib.sha256(cp_raw).hexdigest(),
+            "profiles_count": source["profiles_count"],
+            "cursor_advanced": True,
+            "native_pending_ack_authorized": False,
+            "native_cleanup_authorized": False,
+            "generation_retired": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (ReceiptRefused, OriginalLockRefused, DestinationRefused,
+            QueueSafetyError, DebugWindowRefused, OSError, ValueError,
+            TypeError, KeyError, AttributeError, UnicodeError) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_third_progress_source_or_checkpoint_refused") from exc
+
+
 def _recover_original_learning_partial_locked(
         writer: DestinationCommit, proof, workspace: Path,
         slot: Path, intent: dict, *, owned_root: Path,

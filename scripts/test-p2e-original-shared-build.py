@@ -1727,6 +1727,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         seal_original_learning_forward_progress_locked,
                         preview_original_learning_late_tails_locked,
                         prepare_original_learning_third_slot_locked,
+                        seal_original_learning_third_progress_locked,
                     )
                     def advance_second_cursor(*, inspect_witness=drained):
                         with writer.exclusive_targets(), patch(
@@ -1756,11 +1757,21 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 attest=lambda: proof,
                                 inspect=inspect_witness)
                     third_slot = slot.parent / "00000002"
+                    def advance_third_cursor(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return seal_original_learning_third_progress_locked(
+                                writer, proof, self.work, config_fd=cfg_fd,
+                                config_path=config_path, attest=lambda: proof,
+                                inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
                     with self.assertRaises(V2OriginalConfigRefused):
                         preview_late_tails()
                     with self.assertRaises(V2OriginalConfigRefused):
                         seal_third_slot()
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        advance_third_cursor()
                     partial_second = [False]
                     def abort_after_one_native(folder, name, data, uid):
                         normal_original_write_once(folder, name, data, uid)
@@ -2079,6 +2090,12 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         self.assertFalse(third["commit_authorized"])
                         self.assertFalse(third["ack_authorized"])
                         self.assertEqual(seal_third_slot(), third)
+                        # Source alone is NOT permission for a third
+                        # logical cursor without the original P1 receipt.
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            advance_third_cursor()
+                        self.assertFalse(
+                            (third_slot / "cursor-progress.json").exists())
                         # Third original destination SOURCE provenance is
                         # already qualified without starting another P1.
                         # This is the sole existing DestinationCommit
@@ -2225,6 +2242,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             self.assertEqual(
                                 next_active.read_bytes(),
                                 third_before_active)
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                advance_third_cursor()
+                            self.assertFalse(
+                                (third_slot / "cursor-progress.json").exists())
                             self.assertIn(
                                 b"alpha.com\n", targets["user"].read_bytes())
                             self.assertEqual(
@@ -2251,8 +2272,68 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 seal_second_slot(), second_result)
                             self.assertEqual(
                                 advance_second_cursor(), advanced)
+                            # STEP 9: after durable THIRD P1, seal ONLY
+                            # the original third logical cursor, never
+                            # native old-pending ACK or generation retire.
+                            third_progress_crashed = [False]
+                            def third_progress_crash(
+                                    folder, name, data, uid):
+                                normal_original_write_once(
+                                    folder, name, data, uid)
+                                if (folder.name == "00000002" and
+                                        name == "cursor-progress.json" and
+                                        not third_progress_crashed[0]):
+                                    third_progress_crashed[0] = True
+                                    raise RuntimeError(
+                                        "synthetic_third_cursor_after_fsync")
+                            with patch(
+                                    "auto_detect_epoch_receipts._write_once",
+                                    side_effect=third_progress_crash):
+                                with self.assertRaisesRegex(
+                                        RuntimeError,
+                                        "synthetic_third_cursor_after_fsync"):
+                                    advance_third_cursor()
+                            self.assertTrue(third_progress_crashed[0])
+                            self.assertTrue((
+                                third_slot / "cursor-progress.json").exists())
+                            third_advanced = advance_third_cursor()
+                            self.assertTrue(third_advanced["cursor_advanced"])
+                            self.assertEqual(third_advanced["sequence"], 2)
+                            self.assertFalse(third_advanced[
+                                "native_pending_ack_authorized"])
+                            self.assertFalse(third_advanced[
+                                "native_cleanup_authorized"])
+                            self.assertFalse(third_advanced[
+                                "generation_retired"])
+                            self.assertEqual(
+                                advance_third_cursor(), third_advanced)
+                            third_progress_path = (
+                                third_slot / "cursor-progress.json")
+                            frozen_third_progress = (
+                                third_progress_path.read_bytes())
+                            recorded_third_progress = json.loads(
+                                frozen_third_progress)
+                            self.assertEqual(
+                                recorded_third_progress["kind"],
+                                "original-learning-third-cursor-progress")
+                            self.assertEqual(
+                                recorded_third_progress[
+                                    "previous_cursor_progress_sha256"],
+                                advanced["progress_sha256"])
+                            self.assertEqual(
+                                recorded_third_progress[
+                                    "destination_checkpoint_sha256"],
+                                third_advanced[
+                                    "destination_checkpoint_sha256"])
+                            self.assertEqual(
+                                recorded_third_progress["profiles_count"], 2)
+                            self.assertEqual(
+                                third_advanced["progress_sha256"],
+                                hashlib.sha256(
+                                    frozen_third_progress).hexdigest())
                             self.assertFalse(
                                 (third_slot / "ack.json").exists())
+
                         third_intent_bytes = (
                             third_slot / "intent.json").read_bytes()
                         third_intent = json.loads(third_intent_bytes)
@@ -2297,6 +2378,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             {p.name: p.read_bytes() for p in
                              (third_slot / "native").iterdir()},
                             frozen_N)
+                        self.assertEqual(
+                            advance_third_cursor(), third_advanced)
+                        self.assertEqual(
+                            (third_slot / "cursor-progress.json").read_bytes(),
+                            frozen_third_progress)
                         self.assertGreater(
                             len(preview_late_tails()["observations"]),
                             third["observations_count"])
@@ -2312,6 +2398,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             (third_slot / "ack.json").exists())
                         with self.assertRaises(V2OriginalConfigRefused):
                             seal_third_slot(
+                                inspect_witness=lambda *_a, **_kw:
+                                    FDState.BUSY)
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            advance_third_cursor(
                                 inspect_witness=lambda *_a, **_kw:
                                     FDState.BUSY)
                         # Disposable source-only fixture restoration.
@@ -2381,9 +2471,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         next_active.write_bytes(b"foreign.example.net\n")
                         with self.assertRaises(V2OriginalConfigRefused):
                             advance_second_cursor()
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            advance_third_cursor()
                         next_active.write_bytes(before_managed_progress)
                         self.assertEqual(
                             advance_second_cursor(), advanced)
+                        self.assertEqual(
+                            advance_third_cursor(), third_advanced)
                     # Mutating already sealed old-source prefix MUST
                     # refuse even if the new live inode remains available.
                     former_old_data = user_pending.read_bytes()
@@ -2414,6 +2508,9 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     if third_slot.exists():
                         # Disposable fixtures only: never delete a
                         # production third source or original WAL.
+                        progress_third = third_slot / "cursor-progress.json"
+                        if progress_third.exists():
+                            progress_third.unlink()
                         if (third_slot / "destination").exists():
                             for artifact in (
                                     third_slot / "destination").iterdir():
