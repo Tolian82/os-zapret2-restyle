@@ -39,6 +39,16 @@ PENDING = re.compile(r"[0-9a-f]{32}-[0-9a-f]{32}\.txt\Z")
 STEP = re.compile(r"[0-9]{8}\Z")
 
 
+# Per-ACK original schema3 debug cut. No ad-hoc generation or worker:
+# intent is durable before link/replace; old inode retires only after P2b.
+DEBUG_CUT_INTENT = "debug-cut-intent.json"
+DEBUG_CUT_COMPLETE = "debug-cut-complete.json"
+DEBUG_CUT_RETIRE = "debug-cut-retire.json"
+DEBUG_CUT_ABORT = "debug-cut-abort.json"
+DEBUG_CUT_FRESH = "debug-cut-fresh.log"
+DEBUG_CUT_OLD = "debug-cut-retained.log"
+
+
 class CursorChainRefused(RuntimeError):
     """An ambiguous historical cursor or pending is never auto-consumed."""
 
