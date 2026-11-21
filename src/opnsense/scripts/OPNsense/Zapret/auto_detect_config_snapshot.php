@@ -695,10 +695,15 @@ final class AutoDetectConfigSnapshot
                 );
                 $result = ['result' => $state];
             } elseif (count($argv) === 4 &&
-                      in_array($argv[1], ['commit-with-fds', 'commit-retired-with-fds', 'commit-learning-with-fds'], true) &&
+                      in_array($argv[1], [
+                          'commit-with-fds', 'commit-retired-with-fds',
+                          'commit-learning-with-fds', 'commit-stopped-learning-with-fds',
+                      ], true) &&
                       preg_match('/^[0-9]{1,4}$/D', $argv[2]) === 1 &&
-                      preg_match($argv[1] === 'commit-learning-with-fds' ?
-                        '/^[0-9a-f]{32}$/D' : '/^[0-9a-f]{32}-[0-9a-f]{32}\.txt$/D', $argv[3]) === 1) {
+                      preg_match(in_array($argv[1], [
+                          'commit-learning-with-fds', 'commit-stopped-learning-with-fds',
+                      ], true) ? '/^[0-9a-f]{32}$/D' :
+                        '/^[0-9a-f]{32}-[0-9a-f]{32}\.txt$/D', $argv[3]) === 1) {
                 // No direct worker, no independent Config/XML writer. A
                 // native parent must already hold the P2a worker.lock.
                 $result = self::commitWithInheritedOriginalLocks(
@@ -706,11 +711,17 @@ final class AutoDetectConfigSnapshot
                     (int)$argv[2], '/var/db/zapret2-auto-detect/worker.lock',
                     '/conf/config.xml',
                     [self::NATIVE_PYTHON, self::FD_COMMIT,
-                     $argv[1] === 'commit-learning-with-fds' ? 'commit-learning-fds' :
-                     ($argv[1] === 'commit-retired-with-fds' ? 'commit-retired-fds' : 'commit-fds'),
+                     $argv[1] === 'commit-stopped-learning-with-fds' ?
+                         'commit-stopped-learning-fds' :
+                         ($argv[1] === 'commit-learning-with-fds' ?
+                             'commit-learning-fds' :
+                             ($argv[1] === 'commit-retired-with-fds' ?
+                                 'commit-retired-fds' : 'commit-fds')),
                      $argv[3]],
                     $argv[1] === 'commit-retired-with-fds',
-                    $argv[1] === 'commit-learning-with-fds'
+                    in_array($argv[1], [
+                        'commit-learning-with-fds', 'commit-stopped-learning-with-fds',
+                    ], true)
                 );
             } else {
                 return 64;
