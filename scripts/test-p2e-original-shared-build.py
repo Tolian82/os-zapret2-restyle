@@ -825,20 +825,20 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     # The first non-native "adding to" must not be treated
                     # as a diagnostic-only source ACK; preserve every byte.
                     with debug.open("ab") as out:
-                        out.write(b"native : untrusted.example : adding to /tmp/foreign\\n")
+                        out.write(b"native : untrusted.example : adding to /tmp/foreign\n")
                     from auto_detect_cursor_chain import CursorChainRefused
                     with self.assertRaises(CursorChainRefused):
                         run()
                     self.assertEqual(
-                        debug.read_bytes()[-len(b"/tmp/foreign\\n"):],
-                        b"/tmp/foreign\\n")
+                        debug.read_bytes()[-len(b"/tmp/foreign\n"):],
+                        b"/tmp/foreign\n")
                     self.assertFalse((root / "00000001" / "ack.json").exists())
                     return
                 if case == "diagnostic-highwater":
                     # The original one-PHP/FD9 WAL still commits/ACKs the
                     # unchanged N cursors. All bytes are real on disk and
                     # no worker, engine signal or Config mutation is faked.
-                    diagnostic = b"2026-11-21 : native diagnostic without discovery\\n"
+                    diagnostic = b"2026-11-21 : native diagnostic without discovery\n"
                     count = (2 * 1024 * 1024) // len(diagnostic) + 2
                     with debug.open("ab") as out:
                         out.write(diagnostic * count)
@@ -871,7 +871,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 root = writer.receipts.root / proof.generation / "cursor-chain-v2"
                 self.assertTrue((root / "00000000" / "ack.json").exists())
                 self.assertTrue((root / "00000001" / "ack.json").exists())
-                self.assertFalse((root / "00000002").exists())
+                if case == "diagnostic-highwater":
+                    self.assertTrue((root / "00000002" / "ack.json").exists())
+                    self.assertFalse((root / "00000003").exists())
+                else:
+                    self.assertFalse((root / "00000002").exists())
                 if case == "rollover":
                     import auto_detect_cursor_chain as cursors
                     youtube.write_bytes(b"www.rollover-boundary.net\n")
