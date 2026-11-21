@@ -2060,7 +2060,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 raise RuntimeError(
                                     "synthetic_third_original_N_crash")
                         with patch(
-                                "auto_detect_epoch_receipts._write_once",
+                                "auto_detect_learning_third_slot._write_once",
                                 side_effect=fail_first_third_N):
                             with self.assertRaisesRegex(
                                     RuntimeError,
