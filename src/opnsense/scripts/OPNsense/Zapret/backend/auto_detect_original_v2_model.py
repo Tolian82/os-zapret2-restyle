@@ -889,6 +889,7 @@ def _native_rebind_stable_snapshot(path: Path, uid: int, writer_gid: int,
 def inspect_original_learning_native_rebind_locked(
         writer: DestinationCommit, proof, workspace: Path, *,
         config_fd: int, config_path: Path, attest,
+        forward_wal_source: bool = False,
 ) -> dict:
     """Read-only original cross-N PREPARED→physical-state observation.
 
@@ -987,19 +988,95 @@ def inspect_original_learning_native_rebind_locked(
         }
         if checkpoint != expected_cp:
             raise V2OriginalConfigRefused("learning_rebind_inspector_checkpoint_changed")
+        # During the *exact original second-slot P2k2b* a FIRST-slot
+        # postimage can legitimately become a SECOND-slot postimage. Do
+        # not weaken the physical/owner checks: accept this evolution
+        # ONLY with the same protected write-once second-slot plan.
+        # No plan, foreign plan, or random GUI edit remains a refusal.
+        forward_plan = None
+        if forward_wal_source:
+            second = slot.parent / "00000001"
+            _directory(second, writer.receipts.uid)
+            source_raw = _read(
+                second / "intent.json", writer.receipts.uid)
+            source = json.loads(source_raw)
+            forward_plan, forward_plan_raw = qualified_destination_plan(
+                second, source, writer.receipts.uid,
+                targets=writer.targets)
+            if (source.get("sequence") != 1 or
+                    source.get("generation") != proof.generation or
+                    source.get("owner_pid") != proof.owner.pid or
+                    source.get("owner_start") != proof.owner.started or
+                    source.get("native_rebind_manifest_sha256") !=
+                    hashlib.sha256(manifest_raw).hexdigest() or
+                    forward_plan.get("source_intent_sha256") !=
+                    hashlib.sha256(source_raw).hexdigest() or
+                    "live" not in forward_plan):
+                raise V2OriginalConfigRefused(
+                    "learning_rebind_inspector_forward_wal_unqualified")
+        def matches_target(name, path, expected_after, *, managed=False):
+            data, st = _target(path, writer.receipts.uid)
+            digest = hashlib.sha256(data).hexdigest()
+            if digest == expected_after:
+                return True
+            if forward_plan is None:
+                return False
+            item = forward_plan["live" if managed else "writes"].get(name)
+            if (item is None or item["path"] != str(path) or
+                    item["before"] != expected_after):
+                return False
+            if digest == item["after"]:
+                return True
+            # A second-slot CAS not yet performed must still have the
+            # ORIGINAL protected preimage inode, never just its bytes.
+            return (digest == item["before"] and
+                    _file_identity(st) == (
+                        item["before_device"], item["before_inode"],
+                        item["before_ctime_ns"], item["before_mtime_ns"],
+                        item["before_size"]))
         # Post-commit GUI edits or active managed changes invalidate the
         # old source plan, even if the old root-only receipt still exists.
         for name, change in plan["writes"].items():
-            data, _ = _target(writer.targets[name], writer.receipts.uid)
             if (change["path"] != str(writer.targets[name]) or
-                    hashlib.sha256(data).hexdigest() != change["after"]):
+                    not matches_target(
+                        name, writer.targets[name], change["after"])):
                 raise V2OriginalConfigRefused("learning_rebind_inspector_found_diverged")
         for name, change in plan["live"].items():
             path = COMMON_ACTIVE / "managed" / ("hostlist-" + name + ".txt")
-            data, _ = _target(path, writer.receipts.uid)
             if (change["path"] != str(path) or
-                    hashlib.sha256(data).hexdigest() != change["after"]):
+                    not matches_target(
+                        name, path, change["after"], managed=True)):
                 raise V2OriginalConfigRefused("learning_rebind_inspector_managed_diverged")
+        if forward_plan is not None:
+            # Also qualify second-slot writes to targets never written
+            # by the first slot (e.g. newly discovered shared auto).
+            for name, item in forward_plan["writes"].items():
+                path = writer.targets[name]
+                data, st = _target(path, writer.receipts.uid)
+                digest = hashlib.sha256(data).hexdigest()
+                if (item["path"] != str(path) or
+                        (digest != item["after"] and
+                         (digest != item["before"] or
+                          _file_identity(st) != (
+                              item["before_device"], item["before_inode"],
+                              item["before_ctime_ns"], item["before_mtime_ns"],
+                              item["before_size"])))):
+                    raise V2OriginalConfigRefused(
+                        "learning_rebind_inspector_forward_found_unsafe")
+            for name, item in forward_plan["live"].items():
+                path = (COMMON_ACTIVE / "managed" /
+                        ("hostlist-" + name + ".txt"))
+                data, st = _target(path, writer.receipts.uid)
+                digest = hashlib.sha256(data).hexdigest()
+                if (item["path"] != str(path) or
+                        (digest != item["after"] and
+                         (digest != item["before"] or
+                          _file_identity(st) != (
+                              item["before_device"], item["before_inode"],
+                              item["before_ctime_ns"], item["before_mtime_ns"],
+                              item["before_size"])))):
+                    raise V2OriginalConfigRefused(
+                        "learning_rebind_inspector_forward_live_unsafe")
         file_names = [f"{number:03d}.json"
                       for number, _, _ in proof.learning]
         entries = set(os.listdir(folder))
@@ -1454,9 +1531,14 @@ def preview_original_learning_forward_windows_locked(
             raise V2OriginalConfigRefused("learning_forward_owner_changed")
 
     def read_candidate() -> dict:
+        forward_plan_present = (
+            (writer.receipts.root / proof.generation /
+             "cursor-chain-v2" / "00000001" /
+             "destination" / "plan.json").exists())
         original = inspect_original_learning_native_rebind_locked(
             writer, proof, workspace, config_fd=config_fd,
-            config_path=config_path, attest=attest)
+            config_path=config_path, attest=attest,
+            forward_wal_source=forward_plan_present)
         if (original["ack_authorized"] is not False or
                 original["physical_rotation_authorized"] is not False or
                 len(original["profiles"]) != len(proof.learning)):
