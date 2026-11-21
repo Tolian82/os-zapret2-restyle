@@ -383,11 +383,11 @@ class EpochReceipts:
         allowed = ("pretraffic.json", "epoch.json", "cursor-chain-v2",
                    "cursor-chain-v2.next", "cursor-chain-v2.old",
                    "retired.json", "retired-inbox.txt", "retired-debug.log",
-                   "retired-debug-previous.log")
+                   "retired-debug-previous.log", "learning-retirement")
         if len(entries) > len(allowed) or any(name not in allowed for name in entries):
             raise ReceiptRefused("superseded_one_intent_epoch_refused")
         for name in ("cursor-chain-v2", "cursor-chain-v2.next",
-                     "cursor-chain-v2.old"):
+                     "cursor-chain-v2.old", "learning-retirement"):
             if name in entries:
                 _directory(folder / name, self.uid)
         return folder
