@@ -1604,6 +1604,20 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     user_native.write_bytes(
                         b"mail.example.org\nlate.example.org\n")
                     self.assertEqual(queue.segments(), [])
+                    with self.assertRaisesRegex(
+                            CursorChainRefused,
+                            "learning_first_slot_post_inode_seed_requires_forward_cursor"):
+                        chain.prepare_learning_first_slot(
+                            proof, self.work, attest=lambda: proof,
+                            inspect=drained)
+                    # DISPOSABLE TEST FIXTURE ONLY: erase synthetic
+                    # post-rename observation records after restoring both
+                    # old inodes to run the earlier independent source
+                    # regression assertions. Production MUST NEVER erase
+                    # these write-once receipts or roll a cursor back.
+                    for disposable in observed_root.iterdir():
+                        disposable.unlink()
+                    observed_root.rmdir()
                 for changed_exclude in ("example.com\n", "example.org\n"):
                     with self.assertRaises(V2OriginalConfigRefused):
                         compaction_preview(exclude=changed_exclude)

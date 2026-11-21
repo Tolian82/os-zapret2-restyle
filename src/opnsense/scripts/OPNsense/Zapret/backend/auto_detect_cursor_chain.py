@@ -951,6 +951,21 @@ class CursorChain:
                         # a new queue or independent writer. Its manifest
                         # is validated by the original Config/FD9 model.
                         raise CursorChainRefused("learning_first_slot_foreign_artifacts")
+                    # Once ANY post-rename physical inode seed exists,
+                    # the original first-slot epoch cannot be replayed
+                    # even if its old live filename later reappears.
+                    # Only a future original FORWARD cursor / retained
+                    # P2b+ACK transition may consume those suffixes.
+                    # An empty interrupted observed/ directory also
+                    # refuses: no implicit downgrade to first-slot replay.
+                    if "native-rebind" in entries:
+                        rebind = existing_slot / "native-rebind"
+                        _directory(rebind, self.receipts.uid)
+                        observed = rebind / "observed"
+                        if observed.exists() or observed.is_symlink():
+                            _directory(observed, self.receipts.uid)
+                            raise CursorChainRefused(
+                                "learning_first_slot_post_inode_seed_requires_forward_cursor")
                     source_raw = _read(existing_slot / "intent.json",
                                        self.receipts.uid)
                     source = json.loads(source_raw)
