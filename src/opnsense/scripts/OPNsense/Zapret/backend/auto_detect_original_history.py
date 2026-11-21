@@ -103,7 +103,11 @@ def _read_history_once(writer, proof):
     _directory(archive, uid)
     _directory(prepared_folder, uid)
     expected = {f"{n:03d}" for n, _, _ in proof.learning}
-    if set(os.listdir(root)) != expected | {"manifest.json"}:
+    available = {"manifest.json"}
+    if (root / "postimages.json").exists() or (root / "postimages.json").is_symlink():
+        _read(root / "postimages.json", uid)
+        available.add("postimages.json")
+    if set(os.listdir(root)) != expected | available:
         raise V2OriginalConfigRefused("native_history_unsealed_or_foreign_N")
     archive_manifest = _read(archive / "manifest.json", uid)
     prepared_manifest = _read(prepared_folder / "manifest.json", uid)
@@ -201,7 +205,7 @@ def _read_history_once(writer, proof):
     manifest_raw = _read(root / "manifest.json", uid)
     if manifest_raw != _canonical(manifest):
         raise V2OriginalConfigRefused("native_history_manifest_not_source_bound")
-    if (set(os.listdir(root)) != expected | {"manifest.json"} or
+    if (set(os.listdir(root)) != expected | available or
             _read(archive / "manifest.json", uid) != archive_manifest or
             _read(prepared_folder / "manifest.json", uid) != prepared_manifest or
             _read(slot / "cursor-progress.json", uid) != progress or
@@ -301,7 +305,7 @@ def seal_original_learning_independent_history_locked(
         if _read_archive_plan(writer, proof) != before:
             raise V2OriginalConfigRefused("native_history_old_changed_during_copy")
         expected = {f"{n:03d}" for n, _, _ in proof.learning}
-        if set(os.listdir(root)) - (expected | {"manifest.json"}):
+        if set(os.listdir(root)) - (expected | {"manifest.json", "postimages.json"}):
             raise V2OriginalConfigRefused("native_history_foreign_folder")
         slot, prepared_folder, archive = _archive_paths(writer, proof)
         packed = []

@@ -1836,6 +1836,26 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 writer, proof, self.work,
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof, inspect=inspect_witness)
+                    from auto_detect_original_history_postimages import (
+                        seal_original_learning_independent_postimages_locked,
+                        read_original_learning_independent_postimages_locked,
+                    )
+                    def seal_independent_postimages(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return seal_original_learning_independent_postimages_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof, inspect=inspect_witness)
+                    def read_independent_postimages(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return read_original_learning_independent_postimages_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof, inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
                     with self.assertRaises(V2OriginalConfigRefused):
                         archive_release_preview()
@@ -2710,6 +2730,91 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 checkpoint_path.write_bytes(checkpoint_original)
                             self.assertEqual(
                                 preview_independent_wal(), committed_wal)
+                            # STEP 15b2a: the source-only WAL reader
+                            # knows the latest SHA of EVERY destination,
+                            # but older first/second last-writers lack
+                            # final physical inode pins. One write-once
+                            # receipt now binds all current final identities
+                            # BEFORE any old source could be unlinked.
+                            from unittest.mock import patch as patch_postimages
+                            import auto_detect_original_history_postimages as pim
+                            final_postimage_path = (
+                                history_root / "postimages.json")
+                            saved_postimage_write = pim._write_once
+                            postimage_crashed = [False]
+                            def crash_after_postimage_receipt(
+                                    folder, name, data, uid):
+                                saved_postimage_write(folder, name, data, uid)
+                                if (name == "postimages.json" and
+                                        not postimage_crashed[0]):
+                                    postimage_crashed[0] = True
+                                    raise RuntimeError(
+                                        "synthetic_postimage_after_durable_receipt")
+                            with patch_postimages(
+                                    "auto_detect_original_history_postimages._write_once",
+                                    side_effect=crash_after_postimage_receipt):
+                                with self.assertRaisesRegex(
+                                        RuntimeError,
+                                        "synthetic_postimage_after_durable_receipt"):
+                                    seal_independent_postimages()
+                            self.assertTrue(postimage_crashed[0])
+                            self.assertTrue(final_postimage_path.exists())
+                            final_postimages = seal_independent_postimages()
+                            self.assertTrue(final_postimages[
+                                "all_final_destinations_inode_pinned"])
+                            self.assertTrue(final_postimages[
+                                "all_three_original_wal_checkpoints_verified"])
+                            self.assertFalse(final_postimages[
+                                "source_independent_transaction_replay_available"])
+                            self.assertFalse(final_postimages[
+                                "archive_unlink_authorized"])
+                            self.assertEqual(
+                                seal_independent_postimages(), final_postimages)
+                            self.assertEqual(
+                                read_independent_postimages(), final_postimages)
+                            self.assertEqual(
+                                read_independent_history(), history_image)
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                read_independent_postimages(
+                                    inspect_witness=lambda *_a, **_kw:
+                                        FDState.BUSY)
+                            # No inode swap is needed to prove that a
+                            # foreign postimage witness is refused. Inject a
+                            # same-content, changed inode observation ONLY
+                            # at the read-only witness boundary, leaving
+                            # real Found/managed inode metadata untouched.
+                            actual_observer = pim._read_original_wal_once
+                            def changed_postimage_identity(*args, **kwargs):
+                                witness = actual_observer(*args, **kwargs)
+                                copied = dict(witness)
+                                rows = dict(witness["destination_witnesses"])
+                                self.assertTrue(rows)
+                                key = sorted(rows)[0]
+                                path, sha, identity, sequence = rows[key]
+                                identity = (
+                                    identity[0], identity[1] + 1,
+                                    *identity[2:])
+                                rows[key] = (path, sha, identity, sequence)
+                                copied["destination_witnesses"] = rows
+                                return copied
+                            with patch_postimages(
+                                    "auto_detect_original_history_postimages._read_original_wal_once",
+                                    side_effect=changed_postimage_identity):
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    read_independent_postimages()
+                            # A corrupted postimage receipt is rejected,
+                            # including after it was durably sealed.
+                            postimage_original = (
+                                final_postimage_path.read_bytes())
+                            final_postimage_path.write_bytes(b"{}\n")
+                            try:
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    read_independent_postimages()
+                            finally:
+                                final_postimage_path.write_bytes(
+                                    postimage_original)
+                            self.assertEqual(
+                                read_independent_postimages(), final_postimages)
                             # Deliberately simulate a missing archived
                             # inode ONLY inside this disposable fixture:
                             # old first/second/third source replay must
@@ -2739,6 +2844,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 # has to refuse; NO ACK/unlink is granted.
                                 self.assertEqual(
                                     preview_independent_wal(), committed_wal)
+                                self.assertEqual(
+                                    read_independent_postimages(), final_postimages)
                                 with self.assertRaises(
                                         V2OriginalConfigRefused):
                                     seal_third_slot()
