@@ -21,7 +21,8 @@ import sys
 from auto_detect_queue import DurableInbox, QueueSafetyError
 from auto_detect_storage import ROOT as QUEUE_ROOT
 from auto_detect_destination_commit import DestinationCommit, DestinationRefused
-from auto_detect_fd import probe_pending_fd, probe_stopped_pending_fd
+from auto_detect_fd import (probe_pending_fd, probe_stopped_pending_fd,
+                            probe_stopped_learning_pending_fd)
 from auto_detect_owner import (GenerationProof, attest_running_generation,
                                attest_stopped_generation)
 from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
@@ -361,7 +362,7 @@ def _native_fd_child(pending_name: str, payload: dict, *,
                 manual_hostlists=payload["manual_hostlists"],
                 global_exclude=payload["global_exclude"],
                 attest=learning_attest,
-                inspect=probe_stopped_pending_fd if stopped_learning else probe_pending_fd,
+                inspect=probe_stopped_learning_pending_fd if stopped_learning else probe_pending_fd,
                 stopped=stopped_learning)
             return dict(kind="original-learning-minute-completed", processed=processed,
                         generation=proof.generation, ack_authorized=False)
