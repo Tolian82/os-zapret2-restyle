@@ -31,6 +31,10 @@ from auto_detect_original_lock_handoff import OriginalLockRefused
 from auto_detect_queue import NATIVE_PENDING, QueueSafetyError
 from auto_detect_debug_window import DebugWindowRefused
 from auto_detect_fd import FDState, probe_pending_fd
+from auto_detect_owner import (
+    LearningGenerationProof, GenerationRefused,
+    attest_learning_running_generation,
+)
 
 GUARD = "release-guard.json"
 
@@ -248,6 +252,68 @@ def seal_original_learning_release_guard_locked(
             UnicodeError, ReceiptRefused, OriginalLockRefused,
             QueueSafetyError, DebugWindowRefused) as exc:
         raise V2OriginalConfigRefused("native_release_guard_seal_refused") from exc
+
+
+
+def preview_original_learning_release_owner_live_locked(
+        writer, proof, workspace, *, config_fd, config_path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """STEP 15b3b: independently reattest the *running* native owner twice.
+
+    The caller's attest() is an FD9 handoff check, not a substitute for
+    FreeBSD process/census/argv/supervisor and terminal shared Apply proof.
+    Always use the ORIGINAL schema-3 native owner attester; it requires
+    the existing lifecycle lock and never accepts a detached proposal.
+    A stopped/changed owner fails closed for this optional cleanup
+    preflight, but must NOT block the operator's Stop/Restart/Apply path.
+
+    This path writes nothing and explicitly cannot authorize physical
+    old removal, native ACK or epoch retirement.
+    """
+    try:
+        _held(writer, proof, workspace, config_fd, config_path, attest)
+        if not isinstance(proof, LearningGenerationProof):
+            raise V2OriginalConfigRefused(
+                "native_release_owner_schema3_required")
+        current = attest_learning_running_generation()
+        if current != proof:
+            raise V2OriginalConfigRefused(
+                "native_release_owner_not_original_running_generation")
+        preview = preview_original_learning_release_guard_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
+        second = attest_learning_running_generation()
+        _held(writer, proof, workspace, config_fd, config_path, attest)
+        if (second != current or second != proof or
+                preview.get("generation") != proof.generation or
+                preview.get("source_independent_transaction_replay_available")
+                is not False or
+                preview.get("physical_old_archive_cleanup_authorized")
+                is not False or
+                preview.get("archive_unlink_authorized") is not False or
+                preview.get("native_pending_ack_authorized") is not False or
+                preview.get("generation_retired") is not False):
+            raise V2OriginalConfigRefused(
+                "native_release_owner_changed_across_guard")
+        return {
+            **preview,
+            "original_running_owner_freshly_reattested": True,
+            "owner_lifecycle_mutation_authorized": False,
+            "source_independent_transaction_replay_available": False,
+            "physical_old_archive_cleanup_authorized": False,
+            "archive_unlink_authorized": False,
+            "native_pending_ack_authorized": False,
+            "generation_retired": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (GenerationRefused, OSError, ValueError, TypeError, KeyError,
+            AttributeError, UnicodeError, ReceiptRefused,
+            OriginalLockRefused, QueueSafetyError,
+            DebugWindowRefused) as exc:
+        raise V2OriginalConfigRefused(
+            "native_release_original_running_owner_unavailable") from exc
 
 
 def main():

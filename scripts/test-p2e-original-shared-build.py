@@ -1870,6 +1870,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     from auto_detect_original_history_release_guard import (
                         seal_original_learning_release_guard_locked,
                         preview_original_learning_release_guard_locked,
+                        preview_original_learning_release_owner_live_locked,
                     )
                     def seal_original_release_guard(*, inspect_witness=drained):
                         with writer.exclusive_targets(), patch(
@@ -1884,6 +1885,14 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 "auto_detect_original_v2_model.COMMON_ACTIVE",
                                 active_root):
                             return preview_original_learning_release_guard_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof, inspect=inspect_witness)
+                    def preview_original_owner_live(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return preview_original_learning_release_owner_live_locked(
                                 writer, proof, self.work,
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof, inspect=inspect_witness)
@@ -2868,6 +2877,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 preview_original_release_guard()
                             import auto_detect_original_history_release_guard as rg
                             from unittest.mock import patch as guard_patch
+                            # A genuine owner proof cannot override absent
+                            # protected immutable archive journal evidence.
+                            with guard_patch(
+                                    "auto_detect_original_history_release_guard.attest_learning_running_generation",
+                                    return_value=proof):
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_owner_live()
                             release_path = history_root / "release-guard.json"
                             original_guard_writer = rg._write_once
                             crashed_guard = [False]
@@ -2905,6 +2921,59 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 seal_original_release_guard(), sealed_guard)
                             self.assertEqual(
                                 preview_original_release_guard(), sealed_guard)
+                            # STEP 15b3b: unlike the caller-supplied
+                            # original FD9 attest(), this independent gate
+                            # calls the real native schema3 process/census
+                            # attester twice around the entire archive read.
+                            from auto_detect_owner import GenerationRefused
+                            owner_checks = [0]
+                            def independent_live_owner():
+                                owner_checks[0] += 1
+                                return proof
+                            with guard_patch(
+                                    "auto_detect_original_history_release_guard.attest_learning_running_generation",
+                                    side_effect=independent_live_owner):
+                                fresh = preview_original_owner_live()
+                            self.assertEqual(owner_checks[0], 2)
+                            self.assertTrue(fresh[
+                                "original_running_owner_freshly_reattested"])
+                            self.assertFalse(fresh[
+                                "owner_lifecycle_mutation_authorized"])
+                            self.assertFalse(fresh[
+                                "archive_unlink_authorized"])
+                            self.assertFalse(fresh[
+                                "native_pending_ack_authorized"])
+                            self.assertEqual(
+                                fresh["old_archive_state"], "all-retained")
+                            with guard_patch(
+                                    "auto_detect_original_history_release_guard.attest_learning_running_generation",
+                                    side_effect=GenerationRefused(
+                                        "stopped_original_generation")):
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_owner_live()
+                            # Cleanup preflight's stopped-owner refusal
+                            # cannot break operator Stop/Restart: original
+                            # read-only missing/retained state remains
+                            # intact, and NO lifecycle function is called.
+                            self.assertEqual(
+                                preview_original_release_guard(), sealed_guard)
+                            with guard_patch(
+                                    "auto_detect_original_history_release_guard.attest_learning_running_generation",
+                                    side_effect=(proof, None)):
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_owner_live()
+                            with guard_patch(
+                                    "auto_detect_original_history_release_guard.attest_learning_running_generation",
+                                    return_value=None):
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_owner_live()
+                            with guard_patch(
+                                    "auto_detect_original_history_release_guard.attest_learning_running_generation",
+                                    return_value=proof):
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_owner_live(
+                                        inspect_witness=lambda *_a, **_kw:
+                                            FDState.BUSY)
                             self.assertEqual(
                                 read_independent_history(), history_image)
                             with self.assertRaises(V2OriginalConfigRefused):
@@ -2970,6 +3039,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 self.assertEqual(
                                     partial_guard["old_archive_state"],
                                     "partially-missing")
+                                with guard_patch(
+                                        "auto_detect_original_history_release_guard.attest_learning_running_generation",
+                                        return_value=proof):
+                                    self.assertEqual(
+                                        preview_original_owner_live()[
+                                            "old_archive_state"],
+                                        "partially-missing")
                                 self.assertEqual(
                                     partial_guard["missing_old_native_numbers"],
                                     [youtube_num])
@@ -2988,6 +3064,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     self.assertEqual(
                                         all_missing_guard["old_archive_state"],
                                         "all-missing")
+                                    with guard_patch(
+                                            "auto_detect_original_history_release_guard.attest_learning_running_generation",
+                                            return_value=proof):
+                                        self.assertEqual(
+                                            preview_original_owner_live()[
+                                                "old_archive_state"],
+                                            "all-missing")
                                     self.assertEqual(
                                         sorted(all_missing_guard[
                                             "missing_old_native_numbers"]),
