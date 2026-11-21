@@ -642,6 +642,12 @@ def seal_original_learning_native_rebind_locked(
             not isinstance(owned_root, Path) or
             not owned_root.is_absolute() or
             not callable(attest) or not callable(inspect) or
+            (sealed_window is not None and (
+                type(sealed_window) is not dict or
+                set(sealed_window) != {"debug", "native"} or
+                type(sealed_window.get("debug")) is not dict or
+                type(sealed_window.get("native")) is not list or
+                len(sealed_window["native"]) != len(proof.learning))) or
             (sys.platform.startswith("freebsd") and
              (config_path != CONFIG_PATH or
               writer.receipts.uid != 0 or writer.queue.uid != 0)) or
@@ -1394,6 +1400,7 @@ def preview_original_learning_forward_windows_locked(
         writer: DestinationCommit, proof, workspace: Path, *,
         config_fd: int, config_path: Path, attest,
         inspect=probe_pending_fd,
+        sealed_window: dict | None = None,
 ) -> dict:
     """Read-only original P2a/FD4/FD9/P2b cross-N forward native cut.
 
@@ -1479,7 +1486,17 @@ def preview_original_learning_forward_windows_locked(
                 != intent["debug_end_sha256"] or
                 (debug_bytes and not debug_bytes.endswith(b"\n"))):
             raise V2OriginalConfigRefused("learning_forward_original_debug_cursor_drift")
-        later_debug = debug_bytes[original_debug_end:]
+        # On replay, the first durable second-slot intent pins the
+        # historical end. NEW writes AFTER the sealed end must not be
+        # stolen into the already prepared forward transaction.
+        frozen_debug = (sealed_window["debug"] if sealed_window is not None
+                        else None)
+        debug_end = (frozen_debug["end"] if frozen_debug is not None
+                     else len(debug_bytes))
+        if (type(debug_end) is not int or
+                not original_debug_end <= debug_end <= len(debug_bytes)):
+            raise V2OriginalConfigRefused("learning_forward_frozen_debug_cut_invalid")
+        later_debug = debug_bytes[original_debug_end:debug_end]
         if len(later_debug) > MAX_WINDOW:
             raise V2OriginalConfigRefused("learning_forward_debug_window_limit")
         # Retain an exact immutable cursor for each native inode, including
@@ -1518,14 +1535,22 @@ def preview_original_learning_forward_windows_locked(
                         hashlib.sha256(live_data[:prior_end]).hexdigest() !=
                         first["end_sha256"]):
                     raise V2OriginalConfigRefused("learning_forward_untouched_source_changed")
+                frozen = (sealed_window["native"][index]
+                          if sealed_window is not None else None)
+                old_end = (frozen["old_end"] if frozen is not None
+                           else len(live_data))
+                if (type(old_end) is not int or
+                        not prior_end <= old_end <= len(live_data)):
+                    raise V2OriginalConfigRefused("learning_forward_frozen_old_live_cut_invalid")
                 old_prefix, old_tail, new_rows = (
-                    live_data[:prior_end], live_data[prior_end:], b"")
+                    live_data[:prior_end], live_data[prior_end:old_end], b"")
                 native_cursors.append({
                     "native_number": number, "hostlist": name,
                     "old_path": pathname, "old_device": live_st.st_dev,
                     "old_inode": live_st.st_ino, "old_start": prior_end,
-                    "old_end": len(live_data),
-                    "old_end_sha256": hashlib.sha256(live_data).hexdigest(),
+                    "old_end": old_end,
+                    "old_end_sha256": hashlib.sha256(
+                        live_data[:old_end]).hexdigest(),
                     "new_path": None, "new_device": None, "new_inode": None,
                     "new_start": None, "new_end": None,
                     "new_end_sha256": None,
@@ -1557,24 +1582,40 @@ def preview_original_learning_forward_windows_locked(
                         first["end_sha256"]):
                     raise V2OriginalConfigRefused("learning_forward_old_preimage_mismatch")
                 pinned_sources.append((path_old, old_st.st_dev, old_st.st_ino))
+                frozen = (sealed_window["native"][index]
+                          if sealed_window is not None else None)
+                old_end = (frozen["old_end"] if frozen is not None
+                           else len(old_data))
+                new_end = (frozen["new_end"] if frozen is not None
+                           else len(live_data))
+                if (type(old_end) is not int or type(new_end) is not int or
+                        not prior_end <= old_end <= len(old_data) or
+                        not 0 <= new_end <= len(live_data)):
+                    raise V2OriginalConfigRefused("learning_forward_frozen_rebound_cut_invalid")
                 old_prefix, old_tail, new_rows = (
-                    old_data[:prior_end], old_data[prior_end:], live_data)
+                    old_data[:prior_end], old_data[prior_end:old_end],
+                    live_data[:new_end])
                 native_cursors.append({
                     "native_number": number, "hostlist": name,
                     "old_path": str(path_old), "old_device": old_st.st_dev,
                     "old_inode": old_st.st_ino, "old_start": prior_end,
-                    "old_end": len(old_data),
-                    "old_end_sha256": hashlib.sha256(old_data).hexdigest(),
+                    "old_end": old_end,
+                    "old_end_sha256": hashlib.sha256(
+                        old_data[:old_end]).hexdigest(),
                     "new_path": pathname, "new_device": live_st.st_dev,
                     "new_inode": live_st.st_ino, "new_start": 0,
-                    "new_end": len(live_data),
-                    "new_end_sha256": hashlib.sha256(live_data).hexdigest(),
+                    "new_end": new_end,
+                    "new_end_sha256": hashlib.sha256(
+                        live_data[:new_end]).hexdigest(),
                 })
             else:
                 # PREPARED / linked-unreplaced is not a qualified second
                 # post-rename source cut. Never silently treat old aliases
                 # as independent native cursors.
                 raise V2OriginalConfigRefused("learning_forward_incomplete_native_rebind")
+            if (sealed_window is not None and
+                    native_cursors[-1] != sealed_window["native"][index]):
+                raise V2OriginalConfigRefused("learning_forward_frozen_native_cursor_changed")
             total_unread += len(old_tail) + len(new_rows)
             if total_unread > MAX_RAW:
                 raise V2OriginalConfigRefused("learning_forward_native_raw_window_limit")
@@ -1636,8 +1677,9 @@ def preview_original_learning_forward_windows_locked(
                 "device": debug_stat.st_dev, "inode": debug_stat.st_ino,
                 "start": original_debug_end,
                 "start_sha256": intent["debug_end_sha256"],
-                "end": len(debug_bytes),
-                "end_sha256": hashlib.sha256(debug_bytes).hexdigest(),
+                "end": debug_end,
+                "end_sha256": hashlib.sha256(
+                    debug_bytes[:debug_end]).hexdigest(),
             },
             "native": native_cursors,
             "observations": observations,
@@ -1653,6 +1695,10 @@ def preview_original_learning_forward_windows_locked(
     try:
         held()
         before = read_candidate()
+        if (sealed_window is not None and
+                (before["debug"] != sealed_window["debug"] or
+                 before["native"] != sealed_window["native"])):
+            raise V2OriginalConfigRefused("learning_forward_frozen_window_changed")
         # Independently probe the ORIGINAL P2b whole-machine FD state of
         # ALL original native paths, retained pending and debug inode.
         # Busy old dvtws2 FDs cause a REFUSAL, not SIGSTOP/SIGCONT.
