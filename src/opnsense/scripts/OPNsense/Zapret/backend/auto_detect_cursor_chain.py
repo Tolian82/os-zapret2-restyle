@@ -1437,6 +1437,146 @@ class CursorChain:
                             writer_gid=gid) is FDState.DRAINED and
                     attest() == proof)
 
+        def rollback_late_positive(intent, old_stat=None, old_data=None):
+            """Recover native-positive OLD bytes using the ORIGINAL P1 minute.
+
+            Never forge a discovery or create a second destination writer.
+            If the replacement debug inode is still truly EMPTY and drained,
+            return the complete OLD inode to the same live name, aborting the
+            cut durably. The next ordinary cursor/Config/P1 WAL reads the
+            real positive debug line and its native-N append in source order.
+
+            A guarded hardlink pins the empty NEW inode across os.replace;
+            any late NEW write refuses and preserves that inode physically.
+            Every transition is recoverable under the SAME original FD9.
+            """
+            from auto_detect_debug_window import ADD, _hostname
+            rollback_path = last / DEBUG_CUT_ROLLBACK
+            backup = last / DEBUG_CUT_ROLLBACK_NEW
+            if _entry(complete_file) or _entry(retire_file):
+                raise CursorChainRefused("learning_debug_cut_positive_after_retirement")
+            if not _entry(rollback_path):
+                if old_stat is None or old_data is None or not _entry(archive):
+                    raise CursorChainRefused("learning_debug_cut_missing_positive_old")
+                if ((old_stat.st_dev, old_stat.st_ino) !=
+                        (intent["old"]["device"], intent["old"]["inode"]) or
+                        len(old_data) <= intent["old_size"] or
+                        len(old_data) > MAX_DEBUG or
+                        _digest(old_data[:intent["old_size"]]) != intent["old_sha256"] or
+                        not drained(archive, old_stat)):
+                    raise CursorChainRefused("learning_debug_cut_positive_old_changed")
+                tail = old_data[intent["old_size"]:]
+                if len(tail) > 256 * 1024 or not tail.endswith(b"\\n"):
+                    raise CursorChainRefused("learning_debug_cut_positive_tail_unbounded")
+                rows = {(n, path) for n, _, path in proof.learning}
+                events = 0
+                for line in tail.splitlines(keepends=True):
+                    if not line.endswith(b"\\n"):
+                        raise CursorChainRefused("learning_debug_cut_positive_partial_line")
+                    try:
+                        decoded = line[:-1].decode("ascii")
+                    except UnicodeDecodeError as exc:
+                        raise CursorChainRefused("learning_debug_cut_positive_nonascii") from exc
+                    if "\\x00" in decoded or "\\r" in decoded:
+                        raise CursorChainRefused("learning_debug_cut_positive_control_byte")
+                    if " : adding to " not in decoded:
+                        continue
+                    event = ADD.fullmatch(decoded)
+                    if (event is None or
+                            (int(event["profile"]), event["path"]) not in rows or
+                            not _hostname(event["host"])):
+                        raise CursorChainRefused("learning_debug_cut_positive_foreign_N")
+                    events += 1
+                    if events > 32:
+                        raise CursorChainRefused("learning_debug_cut_positive_events_limit")
+                if not events:
+                    raise CursorChainRefused("learning_debug_cut_positive_missing_event")
+                active_new, new_data, _ = snapshot(live)
+                if ((active_new.st_dev, active_new.st_ino) !=
+                        (intent["new"]["device"], intent["new"]["inode"]) or
+                        new_data or not drained(live, active_new) or
+                        attest() != proof):
+                    raise CursorChainRefused("learning_debug_cut_positive_new_not_empty")
+                record = dict(
+                    schema=3, kind="original-learning-debug-cut-rollback",
+                    generation=proof.generation,
+                    intent_sha256=_digest(_canonical(intent)),
+                    old_retained_size=len(old_data),
+                    old_retained_sha256=_digest(old_data),
+                    positive_events=events, ack_authorized=False)
+                _write_once(last, DEBUG_CUT_ROLLBACK, _canonical(record), uid)
+            record, raw = _load(rollback_path, uid)
+            # The canonical, original ACK-bound rollback receipt is checked
+            # by learning_tip on the same source epoch before any mutation.
+            check_tip = self.learning_tip(
+                proof, workspace, allow_unfinished_debug_cut=True)
+            if (check_tip.get("debug_cut_pending") != last or
+                    check_tip["previous_ack_sha256"] != intent["previous_ack_sha256"] or
+                    check_tip["debug"] != intent["old"] or
+                    attest() != proof):
+                raise CursorChainRefused("learning_debug_cut_rollback_not_original")
+            live_stat = _stat_regular(live, uid, max_size=MAX_DEBUG,
+                                      writer_gid=gid)
+            old_id = (intent["old"]["device"], intent["old"]["inode"])
+            new_id = (intent["new"]["device"], intent["new"]["inode"])
+            if (live_stat.st_dev, live_stat.st_ino) == new_id:
+                # Crash before rename may leave the new guard already linked.
+                new_st, new_data, _ = snapshot(
+                    live, links=(1, 2) if _entry(backup) else (1,))
+                if new_data or not drained(live, new_st):
+                    raise CursorChainRefused("learning_debug_cut_rollback_new_changed")
+                if not _entry(backup):
+                    os.link(live, backup, follow_symlinks=False)
+                    _sync(last)
+                pinned, payload, _ = snapshot(backup, links=(2,))
+                if ((pinned.st_dev, pinned.st_ino) != new_id or payload or
+                        not drained(backup, pinned)):
+                    raise CursorChainRefused("learning_debug_cut_rollback_guard_changed")
+                old_st, old_payload, _ = snapshot(archive)
+                if ((old_st.st_dev, old_st.st_ino) != old_id or
+                        len(old_payload) != record["old_retained_size"] or
+                        _digest(old_payload) != record["old_retained_sha256"] or
+                        not drained(archive, old_st) or attest() != proof):
+                    raise CursorChainRefused("learning_debug_cut_rollback_old_changed")
+                os.replace(archive, live)
+                _sync(self.queue.root)
+                _sync(last)
+            elif (live_stat.st_dev, live_stat.st_ino) == old_id:
+                # Crash after os.replace: NEW backup must still be pinned;
+                # otherwise refuse rather than infer it had no late write.
+                if _entry(archive) or (not _entry(backup) and not _entry(abort_file)):
+                    raise CursorChainRefused("learning_debug_cut_rollback_missing_guard")
+            else:
+                raise CursorChainRefused("learning_debug_cut_rollback_foreign_live")
+            restored, restored_data, _ = snapshot(live)
+            if ((restored.st_dev, restored.st_ino) != old_id or
+                    len(restored_data) < record["old_retained_size"] or
+                    _digest(restored_data[:record["old_retained_size"]]) !=
+                        record["old_retained_sha256"] or
+                    not drained(live, restored) or attest() != proof):
+                raise CursorChainRefused("learning_debug_cut_rollback_restored_changed")
+            # A durable ABORT precedes physical NEW-guard removal. On crash
+            # during cleanup, the ordinary source WAL remains blocked until
+            # this exact original owner repeats the empty/inode/FD proof.
+            aborted = dict(
+                schema=3, kind="original-learning-debug-cut-aborted",
+                generation=proof.generation,
+                intent_sha256=_digest(_canonical(intent)),
+                ack_authorized=False)
+            _write_once(last, DEBUG_CUT_ABORT, _canonical(aborted), uid)
+            if _entry(backup):
+                guard_st, guard_data, _ = snapshot(backup)
+                if ((guard_st.st_dev, guard_st.st_ino) != new_id or
+                        guard_data or not drained(backup, guard_st) or
+                        attest() != proof):
+                    raise CursorChainRefused("learning_debug_cut_rollback_new_guard_busy")
+                backup.unlink()
+                _sync(last)
+            if (_entry(archive) or _entry(backup) or
+                    self.learning_tip(proof, workspace)["debug"] != intent["old"]):
+                raise CursorChainRefused("learning_debug_cut_rollback_not_sealed")
+            return False
+
         def abort_without_cut(intent):
             # An old-debug append won before os.replace. Preserve the
             # unchanged live *name* and all newly appended bytes; remove
