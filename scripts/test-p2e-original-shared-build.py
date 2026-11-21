@@ -5692,21 +5692,22 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         begin = service.index("shared_apply_prepare_service()\n")
         end = service.index("extra_resources_native_previous_owner_service()\n", begin)
         stage = service[begin:end]
+        stage_flat = " ".join(line.strip().rstrip("\\") for line in stage.splitlines())
         for token in ('ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL',
                       'ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE',
                       'ZAPRET2_NATIVE_BUILD_CI', 'GITHUB_ACTIONS',
                       'preflight-learning "$_shared_work" "$_shared_auto_digest"',
                       'promote-learning "$_shared_work" "$_shared_auto_digest"',
                       'verify-learning-active "$_shared_work" "$_shared_auto_digest"'):
-            self.assertIn(token, stage)
-        self.assertLess(stage.index('preflight-learning "$_shared_work"'),
-                        stage.index('promote-learning "$_shared_work"'))
-        self.assertLess(stage.index('promote-learning "$_shared_work"'),
-                        stage.index('verify-learning-active "$_shared_work"'))
-        self.assertLess(stage.index('verify-learning-active "$_shared_work"'),
-                        stage.index('shared_apply_bundle_service seal "$1"'))
-        self.assertIn('preview "$_shared_work" "$_shared_auto_digest"', stage)
-        self.assertIn('promote "$_shared_work" "$_shared_auto_digest"', stage)
+            self.assertIn(token, stage_flat)
+        self.assertLess(stage_flat.index('preflight-learning "$_shared_work"'),
+                        stage_flat.index('promote-learning "$_shared_work"'))
+        self.assertLess(stage_flat.index('promote-learning "$_shared_work"'),
+                        stage_flat.index('verify-learning-active "$_shared_work"'))
+        self.assertLess(stage_flat.index('verify-learning-active "$_shared_work"'),
+                        stage_flat.index('shared_apply_bundle_service seal "$1"'))
+        self.assertIn('preview "$_shared_work" "$_shared_auto_digest"', stage_flat)
+        self.assertIn('promote "$_shared_work" "$_shared_auto_digest"', stage_flat)
         applied = service[service.index("shared_apply_execute_service()\n"):
                           service.index("shared_apply_wan_save_service()\n")]
         self.assertIn('.schema | select(. == 2 or . == 3)', applied)
