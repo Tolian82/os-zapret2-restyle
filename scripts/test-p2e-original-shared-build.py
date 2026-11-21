@@ -1631,6 +1631,51 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertEqual(
                         forward["debug"]["start"],
                         len(first_debug + second_debug))
+                    # A hostname may be discovered by BOTH native
+                    # profiles. Same-host duplicate is removed ONLY
+                    # within one exact (N, HOSTLIST) source, never by
+                    # guessing that YouTube and User share a destination.
+                    native.write_bytes(b"late.example.org\n")
+                    debug_path.write_bytes(
+                        first_debug + second_debug + second_tail +
+                        native_debug(youtube_num, "late.example.org",
+                                     learning[0][2]))
+                    mixed = forward_preview()
+                    self.assertEqual(
+                        len(mixed["observations"]), 4)
+                    self.assertEqual(
+                        {r["hostlist"] for r in mixed["observations"]
+                         if r["hostname"] == "late.example.org"},
+                        {"youtube", "user"})
+                    self.assertFalse(mixed["ack_authorized"])
+                    native.write_bytes(b"")
+                    debug_path.write_bytes(
+                        first_debug + second_debug + second_tail)
+                    # Even a genuinely matching append must NOT arrive
+                    # while the global original P2b FD scan runs:
+                    # the all-N source cut and debug cursor have changed.
+                    raced = [False]
+                    def p2b_append_race(path, device, inode, *, owner, writer_gid):
+                        if not raced[0]:
+                            raced[0] = True
+                            with user_native.open("ab", buffering=0) as producer:
+                                producer.write(b"racing-p2b.example.net\n")
+                                os.fsync(producer.fileno())
+                            with debug_path.open("ab", buffering=0) as out:
+                                out.write(native_debug(
+                                    user_num, "racing-p2b.example.net",
+                                    learning[1][2]))
+                                os.fsync(out.fileno())
+                        return drained(path, device, inode, owner=owner,
+                                       writer_gid=writer_gid)
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        forward_preview(inspect_witness=p2b_append_race)
+                    self.assertTrue(raced[0])
+                    user_native.write_bytes(
+                        b"late.example.org\nafter-seal-new.example.net\n")
+                    debug_path.write_bytes(
+                        first_debug + second_debug + second_tail)
+                    self.assertEqual(forward_preview(), forward)
                     # A debug event alone cannot advance any source:
                     # the native row may not have been persisted yet.
                     debug_path.write_bytes(
@@ -1659,7 +1704,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             inspect_witness=lambda *_args, **_kwargs:
                                 FDState.BUSY)
                     self.assertEqual(forward_preview(), forward)
-                    self.assertFalse((slot / "00000001").exists())
+                    self.assertFalse((slot.parent / "00000001").exists())
                     self.assertFalse((slot / "ack.json").exists())
                     # No new cursor, destination plan or native ACK exists
                     # simply because the original P2b preview passed.
