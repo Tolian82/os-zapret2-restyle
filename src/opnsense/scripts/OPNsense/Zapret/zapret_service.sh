@@ -992,7 +992,14 @@ shared_apply_stop_service()
         if [ "$_shared_stop_observer" = 1 ]; then
             _shared_stop_epoch=$("$PYTHON_RUNTIME" \
                 "$BACKEND_DIR/auto_detect_minute.py" --pre-retire) || return 69
-            [ "$_shared_stop_epoch" = auto-detect-retire=original-running-attested ] || return 69
+            # Only the exact sealed active schema may authorize stopping
+            # this original owner. The original post-Stop FD9 retirement
+            # MUST complete before Stop returns success or a new Boot.
+            case "$_apply_native_schema:$_shared_stop_epoch" in
+                2:auto-detect-retire=original-running-attested|\
+                3:auto-detect-retire=original-learning-running-attested) ;;
+                *) return 69 ;;
+            esac
         else
             apply_runtime_observer_retirement_preflight || return 69
         fi
