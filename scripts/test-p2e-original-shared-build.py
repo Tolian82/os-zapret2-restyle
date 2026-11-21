@@ -2608,12 +2608,16 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             # refuse, not declare it safe to delete.
                             missing_old = (
                                 archive_folder / f"{youtube_num:03d}.txt")
+                            # Park outside ALL original journal folders:
+                            # a third-slot foreign-file refusal would mask
+                            # the actual missing-OLD-inode recovery defect.
                             out_of_tree = (
-                                third_slot / "test-only-detached-source.txt")
+                                self.root / "test-only-detached-source.txt")
                             missing_old.rename(out_of_tree)
                             try:
-                                with self.assertRaises(
-                                        V2OriginalConfigRefused):
+                                with self.assertRaisesRegex(
+                                        V2OriginalConfigRefused,
+                                        "native_archive_old_missing_without_archived_inode"):
                                     archive_release_preview()
                                 with self.assertRaises(
                                         V2OriginalConfigRefused):
