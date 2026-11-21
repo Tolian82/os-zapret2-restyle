@@ -1726,6 +1726,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     from auto_detect_original_v2_model import (
                         seal_original_learning_forward_progress_locked,
                         preview_original_learning_late_tails_locked,
+                        prepare_original_learning_third_slot_locked,
                     )
                     def advance_second_cursor(*, inspect_witness=drained):
                         with writer.exclusive_targets(), patch(
@@ -1745,9 +1746,21 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof,
                                 inspect=inspect_witness)
+                    def seal_third_slot(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return prepare_original_learning_third_slot_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof,
+                                inspect=inspect_witness)
+                    third_slot = slot.parent / "00000002"
                     self.assertFalse(second_slot.exists())
                     with self.assertRaises(V2OriginalConfigRefused):
                         preview_late_tails()
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        seal_third_slot()
                     partial_second = [False]
                     def abort_after_one_native(folder, name, data, uid):
                         normal_original_write_once(folder, name, data, uid)
@@ -2034,6 +2047,100 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             second_intent["debug"]["end"])
                         self.assertEqual(
                             preview_late_tails(), late)
+                        # SOURCE ONLY: third original slot is immutable
+                        # N-per-inode provenance, NOT a third P1 or ACK.
+                        third_crashed = [False]
+                        def fail_first_third_N(folder, name, data, uid):
+                            normal_original_write_once(
+                                folder, name, data, uid)
+                            if (folder.name == "native" and
+                                    folder.parent.name == "00000002" and
+                                    not third_crashed[0]):
+                                third_crashed[0] = True
+                                raise RuntimeError(
+                                    "synthetic_third_original_N_crash")
+                        with patch(
+                                "auto_detect_epoch_receipts._write_once",
+                                side_effect=fail_first_third_N):
+                            with self.assertRaisesRegex(
+                                    RuntimeError,
+                                    "synthetic_third_original_N_crash"):
+                                seal_third_slot()
+                        self.assertTrue(third_crashed[0])
+                        self.assertFalse(
+                            (third_slot / "intent.json").exists())
+                        self.assertEqual(
+                            len(list((third_slot / "native").iterdir())), 1)
+                        third = seal_third_slot()
+                        self.assertEqual(third["sequence"], 2)
+                        self.assertEqual(third["profiles_count"], 2)
+                        self.assertEqual(third["observations_count"], 2)
+                        self.assertFalse(third["cursor_advanced"])
+                        self.assertFalse(third["commit_authorized"])
+                        self.assertFalse(third["ack_authorized"])
+                        self.assertEqual(seal_third_slot(), third)
+                        third_intent_bytes = (
+                            third_slot / "intent.json").read_bytes()
+                        third_intent = json.loads(third_intent_bytes)
+                        self.assertEqual(
+                            third_intent["previous_cursor_progress_sha256"],
+                            advanced["progress_sha256"])
+                        self.assertEqual(
+                            third_intent["previous_source_intent_sha256"],
+                            advanced["source_intent_sha256"])
+                        self.assertEqual(
+                            third_intent["observations"],
+                            late["observations"])
+                        self.assertEqual(
+                            third_intent["native_observations"],
+                            late["native_observations"])
+                        frozen_N = {
+                            p.name: p.read_bytes() for p in
+                            (third_slot / "native").iterdir()}
+                        previous_old = user_pending.read_bytes()
+                        previous_live = user_native.read_bytes()
+                        previous_debug = debug_path.read_bytes()
+                        with user_pending.open("ab", buffering=0) as old:
+                            old.write(b"post-third-old.example.net\n")
+                            os.fsync(old.fileno())
+                        with user_native.open("ab", buffering=0) as live:
+                            live.write(b"post-third-new.example.net\n")
+                            os.fsync(live.fileno())
+                        with debug_path.open("ab", buffering=0) as debug:
+                            debug.write(
+                                native_debug(
+                                    user_num, "post-third-old.example.net",
+                                    learning[1][2]) +
+                                native_debug(
+                                    user_num, "post-third-new.example.net",
+                                    learning[1][2]))
+                            os.fsync(debug.fileno())
+                        self.assertEqual(seal_third_slot(), third)
+                        self.assertEqual(
+                            (third_slot / "intent.json").read_bytes(),
+                            third_intent_bytes)
+                        self.assertEqual(
+                            {p.name: p.read_bytes() for p in
+                             (third_slot / "native").iterdir()},
+                            frozen_N)
+                        self.assertGreater(
+                            len(preview_late_tails()["observations"]),
+                            third["observations_count"])
+                        self.assertEqual(seal_second_slot(), second_result)
+                        self.assertEqual(advance_second_cursor(), advanced)
+                        self.assertFalse(
+                            (third_slot / "destination").exists())
+                        self.assertFalse(
+                            (third_slot / "ack.json").exists())
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            seal_third_slot(
+                                inspect_witness=lambda *_a, **_kw:
+                                    FDState.BUSY)
+                        # Disposable source-only fixture restoration.
+                        user_pending.write_bytes(previous_old)
+                        user_native.write_bytes(previous_live)
+                        debug_path.write_bytes(previous_debug)
+                        self.assertEqual(seal_third_slot(), third)
                         # Exact N is not optional when a YouTube and a
                         # User learning clone detect the same hostname.
                         raw_mix_debug = debug_path.read_bytes()
@@ -2069,9 +2176,6 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 inspect_witness=lambda *_a, **_k: FDState.BUSY)
                         self.assertFalse(
                             (second_slot / "ack.json").exists())
-                        # Completed second P1 is immutable even if the
-                        # producer grows BOTH native tails and debug.
-
                         # Completed second P1 is immutable even if the
                         # producer grows BOTH native tails and debug.
                         # Replay cannot re-commit a later minute or
@@ -2121,6 +2225,14 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         (second_slot / "destination").rmdir()
                     self.assertFalse((second_slot / "destination").exists())
                     self.assertFalse((second_slot / "ack.json").exists())
+                    # Disposable test teardown only: production MUST
+                    # preserve the immutable third source journal.
+                    if third_slot.exists():
+                        for receipt in (third_slot / "native").iterdir():
+                            receipt.unlink()
+                        (third_slot / "intent.json").unlink()
+                        (third_slot / "native").rmdir()
+                        third_slot.rmdir()
                     # Disposable source-only fixture cleanup, never a
                     # production rollback/unlink of original cursor WAL.
                     progress_file = second_slot / "cursor-progress.json"

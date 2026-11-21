@@ -1968,8 +1968,18 @@ def prepare_original_learning_forward_second_slot_locked(
                  "cursor-chain-v2")
         _directory(chain, writer.receipts.uid)
         names = set(os.listdir(chain))
-        if (names not in ({"00000000"}, {"00000000", "00000001"})):
+        if names not in (
+                {"00000000"}, {"00000000", "00000001"},
+                {"00000000", "00000001", "00000002"}):
             raise V2OriginalConfigRefused("learning_second_slot_foreign_chain")
+        if "00000002" in names and not (
+                (chain / "00000001" / "cursor-progress.json").exists() and
+                (chain / "00000001" / "destination" /
+                 "checkpoint.json").exists()):
+            # The new folder does NOT authorize a partially committed
+            # or entirely missing second-slot cursor checkpoint.
+            raise V2OriginalConfigRefused(
+                "learning_third_slot_requires_second_progress")
         slot = chain / "00000001"
         if slot.exists() or slot.is_symlink():
             _directory(slot, writer.receipts.uid)
@@ -2304,7 +2314,7 @@ def seal_original_learning_forward_progress_locked(
 def preview_original_learning_late_tails_locked(
         writer: DestinationCommit, proof, workspace: Path, *,
         config_fd: int, config_path: Path, attest,
-        inspect=probe_pending_fd,
+        inspect=probe_pending_fd, sealed_window: dict | None = None,
 ) -> dict:
     """Read ONLY the next physical old-pending/new-live N-profile suffixes.
 
@@ -2376,7 +2386,8 @@ def preview_original_learning_late_tails_locked(
                 "learning_late_tail_second_cut_not_original")
         current = preview_original_learning_forward_windows_locked(
             writer, proof, workspace, config_fd=config_fd,
-            config_path=config_path, attest=attest, inspect=inspect)
+            config_path=config_path, attest=attest, inspect=inspect,
+            sealed_window=sealed_window)
         result = qualify_learning_forward_late_delta(
             original, current, proof.learning)
         if (current_progress() != advanced or
@@ -2399,6 +2410,18 @@ def preview_original_learning_late_tails_locked(
             UnicodeError) as exc:
         raise V2OriginalConfigRefused(
             "learning_late_tail_source_or_owner_refused") from exc
+
+
+def prepare_original_learning_third_slot_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """Original third-source write-once adapter, NOT another WAL writer."""
+    from auto_detect_learning_third_slot import prepare_third_source_locked
+    return prepare_third_source_locked(
+        writer, proof, workspace, config_fd=config_fd,
+        config_path=config_path, attest=attest, inspect=inspect)
 
 
 def _recover_original_learning_partial_locked(
