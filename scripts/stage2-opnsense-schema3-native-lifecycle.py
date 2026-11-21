@@ -281,28 +281,45 @@ def execute() -> dict:
     stopped_receipts(ident, learning, debug_inode)
     require(committed_id() == ident, "CANARY_STOP_CHANGED_FD9_GENERATION")
 
+    # The original Boot code deliberately creates a fresh operation/epoch
+    # from the SAME persisted Config after terminal old-generation retirement.
+    # Reusing a stopped PID/birth or the first generation ID would be unsafe.
+    saved_model = ET.tostring(saved_root, encoding="utf-8")
     service_action("start")
     boot_pid = check_process(True)
+    boot_id = committed_id()
     require(boot_pid is not None and boot_pid != first_pid and
-            committed_id() == ident,
-            "CANARY_BOOT_NOT_SAME_SEALED_OWNER")
+            boot_id != ident and
+            ET.tostring(ET.fromstring(CONFIG.read_bytes()).find(
+                "./OPNsense/Zapret"), encoding="utf-8") == saved_model,
+            "CANARY_BOOT_NEW_FD9_OWNER_DID_NOT_PRESERVE_SAVED_CONFIG")
+    boot_learning, boot_debug_inode = schema3_receipts(boot_id, boot_pid)
     service_action("restart")
     restart_pid = check_process(True)
+    restart_id = committed_id()
     require(restart_pid is not None and restart_pid != boot_pid and
-            committed_id() == ident,
-            "CANARY_RESTART_NOT_SAME_SEALED_OWNER")
+            restart_id not in {ident, boot_id} and
+            ET.tostring(ET.fromstring(CONFIG.read_bytes()).find(
+                "./OPNsense/Zapret"), encoding="utf-8") == saved_model,
+            "CANARY_RESTART_NEW_FD9_OWNER_DID_NOT_PRESERVE_SAVED_CONFIG")
+    restart_learning, restart_debug_inode = schema3_receipts(
+        restart_id, restart_pid)
     service_action("stop")
     check_process(False)
-    require(committed_id() == ident, "CANARY_FINAL_STOP_LOST_SAVED_OWNER")
+    stopped_receipts(restart_id, restart_learning, restart_debug_inode)
+    require(committed_id() == restart_id,
+            "CANARY_FINAL_STOP_LOST_LAST_SAVED_OWNER")
     return {
         "status": "PASS_TZ6V4_DISPOSABLE_REAL_SCHEMA3_APPLY_STOP_BOOT_RESTART",
-        "source_sha": head, "generation": ident,
+        "source_sha": head, "initial_generation": ident,
+        "boot_generation": boot_id, "restart_generation": restart_id,
         "real_engine_start_pid": first_pid,
         "real_engine_boot_pid": boot_pid,
         "real_engine_restart_pid": restart_pid,
         "native_learning_profiles": len(learning),
         "original_fd9_config_and_p2c_process": True,
         "terminal_n_debug_retirement": True,
+        "new_epoch_on_boot_and_restart": True,
         "one_engine_at_each_active_checkpoint": True,
         "real_isp_positive_attribution_tested": False,
         "powerloss_recovery_tested": False,

@@ -5689,8 +5689,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
     def test_tz6v4_schema3_shared_apply_canary_stays_ci_only(self):
         """Production retains P2h/schema2; schema3 gets exact FD9 native trial."""
         service = (BACKEND.parent / "zapret_service.sh").read_text()
-        begin = service.index("shared_apply_prepare_service()\\n")
-        end = service.index("extra_resources_native_previous_owner_service()\\n", begin)
+        begin = service.index("shared_apply_prepare_service()\n")
+        end = service.index("extra_resources_native_previous_owner_service()\n", begin)
         stage = service[begin:end]
         for token in ('ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL',
                       'ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE',
@@ -5707,8 +5707,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         stage.index('shared_apply_bundle_service seal "$1"'))
         self.assertIn('preview "$_shared_work" "$_shared_auto_digest"', stage)
         self.assertIn('promote "$_shared_work" "$_shared_auto_digest"', stage)
-        applied = service[service.index("shared_apply_execute_service()\\n"):
-                          service.index("shared_apply_wan_save_service()\\n")]
+        applied = service[service.index("shared_apply_execute_service()\n"):
+                          service.index("shared_apply_wan_save_service()\n")]
         self.assertIn('.schema | select(. == 2 or . == 3)', applied)
         self.assertIn('case "$_shared_apply_native_schema" in', applied)
         self.assertIn('auto_detect_origin_map.py" verify-active', applied)
