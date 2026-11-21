@@ -640,6 +640,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 with self.assertRaises(V2OriginalConfigRefused):
                     preview_learning_p1_effects(bad, manual, owned, "", "", psl=psl)
 
+    def test_tz6v4_remaining_new_reaches_original_destination(self):
+        """Real files through original generator/P1/WAL; synthetic FD9 only."""
+        self.exercise_remaining_new = True
+        self.test_tz6v4_sealed_full_n_pretraffic_is_one_original_epoch()
+
     def test_tz6v4_sealed_full_n_pretraffic_is_one_original_epoch(self):
         """Real shared generator + sealed active schema3 + protected inodes.
 
@@ -2915,8 +2920,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             with self.assertRaises(V2OriginalConfigRefused):
                                 run_late()
                             self.assertFalse(late_slot.exists())
-                            late_name = "late.fourth.example.net"
-                            later_name = "after.fourth.example.net"
+                            late_name = "www.fourth-boundary.com"
+                            later_name = "www.fifth-boundary.org"
                             try:
                                 with user_native.open("ab") as stream:
                                     stream.write((late_name + "\n").encode())
@@ -3003,6 +3008,145 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 finally:
                                     (late_slot / rl.INTENT).write_bytes(late_raw)
                                 self.assertEqual(run_late(), sealed_result)
+                                if getattr(self, "exercise_remaining_new", False):
+                                    from auto_detect_effective_known import compose_known
+                                    from auto_detect_destination_commit import _edit
+                                    def late_live_preview(manual, effects, **context):
+                                        owned = {name: targets[name].read_text()
+                                                 for name in ("youtube", "user")}
+                                        after_owned = {
+                                            name: _edit(owned[name].encode(),
+                                                effects.get(name, {}).get("add", []),
+                                                effects.get(name, {}).get("remove", [])).decode()
+                                            for name in owned}
+                                        after = compose_known(manual, after_owned)
+                                        files = {}
+                                        changed = []
+                                        for name in owned:
+                                            pathname = active_managed / f"hostlist-{name}.txt"
+                                            before_bytes = pathname.read_bytes()
+                                            if before_bytes != after[name].encode():
+                                                changed.append(name)
+                                            files[name] = {
+                                                "path": str(pathname),
+                                                "before_sha256": hashlib.sha256(before_bytes).hexdigest(),
+                                                "after_sha256": hashlib.sha256(after[name].encode()).hexdigest()}
+                                        return {
+                                            "owner_schema": 3, "generation": proof.generation,
+                                            "operation": proof.operation_id, "pid": proof.owner.pid,
+                                            "started": proof.owner.started, "changed": changed,
+                                            "files": files, "commit_authorized": False,
+                                            "ack_authorized": False}
+                                    def commit_late(exclude="", *, next_cycle=False):
+                                        with patch(
+                                                "auto_detect_original_v2_model.COMMON_ACTIVE", active_root), patch(
+                                                "auto_detect_original_v2_model.preview_live_known_after_readonly",
+                                                side_effect=late_live_preview), patch(
+                                                "auto_detect_original_history_running_late.attest_learning_running_generation",
+                                                return_value=proof):
+                                            consumer = (rl.process_original_learning_running_late_once
+                                                        if next_cycle else rl.commit_original_learning_running_late)
+                                            return consumer(
+                                                writer, proof, self.work,
+                                                config_fd=cfg_fd, config_path=config_path,
+                                                owned_root=owned_dir,
+                                                manual_hostlists={"youtube": "youtube.com\n", "user": ""},
+                                                global_exclude=exclude, attest=lambda: proof,
+                                                inspect=drained, psl=self._tz6v4_psl_for_fixtures())
+                                    managed_user = active_managed / "hostlist-user.txt"
+                                    before_managed = managed_user.read_bytes()
+                                    # The original writer can leave an empty
+                                    # destination directory before plan fsync.
+                                    # Re-entry must finish that SAME slot.
+                                    (late_slot / "destination").mkdir(mode=0o700)
+                                    crashed = [False]
+                                    def interrupt_found(*args, **kwargs):
+                                        real_replace(*args, **kwargs)
+                                        if not crashed[0]:
+                                            crashed[0] = True
+                                            raise DestinationRefused("fourth_found_before_managed")
+                                    with patch("auto_detect_destination_commit._replace",
+                                               side_effect=interrupt_found):
+                                        with self.assertRaises(V2OriginalConfigRefused):
+                                            commit_late()
+                                    self.assertTrue(crashed[0])
+                                    self.assertIn(b"fourth-boundary.com\n", targets["user"].read_bytes())
+                                    self.assertNotIn(b"fifth-boundary.org\n", targets["user"].read_bytes())
+                                    self.assertEqual(managed_user.read_bytes(), before_managed)
+                                    self.assertFalse((late_slot / "destination/checkpoint.json").exists())
+                                    plan_bytes = (late_slot / "destination/plan.json").read_bytes()
+                                    forged_plan = json.loads(plan_bytes)
+                                    forged_plan["writes"]["user"]["before_inode"] += 1
+                                    (late_slot / "destination/plan.json").write_bytes(_canonical(forged_plan))
+                                    try:
+                                        with self.assertRaises(V2OriginalConfigRefused):
+                                            commit_late()
+                                    finally:
+                                        (late_slot / "destination/plan.json").write_bytes(plan_bytes)
+                                    with self.assertRaises(V2OriginalConfigRefused):
+                                        commit_late("fourth-boundary.com\n")
+                                    completed_late = commit_late()
+                                    self.assertEqual(completed_late["pending_name"], "learning-00000003")
+                                    self.assertFalse(completed_late["ack_authorized"])
+                                    self.assertIn(b"fourth-boundary.com\n", managed_user.read_bytes())
+                                    self.assertNotIn(b"fifth-boundary.org\n", managed_user.read_bytes())
+                                    self.assertEqual((late_slot / "destination/plan.json").read_bytes(), plan_bytes)
+                                    self.assertEqual(commit_late(), completed_late)
+                                    self.assertEqual((late_slot / rl.INTENT).read_bytes(), late_raw)
+                                    self.assertTrue(user_native.read_bytes().endswith((later_name + "\n").encode()))
+                                    self.assertTrue((late_slot / "cursor-progress.json").exists())
+                                    # Old receipts stay immutable, but lawful fourth
+                                    # CAS postimages must no longer poison history.
+                                    continued_postimages = read_independent_postimages()
+                                    self.assertEqual(continued_postimages["postimages_sha256"],
+                                                     final_postimages["postimages_sha256"])
+                                    self.assertTrue(continued_postimages["all_final_destinations_inode_pinned"])
+                                    self.assertEqual(continued_postimages["unprocessed_new_native_bytes"],
+                                                     len((later_name + "\n").encode()))
+                                    self.assertEqual(final_postimage_path.read_bytes(), postimage_original)
+                                    with writer.exclusive_targets(), patch(
+                                            "auto_detect_original_v2_model.COMMON_ACTIVE", active_root):
+                                        from auto_detect_original_history_stopped import (
+                                            _current_original_final_destinations,
+                                        )
+                                        reconciled = _current_original_final_destinations(
+                                            writer, proof, hashlib.sha256(postimage_original).hexdigest())
+                                    self.assertTrue(all(state == "exact" for _, state in reconciled))
+                                    fifth = commit_late(next_cycle=True)
+                                    self.assertEqual(fifth["pending_name"], "learning-00000004")
+                                    fifth_slot = late_slot.parent / "00000004"
+                                    fifth_intent = json.loads((fifth_slot / rl.INTENT).read_bytes())
+                                    self.assertEqual(fifth_intent["observations"], [
+                                        {"hostname": later_name, "hostlist": "user"}])
+                                    self.assertIn(b"fifth-boundary.org\n", managed_user.read_bytes())
+                                    self.assertEqual(read_independent_postimages()["postimages_sha256"],
+                                                     final_postimages["postimages_sha256"])
+                                    self.assertIsNone(commit_late(next_cycle=True))
+                                    self.assertFalse((late_slot.parent / "00000005").exists())
+                                    sixth_name = "www.sixth-boundary.net"
+                                    with user_native.open("ab") as stream:
+                                        stream.write((sixth_name + "\n").encode())
+                                    with debug_path.open("ab") as stream:
+                                        stream.write(native_debug(user_num, sixth_name, str(user_native)))
+                                    sixth = commit_late(next_cycle=True)
+                                    self.assertEqual(sixth["pending_name"], "learning-00000005")
+                                    self.assertIn(b"sixth-boundary.net\n", managed_user.read_bytes())
+                                    self.assertIsNone(commit_late(next_cycle=True))
+                                    self.assertEqual(read_independent_postimages()["postimages_sha256"],
+                                                     final_postimages["postimages_sha256"])
+                                    self.assertEqual(read_independent_postimages()["unprocessed_new_native_bytes"], 0)
+                                    # Replaying a committed old source cannot
+                                    # resurrect a later GUI deletion. New work
+                                    # refuses the changed physical lineage.
+                                    target_bytes = targets["user"].read_bytes()
+                                    targets["user"].write_bytes(target_bytes.replace(
+                                        b"fourth-boundary.com\n", b""))
+                                    deleted_bytes = targets["user"].read_bytes()
+                                    self.assertEqual(commit_late(), completed_late)
+                                    self.assertEqual(targets["user"].read_bytes(), deleted_bytes)
+                                    with self.assertRaises(V2OriginalConfigRefused):
+                                        commit_late(next_cycle=True)
+                                    return
                             finally:
                                 # Test fixture only, not production rollback:
                                 # restore identical live inode bytes; then
@@ -3010,9 +3154,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 user_native.write_bytes(saved_live_before)
                                 debug_path.write_bytes(saved_debug_before)
                                 if late_slot.exists():
-                                    for entry in late_slot.iterdir():
-                                        entry.unlink()
-                                    late_slot.rmdir()
+                                    shutil.rmtree(late_slot)
                             self.assertFalse(late_slot.exists())
                             self.assertEqual(
                                 preview_independent_positive(), positive_baseline)

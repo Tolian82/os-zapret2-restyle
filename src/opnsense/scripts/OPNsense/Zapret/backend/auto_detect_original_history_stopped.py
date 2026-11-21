@@ -269,6 +269,11 @@ def _current_original_final_destinations(writer, proof, expected_post_sha):
             len({r.get("target") for r in rows if type(r) is dict}) != len(rows)):
         raise V2OriginalConfigRefused(
             "stopped_reconciliation_invalid_original_targets")
+    from auto_detect_original_history_running_late import (
+        read_original_learning_late_postimages,
+    )
+    rows, _ = read_original_learning_late_postimages(
+        writer, proof, rows, verify_current=False)
     results = []
     for row in rows:
         if type(row) is not dict or type(row.get("target")) is not str:
@@ -343,8 +348,7 @@ def preview_original_learning_stopped_destination_reconciliation_locked(
             writer, proof, workspace, config_fd=config_fd,
             config_path=config_path, attest=attest, inspect=inspect)
         _held(writer, proof, workspace, config_fd, config_path, attest)
-        if first != second or before != after or len(first) != before[
-                "historical_final_destinations_count"]:
+        if first != second or before != after:
             raise V2OriginalConfigRefused(
                 "stopped_reconciliation_current_destinations_raced")
         conflicts = [

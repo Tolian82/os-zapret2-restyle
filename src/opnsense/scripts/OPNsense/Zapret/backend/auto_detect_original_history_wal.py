@@ -101,17 +101,43 @@ def _read_original_wal_once(writer, proof, old_images, inspect):
                 latest[(kind, name)] = (seq, row)
     destinations = {}
     all_final_destinations_inode_pinned = True
+    continuation = first_folder / "00000003" / "destination" / "plan.json"
+    historical_rows = None
+    continuation_intent = None
+    if continuation.exists() or continuation.is_symlink():
+        from auto_detect_original_history_running_late import (
+            read_original_learning_late_postimages, _frozen_prefix_still_exists,
+        )
+        post = json.loads(_read(
+            _archive_paths(writer, proof)[2] / "history" / "postimages.json", uid))
+        # Preserve the immutable third seal. The fourth original WAL must
+        # inherit those exact before-inodes and pin its own final inodes.
+        _, progress = read_original_learning_late_postimages(
+            writer, proof, post["destinations"])
+        if progress is None:
+            raise V2OriginalConfigRefused("native_history_late_progress_missing")
+        last = first_folder / f"{progress['sequence']:08d}" / "intent.json"
+        continuation_intent = json.loads(_read(last, uid))
+        _frozen_prefix_still_exists(writer, proof, continuation_intent, inspect)
+        historical_rows = {row["target"]: row for row in post["destinations"]}
     for (kind, name), (seq, row) in sorted(latest.items()):
         path = (writer.targets[name] if kind == "writes" else
                 original_model.COMMON_ACTIVE / "managed" /
                 f"hostlist-{name}.txt")
         if row["path"] != str(path):
             raise V2OriginalConfigRefused("native_history_foreign_destination_path")
-        data, stat = _target(path, uid)
-        digest = _digest(data)
+        if historical_rows is None:
+            data, stat = _target(path, uid)
+            digest, identity = _digest(data), _file_identity(stat)
+        else:
+            old = historical_rows[f"{kind}:{name}"]
+            if old["path"] != str(path) or old["last_writer_sequence"] != seq:
+                raise V2OriginalConfigRefused("native_history_late_predecessor_changed")
+            digest = old["sha256"]
+            identity = tuple(old[key] for key in (
+                "device", "inode", "ctime_ns", "mtime_ns", "size"))
         if digest != row["after"]:
             raise V2OriginalConfigRefused("native_history_destination_not_committed")
-        identity = _file_identity(stat)
         if seq == 2:
             pin = pinned[kind][name]
             expected_pin = dict(
@@ -158,7 +184,12 @@ def _read_original_wal_once(writer, proof, old_images, inspect):
                 inspect(path, stat.st_dev, stat.st_ino,
                         owner=proof.owner, writer_gid=gid) is not FDState.DRAINED):
             raise V2OriginalConfigRefused("native_history_new_inode_unqualified")
-        unread = data[end:]
+        effective_end = end
+        if continuation_intent is not None:
+            current = next(r for r in continuation_intent["native"]
+                           if r["native_number"] == number)
+            effective_end = current["frozen_end"]
+        unread = data[effective_end:]
         if unread:
             _raw_hosts(unread)
         total_unread += len(unread)
@@ -175,6 +206,8 @@ def _read_original_wal_once(writer, proof, old_images, inspect):
             inspect(path_debug, stat_debug.st_dev, stat_debug.st_ino,
                     owner=proof.owner, writer_gid=gid) is not FDState.DRAINED):
         raise V2OriginalConfigRefused("native_history_debug_inode_unqualified")
+    processed_debug_end = (continuation_intent["debug"]["frozen_end"]
+                           if continuation_intent is not None else debug["end"])
     return {
         "sequence": 2,
         "checkpoint_sha256": tuple(_digest(row[3]) for row in rows),
@@ -189,7 +222,7 @@ def _read_original_wal_once(writer, proof, old_images, inspect):
             _digest(debug_bytes),
         ),
         "unprocessed_new_native_bytes": total_unread,
-        "unprocessed_new_debug_bytes": len(debug_bytes) - debug["end"],
+        "unprocessed_new_debug_bytes": len(debug_bytes) - processed_debug_end,
         "new_positive_debug_attribution_verified": False,
     }
 

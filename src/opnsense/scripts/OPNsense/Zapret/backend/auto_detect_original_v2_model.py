@@ -3233,6 +3233,19 @@ def _recover_original_learning_partial_locked(
         # Reuse ONE original P2a/P2b source attester. The second slot has
         # TWO immutable native inode cursors, and must not be examined by
         # the first-slot single-inode prefix attester.
+        if type(intent.get("sequence")) is int and intent["sequence"] >= 3:
+            from auto_detect_original_history_running_late import (
+                prepare_original_learning_running_late_source_locked,
+            )
+            answer = prepare_original_learning_running_late_source_locked(
+                writer, proof, workspace, config_fd=config_fd,
+                config_path=config_path, attest=attest, inspect=inspect,
+                sequence=intent["sequence"])
+            return {
+                "source_intent_sha256": answer["source_intent_sha256"],
+                "p2b_drained": True, "commit_authorized": False,
+                "ack_authorized": False,
+            }
         if intent.get("sequence") in (1, 2):
             if config_fd is None or config_path is None:
                 raise V2OriginalConfigRefused(
@@ -3578,14 +3591,15 @@ def commit_with_original_learning_forward_second_slot(
             "learning_forward_original_config_wal_refused") from exc
 
 
-def commit_with_original_learning_third_slot(
+def _commit_with_original_learning_slot(
         writer: DestinationCommit, proof, workspace: Path, *,
         config_fd: int, config_path: Path,
         owned_root: Path, manual_hostlists: dict[str, str],
         global_exclude: str, attest, inspect=probe_pending_fd,
         psl: PublicSuffixList | None = None,
+        sequence: int = 2, prepare=None,
 ) -> dict:
-    """Original schema3 third-slot P1 -> SAME Found/managed P2k2b WAL.
+    """Original schema3 source -> SAME Found/managed P2k2b WAL.
 
     This import-only primitive is NOT connected to Apply, minute, or
     dvtws2. Never infer observations after the durable 00000002 intent:
@@ -3605,6 +3619,7 @@ def commit_with_original_learning_third_slot(
     )
     from auto_detect_owner import LearningGenerationProof
     from auto_detect_destination_commit import _file_identity
+    from auto_detect_destination_commit import _original_source_plan_fields
 
     if (not isinstance(writer, DestinationCommit) or
             not isinstance(proof, LearningGenerationProof) or
@@ -3634,11 +3649,14 @@ def commit_with_original_learning_third_slot(
             raise V2OriginalConfigRefused(
                 "learning_forward_original_config_owner_changed")
 
+    if prepare is None:
+        prepare = prepare_original_learning_third_slot_locked
+
     def original_third_source():
-        result = prepare_original_learning_third_slot_locked(
+        result = prepare(
             writer, proof, workspace, config_fd=config_fd,
             config_path=config_path, attest=attest, inspect=inspect)
-        if (result["sequence"] != 2 or
+        if (result["sequence"] != sequence or
                 result["cursor_advanced"] is not False or
                 result["commit_authorized"] is not False or
                 result["ack_authorized"] is not False):
@@ -3657,11 +3675,12 @@ def commit_with_original_learning_third_slot(
                 raise V2OriginalConfigRefused(
                     "learning_forward_source_intent_changed")
             intent = json.loads(encoded)
-            if (intent["sequence"] != 2 or
+            if (intent["sequence"] != sequence or
                     intent["generation"] != proof.generation or
                     not intent["observations"]):
                 raise V2OriginalConfigRefused(
                     "learning_forward_third_slot_not_original")
+            source = _original_source_plan_fields(slot, intent, writer.receipts.uid)
             raw = _canonical({"observations": intent["observations"]})
             checkpoint_file = slot / "destination" / "checkpoint.json"
             plan_file = slot / "destination" / "plan.json"
@@ -3676,11 +3695,11 @@ def commit_with_original_learning_third_slot(
                     "schema": 1,
                     "kind": "destination-and-cursor-committed",
                     "generation": proof.generation,
-                    "pending_name": "learning-00000002",
+                    "pending_name": source["pending_name"],
                     "plan_sha256": hashlib.sha256(plan_raw).hexdigest(),
                     "evidence": "learning-native-debug",
-                    "committed_cursor_offset": intent["debug"]["end"],
-                    "committed_cursor_sha256": intent["debug"]["end_sha256"],
+                    "committed_cursor_offset": source["debug_end_offset"],
+                    "committed_cursor_sha256": source["debug_end_sha256"],
                     "ack_authorized": False,
                 }
                 if checkpoint != expected or attest() != proof:
@@ -3769,11 +3788,11 @@ def commit_with_original_learning_third_slot(
                 "schema": 1,
                 "kind": "destination-and-cursor-committed",
                 "generation": proof.generation,
-                "pending_name": "learning-00000002",
+                "pending_name": source["pending_name"],
                 "plan_sha256": hashlib.sha256(plan_raw).hexdigest(),
                 "evidence": "learning-native-debug",
-                "committed_cursor_offset": intent["debug"]["end"],
-                "committed_cursor_sha256": intent["debug"]["end_sha256"],
+                "committed_cursor_offset": source["debug_end_offset"],
+                "committed_cursor_sha256": source["debug_end_sha256"],
                 "ack_authorized": False,
             }
             if (result != expected or
@@ -3792,6 +3811,19 @@ def commit_with_original_learning_third_slot(
             UnicodeError) as exc:
         raise V2OriginalConfigRefused(
             "learning_forward_original_config_wal_refused") from exc
+
+
+def commit_with_original_learning_third_slot(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path,
+        owned_root: Path, manual_hostlists: dict[str, str],
+        global_exclude: str, attest, inspect=probe_pending_fd,
+        psl: PublicSuffixList | None = None) -> dict:
+    """Third source through the original shared P1/Found/managed writer."""
+    return _commit_with_original_learning_slot(
+        writer, proof, workspace, config_fd=config_fd, config_path=config_path,
+        owned_root=owned_root, manual_hostlists=manual_hostlists,
+        global_exclude=global_exclude, attest=attest, inspect=inspect, psl=psl)
 
 
 def commit_with_original_learning_first_slot(

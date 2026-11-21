@@ -1,5 +1,13 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
+## Current integration boundary — 21 November 2026
+
+The owner's integration instruction closes the current OLD-archive research series at its already qualified boundary. Keep the implemented protections; do not extend that series as a substitute for delivering the working chain.
+
+The remaining-NEW source now reaches the **original** P1/DestinationCommit and active managed files through `process_original_learning_running_late_once()`. The same source intent, physical preimages and partial-WAL recovery bind successive windows; only a committed destination advances the cursor. Original OLD historical proofs follow these legitimate later postimages without rewriting historic seals. The portable P2e journey covers interruption after Found, exclusion/preimage conflicts, replay, late native append, three consecutive windows and GUI deletion preservation.
+
+This does not complete STEP 3–6: native cleanup/ACK for repeated windows, original chain capacity rollover, complete launcher/minute and Stop/Restart/Boot/Recovery integration and installed-native acceptance remain OPEN. Schema3 activation is still disabled; schema2 and operator lifecycle are unchanged. No merge or `_109.pkg` publication is authorized by source-only checks. Continue to the functional ACK/lifecycle exit rather than another standalone OLD recovery mechanism. The detailed requirements and retained P0–P5 evidence below remain in force within that scope.
+
 ## ACTIVE — ТЗ_6v4: двухуровневые профили, постоянные Found и восстановление Strategy Lab (20 ноября 2026)
 
 **Новый нормативный маршрут:** [ТЗ_6v4](TZ_6v4.md) / [#1052](https://github.com/Tolian82/os-zapret2-restyle/issues/1052). Настоящий блок заменяет старые предложения о завершающем универсальном observer, но сохраняет ТЗ_6v3 как действующий GUI/API/FD9/Apply контракт. **Весь предыдущий план S0–S5, P0–P5 и P2k* ниже оставлен как история выполненных решений и доказательств, а не удалён и не переобъявлен невыполненным.** Прежние отметки ACTIVE/NEXT внутри исторической части больше не управляют порядком работ.

@@ -30,14 +30,17 @@ from auto_detect_original_lock_handoff import OriginalLockRefused
 from auto_detect_queue import QueueSafetyError
 
 
-def _positive_snapshot_once(writer, proof, inspect):
+def _positive_snapshot_once(writer, proof, inspect, *, sequence=2):
     """One bounded physical N+debug attestation after third committed cuts."""
     uid, gid = writer.receipts.uid, writer.queue.writer_gid
     slot = (writer.receipts.root / proof.generation /
-            "cursor-chain-v2" / "00000002")
+            "cursor-chain-v2" / f"{sequence:08d}")
     intent_raw = _read(slot / "intent.json", uid)
     intent = json.loads(intent_raw)
-    if (intent_raw != _canonical(intent) or
+    if sequence >= 3:
+        from auto_detect_destination_commit import _original_source_plan_fields
+        _original_source_plan_fields(slot, intent, uid)
+    elif (intent_raw != _canonical(intent) or
             intent.get("schema") != 3 or
             intent.get("sequence") != 2 or
             intent.get("generation") != proof.generation or
@@ -55,10 +58,20 @@ def _positive_snapshot_once(writer, proof, inspect):
                 pathname in by_path or
                 hostlist not in ("youtube", "user")):
             raise V2OriginalConfigRefused("native_positive_foreign_profile_map")
-        receipt_raw = _read(slot / "native" / f"{number:03d}.json", uid)
-        receipt = json.loads(receipt_raw)
-        cursor = receipt["cursor"]
-        if (receipt_raw != _canonical(receipt) or
+        if sequence >= 3:
+            row = next(r for r in intent["native"] if r["native_number"] == number)
+            cursor = {
+                "new_path": row["path"], "new_device": row["device"],
+                "new_inode": row["inode"], "new_end": row["frozen_end"],
+                "new_end_sha256": row["frozen_sha256"],
+            }
+            if row["hostlist"] != hostlist or row["path"] != pathname:
+                raise V2OriginalConfigRefused("native_positive_continuation_map_changed")
+        else:
+            receipt_raw = _read(slot / "native" / f"{number:03d}.json", uid)
+            receipt = json.loads(receipt_raw)
+            cursor = receipt["cursor"]
+        if sequence == 2 and (receipt_raw != _canonical(receipt) or
                 receipt.get("schema") != 3 or
                 receipt.get("kind") != "original-learning-third-native-cut" or
                 receipt.get("generation") != proof.generation or
@@ -98,6 +111,9 @@ def _positive_snapshot_once(writer, proof, inspect):
     stat_debug, debug_bytes = _read_exact(
         debug_path, owner_uid=uid, writer_gid=gid)
     debug = intent["debug"]
+    if sequence >= 3:
+        debug = {**debug, "end": debug["frozen_end"],
+                 "end_sha256": debug["frozen_sha256"]}
     cut = debug["end"]
     if (type(cut) is not int or cut < 0 or cut > len(debug_bytes) or
             (stat_debug.st_dev, stat_debug.st_ino) !=
