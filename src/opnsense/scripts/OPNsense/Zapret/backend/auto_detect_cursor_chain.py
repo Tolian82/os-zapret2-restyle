@@ -1384,30 +1384,53 @@ class CursorChain:
         by_path = {row["path"]: row for row in state.values()}
         observations = []
         end = dc["offset"]
-        for line in debug_data[end:].splitlines(keepends=True):
-            if not line.endswith(b"\n") or end + len(line) - dc["offset"] > MAX_WINDOW:
-                break
-            decoded = line[:-1].decode("ascii")
-            if " : adding to " in decoded:
-                event = ADD.fullmatch(decoded)
-                if (event is None or event["path"] not in by_path or
-                        not _hostname(event["host"])):
-                    raise CursorChainRefused("learning_cycle_foreign_positive")
-                row = by_path[event["path"]]
-                if int(event["profile"]) != row["native_number"]:
-                    raise CursorChainRefused("learning_cycle_wrong_native_N")
-                encoded = (event["host"] + "\n").encode("ascii")
-                match = next((s for s in reversed(row["streams"])
-                              if snapshots[s["path"]][1][positions[s["path"]]:].startswith(encoded)), None)
-                if match is None:
-                    # Native debug precedes append_to_list_file. Keep this
-                    # line AND every unmatched raw byte for the next minute.
+        # A long-running dvtws2 can emit >2 MiB of *diagnostic-only* rows
+        # without a single native hostlist append. Advancing that complete
+        # non-positive suffix through the SAME original Config/P1 WAL and
+        # physical ACK need not consume eight 256-KiB minute slots. This is
+        # NOT a debug rotation, truncation, or inferred native attribution.
+        # Only full ASCII lines with no native-positive marker qualify.
+        # The original bounded stable snapshot and below source re-attest
+        # still protect every byte; a trailing partial line remains unread.
+        tail = debug_data[end:]
+        complete_end = tail.rfind(b"\n") + 1
+        diagnostic = tail[:complete_end]
+        if diagnostic and b" : adding to " not in diagnostic:
+            try:
+                diagnostic.decode("ascii")
+            except UnicodeDecodeError as exc:
+                raise CursorChainRefused("learning_cycle_nonascii_diagnostic") from exc
+            end += complete_end
+        else:
+            # An actual native positive (including malformed/unmatched
+            # rows) keeps the existing exact ordered 256-KiB/N limit.
+            for line in tail.splitlines(keepends=True):
+                if not line.endswith(b"\n") or end + len(line) - dc["offset"] > MAX_WINDOW:
                     break
-                positions[match["path"]] += len(encoded)
-                observations.append(dict(hostname=event["host"], hostlist=row["hostlist"]))
-            end += len(line)
-            if len(observations) == 32:
-                break
+                try:
+                    decoded = line[:-1].decode("ascii")
+                except UnicodeDecodeError as exc:
+                    raise CursorChainRefused("learning_cycle_nonascii_debug") from exc
+                if " : adding to " in decoded:
+                    event = ADD.fullmatch(decoded)
+                    if (event is None or event["path"] not in by_path or
+                            not _hostname(event["host"])):
+                        raise CursorChainRefused("learning_cycle_foreign_positive")
+                    row = by_path[event["path"]]
+                    if int(event["profile"]) != row["native_number"]:
+                        raise CursorChainRefused("learning_cycle_wrong_native_N")
+                    encoded = (event["host"] + "\n").encode("ascii")
+                    match = next((s for s in reversed(row["streams"])
+                                  if snapshots[s["path"]][1][positions[s["path"]]:].startswith(encoded)), None)
+                    if match is None:
+                        # Native debug precedes append_to_list_file. Keep this
+                        # line AND every unmatched raw byte for the next minute.
+                        break
+                    positions[match["path"]] += len(encoded)
+                    observations.append(dict(hostname=event["host"], hostlist=row["hostlist"]))
+                end += len(line)
+                if len(observations) == 32:
+                    break
         if end == dc["offset"]:
             return None
         native = {}
