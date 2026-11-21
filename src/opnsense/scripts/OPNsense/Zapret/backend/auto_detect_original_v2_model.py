@@ -3020,7 +3020,7 @@ def prepare_original_learning_third_pending_ack_locked(
                         entry["unprocessed_old_bytes"] != 0 or
                         entry["ack_authorized"] is not False or
                         type(entry["old_committed_end"]) is not int or
-                        entry["old_committed_end"] <= 0 or
+                        entry["old_committed_end"] < 0 or
                         entry["old_current_end"] !=
                         entry["old_committed_end"]):
                     raise V2OriginalConfigRefused(
