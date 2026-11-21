@@ -929,7 +929,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     # Native used an old open FD after the
                                     # cut, and its bytes remain protected.
                                     with (previous_slot / cursors.DEBUG_CUT_OLD).open("ab") as fp:
-                                        fp.write(b"late-old-native-diagnostic\\n")
+                                        fp.write(b"late-old-native-diagnostic\n")
                                 raise OSError("injected_after_original_debug_replace")
                             return result
                         with patch.object(cursors.os, "replace", interrupted_debug_cut):
@@ -944,10 +944,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 run()
                             self.assertTrue((previous_slot / cursors.DEBUG_CUT_OLD).is_file())
                             self.assertFalse((previous_slot / cursors.DEBUG_CUT_RETIRE).exists())
-                            self.assertIn(b"late-old-native-diagnostic\\n",
+                            self.assertIn(b"late-old-native-diagnostic\n",
                                           (previous_slot / cursors.DEBUG_CUT_OLD).read_bytes())
                             self.assertEqual((managed / "hostlist-user.txt").read_bytes(),
-                                             b"example.org\\n")
+                                             b"example.org\n")
                             return
                     self.assertTrue(run())
                     self.assertNotEqual(debug.stat().st_ino, old_inode)
