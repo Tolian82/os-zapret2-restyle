@@ -3287,7 +3287,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     writer, proof, drained)
                                 invented_tail = dict(observed_NEW)
                                 invented_tail["native_bytes_after_third"] = (
-                                    len(b"fresh.example.net\\n"))
+                                    len(b"fresh.example.net\n"))
                                 invented_tail["debug_bytes_after_third"] = 74
                                 invented_tail["positive"] = ((
                                     user_num, "user", "fresh.example.net"),)
@@ -3314,7 +3314,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     with self.assertRaises(V2OriginalConfigRefused):
                                         preview_stopped_NEW()
                                 saved_complete = (retire_dir / "complete.json").read_bytes()
-                                (retire_dir / "complete.json").write_bytes(b"{}\\n")
+                                (retire_dir / "complete.json").write_bytes(b"{}\n")
                                 try:
                                     with self.assertRaises(V2OriginalConfigRefused):
                                         preview_stopped_NEW()
