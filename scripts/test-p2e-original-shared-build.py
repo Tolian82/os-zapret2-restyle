@@ -980,8 +980,9 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 run()
                             self.assertTrue((previous_slot / cursors.DEBUG_CUT_OLD).is_file())
                             self.assertFalse((previous_slot / cursors.DEBUG_CUT_RETIRE).exists())
-                            self.assertIn(b"late.example.net\n",
-                                          (previous_slot / cursors.DEBUG_CUT_OLD).read_bytes())
+                            self.assertIn(
+                                b" : late.example.net : profile ",
+                                (previous_slot / cursors.DEBUG_CUT_OLD).read_bytes())
                             self.assertEqual(youtube.read_bytes(), b"late.example.net\n")
                             self.assertEqual((managed / "hostlist-user.txt").read_bytes(),
                                              b"example.org\n")
