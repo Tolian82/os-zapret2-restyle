@@ -1728,6 +1728,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         preview_original_learning_late_tails_locked,
                         prepare_original_learning_third_slot_locked,
                         seal_original_learning_third_progress_locked,
+                        preview_original_learning_third_pending_retirement_locked,
                     )
                     def advance_second_cursor(*, inspect_witness=drained):
                         with writer.exclusive_targets(), patch(
@@ -1765,7 +1766,18 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 writer, proof, self.work, config_fd=cfg_fd,
                                 config_path=config_path, attest=lambda: proof,
                                 inspect=inspect_witness)
+                    def pending_retirement(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return preview_original_learning_third_pending_retirement_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof,
+                                inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        pending_retirement()
                     with self.assertRaises(V2OriginalConfigRefused):
                         preview_late_tails()
                     with self.assertRaises(V2OriginalConfigRefused):
@@ -2333,6 +2345,42 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     frozen_third_progress).hexdigest())
                             self.assertFalse(
                                 (third_slot / "ack.json").exists())
+                            # STEP 10: read-only native pending disposition,
+                            # no P2a/native unlink or ACK authority.
+                            observed_files = {
+                                p: p.read_bytes() for p in
+                                (youtube_pending, user_pending, native,
+                                 user_native, debug_path)}
+                            pending_preview = pending_retirement()
+                            self.assertEqual(
+                                pending_preview["progress_sha256"],
+                                third_advanced["progress_sha256"])
+                            self.assertFalse(
+                                pending_preview[
+                                    "native_pending_ack_authorized"])
+                            self.assertFalse(
+                                pending_preview["native_cleanup_authorized"])
+                            self.assertFalse(
+                                pending_preview["generation_retired"])
+                            user_row = next(
+                                x for x in pending_preview["profiles"]
+                                if x["native_number"] == user_num)
+                            self.assertEqual(
+                                user_row["status"],
+                                "covered-old-pending-no-ACK")
+                            self.assertEqual(
+                                user_row["unprocessed_old_bytes"], 0)
+                            self.assertEqual(
+                                user_row["unprocessed_new_bytes"], 0)
+                            self.assertEqual(
+                                pending_retirement(), pending_preview)
+                            self.assertEqual(
+                                {p: p.read_bytes() for p in observed_files},
+                                observed_files)
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                pending_retirement(
+                                    inspect_witness=lambda *_a, **_kw:
+                                        FDState.BUSY)
 
                         third_intent_bytes = (
                             third_slot / "intent.json").read_bytes()
@@ -2355,21 +2403,56 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         previous_old = user_pending.read_bytes()
                         previous_live = user_native.read_bytes()
                         previous_debug = debug_path.read_bytes()
-                        with user_pending.open("ab", buffering=0) as old:
-                            old.write(b"post-third-old.example.net\n")
-                            os.fsync(old.fileno())
+                        # New-only late appends are independent from
+                        # old-pending cover: they stay UNPROCESSED in live.
                         with user_native.open("ab", buffering=0) as live:
                             live.write(b"post-third-new.example.net\n")
                             os.fsync(live.fileno())
                         with debug_path.open("ab", buffering=0) as debug:
-                            debug.write(
-                                native_debug(
-                                    user_num, "post-third-old.example.net",
-                                    learning[1][2]) +
-                                native_debug(
-                                    user_num, "post-third-new.example.net",
-                                    learning[1][2]))
+                            debug.write(native_debug(
+                                user_num, "post-third-new.example.net",
+                                learning[1][2]))
                             os.fsync(debug.fileno())
+                        new_only = pending_retirement()
+                        user_only = next(
+                            x for x in new_only["profiles"]
+                            if x["native_number"] == user_num)
+                        self.assertEqual(user_only["status"],
+                                         "covered-old-pending-no-ACK")
+                        self.assertGreater(
+                            user_only["unprocessed_new_bytes"], 0)
+                        self.assertEqual(
+                            user_only["unprocessed_old_bytes"], 0)
+                        # A late write to OLD pending must switch the
+                        # disposition to KEEP; the third P1 tip is not
+                        # allowed to delete those unread bytes.
+                        with user_pending.open("ab", buffering=0) as old:
+                            old.write(b"post-third-old.example.net\n")
+                            os.fsync(old.fileno())
+                        with debug_path.open("ab", buffering=0) as debug:
+                            debug.write(native_debug(
+                                user_num, "post-third-old.example.net",
+                                learning[1][2]))
+                            os.fsync(debug.fileno())
+                        late_retirement = pending_retirement()
+                        late_user = next(
+                            x for x in late_retirement["profiles"]
+                            if x["native_number"] == user_num)
+                        self.assertEqual(
+                            late_user["status"], "retained-unprocessed-old")
+                        self.assertGreater(
+                            late_user["unprocessed_old_bytes"], 0)
+                        self.assertGreater(
+                            late_user["unprocessed_new_bytes"], 0)
+                        self.assertGreaterEqual(
+                            late_retirement[
+                                "retained_with_unprocessed_old"], 1)
+                        self.assertFalse(
+                            late_retirement[
+                                "native_pending_ack_authorized"])
+                        self.assertEqual(
+                            queue.segments(),
+                            [youtube_pending, user_pending])
                         self.assertEqual(seal_third_slot(), third)
                         self.assertEqual(
                             (third_slot / "intent.json").read_bytes(),
@@ -2383,6 +2466,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         self.assertEqual(
                             (third_slot / "cursor-progress.json").read_bytes(),
                             frozen_third_progress)
+                        self.assertEqual(
+                            pending_retirement(), late_retirement)
                         self.assertGreater(
                             len(preview_late_tails()["observations"]),
                             third["observations_count"])

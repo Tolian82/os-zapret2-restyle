@@ -2721,6 +2721,197 @@ def seal_original_learning_third_progress_locked(
             "learning_third_progress_source_or_checkpoint_refused") from exc
 
 
+def preview_original_learning_third_pending_retirement_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """Read-only per-N OLD pending retention after immutable third P1 tip.
+
+    The original P2a/GUI/FD4/FD9 and all-PID P2b reattest every source
+    twice. A third logical cursor only covers exact bytes up to its
+    immutable old/new inode cuts. A *later* old append MUST keep pending,
+    even if the new live inode is quiet. New-only appends remain unread
+    in the new inode and must never be treated as processed by this tip.
+
+    This is a diagnostic disposition, NOT an ACK/cleanup authorization.
+    No unlink, rename, producer reset, Config write, stop or restart.
+    """
+    from auto_detect_epoch_receipts import _canonical
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_queue import QueueSafetyError
+    import sys
+
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not writer.queue._held or not getattr(writer, "_gui_held", False)
+            or not isinstance(workspace, Path) or
+            not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(config_path, Path) or
+            not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not callable(attest) or not callable(inspect) or
+            (sys.platform.startswith("freebsd") and (
+                config_path != CONFIG_PATH or
+                writer.receipts.uid != 0 or writer.queue.uid != 0)) or
+            attest() != proof):
+        raise V2OriginalConfigRefused(
+            "learning_third_retirement_original_fd4_fd9_required")
+
+    def held():
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=(None if config_path == CONFIG_PATH
+                       else writer.receipts.uid))
+        if attest() != proof:
+            raise V2OriginalConfigRefused(
+                "learning_third_retirement_original_owner_changed")
+
+    try:
+        held()
+        slot = (writer.receipts.root / proof.generation /
+                "cursor-chain-v2" / "00000002")
+        progress_path = slot / "cursor-progress.json"
+        # A source intent or even a completed WAL alone may NOT authorize
+        # any old-inode disposition. The sealed post-P1 cursor must exist.
+        if not progress_path.exists() and not progress_path.is_symlink():
+            raise V2OriginalConfigRefused(
+                "learning_third_retirement_no_durable_progress")
+        recorded = _read(progress_path, writer.receipts.uid)
+        progress = json.loads(recorded)
+        advanced = seal_original_learning_third_progress_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
+        if (recorded != _canonical(progress) or
+                advanced["progress_sha256"] !=
+                hashlib.sha256(recorded).hexdigest() or
+                progress.get("kind") !=
+                "original-learning-third-cursor-progress" or
+                progress.get("sequence") != 2 or
+                progress.get("generation") != proof.generation or
+                progress.get("cursor_advanced") is not True or
+                progress.get("native_pending_ack_authorized") is not False or
+                progress.get("native_cleanup_authorized") is not False):
+            raise V2OriginalConfigRefused(
+                "learning_third_retirement_cursor_unqualified")
+        intent_raw = _read(slot / "intent.json", writer.receipts.uid)
+        source = json.loads(intent_raw)
+        if (hashlib.sha256(intent_raw).hexdigest() !=
+                progress["source_intent_sha256"] or
+                source.get("sequence") != 2 or
+                source.get("profiles_count") != len(proof.learning)):
+            raise V2OriginalConfigRefused(
+                "learning_third_retirement_source_not_bound")
+
+        frozen_native = []
+        for number, _, _ in proof.learning:
+            native_raw = _read(
+                slot / "native" / f"{number:03d}.json",
+                writer.receipts.uid)
+            native = json.loads(native_raw)
+            if (native_raw != _canonical(native) or
+                    native.get("kind") !=
+                    "original-learning-third-native-cut" or
+                    native.get("native_number") != number or
+                    native.get("ack_authorized") is not False):
+                raise V2OriginalConfigRefused(
+                    "learning_third_retirement_N_not_sealed")
+            frozen_native.append(native["cursor"])
+        sealed = {"native": frozen_native, "debug": source["debug"]}
+        def inspect_snapshot(window):
+            return preview_original_learning_forward_windows_locked(
+                writer, proof, workspace, config_fd=config_fd,
+                config_path=config_path, attest=attest, inspect=inspect,
+                sealed_window=window)
+        frozen = inspect_snapshot(sealed)
+        if (frozen["native"] != frozen_native or
+                frozen["debug"] != sealed["debug"] or
+                frozen["observations"] != source["observations"] or
+                frozen["p2b_drained"] is not True):
+            raise V2OriginalConfigRefused(
+                "learning_third_retirement_sealed_N_changed")
+        # Current P2b validates unprocessed tails on both physical inodes
+        # and the matching debug positive; unpaired appends refuse.
+        current = inspect_snapshot(None)
+        rows = []
+        for i, (number, hostlist, pathname) in enumerate(proof.learning):
+            prior, now = frozen_native[i], current["native"][i]
+            if (prior.get("native_number") != number or
+                    prior.get("hostlist") != hostlist or
+                    now.get("native_number") != number or
+                    now.get("hostlist") != hostlist or
+                    any(prior.get(k) != now.get(k)
+                        for k in ("old_path", "old_device", "old_inode",
+                                  "old_start", "new_path", "new_device",
+                                  "new_inode", "new_start")) or
+                    any(type(prior.get(f"{side}_end")) is not int or
+                        type(now.get(f"{side}_end")) is not int or
+                        now[f"{side}_end"] < prior[f"{side}_end"]
+                        for side in ("old", "new")
+                        if prior.get(f"{side}_path") is not None)):
+                raise V2OriginalConfigRefused(
+                    "learning_third_retirement_old_or_new_cursor_drift")
+            old_late = now["old_end"] - prior["old_end"]
+            new_late = (now["new_end"] - prior["new_end"]
+                        if prior.get("new_path") is not None else 0)
+            if (old_late < 0 or new_late < 0 or
+                    (prior.get("new_path") is not None and
+                     now.get("new_path") != pathname)):
+                raise V2OriginalConfigRefused(
+                    "learning_third_retirement_regressed_inode")
+            status = ("not-detached" if prior["new_path"] is None
+                      else "retained-unprocessed-old"
+                      if old_late else "covered-old-pending-no-ACK")
+            rows.append({
+                "native_number": number, "hostlist": hostlist,
+                "old_pending_path": (prior["old_path"]
+                                     if prior["new_path"] is not None
+                                     else None),
+                "old_device": prior["old_device"],
+                "old_inode": prior["old_inode"],
+                "old_committed_end": prior["old_end"],
+                "old_current_end": now["old_end"],
+                "unprocessed_old_bytes": old_late,
+                "unprocessed_new_bytes": new_late,
+                "status": status,
+                "ack_authorized": False,
+            })
+        if (inspect_snapshot(None) != current or
+                _read(progress_path, writer.receipts.uid) != recorded or
+                seal_original_learning_third_progress_locked(
+                    writer, proof, workspace, config_fd=config_fd,
+                    config_path=config_path, attest=attest,
+                    inspect=inspect) != advanced or
+                attest() != proof):
+            raise V2OriginalConfigRefused(
+                "learning_third_retirement_N_or_progress_raced")
+        held()
+        return {
+            "generation": proof.generation, "sequence": 2,
+            "kind": "original-learning-third-pending-retirement-preview",
+            "progress_sha256": advanced["progress_sha256"],
+            "profiles": rows,
+            "retained_with_unprocessed_old": sum(
+                x["status"] == "retained-unprocessed-old" for x in rows),
+            "covered_without_ACK": sum(
+                x["status"] == "covered-old-pending-no-ACK" for x in rows),
+            "native_pending_ack_authorized": False,
+            "native_cleanup_authorized": False,
+            "generation_retired": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (ReceiptRefused, OriginalLockRefused, DestinationRefused,
+            QueueSafetyError, DebugWindowRefused, OSError, ValueError,
+            TypeError, KeyError, AttributeError, UnicodeError) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_third_retirement_original_source_refused") from exc
+
+
 def _recover_original_learning_partial_locked(
         writer: DestinationCommit, proof, workspace: Path,
         slot: Path, intent: dict, *, owned_root: Path,
