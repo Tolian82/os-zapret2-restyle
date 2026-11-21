@@ -18,7 +18,7 @@ Read through EOF in this order:
 
 ## Level 2 — active work and current contracts
 
-**Текущая очередь:** [ТЗ_6v3](architecture/TZ_6v3.md), [Strategies List API v1](architecture/STRATEGIES_LIST_API_V1.md) и [обновлённый P0–P5 план](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). **Будущее:** [Future design](architecture/STRATEGIES_LIST_FUTURE.md) / [Features #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192) — отдельно, не входит в ТЗ_6v3.
+**Текущая очередь:** [утверждённая ТЗ_6v4](architecture/TZ_6v4.md), [актуальный STEP0–6 / P0–P5 план](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md), [сохранённый ТЗ_6v3 GUI/API](architecture/TZ_6v3.md) и [Strategies List API v1](architecture/STRATEGIES_LIST_API_V1.md). **Будущее:** [Future design](architecture/STRATEGIES_LIST_FUTURE.md) / [Features #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192) — отдельно, не входит в ТЗ_6v3.
 
 | Need | Primary document |
 |---|---|

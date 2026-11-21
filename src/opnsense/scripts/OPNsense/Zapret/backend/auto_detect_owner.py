@@ -58,6 +58,26 @@ class GenerationProof:
     profiles: tuple[tuple[int | None, str, str | None], ...]
 
 
+
+@dataclass(frozen=True)
+class LearningGenerationProof:
+    """Inert original FD9/P2c schema3 process witness shape.
+
+    No producer constructs this from a map alone. A future owner attester
+    must independently prove the SAME committed Apply journal, sealed
+    release == active runtime, single real PID/birth/full kernel argv,
+    supervisor and N native inputs before returning this shape.
+    The legacy GenerationProof/observer worker never accepts it.
+    """
+    owner: OwnerToken
+    operation_id: str
+    generation: str
+    owner_candidate_sha256: str
+    final_args_sha256: str
+    native_map_sha256: str
+    learning: tuple[tuple[int, str, str], ...]
+
+
 def _secure_bytes(path: Path, limit: int, owner_uid: int) -> bytes:
     before = path.lstat()
     if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
@@ -146,6 +166,210 @@ def _snapshot(runner, pid: int) -> tuple[str, list[str]]:
     if len(parts) != 6:
         raise GenerationRefused("invalid_process_start")
     return " ".join(parts[:5]), parts[5].split()
+
+
+
+def _valid_learning_proposal(raw: bytes, owner: dict, original: bytes,
+                             argv: bytes) -> tuple[tuple[int, str, str], ...]:
+    """Read-only exact native-order proof for TZ6v4 drafts; NEVER authorizes.
+
+    Unlike the installed schema-2 _valid_map this primitive does not permit
+    runtime, FD9 producer access, queue rotation, epoch sealing, or ACK.
+    It independently checks the exact executable argv semantics of the
+    canonical source-map proposal before the original owner may eventually
+    promote a *different*, fully protected active-generation format.
+    """
+    from auto_detect_origin_map import LEARNING_PROPOSAL
+    from auto_detect_owned_sources import KNOWN_HOSTLISTS
+    from auto_detect_storage import DEBUG_PATH, ROOT
+    from global_exclusions import BASE, visible
+
+    if (not isinstance(raw, bytes) or len(raw) > MAX_MAP or
+            not isinstance(original, bytes) or not isinstance(argv, bytes) or
+            not 0 < len(original) <= MAX_ARGS or not 0 < len(argv) <= MAX_ARGS or
+            not isinstance(owner, dict) or
+            not HEX32.fullmatch(str(owner.get("id", ""))) or
+            not HEX64.fullmatch(str(owner.get("candidate", "")))):
+        raise GenerationRefused("invalid_learning_proposal_input")
+    try:
+        record = json.loads(raw)
+        src_tokens = original.decode("utf-8").split()
+        dst_tokens = argv.decode("utf-8").split()
+        original_rows = segments(original.decode("utf-8"))
+        proposed_rows = segments(argv.decode("utf-8"))
+    except (ValueError, TypeError, UnicodeError) as exc:
+        raise GenerationRefused("invalid_learning_native_projection") from exc
+    expected_keys = {
+        "schema", "evidence", "activation_authorized", "generation",
+        "owner_operation_id", "owner_candidate_sha256", "mode",
+        "original_args_sha256", "final_args_sha256", "profiles",
+    }
+    if (not isinstance(record, dict) or set(record) != expected_keys or
+            type(record["schema"]) is not int or record["schema"] != 3 or
+            record["evidence"] != LEARNING_PROPOSAL or
+            record["activation_authorized"] is not False or
+            record["mode"] != "auto" or
+            record["generation"] != owner["id"] or
+            record["owner_operation_id"] != owner["id"] or
+            record["owner_candidate_sha256"] != owner["candidate"] or
+            record["original_args_sha256"] != hashlib.sha256(original).hexdigest() or
+            record["final_args_sha256"] != hashlib.sha256(argv).hexdigest()):
+        raise GenerationRefused("untrusted_learning_generation")
+    profiles = record["profiles"]
+    if not isinstance(profiles, list) or not 1 < len(profiles) <= 257:
+        raise GenerationRefused("invalid_learning_profile_map")
+    fields = {"native_number", "role", "source_profile",
+              "source_sha256", "selector", "hostlist", "found_source_id",
+              "auto_inbox", "debug_identity", "origin_status"}
+    if any(not isinstance(p, dict) or set(p) != fields for p in profiles):
+        raise GenerationRefused("invalid_learning_profile_fields")
+    ordinary = profiles[:len(original_rows)]
+    learning = profiles[len(original_rows):-1]
+    last = profiles[-1]
+    if (len(profiles) != len(original_rows) + len(learning) + 1 or
+            last != {
+                "native_number": 0, "role": "excluded",
+                "source_profile": f"{owner['id']}:default",
+                "source_sha256": None, "selector": None, "hostlist": None,
+                "found_source_id": None, "auto_inbox": None,
+                "debug_identity": None, "origin_status": "unknown-native-default",
+            }):
+        raise GenerationRefused("invalid_learning_default_profile")
+    numbers = []
+    sources = {}
+    for ordinal, item in enumerate(ordinary, 1):
+        native_number = item["native_number"]
+        if (item["role"] not in ("working", "excluded") or
+                item["source_profile"] != f"{owner['id']}:{ordinal}" or
+                item["auto_inbox"] is not None or
+                item["debug_identity"] is not None or
+                item["found_source_id"] not in (None, "youtube_found", "user_found") or
+                not isinstance(item["origin_status"], str) or
+                item["origin_status"] not in ALLOWED or
+                (item["role"] == "working") !=
+                (item["origin_status"] == "known-hostlist") or
+                (native_number is not None and
+                 (type(native_number) is not int or native_number <= 0))):
+            raise GenerationRefused("unqualified_ordinary_learning_source")
+        if native_number is not None:
+            numbers.append(native_number)
+        sources[item["source_profile"]] = (item, original_rows[ordinal - 1])
+    if numbers != list(range(1, len(numbers) + 1)):
+        raise GenerationRefused("invalid_ordinary_native_numbering")
+    if len(learning) > 255 - len(numbers):
+        raise GenerationRefused("learning_native_profile_limit")
+    debug_flag = "--hostlist-auto-debug=" + str(DEBUG_PATH)
+    if learning:
+        if (dst_tokens.count(debug_flag) != 1 or
+                len(dst_tokens) < 2 or dst_tokens[1] != debug_flag or
+                not src_tokens or not src_tokens[0].startswith("--port=")):
+            raise GenerationRefused("unqualified_learning_debug")
+    elif argv != original:
+        raise GenerationRefused("unwarranted_learning_argv_change")
+    if any(t.startswith("--hostlist-auto") for t in src_tokens):
+        raise GenerationRefused("original_argv_contains_native_auto")
+    if len(proposed_rows) != len(original_rows) + len(learning):
+        raise GenerationRefused("learning_argv_profile_count_changed")
+    for ordinal, row in enumerate(original_rows):
+        planned = list(proposed_rows[ordinal])
+        if ordinal == 0 and learning:
+            if planned.count(debug_flag) != 1:
+                raise GenerationRefused("ordinary_native_debug_placement")
+            planned.remove(debug_flag)
+        if planned != row:
+            raise GenerationRefused("ordinary_first_match_order_changed")
+
+    attested = []
+    seen = set()
+    for index, item in enumerate(learning):
+        native_number = len(numbers) + index + 1
+        hostlist = item["hostlist"]
+        source = sources.get(item["source_profile"])
+        if (item["role"] != "learning" or
+                type(item["native_number"]) is not int or
+                item["native_number"] != native_number or
+                item["origin_status"] != "qualified-source-proposal" or
+                not isinstance(hostlist, str) or
+                hostlist not in KNOWN_HOSTLISTS or
+                item["selector"] != f"<HOSTLIST:{hostlist}>" or
+                item["found_source_id"] != f"{hostlist}_found" or
+                item["debug_identity"] != str(DEBUG_PATH) or
+                source is None):
+            raise GenerationRefused("unauthorized_learning_destination")
+        original_item, original_row = source
+        if (original_item["role"] != "working" or
+                original_item["hostlist"] != hostlist or
+                original_item["selector"] != item["selector"] or
+                original_item["source_sha256"] != item["source_sha256"]):
+            raise GenerationRefused("learning_source_identity_mismatch")
+        expected_inbox = str(ROOT / f"learning-{owner['id']}-{native_number}.txt")
+        if item["auto_inbox"] != expected_inbox or expected_inbox in seen:
+            raise GenerationRefused("unqualified_learning_native_inbox")
+        seen.add(expected_inbox)
+        clone = [token for token in visible(original_row)
+                 if token.partition("=")[0] not in BASE]
+        actual = proposed_rows[len(original_rows) + index]
+        # --new is the boundary token and is deliberately not in segments().
+        if (not clone or
+                actual != clone + [
+                    f"--hostlist-auto={expected_inbox}",
+                    "--hostlist-auto-retrans-reset=0",
+                ] or sum(token.startswith("--hostlist=") for token in clone) != 1 or
+                any(token.startswith("--hostlist-auto") for token in clone)):
+            raise GenerationRefused("learning_native_profile_is_not_exact_clone")
+        attested.append((native_number, hostlist, expected_inbox))
+    if sum(t.startswith("--hostlist-auto=") for t in dst_tokens) != len(learning):
+        raise GenerationRefused("unexpected_native_learning_producers")
+    if sum(t.startswith("--hostlist-auto-debug=") for t in dst_tokens) != int(bool(learning)):
+        raise GenerationRefused("unexpected_native_learning_debug")
+    return tuple(attested)
+
+
+
+LEARNING_ACTIVE = "ORIGINAL_SHARED_GENERATOR_LEARNING_ACTIVE"
+
+
+def _valid_learning_active(raw: bytes, owner: dict, source: dict,
+                           original: bytes, argv: bytes
+                           ) -> tuple[tuple[int, str, str], ...]:
+    """Qualify a *hypothetically sealed* active schema3 map, not an owner.
+
+    This is a prerequisite for original FD9 pretraffic. It CANNOT grant
+    running process identity, P2c/epoch permission, engine start or ACK.
+    A caller must independently verify the exact original shared bundle
+    seal, root-owned source/argv/map and inherited FD9 before trusting it.
+    """
+    from auto_detect_origin_map import (
+        AttributionError, LEARNING_PROPOSAL, plan_learning_tier,
+    )
+    if (not isinstance(raw, bytes) or len(raw) > MAX_MAP or
+            not isinstance(source, dict) or not isinstance(owner, dict)):
+        raise GenerationRefused("unqualified_learning_active_map")
+    try:
+        actual = json.loads(raw)
+        if (not isinstance(actual, dict) or
+                actual.get("evidence") != LEARNING_ACTIVE or
+                actual.get("activation_authorized") is not True or
+                actual.get("schema") != 3):
+            raise GenerationRefused("learning_active_not_explicitly_authorized")
+        proposed, projection = plan_learning_tier(
+            source, original, owner_id=owner["id"],
+            owner_candidate_sha256=owner["candidate"])
+        if (not isinstance(argv, bytes) or argv != proposed or
+                actual != {**projection, "evidence": LEARNING_ACTIVE,
+                           "activation_authorized": True}):
+            raise GenerationRefused("learning_active_not_original_projection")
+        nonactivating = {**actual, "evidence": LEARNING_PROPOSAL,
+                         "activation_authorized": False}
+        encoded = json.dumps(
+            nonactivating, sort_keys=True, separators=(",", ":")).encode()
+        approved = _valid_learning_proposal(encoded, owner, original, argv)
+        if not approved:
+            raise GenerationRefused("learning_active_no_qualified_profiles")
+        return approved
+    except (ValueError, TypeError, KeyError, UnicodeError,
+            AttributionError) as exc:
+        raise GenerationRefused("learning_active_source_or_argv_refused") from exc
 
 
 def _valid_map(raw: bytes, owner: dict, argv: bytes) -> tuple[dict, tuple]:
@@ -245,9 +469,13 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
                  runner, owner_uid: int,
                  epoch_finalizing_operation: str | None = None,
                  reviewed_operation: str | None = None,
-                 argv_reader=None) -> GenerationProof:
+                 argv_reader=None,
+                 learning_schema3: bool = False) -> GenerationProof | LearningGenerationProof:
     if argv_reader is None:
         argv_reader = _freebsd_argv
+    if type(learning_schema3) is not bool or (
+            learning_schema3 and reviewed_operation is not None):
+        raise GenerationRefused("unsupported_learning_reviewed_owner")
     record = SharedApplyOperation(journal, owner=owner_uid).read()
     if reviewed_operation is not None:
         # Only the explicit original-FD9 rescue may inspect a reviewed
@@ -290,7 +518,21 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
     active_map = _secure_bytes(active / MAP_NAME, MAX_MAP, owner_uid)
     if raw_map != active_map:
         raise GenerationRefused("active_generation_not_same_sealed_map")
-    mapping, profiles = _valid_map(raw_map, owner, sealed_argv)
+    if learning_schema3:
+        from auto_detect_origin_map import ORIGIN_FILE
+        original = _secure_bytes(
+            work / "release" / "dvtws.original.args", MAX_ARGS, owner_uid)
+        source_bytes = _secure_bytes(
+            work / "release" / ORIGIN_FILE, MAX_MAP, owner_uid)
+        if (_secure_bytes(active / "dvtws.original.args", MAX_ARGS, owner_uid) !=
+                original or
+                _secure_bytes(active / ORIGIN_FILE, MAX_MAP, owner_uid) !=
+                source_bytes):
+            raise GenerationRefused("learning_active_original_source_not_same_release")
+        learning = _valid_learning_active(
+            raw_map, owner, json.loads(source_bytes), original, sealed_argv)
+    else:
+        mapping, profiles = _valid_map(raw_map, owner, sealed_argv)
 
     pid, monitor = _pid(child_pidfile, owner_uid), _pid(monitor_pidfile, owner_uid)
     birth, ps_command = _snapshot(runner, pid)
@@ -328,6 +570,20 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
     if (_secure_bytes(active / "dvtws.args", MAX_ARGS, owner_uid) != sealed_argv or
             _secure_bytes(active / MAP_NAME, MAX_MAP, owner_uid) != raw_map):
         raise GenerationRefused("active_release_changed_during_read")
+    if learning_schema3:
+        if (_secure_bytes(active / "dvtws.original.args", MAX_ARGS, owner_uid) !=
+                original or
+                _secure_bytes(active / ORIGIN_FILE, MAX_MAP, owner_uid) !=
+                source_bytes or
+                _secure_bytes(work / "release" / "dvtws.original.args",
+                              MAX_ARGS, owner_uid) != original or
+                _secure_bytes(work / "release" / ORIGIN_FILE,
+                              MAX_MAP, owner_uid) != source_bytes):
+            raise GenerationRefused("learning_source_changed_during_owner_read")
+        return LearningGenerationProof(
+            token, owner["id"], owner["id"], owner["candidate"],
+            hashlib.sha256(sealed_argv).hexdigest(),
+            hashlib.sha256(raw_map).hexdigest(), learning)
     return GenerationProof(token, owner["id"], mapping["generation"],
                            mapping["final_args_sha256"], mapping["raw_path"],
                            mapping["debug_path"], mapping["observer_native_number"],
@@ -380,6 +636,77 @@ def attest_epoch_finalizing_generation(operation_id: str, *,
 
 
 
+
+
+def attest_learning_running_generation(*,
+                                       journal: Path = Path("/var/db/zapret2/shared-apply"),
+                                       work_root: Path = WORK,
+                                       active: Path = COMMON_ACTIVE,
+                                       child_pidfile: Path = CHILD_PID,
+                                       monitor_pidfile: Path = MONITOR_PID,
+                                       runner=subprocess.run) -> LearningGenerationProof:
+    """One terminal committed schema3 owner for original-FD9 minute P2.
+
+    Same _attest_core, sealed argv/source, PID/birth/kernel argv and
+    supervisor+census as schema2. Unlike epoch-finalizing, a normal
+    minute must refuse any nonterminal Apply journal. Even a valid
+    witness never authorizes P1 destination commit or native cleanup.
+    """
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise GenerationRefused("native_root_learning_running_fd9_required")
+    try:
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        proof = _attest_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            runner=runner, owner_uid=0, learning_schema3=True)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("learning_running_not_schema3")
+        return proof
+    except (OSError, ValueError, TypeError, UnicodeError,
+            subprocess.SubprocessError, SharedOperationError,
+            SharedBundleError, ExclusionError) as exc:
+        raise GenerationRefused("learning_running_owner_not_attested") from exc
+
+
+def attest_learning_epoch_finalizing_generation(operation_id: str, *,
+                                                journal: Path = Path("/var/db/zapret2/shared-apply"),
+                                                work_root: Path = WORK,
+                                                active: Path = COMMON_ACTIVE,
+                                                child_pidfile: Path = CHILD_PID,
+                                                monitor_pidfile: Path = MONITOR_PID,
+                                                runner=subprocess.run,
+                                                ) -> LearningGenerationProof:
+    """Original FD9-only schema3 attestation via the SAME native owner gate.
+
+    Before use the real generator must promote a fully sealed schema3
+    release, original launcher must start it and the existing shared Apply
+    journal must be epoch-finalizing. This is not a public minute/ACK
+    path and does not enable a new CLI or a separate process inspector.
+    """
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation_id, str) or
+            not HEX32.fullmatch(operation_id)):
+        raise GenerationRefused("native_root_learning_epoch_fd9_required")
+    try:
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        proof = _attest_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            runner=runner, owner_uid=0,
+            epoch_finalizing_operation=operation_id,
+            learning_schema3=True)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("learning_owner_not_schema3")
+        return proof
+    except (OSError, ValueError, TypeError, UnicodeError,
+            subprocess.SubprocessError, SharedOperationError,
+            SharedBundleError, ExclusionError) as exc:
+        raise GenerationRefused("learning_epoch_owner_not_attested") from exc
+
+
 def attest_reviewed_native_generation(operation_id: str, *,
                                       journal: Path = Path("/var/db/zapret2/shared-apply"),
                                       work_root: Path = WORK,
@@ -411,7 +738,9 @@ def attest_reviewed_native_generation(operation_id: str, *,
 def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
                          child_pidfile: Path, monitor_pidfile: Path,
                          epoch_root: Path, runner, owner_uid: int,
-                         allow_transition: bool = False) -> GenerationProof:
+                         allow_transition: bool = False,
+                         learning_schema3: bool = False
+                         ) -> GenerationProof | LearningGenerationProof:
     """Attest the SAME immutable original owner after its process has exited.
 
     This is a strict FD9-only *stopped* counterpart to the running P2c
@@ -449,7 +778,22 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
     if (argv != _secure_bytes(active / "dvtws.args", MAX_ARGS, owner_uid) or
             mapping_raw != _secure_bytes(active / MAP_NAME, MAX_MAP, owner_uid)):
         raise GenerationRefused("stopped_active_release_not_same_owner")
-    mapping, profiles = _valid_map(mapping_raw, owner, argv)
+    original = source_bytes = None
+    if learning_schema3:
+        from auto_detect_origin_map import ORIGIN_FILE
+        original = _secure_bytes(
+            work / "release" / "dvtws.original.args", MAX_ARGS, owner_uid)
+        source_bytes = _secure_bytes(
+            work / "release" / ORIGIN_FILE, MAX_MAP, owner_uid)
+        if (_secure_bytes(active / "dvtws.original.args",
+                          MAX_ARGS, owner_uid) != original or
+                _secure_bytes(active / ORIGIN_FILE,
+                              MAX_MAP, owner_uid) != source_bytes):
+            raise GenerationRefused("stopped_learning_source_not_same_release")
+        learning = _valid_learning_active(
+            mapping_raw, owner, json.loads(source_bytes), original, argv)
+    else:
+        mapping, profiles = _valid_map(mapping_raw, owner, argv)
 
     receipts = EpochReceipts(epoch_root, owner_uid=owner_uid)
     folder = receipts._generation(owner["id"], create=False)
@@ -460,14 +804,21 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
             not _START.fullmatch(saved["owner_start"]) or
             saved.get("owner_executable") != CHILD_EXEC):
         raise GenerationRefused("stopped_original_birth_receipt_unavailable")
-    proof = GenerationProof(
-        OwnerToken(saved["owner_pid"], saved["owner_start"], CHILD_EXEC),
-        owner["id"], mapping["generation"], mapping["final_args_sha256"],
-        mapping["raw_path"], mapping["debug_path"],
-        mapping["observer_native_number"], profiles)
-    # This checks the ORIGINAL pretraffic + postlaunch epoch and precise
-    # sealed PID/birth/argv/profile map, not a new synthetic identity.
-    receipts._epoch(proof)
+    if learning_schema3:
+        proof = LearningGenerationProof(
+            OwnerToken(saved["owner_pid"], saved["owner_start"], CHILD_EXEC),
+            owner["id"], owner["id"], owner["candidate"],
+            hashlib.sha256(argv).hexdigest(),
+            hashlib.sha256(mapping_raw).hexdigest(), learning)
+        # Original immutable receipts only; never open mutable old N.
+        receipts.verify_learning_stopped_epoch(proof, workspace=work)
+    else:
+        proof = GenerationProof(
+            OwnerToken(saved["owner_pid"], saved["owner_start"], CHILD_EXEC),
+            owner["id"], mapping["generation"], mapping["final_args_sha256"],
+            mapping["raw_path"], mapping["debug_path"],
+            mapping["observer_native_number"], profiles)
+        receipts._epoch(proof)
 
     def no_engine_or_monitor() -> bool:
         if (child_pidfile.exists() or child_pidfile.is_symlink() or
@@ -500,6 +851,15 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
     if (SharedApplyOperation(journal, owner=owner_uid).read() != record or
             _secure_bytes(active / "dvtws.args", MAX_ARGS, owner_uid) != argv or
             _secure_bytes(active / MAP_NAME, MAX_MAP, owner_uid) != mapping_raw or
+            (learning_schema3 and
+             (_secure_bytes(active / "dvtws.original.args",
+                            MAX_ARGS, owner_uid) != original or
+              _secure_bytes(active / ORIGIN_FILE,
+                            MAX_MAP, owner_uid) != source_bytes or
+              _secure_bytes(work / "release" / "dvtws.original.args",
+                            MAX_ARGS, owner_uid) != original or
+              _secure_bytes(work / "release" / ORIGIN_FILE,
+                            MAX_MAP, owner_uid) != source_bytes)) or
             not no_engine_or_monitor()):
         raise GenerationRefused("stopped_original_owner_changed")
     return proof
@@ -532,6 +892,42 @@ def attest_stopped_generation(*,
             SharedOperationError, SharedBundleError, ExclusionError) as exc:
         raise GenerationRefused("stopped_original_owner_not_attested") from exc
 
+
+
+
+def attest_learning_stopped_generation(*,
+                                       journal: Path = Path("/var/db/zapret2/shared-apply"),
+                                       work_root: Path = WORK,
+                                       active: Path = COMMON_ACTIVE,
+                                       child_pidfile: Path = CHILD_PID,
+                                       monitor_pidfile: Path = MONITOR_PID,
+                                       epoch_root: Path = Path("/var/db/zapret2/auto-detect-epochs"),
+                                       runner=subprocess.run) -> LearningGenerationProof:
+    """STEP 15b3c: optional read-only STOPPED schema3 historical owner.
+
+    Existing lifecycle lock, original terminal Apply, sealed source/map,
+    exact original epoch and no engine/supervisor: NEVER a second writer.
+    Operator Stop never calls this additional proof. No ACK/unlink/retire.
+    """
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise GenerationRefused("native_root_learning_stopped_fd9_required")
+    try:
+        from auto_detect_epoch_receipts import ReceiptRefused
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        proof = _attest_stopped_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            epoch_root=epoch_root, runner=runner, owner_uid=0,
+            learning_schema3=True)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("stopped_learning_owner_not_schema3")
+        return proof
+    except (OSError, ValueError, TypeError, UnicodeError,
+            subprocess.SubprocessError, SharedOperationError,
+            SharedBundleError, ExclusionError, ReceiptRefused) as exc:
+        raise GenerationRefused(
+            "stopped_learning_original_owner_not_attested") from exc
 
 
 def attest_retiring_predecessor(*,

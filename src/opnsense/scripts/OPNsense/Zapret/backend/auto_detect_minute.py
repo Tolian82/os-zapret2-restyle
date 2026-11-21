@@ -8,6 +8,7 @@ Neither this entry nor its source tests install cron or launch/stop dvtws2.
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 import stat
 import sys
@@ -16,6 +17,7 @@ from auto_detect_owner import (
     MAP_NAME, MAX_ARGS, GenerationProof, GenerationRefused,
     _secure_bytes, attest_running_generation, attest_stopped_generation,
     attest_retiring_predecessor,
+    LearningGenerationProof, attest_learning_running_generation,
 )
 from auto_detect_storage import RAW_PATH, DEBUG_PATH
 from auto_detect_original_lock_handoff import (
@@ -108,7 +110,20 @@ def native_minute_once(args: list[str]) -> int:
             # native argv can turn the refusal into a qualified worker.
             # A forged map, a stale process, and preview-only generation
             # all fail BEFORE P2a queue/Config/target access.
-            proof = attest_running_generation()
+            mapping = json.loads(_secure_bytes(COMMON_ACTIVE / MAP_NAME, 1048576, 0))
+            learning = mapping.get("schema") == 3
+            proof = (attest_learning_running_generation() if learning
+                     else attest_running_generation())
+            if learning:
+                if (not isinstance(proof, LearningGenerationProof) or
+                        proof.operation_id != proof.generation or
+                        any(Path(path).parent != QUEUE_ROOT for _, _, path in proof.learning)):
+                    raise MinuteRefused('unqualified_original_learning_generation')
+                changed = run_native_original_v2_cycle_once(learning=True)
+                if type(changed) is not bool:
+                    raise MinuteRefused('original_learning_completion_not_boolean')
+                print('auto-detect-minute=' + ('processed' if changed else 'idle'))
+                return 0
             if (not isinstance(proof, GenerationProof) or
                     proof.operation_id != proof.generation or
                     proof.raw_path != str(RAW_PATH) or
@@ -142,13 +157,43 @@ def native_retire_preflight() -> int:
         return 69
     try:
         require_lifecycle_lock()
-        proof = attest_running_generation()
+        # The existing original P2c attesters have DIFFERENT schema2 and
+        # schema3 receipts. A learning generation must never be interpreted
+        # as a single-observer raw source during explicit Stop preflight.
+        mapping = json.loads(_secure_bytes(COMMON_ACTIVE / MAP_NAME, 1048576, 0))
+        if type(mapping) is not dict or type(mapping.get("schema")) is not int:
+            raise MinuteRefused("retirement_original_schema_unqualified")
+        schema = mapping["schema"]
+        if schema not in (2, 3):
+            raise MinuteRefused("retirement_original_schema_unsupported")
         import pwd
         gid = pwd.getpwnam(ENGINE_USER).pw_gid
         if gid <= 0:
             raise MinuteRefused("invalid_original_engine_gid")
         queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
         receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+        if schema == 3:
+            # The native running owner, full original generation map and
+            # immutable pretraffic/epoch are independently re-attested under
+            # the SAME FD9 and queue lock. No native file is rotated, ACKed
+            # or removed. A distinct receipt deliberately does NOT authorize
+            # the old schema2 post-Stop/Boot handoff.
+            from auto_detect_cursor_chain import CursorChain
+            from shared_apply_seal import WORK
+            proof = attest_learning_running_generation()
+            if (not isinstance(proof, LearningGenerationProof) or
+                    proof.operation_id != proof.generation or
+                    any(Path(path).parent != QUEUE_ROOT
+                        for _, _, path in proof.learning)):
+                raise MinuteRefused("unqualified_learning_stop_owner")
+            with queue.exclusive():
+                chain = CursorChain(receipts, queue)
+                chain.learning_epoch(proof, WORK / proof.operation_id)
+                if attest_learning_running_generation() != proof:
+                    raise MinuteRefused("learning_owner_changed_before_stop")
+            print('auto-detect-retire=original-learning-running-attested')
+            return 0
+        proof = attest_running_generation()
         with queue.exclusive():
             qualified_current_source(proof, queue)
             drifted = receipts.verify_stop_only_epoch(

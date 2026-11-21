@@ -20,7 +20,8 @@ import sys
 
 from auto_detect_debug_window import _read_exact, DebugWindowRefused
 from auto_detect_fd import _START
-from auto_detect_owner import (GenerationProof, GenerationRefused,
+from auto_detect_owner import (GenerationProof, LearningGenerationProof,
+                               GenerationRefused,
                                MAX_ARGS, MAX_MAP, _secure_bytes, _valid_map,
                                attest_running_generation)
 from auto_detect_original_v2_source import qualified_current_source, OriginalSourceRefused
@@ -147,6 +148,10 @@ def _proof_fields(proof: GenerationProof) -> dict:
         "profiles": [list(p) for p in proof.profiles],
         "ack_authorized": False
     }
+
+
+def _digest_seal(seal) -> str:
+    return hashlib.sha256(_canonical(seal)).hexdigest()
 
 
 class EpochReceipts:
@@ -514,6 +519,478 @@ class EpochReceipts:
         except (OSError, ValueError, KeyError, TypeError, QueueSafetyError,
                 GenerationRefused, DebugWindowRefused, SharedBundleError) as exc:
             raise ReceiptRefused("original_sealed_pretraffic_not_attested") from exc
+
+
+    def seal_learning_pretraffic(self, queue: DurableInbox, *,
+                                 workspace: Path, candidate_sha256: str,
+                                 wire: str, root_gid: int, engine_uid: int,
+                                 attest) -> dict:
+        """Durable N-file zero-cut in the ORIGINAL epoch store; no activation.
+
+        The proposed final argv must already be accompanied by the same
+        fully sealed original args/source and an explicit active schema3 map.
+        Even such a seed is NOT a P2c owner: the installed schema2 _epoch()
+        will reject it, and no CLI currently exposes this entrypoint. It
+        may only be called by the future original held-FD9 launcher BEFORE
+        its native traffic and after original sealed-release promotion.
+        """
+        from auto_detect_origin_map import ORIGIN_FILE
+        from auto_detect_owner import _valid_learning_active
+        from auto_detect_post_drop import (
+            PostDropRefused, _witness_decode_learning,
+        )
+        from auto_detect_original_v2_source import (
+            preview_learning_pretraffic_cursors_locked,
+        )
+        if (not isinstance(queue, DurableInbox) or not queue._held or
+                queue.uid != self.uid or queue.writer_gid != self.writer_gid or
+                self.writer_gid is None or
+                not isinstance(workspace, Path) or
+                not workspace.is_absolute() or not HEX32.fullmatch(workspace.name) or
+                not isinstance(candidate_sha256, str) or
+                not HEX64.fullmatch(candidate_sha256) or
+                not isinstance(wire, str) or type(root_gid) is not int or
+                root_gid < 0 or type(engine_uid) is not int or
+                engine_uid <= 0 or not callable(attest)):
+            raise ReceiptRefused("learning_original_fd9_pretraffic_required")
+        try:
+            if sys.platform.startswith("freebsd"):
+                if self.uid != 0 or os.geteuid() != 0:
+                    raise ReceiptRefused("learning_root_original_fd9_required")
+                from voice_ipfw_adapter import require_lifecycle_lock
+                require_lifecycle_lock()
+            queue._verify()
+            if queue.segments():
+                raise ReceiptRefused("learning_unacknowledged_pending_before_launch")
+            seal = verify_seal(workspace, owner=self.uid)
+            release = workspace / "release"
+            original = _secure_bytes(
+                release / "dvtws.original.args", MAX_ARGS, self.uid)
+            final = _secure_bytes(release / "dvtws.args", MAX_ARGS, self.uid)
+            native_map = _secure_bytes(
+                release / "auto-detect-generation.json", MAX_MAP, self.uid)
+            source_bytes = _secure_bytes(
+                release / ORIGIN_FILE, MAX_MAP, self.uid)
+            source = json.loads(source_bytes)
+            approved = _valid_learning_active(
+                native_map, {"id": workspace.name,
+                             "candidate": candidate_sha256},
+                source, original, final)
+            if (not approved or
+                    any(Path(path).parent != queue.root for _, _, path in approved)):
+                raise ReceiptRefused("learning_original_native_paths_changed")
+            producer = _witness_decode_learning(
+                wire, approved, root=queue.root, root_uid=self.uid,
+                root_gid=root_gid, engine_uid=engine_uid,
+                engine_gid=self.writer_gid)
+            cursors = preview_learning_pretraffic_cursors_locked(
+                queue, wire, approved, root_gid=root_gid,
+                engine_uid=engine_uid, attest=attest)
+            if (attest() is not True or queue.segments() or
+                    verify_seal(workspace, owner=self.uid) != seal or
+                    _secure_bytes(release / "dvtws.args", MAX_ARGS, self.uid) != final or
+                    _secure_bytes(release / "auto-detect-generation.json",
+                                  MAX_MAP, self.uid) != native_map or
+                    _secure_bytes(release / ORIGIN_FILE, MAX_MAP, self.uid) !=
+                    source_bytes):
+                raise ReceiptRefused("learning_pretraffic_release_or_owner_changed")
+            # Repeat every physical zero check after verifying the exact
+            # sealed map: no new append or changed inode can be silently
+            # turned into an already-committed cursor.
+            if (preview_learning_pretraffic_cursors_locked(
+                    queue, wire, approved, root_gid=root_gid,
+                    engine_uid=engine_uid, attest=attest) != cursors):
+                raise ReceiptRefused("learning_pretraffic_zero_cut_changed")
+            names = ("inbox.txt", "debug.log", *producer.learning_names)
+            seed = {
+                "schema": 3, "kind": "original-fd9-learning-pretraffic-zero",
+                "generation": workspace.name,
+                "owner_candidate_sha256": candidate_sha256,
+                "release_seal_sha256": hashlib.sha256(
+                    _canonical(seal)).hexdigest(),
+                "original_args_sha256": hashlib.sha256(original).hexdigest(),
+                "final_args_sha256": hashlib.sha256(final).hexdigest(),
+                "native_map_sha256": hashlib.sha256(native_map).hexdigest(),
+                "source_map_sha256": hashlib.sha256(source_bytes).hexdigest(),
+                "witness_sha256": hashlib.sha256(wire.encode()).hexdigest(),
+                "files": [
+                    {"name": name, "device": identity[0],
+                     "inode": identity[1], "nlink": identity[2]}
+                    for name, identity in zip(names, producer.identities)
+                ],
+                "learning": [
+                    {"native_number": number, "hostlist": hostlist,
+                     "path": path, "device": cursors[path].device,
+                     "inode": cursors[path].inode,
+                     "offset": cursors[path].offset,
+                     "prefix_sha256": cursors[path].prefix_sha256}
+                    for number, hostlist, path in approved
+                ],
+                "ack_authorized": False,
+            }
+            encoded = _canonical(seed)  # Bound by existing 16 KiB receipt.
+            # No history pruning, cursor file or runtime journal. The old
+            # schema2 _pretraffic and _epoch intentionally refuse schema3.
+            folder = self._generation(workspace.name, create=True)
+            if ((folder / "epoch.json").exists() or
+                    (folder / "cursor-chain-v2").exists()):
+                raise ReceiptRefused("learning_pretraffic_epoch_already_consumed")
+            _write_once(folder, "pretraffic.json", encoded, self.uid)
+            return seed
+        except ReceiptRefused:
+            raise
+        except (OSError, ValueError, TypeError, KeyError,
+                QueueSafetyError, GenerationRefused, DebugWindowRefused,
+                SharedBundleError, PostDropRefused, OriginalSourceRefused) as exc:
+            raise ReceiptRefused("learning_sealed_pretraffic_not_attested") from exc
+
+
+
+    def _learning_pretraffic(
+        self, proof: LearningGenerationProof, queue: DurableInbox,
+        workspace: Path,
+    ) -> tuple[Path, dict, bytes]:
+        """Revalidate schema3 zero-cut against the SAME sealed original release.
+
+        Do not infer a live process from this pretraffic receipt. The caller
+        additionally needs an independent original FD9/P2c owner attester.
+        """
+        from auto_detect_origin_map import ORIGIN_FILE
+        from auto_detect_owner import _valid_learning_active
+        if (not isinstance(proof, LearningGenerationProof) or
+                not isinstance(queue, DurableInbox) or not queue._held or
+                queue.uid != self.uid or queue.writer_gid != self.writer_gid or
+                self.writer_gid is None or
+                not isinstance(workspace, Path) or
+                workspace.name != proof.operation_id or
+                not HEX32.fullmatch(proof.operation_id) or
+                proof.generation != proof.operation_id or
+                not HEX64.fullmatch(proof.owner_candidate_sha256) or
+                not HEX64.fullmatch(proof.final_args_sha256) or
+                not HEX64.fullmatch(proof.native_map_sha256) or
+                not isinstance(proof.learning, tuple) or
+                not 1 <= len(proof.learning) <= 255):
+            raise ReceiptRefused("unqualified_learning_epoch_source")
+        folder = self._generation(proof.generation, create=False)
+        seed_raw = _read(folder / "pretraffic.json", self.uid)
+        try:
+            seed = json.loads(seed_raw)
+        except (UnicodeError, ValueError, TypeError) as exc:
+            raise ReceiptRefused("invalid_learning_pretraffic_document") from exc
+        required = {
+            "schema", "kind", "generation", "owner_candidate_sha256",
+            "release_seal_sha256", "original_args_sha256",
+            "final_args_sha256", "native_map_sha256",
+            "source_map_sha256", "witness_sha256",
+            "files", "learning", "ack_authorized",
+        }
+        if (not isinstance(seed, dict) or set(seed) != required or
+                type(seed["schema"]) is not int or seed["schema"] != 3 or
+                seed["kind"] != "original-fd9-learning-pretraffic-zero" or
+                seed["generation"] != proof.generation or
+                seed["owner_candidate_sha256"] != proof.owner_candidate_sha256 or
+                seed["final_args_sha256"] != proof.final_args_sha256 or
+                seed["native_map_sha256"] != proof.native_map_sha256 or
+                any(not HEX64.fullmatch(str(seed[field]))
+                    for field in ("release_seal_sha256", "original_args_sha256",
+                                  "source_map_sha256", "witness_sha256")) or
+                seed["ack_authorized"] is not False or
+                not isinstance(seed["files"], list) or
+                not isinstance(seed["learning"], list)):
+            raise ReceiptRefused("learning_zero_cut_is_not_original_epoch")
+        seal = verify_seal(workspace, owner=self.uid)
+        release = workspace / "release"
+        original = _secure_bytes(
+            release / "dvtws.original.args", MAX_ARGS, self.uid)
+        argv = _secure_bytes(release / "dvtws.args", MAX_ARGS, self.uid)
+        native = _secure_bytes(
+            release / "auto-detect-generation.json", MAX_MAP, self.uid)
+        source_bytes = _secure_bytes(release / ORIGIN_FILE, MAX_MAP, self.uid)
+        source = json.loads(source_bytes)
+        approved = _valid_learning_active(
+            native, {"id": proof.generation,
+                     "candidate": proof.owner_candidate_sha256},
+            source, original, argv)
+        if (approved != proof.learning or
+                hashlib.sha256(_canonical(seal)).hexdigest() !=
+                seed["release_seal_sha256"] or
+                hashlib.sha256(original).hexdigest() !=
+                seed["original_args_sha256"] or
+                hashlib.sha256(argv).hexdigest() != seed["final_args_sha256"] or
+                hashlib.sha256(native).hexdigest() != seed["native_map_sha256"] or
+                hashlib.sha256(source_bytes).hexdigest() !=
+                seed["source_map_sha256"]):
+            raise ReceiptRefused("learning_epoch_sealed_generation_changed")
+        expected_names = [
+            "inbox.txt", "debug.log", *(Path(path).name
+                                        for _, _, path in approved)]
+        if (len(seed["files"]) != len(expected_names) or
+                len(seed["learning"]) != len(approved) or
+                any(Path(path).parent != queue.root for _, _, path in approved)):
+            raise ReceiptRefused("learning_epoch_missing_native_inode")
+        seen: set[tuple[int, int]] = set()
+        for name, row in zip(expected_names, seed["files"]):
+            if (not isinstance(row, dict) or
+                    set(row) != {"name", "device", "inode", "nlink"} or
+                    row["name"] != name or
+                    any(type(row[field]) is not int for field in
+                        ("device", "inode", "nlink")) or
+                    row["device"] < 0 or row["inode"] <= 0 or
+                    row["nlink"] != 1 or
+                    (row["device"], row["inode"]) in seen):
+                raise ReceiptRefused("learning_epoch_foreign_inode_seed")
+            seen.add((row["device"], row["inode"]))
+        for index, (number, hostlist, path) in enumerate(approved):
+            saved = seed["learning"][index]
+            matched = seed["files"][index + 2]
+            if (not isinstance(saved, dict) or
+                    set(saved) != {"native_number", "hostlist", "path",
+                                   "device", "inode", "offset", "prefix_sha256"} or
+                    (saved["native_number"], saved["hostlist"], saved["path"]) !=
+                    (number, hostlist, path) or
+                    saved["device"] != matched["device"] or
+                    saved["inode"] != matched["inode"] or
+                    type(saved["offset"]) is not int or saved["offset"] != 0 or
+                    saved["prefix_sha256"] != EMPTY_HASH):
+                raise ReceiptRefused("learning_epoch_cursor_not_original_zero")
+        return folder, seed, seed_raw
+
+    def finish_learning_running(
+        self, proof: LearningGenerationProof, queue: DurableInbox, *,
+        workspace: Path, attest,
+    ) -> dict:
+        """Durably finish *one* schema3 epoch; never grants minute/P2 ACK.
+
+        A genuine future original FD9/P2c callback must independently
+        verify shared Apply owner, active release, one actual PID/birth,
+        full kernel argv and monitor, exactly as legacy _attest_core.
+        No such callable is connected to production in this patch.
+        """
+        from auto_detect_fd import OwnerToken
+        from voice_live_inspect import CHILD_EXEC
+        if (not isinstance(proof, LearningGenerationProof) or
+                not isinstance(proof.owner, OwnerToken) or
+                type(proof.owner.pid) is not int or proof.owner.pid <= 1 or
+                type(proof.owner.started) is not str or
+                not _START.fullmatch(proof.owner.started) or
+                proof.owner.executable != CHILD_EXEC or
+                not isinstance(queue, DurableInbox) or not queue._held or
+                queue.uid != self.uid or queue.writer_gid != self.writer_gid or
+                self.writer_gid is None or not callable(attest) or
+                attest() != proof):
+            raise ReceiptRefused("learning_original_running_owner_required")
+        try:
+            if sys.platform.startswith("freebsd"):
+                if self.uid != 0 or os.geteuid() != 0:
+                    raise ReceiptRefused("learning_fd9_running_root_required")
+                from voice_ipfw_adapter import require_lifecycle_lock
+                require_lifecycle_lock()
+            queue._verify()
+            if queue.segments():
+                raise ReceiptRefused("learning_running_has_unacknowledged_pending")
+            folder, seed, seed_raw = self._learning_pretraffic(
+                proof, queue, workspace)
+            from auto_detect_debug_window import _read_exact
+            paths = [queue.inbox, queue.root / "debug.log",
+                     *(Path(path) for _, _, path in proof.learning)]
+            for path, identity in zip(paths, seed["files"]):
+                native, _ = _read_exact(
+                    path, owner_uid=self.uid, writer_gid=self.writer_gid)
+                if (native.st_dev != identity["device"] or
+                        native.st_ino != identity["inode"] or
+                        native.st_nlink != identity["nlink"]):
+                    raise ReceiptRefused("learning_running_inode_differs_from_zero")
+            # Postlaunch append is ALLOWED. Cursor remains exactly zero
+            # until the original verified P2a/P2b/P2c WAL and Found transfer.
+            if attest() != proof or queue.segments():
+                raise ReceiptRefused("learning_running_owner_changed_before_epoch")
+            queue._verify()
+            for path, identity in zip(paths, seed["files"]):
+                native, _ = _read_exact(
+                    path, owner_uid=self.uid, writer_gid=self.writer_gid)
+                if (native.st_dev, native.st_ino, native.st_nlink) != (
+                        identity["device"], identity["inode"], identity["nlink"]):
+                    raise ReceiptRefused("learning_running_inode_changed_during_epoch")
+            if attest() != proof:
+                raise ReceiptRefused("learning_running_owner_changed_after_recheck")
+            data = {
+                "schema": 3, "kind": "original-native-learning-epoch",
+                "generation": proof.generation,
+                "operation_id": proof.operation_id,
+                "owner_candidate_sha256": proof.owner_candidate_sha256,
+                "final_args_sha256": proof.final_args_sha256,
+                "native_map_sha256": proof.native_map_sha256,
+                "pretraffic_sha256": hashlib.sha256(seed_raw).hexdigest(),
+                "owner_pid": proof.owner.pid,
+                "owner_start": proof.owner.started,
+                "owner_executable": proof.owner.executable,
+                "files": seed["files"],
+                "learning": seed["learning"],
+                "ack_authorized": False,
+            }
+            if (folder / "cursor-chain-v2").exists():
+                raise ReceiptRefused("learning_running_cursor_chain_already_exists")
+            _write_once(folder, "epoch.json", _canonical(data), self.uid)
+            return data
+        except ReceiptRefused:
+            raise
+        except (OSError, ValueError, TypeError, KeyError, QueueSafetyError,
+                GenerationRefused, DebugWindowRefused,
+                SharedBundleError) as exc:
+            raise ReceiptRefused("learning_running_epoch_not_attested") from exc
+
+
+    def verify_learning_stopped_epoch(
+        self, proof: LearningGenerationProof, *, workspace: Path,
+    ) -> dict:
+        """STEP 15b3c: strict immutable schema3 epoch for STOPPED P2c.
+
+        This is NOT the schema2 _epoch(), a live native source check or an
+        ACK permit. The original FD9 lifecycle attester separately proves
+        the shared Apply journal, that the real engine is absent, and
+        that no replacement engine/supervisor is running. No producer
+        inode or OLD archive is opened, changed, truncated or removed.
+        """
+        from auto_detect_origin_map import ORIGIN_FILE
+        from auto_detect_owner import _valid_learning_active
+        from auto_detect_storage import ROOT as PRODUCER_ROOT
+        from voice_live_inspect import CHILD_EXEC
+        if (not isinstance(proof, LearningGenerationProof) or
+                not isinstance(workspace, Path) or not workspace.is_absolute() or
+                workspace.name != proof.generation or
+                proof.generation != proof.operation_id or
+                not HEX32.fullmatch(proof.generation) or
+                not HEX64.fullmatch(proof.owner_candidate_sha256) or
+                not HEX64.fullmatch(proof.final_args_sha256) or
+                not HEX64.fullmatch(proof.native_map_sha256) or
+                proof.owner.pid <= 1 or
+                not _START.fullmatch(proof.owner.started) or
+                proof.owner.executable != CHILD_EXEC or
+                not isinstance(proof.learning, tuple) or
+                not 1 <= len(proof.learning) <= 255):
+            raise ReceiptRefused("stopped_learning_proof_not_original")
+        try:
+            folder = self._generation(proof.generation, create=False)
+            zero_raw = _read(folder / "pretraffic.json", self.uid)
+            epoch_raw = _read(folder / "epoch.json", self.uid)
+            zero, epoch = json.loads(zero_raw), json.loads(epoch_raw)
+            if (zero_raw != _canonical(zero) or
+                    epoch_raw != _canonical(epoch) or
+                    type(zero) is not dict or type(epoch) is not dict):
+                raise ReceiptRefused("stopped_learning_receipt_noncanonical")
+            seal = verify_seal(workspace, owner=self.uid)
+            release = workspace / "release"
+            original = _secure_bytes(
+                release / "dvtws.original.args", MAX_ARGS, self.uid)
+            final = _secure_bytes(
+                release / "dvtws.args", MAX_ARGS, self.uid)
+            native = _secure_bytes(
+                release / "auto-detect-generation.json", MAX_MAP, self.uid)
+            source = _secure_bytes(
+                release / ORIGIN_FILE, MAX_MAP, self.uid)
+            authorized = _valid_learning_active(
+                native, {"id": proof.generation,
+                         "candidate": proof.owner_candidate_sha256},
+                json.loads(source), original, final)
+            if authorized != proof.learning:
+                raise ReceiptRefused("stopped_learning_native_map_mismatch")
+            file_names = [
+                "inbox.txt", "debug.log",
+                *(Path(path).name for _, _, path in authorized)]
+            if (len(file_names) != len(set(file_names)) or
+                    any(Path(path).parent != PRODUCER_ROOT
+                        for _, _, path in authorized)):
+                raise ReceiptRefused("stopped_learning_foreign_producer_root")
+            records = zero.get("files")
+            learning = zero.get("learning")
+            if (type(records) is not list or
+                    len(records) != len(file_names) or
+                    type(learning) is not list or
+                    len(learning) != len(authorized)):
+                raise ReceiptRefused("stopped_learning_zero_missing_N")
+            inode_ids = set()
+            for name, record in zip(file_names, records):
+                if (type(record) is not dict or
+                        set(record) != {"name", "device", "inode", "nlink"} or
+                        record["name"] != name or
+                        any(type(record[k]) is not int
+                            for k in ("device", "inode", "nlink")) or
+                        record["device"] < 0 or record["inode"] <= 0 or
+                        record["nlink"] != 1 or
+                        (record["device"], record["inode"]) in inode_ids):
+                    raise ReceiptRefused("stopped_learning_zero_inode_invalid")
+                inode_ids.add((record["device"], record["inode"]))
+            for index, (number, hostlist, path) in enumerate(authorized):
+                row = learning[index]
+                pinned = records[index + 2]
+                if (type(row) is not dict or set(row) != {
+                        "native_number", "hostlist", "path", "device",
+                        "inode", "offset", "prefix_sha256"} or
+                        (row["native_number"], row["hostlist"], row["path"]) !=
+                        (number, hostlist, path) or
+                        row["device"] != pinned["device"] or
+                        row["inode"] != pinned["inode"] or
+                        type(row["offset"]) is not int or row["offset"] != 0 or
+                        row["prefix_sha256"] != EMPTY_HASH):
+                    raise ReceiptRefused("stopped_learning_zero_N_unqualified")
+            expected_zero = {
+                "schema": 3, "kind": "original-fd9-learning-pretraffic-zero",
+                "generation": proof.generation,
+                "owner_candidate_sha256": proof.owner_candidate_sha256,
+                "release_seal_sha256": _digest_seal(seal),
+                "original_args_sha256": hashlib.sha256(original).hexdigest(),
+                "final_args_sha256": proof.final_args_sha256,
+                "native_map_sha256": proof.native_map_sha256,
+                "source_map_sha256": hashlib.sha256(source).hexdigest(),
+                "witness_sha256": zero.get("witness_sha256"),
+                "files": records, "learning": learning,
+                "ack_authorized": False,
+            }
+            if (not isinstance(zero.get("witness_sha256"), str) or
+                    not HEX64.fullmatch(zero["witness_sha256"]) or
+                    zero != expected_zero or
+                    hashlib.sha256(final).hexdigest() !=
+                    proof.final_args_sha256 or
+                    hashlib.sha256(native).hexdigest() !=
+                    proof.native_map_sha256):
+                raise ReceiptRefused("stopped_learning_zero_not_sealed")
+            expected_epoch = {
+                "schema": 3, "kind": "original-native-learning-epoch",
+                "generation": proof.generation,
+                "operation_id": proof.operation_id,
+                "owner_candidate_sha256": proof.owner_candidate_sha256,
+                "final_args_sha256": proof.final_args_sha256,
+                "native_map_sha256": proof.native_map_sha256,
+                "pretraffic_sha256": hashlib.sha256(zero_raw).hexdigest(),
+                "owner_pid": proof.owner.pid,
+                "owner_start": proof.owner.started,
+                "owner_executable": proof.owner.executable,
+                "files": records, "learning": learning,
+                "ack_authorized": False,
+            }
+            if epoch != expected_epoch:
+                raise ReceiptRefused("stopped_learning_epoch_not_original")
+            # Immutable sources are trusted only if they stayed EXACTLY
+            # identical for both passes; never re-open old producer inodes.
+            if (_read(folder / "pretraffic.json", self.uid) != zero_raw or
+                    _read(folder / "epoch.json", self.uid) != epoch_raw or
+                    verify_seal(workspace, owner=self.uid) != seal or
+                    _secure_bytes(release / "dvtws.args",
+                                  MAX_ARGS, self.uid) != final or
+                    _secure_bytes(release / "auto-detect-generation.json",
+                                  MAX_MAP, self.uid) != native or
+                    _secure_bytes(release / "dvtws.original.args",
+                                  MAX_ARGS, self.uid) != original or
+                    _secure_bytes(release / ORIGIN_FILE,
+                                  MAX_MAP, self.uid) != source):
+                raise ReceiptRefused("stopped_learning_original_epoch_raced")
+            return epoch
+        except ReceiptRefused:
+            raise
+        except (OSError, ValueError, TypeError, KeyError, AttributeError,
+                UnicodeError, GenerationRefused, SharedBundleError) as exc:
+            raise ReceiptRefused(
+                "stopped_learning_epoch_not_independently_attested") from exc
 
     def finish_running(self, proof: GenerationProof, queue: DurableInbox, *,
                        attest=attest_running_generation) -> None:

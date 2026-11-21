@@ -17,6 +17,9 @@ import stat
 
 MAX_PENDING = 512
 MAX_SEGMENT = 4 * 1024 * 1024
+# Native old inodes share the original P2a pending directory, but MUST
+# never be interpreted as the raw inbox batch by the original raw ACK.
+NATIVE_PENDING = re.compile(r"native-([0-9a-f]{32})-([1-9][0-9]{0,2})-([0-9a-f]{32})\.txt\Z")
 
 
 class QueueSafetyError(RuntimeError):
@@ -218,16 +221,47 @@ class DurableInbox:
         for path in files:
             if not path.name.endswith(".txt") or path.name.startswith("."):
                 raise QueueSafetyError("unknown_pending_entry")
+            if path.name.startswith("native-"):
+                match = NATIVE_PENDING.fullmatch(path.name)
+                if match is None or int(match[2]) > 255:
+                    raise QueueSafetyError("foreign_native_pending_name")
             _stat_regular(path, self.uid, writer_gid=self.writer_gid)
         return files
 
     def rotate(self, *, generation: str | None = None,
                cycle: int | None = None, sequence: int | None = None) -> Path | None:
-        """Rotate the same original inode under the original queue lock.
+        """Unchanged original raw P2a rotation, via its ONE inode primitive."""
+        return self._rotate_original_source(
+            self.inbox, replacement=b"", generation=generation,
+            cycle=cycle, sequence=sequence,
+        )
 
-        Native v2 supplies a bounded compaction cycle plus local sequence
-        to make each pending filename unique across prior pruned journals;
-        other original queue users retain their untagged random names.
+    def _rotate_original_source(
+            self, source: Path, *, replacement: bytes,
+            generation: str | None = None,
+            cycle: int | None = None, sequence: int | None = None,
+            expected_identity: tuple[int, int] | None = None,
+            sealed_prefix: tuple[int, str] | None = None,
+            expected_native_image: tuple[int, str] | None = None,
+            native_pending_name: str | None = None,
+    ) -> Path | None:
+        """Same P2a protected hardlink→replace for one original source inode.
+
+        The ordinary raw inbox uses the ORIGINAL public rotate(), unchanged.
+        A native learning source MUST be one of this producer generation's
+        original root files with original epoch dev/inode, sealed PREFIX and
+        EXACT full source SHA/size already authorized by the P1 snapshot.
+        The caller (original Config+FD9/GUI WAL owner) must qualify any
+        removed known rows and a durable Found+managed checkpoint BEFORE
+        calling this INTERNAL physical primitive. No such product caller is
+        registered yet. This retains every old byte, including a concurrent
+        late append on an open producer FD, through a root-only original
+        P2a pending hardlink. This NEVER unlinks or ACKs that pending inode.
+
+        Replacing a native working HOSTLIST changes its visible inode.
+        Later crash/retirement must reconcile the retained old inode using
+        the same original generation's WAL; this primitive cannot authorize
+        that higher-level transition or reset the engine's in-memory state.
         """
         if generation is not None and (type(generation) is not str or
                                        re.fullmatch(r"[a-f0-9]{32}", generation) is None):
@@ -247,8 +281,111 @@ class DurableInbox:
         # is detached and indefinitely blocks later current-generation ACK.
         # This is bounded backpressure, NOT permission to discard/truncate
         # or claim that large native appends after rotation are impossible.
-        old = _stat_regular(self.inbox, self.uid, max_size=MAX_SEGMENT,
+        old = _stat_regular(source, self.uid, max_size=MAX_SEGMENT,
                             writer_gid=self.writer_gid)
+        if (not isinstance(source, Path) or not source.is_absolute()
+                or source.parent != self.root or
+                type(replacement) is not bytes or
+                len(replacement) > MAX_SEGMENT or
+                (replacement and not replacement.endswith(b"\n"))):
+            raise QueueSafetyError("original_source_or_replacement_invalid")
+        is_native = source != self.inbox
+        if is_native:
+            from auto_detect_storage import LEARNING_NAME
+            import hashlib
+            found = LEARNING_NAME.fullmatch(source.name)
+            if (found is None or generation is None or
+                    found[1] != generation or int(found[2]) > 255 or
+                    expected_identity is None or
+                    len(expected_identity) != 2 or
+                    any(type(item) is not int or item <= 0
+                        for item in expected_identity) or
+                    sealed_prefix is None or
+                    len(sealed_prefix) != 2 or
+                    expected_native_image is None or
+                    (native_pending_name is not None and (
+                        type(native_pending_name) is not str or
+                        NATIVE_PENDING.fullmatch(native_pending_name) is None or
+                        not native_pending_name.startswith(
+                            f"native-{generation}-{found[2]}-"))) or
+                    type(expected_native_image) is not tuple or
+                    len(expected_native_image) != 2 or
+                    type(expected_native_image[0]) is not int or
+                    not 0 <= expected_native_image[0] <= MAX_SEGMENT or
+                    type(expected_native_image[1]) is not str or
+                    re.fullmatch(r"[0-9a-f]{64}",
+                                 expected_native_image[1]) is None or
+                    type(sealed_prefix[0]) is not int or
+                    not 0 <= sealed_prefix[0] <= MAX_SEGMENT or
+                    type(sealed_prefix[1]) is not str or
+                    re.fullmatch(r"[0-9a-f]{64}", sealed_prefix[1]) is None):
+                raise QueueSafetyError("native_source_original_epoch_required")
+        elif (replacement or expected_identity is not None or
+              sealed_prefix is not None or expected_native_image is not None or
+              native_pending_name is not None):
+            raise QueueSafetyError("original_raw_rotation_must_remain_unchanged")
+        if is_native:
+            if (old.st_dev, old.st_ino) != expected_identity:
+                raise QueueSafetyError("native_original_inode_changed")
+            # The original P2b+WAL owner must additionally attest current
+            # FD ownership. This read only ensures our physical inode and
+            # byte-accurate cut cannot diverge from THAT sealed epoch.
+            fd_probe = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                probe = os.fstat(fd_probe)
+                if ((probe.st_dev, probe.st_ino) != expected_identity or
+                        probe.st_size > MAX_SEGMENT):
+                    raise QueueSafetyError("native_read_inode_changed")
+                old_bytes = bytearray()
+                while len(old_bytes) <= MAX_SEGMENT:
+                    piece = os.read(fd_probe, MAX_SEGMENT + 1 - len(old_bytes))
+                    if not piece:
+                        break
+                    old_bytes.extend(piece)
+                old_bytes = bytes(old_bytes)
+            finally:
+                os.close(fd_probe)
+            # Prefix-only evidence authenticates a historical event, NOT
+            # the full working file chosen by original P1 for compaction.
+            # Never accept an append that happened between P1's source
+            # snapshot and this physical mutation, even when it leaves
+            # generation, device, inode and historical prefix unchanged.
+            if (len(old_bytes) != expected_native_image[0] or
+                    hashlib.sha256(old_bytes).hexdigest() !=
+                    expected_native_image[1]):
+                raise QueueSafetyError("native_full_preimage_changed")
+            if (len(old_bytes) != old.st_size or
+                    old.st_size and not old_bytes.endswith(b"\n") or
+                    sealed_prefix[0] > len(old_bytes) or
+                    hashlib.sha256(old_bytes[:sealed_prefix[0]]).hexdigest()
+                    != sealed_prefix[1] or
+                    sealed_prefix[0] and old_bytes[sealed_prefix[0] - 1:
+                                                    sealed_prefix[0]] != b"\n"):
+                raise QueueSafetyError("native_original_prefix_not_sealed")
+            # All retained rows must be an ordered SUBSEQUENCE of complete
+            # original native lines. Removed rows still remain in pending.
+            # The original P1/active managed WAL, NOT this helper, determines
+            # which (if any) rows are actually eligible for removal.
+            lines = old_bytes.splitlines(keepends=True)
+            kept = replacement.splitlines(keepends=True)
+            index = 0
+            for row in kept:
+                while index < len(lines) and lines[index] != row:
+                    index += 1
+                if index == len(lines):
+                    raise QueueSafetyError("native_replacement_not_original_subset")
+                index += 1
+            if replacement and not old_bytes:
+                raise QueueSafetyError("native_replacement_outside_original")
+            # Upstream zapret2 v1.0.7 compares only mtime+SIZE in its
+            # file_mod_signature, not inode. A real native compaction MUST
+            # shrink the working image to guarantee same-PID reload even
+            # when a replacement happens inside one timestamp quantum.
+            if len(replacement) >= len(old_bytes):
+                raise QueueSafetyError("native_compaction_must_shrink_hostlist")
+
+        if is_native and (old.st_dev, old.st_ino) != expected_identity:
+            raise QueueSafetyError("native_original_inode_changed")
         existing = self.segments()
         same = [path for path in existing if _identity(path) == (old.st_dev, old.st_ino)]
         if len(same) > 1:
@@ -257,8 +394,11 @@ class DurableInbox:
             if old.st_nlink != 2:
                 raise QueueSafetyError("unexpected_live_links")
             segment = same[0]
-            if generation is not None and not segment.name.startswith(generation + "-"):
-                raise QueueSafetyError("crash_recovery_generation_changed")
+            if generation is not None:
+                expected_tag = (f"native-{generation}-{found[2]}-"
+                                if is_native else generation + "-")
+                if not segment.name.startswith(expected_tag):
+                    raise QueueSafetyError("crash_recovery_generation_changed")
             if old.st_size == 0:
                 # Interrupted link() before replace() with no raw event.
                 # This is only a second NAME for the live inode, not a
@@ -266,7 +406,7 @@ class DurableInbox:
                 # safe even if dvtws2 appends concurrently: its bytes stay
                 # reachable through the original inbox name and open FD.
                 # Never unlink an independently detached empty segment.
-                live = _stat_regular(self.inbox, self.uid, writer_gid=self.writer_gid)
+                live = _stat_regular(source, self.uid, writer_gid=self.writer_gid)
                 alias = _stat_regular(segment, self.uid, writer_gid=self.writer_gid)
                 if ((live.st_dev, live.st_ino) != (old.st_dev, old.st_ino) or
                         (alias.st_dev, alias.st_ino) != (old.st_dev, old.st_ino) or
@@ -275,7 +415,7 @@ class DurableInbox:
                     raise QueueSafetyError("empty_live_alias_changed")
                 segment.unlink()
                 _sync_directory(self.pending)
-                remaining = _stat_regular(self.inbox, self.uid,
+                remaining = _stat_regular(source, self.uid,
                                           writer_gid=self.writer_gid)
                 if ((remaining.st_dev, remaining.st_ino) !=
                         (old.st_dev, old.st_ino) or remaining.st_nlink != 1):
@@ -286,10 +426,29 @@ class DurableInbox:
                 return None
             if old.st_nlink != 1 or len(existing) >= MAX_PENDING:
                 raise QueueSafetyError("unsafe_inbox_links_or_capacity")
-            suffix = (f"{cycle:08x}{sequence:06x}{secrets.token_hex(9)}"
-                      if cycle is not None else secrets.token_hex(16))
-            segment = self.pending / ((generation + "-" if generation is not None else "") +
-                                      suffix + ".txt")
+            if is_native:
+                # Original P2a directory, distinct profile-bound retained
+                # class; never accepted by original raw acknowledge().
+                segment = self.pending / (
+                    native_pending_name if native_pending_name is not None
+                    else f"native-{generation}-{found[2]}-"
+                         f"{secrets.token_hex(16)}.txt")
+            else:
+                suffix = (f"{cycle:08x}{sequence:06x}{secrets.token_hex(9)}"
+                          if cycle is not None else secrets.token_hex(16))
+                segment = self.pending / (
+                    (generation + "-" if generation is not None else "") +
+                    suffix + ".txt")
+        # A changed source cannot silently borrow an alias of a different
+        # native profile or a different source generation. All aliases are
+        # validated by the original segments() and by exact old inode.
+        if is_native and same and (
+                NATIVE_PENDING.fullmatch(same[0].name) is None or
+                not same[0].name.startswith(
+                    f"native-{generation}-{found[2]}-") or
+                (native_pending_name is not None and
+                 same[0].name != native_pending_name)):
+            raise QueueSafetyError("native_foreign_pending_alias")
         # A new inode is fully synced before the live name is replaced.
         temp = self.root / (".new-inbox-" + secrets.token_hex(16))
         fd = None
@@ -299,13 +458,20 @@ class DurableInbox:
             # Creation umask must not strip the qualified native writer's
             # exact group-write permission on the replacement inbox.
             os.fchmod(fd, old.st_mode & 0o777)
+            if replacement:
+                view = memoryview(replacement)
+                while view:
+                    count = os.write(fd, view)
+                    if count <= 0:
+                        raise QueueSafetyError("native_replacement_write_short")
+                    view = view[count:]
             os.fsync(fd)
             os.close(fd)
             fd = None
             if not same:
-                if _identity(self.inbox) != (old.st_dev, old.st_ino):
+                if _identity(source) != (old.st_dev, old.st_ino):
                     raise QueueSafetyError("inbox_changed_before_link")
-                os.link(self.inbox, segment, follow_symlinks=False)
+                os.link(source, segment, follow_symlinks=False)
                 if _identity(segment) != (old.st_dev, old.st_ino) or segment.lstat().st_nlink != 2:
                     raise QueueSafetyError("link_identity_changed")
                 _sync_directory(self.pending)
@@ -316,7 +482,7 @@ class DurableInbox:
             # on its original live path, with the same pending hardlink
             # available for exactly attributed crash recovery; NEVER drop
             # or truncate its bytes to make the next tick pass.
-            live_now = _stat_regular(self.inbox, self.uid,
+            live_now = _stat_regular(source, self.uid,
                                      max_size=MAX_SEGMENT,
                                      writer_gid=self.writer_gid)
             pending_now = _stat_regular(segment, self.uid,
@@ -332,7 +498,7 @@ class DurableInbox:
                     live_now.st_mtime_ns != old.st_mtime_ns or
                     pending_now.st_mtime_ns != old.st_mtime_ns):
                 raise QueueSafetyError("raw_changed_between_link_and_replace")
-            os.replace(temp, self.inbox)
+            os.replace(temp, source)
             _sync_directory(self.root)
             return segment
         finally:
@@ -342,7 +508,9 @@ class DurableInbox:
                 temp.unlink()
                 _sync_directory(self.root)
 
-    def acknowledge(self, segment: Path, *, drained, committed) -> bool:
+    def acknowledge(self, segment: Path, *, drained, committed,
+                    native_source: Path | None = None,
+                    native_image: tuple | None = None) -> bool:
         """Both callbacks must independently prove safety, not just return data.
 
         drained(path, dev, inode) must be backed by native owner/FD evidence.
@@ -357,12 +525,27 @@ class DurableInbox:
         segment = Path(segment)
         if segment.parent != self.pending or segment not in self.segments():
             raise QueueSafetyError("foreign_segment")
+        if NATIVE_PENDING.fullmatch(segment.name):
+            matched = NATIVE_PENDING.fullmatch(segment.name)
+            expected = self.root / ("learning-" + matched[1] + "-" + matched[2] + ".txt")
+            if (native_source != expected or type(native_image) is not tuple or
+                    len(native_image) != 4 or
+                    any(type(v) is not int or v < 0 for v in native_image[:3]) or
+                    not re.fullmatch(r"[0-9a-f]{64}", str(native_image[3]))):
+                raise QueueSafetyError("native_pending_requires_qualified_ack")
+        elif native_source is not None or native_image is not None:
+            raise QueueSafetyError("foreign_native_ack_capability")
         before = _stat_regular(segment, self.uid, max_size=MAX_SEGMENT,
                                writer_gid=self.writer_gid)
         if _identity(self.inbox) == (before.st_dev, before.st_ino):
             return False  # crash after hardlink, before replace
         if before.st_nlink != 1:
             raise QueueSafetyError("unaccounted_pending_links")
+        if native_source is not None:
+            import hashlib
+            if ((before.st_dev, before.st_ino, before.st_size) != native_image[:3] or
+                    _identity(native_source) == (before.st_dev, before.st_ino)):
+                return False
         if not drained(segment, before.st_dev, before.st_ino):
             return False
         fd = os.open(segment, os.O_RDONLY | os.O_NOFOLLOW)
@@ -374,6 +557,8 @@ class DurableInbox:
             os.close(fd)
         if len(data) > MAX_SEGMENT or (data and not data.endswith(b"\n")):
             return False  # never discard incomplete last line
+        if native_source is not None and hashlib.sha256(data).hexdigest() != native_image[3]:
+            return False
         if not committed(data):
             return False
         after = _stat_regular(segment, self.uid, max_size=MAX_SEGMENT,

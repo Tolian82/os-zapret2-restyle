@@ -1562,14 +1562,40 @@ shared_apply_activate_and_commit_service()
     if [ "$_shared_apply_epoch_required" = 1 ]; then
         # First native packets may already have been appended. Do not reset
         # original raw/debug or move the starting cursor away from zero.
+        # The finalized sealed map alone chooses which existing original
+        # FD9 epoch attester to call. A schema3 N-inbox generation must NOT
+        # be falsely completed with the schema2 observer PID/debug receipt.
+        _shared_epoch_schema=$(/usr/local/bin/jq -er \
+            '.schema | select(. == 2 or . == 3)' \
+            "$_shared_apply_root/release/auto-detect-generation.json") || {
+            shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+                "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+            common_error "shared Apply: original epoch schema unavailable"
+            return 70
+        }
+        case "$_shared_epoch_schema" in
+            2)
+                _shared_epoch_verb=finish-epoch
+                _shared_epoch_expected=original-fd9-running-epoch=attested
+                ;;
+            3)
+                _shared_epoch_verb=finish-learning-epoch
+                _shared_epoch_expected=original-fd9-learning-running-epoch=attested
+                ;;
+            *)
+                shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+                    "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+                return 70
+                ;;
+        esac
         _shared_epoch_complete=$("$PYTHON_RUNTIME" \
-            "$BACKEND_DIR/auto_detect_post_drop.py" finish-epoch "$_shared_apply_id") || {
+            "$BACKEND_DIR/auto_detect_post_drop.py" "$_shared_epoch_verb" "$_shared_apply_id") || {
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
             common_error "shared Apply: original epoch completion refused"
             return 70
         }
-        if [ "$_shared_epoch_complete" != original-fd9-running-epoch=attested ]; then
+        if [ "$_shared_epoch_complete" != "$_shared_epoch_expected" ]; then
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
             common_error "shared Apply: original epoch completion unverified"

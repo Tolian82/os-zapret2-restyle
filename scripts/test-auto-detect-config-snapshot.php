@@ -360,6 +360,29 @@ check($syncCalls===1 && $c->locks===1 && $c->unlocks===1 &&
 ++$count;
 
 $c=new TestConfig;
+$learningDone=Snapshot::withLockedOriginalModel(
+    $c,fn()=>new TestModel(nativeModel()),
+    fn($source)=>['kind'=>'original-learning-minute-completed',
+                  'generation'=>str_repeat('a',32),'processed'=>false,
+                  'ack_authorized'=>false], true
+);
+check($learningDone['processed']===false && !$c->held && $c->writes===0,
+      'learning idle must keep original Config scope and never save');
+expectFailure(fn()=>Snapshot::withLockedOriginalModel(
+    new TestConfig,fn()=>new TestModel(nativeModel()),
+    fn($source)=>['kind'=>'original-learning-minute-completed',
+                  'generation'=>str_repeat('a',32),'processed'=>'yes',
+                  'ack_authorized'=>false], true
+),'learning completion requires a real boolean');
+expectFailure(fn()=>Snapshot::withLockedOriginalModel(
+    new TestConfig,fn()=>new TestModel(nativeModel()),
+    fn($source)=>['kind'=>'original-learning-minute-completed',
+                  'generation'=>str_repeat('a',32),'processed'=>true,
+                  'ack_authorized'=>false]
+),'legacy raw route must not accept learning completion');
++$count;
+
+$c=new TestConfig;
 expectFailure(
     fn()=>Snapshot::withLockedOriginalModel(
         $c,

@@ -86,14 +86,15 @@ def inspect_live_known_readonly(
     physical inode images inside the original destination transaction.
     """
     from auto_detect_owner import (
-        GenerationProof, MAX_ARGS, attest_running_generation,
+        GenerationProof, LearningGenerationProof, MAX_ARGS,
+        attest_running_generation,
     )
 
     attest = attest_running_generation if attest is None else attest
     if not callable(attest):
         raise EffectiveKnownRefused("invalid_live_owner_attester")
     before_owner = attest()
-    if not isinstance(before_owner, GenerationProof):
+    if not isinstance(before_owner, (GenerationProof, LearningGenerationProof)):
         raise EffectiveKnownRefused("live_owner_not_attested")
 
     active = Path(active)
@@ -124,8 +125,14 @@ def inspect_live_known_readonly(
     }
     if used - allowed:
         raise EffectiveKnownRefused("foreign_live_hostlist_selector")
-    mapped = {name for _number, status, name in before_owner.profiles
-              if status == "known-hostlist"}
+    if isinstance(before_owner, LearningGenerationProof):
+        # The original exact kernel-argv owner attests the generator's
+        # complete schema3 source/native map first. Only hostlists
+        # authorized by that map may claim a corresponding working file.
+        mapped = {name for _number, name, _path in before_owner.learning}
+    else:
+        mapped = {name for _number, status, name in before_owner.profiles
+                  if status == "known-hostlist"}
     if (not mapped.issubset(set(KNOWN_HOSTLISTS)) or
             {name for name, path in actual_paths.items()
              if str(path) in used} != mapped):
@@ -162,6 +169,7 @@ def inspect_live_known_readonly(
         raise EffectiveKnownRefused("live_owner_changed_during_inspection")
     return {
         "status": "read-only-active-known-witness",
+        "owner_schema": 3 if isinstance(before_owner, LearningGenerationProof) else 2,
         "generation": before_owner.generation,
         "operation": before_owner.operation_id,
         "pid": before_owner.owner.pid,
@@ -195,7 +203,6 @@ def preview_live_known_after_readonly(
                 set(change) != {"add", "remove"} or
                 not isinstance(change["add"], list) or
                 not isinstance(change["remove"], list) or
-                (name in KNOWN_HOSTLISTS and change["add"]) or
                 (name == "auto" and change["remove"])
                 for name, change in effects.items())):
         raise EffectiveKnownRefused("unqualified_live_known_effects")
@@ -203,6 +210,14 @@ def preview_live_known_after_readonly(
     witness = inspect_live_known_readonly(
         manual, active=active, owned_root=owned_root,
         owner_uid=owner_uid, attest=attest)
+    # Schema2 observer can only relocate existing known-owned rows.
+    # Schema3's FULL original generator + FD9 + same-PID owner is the only
+    # mode allowed to propose NEW known Found additions in this preview.
+    # The eventual writer must still CAS the existing original WAL slot.
+    if (witness["owner_schema"] != 3 and
+            any(name in KNOWN_HOSTLISTS and change["add"]
+                for name, change in effects.items())):
+        raise EffectiveKnownRefused("unqualified_live_known_effects")
     if not witness["aligned"]:
         raise EffectiveKnownRefused("live_known_preimage_not_aligned")
 
@@ -248,9 +263,11 @@ def preview_live_known_after_readonly(
     if attest is None:
         from auto_detect_owner import attest_running_generation
         attest = attest_running_generation
-    from auto_detect_owner import GenerationProof
+    from auto_detect_owner import GenerationProof, LearningGenerationProof
     final_owner = attest()
-    if (not isinstance(final_owner, GenerationProof) or
+    if (not isinstance(final_owner, (GenerationProof, LearningGenerationProof)) or
+            (3 if isinstance(final_owner, LearningGenerationProof) else 2)
+            != witness["owner_schema"] or
             final_owner.owner.pid != witness["pid"] or
             final_owner.owner.started != witness["started"] or
             final_owner.operation_id != witness["operation"] or

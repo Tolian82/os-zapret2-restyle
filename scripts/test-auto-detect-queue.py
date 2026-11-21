@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
 MODULE = Path(__file__).resolve().parents[1] / "src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py"
+# The original module is loaded by path in this standalone test; its
+# established backend siblings must stay importable without copying them.
+sys.path.insert(0, str(MODULE.parent))
 spec = importlib.util.spec_from_file_location("auto_detect_queue", MODULE)
 queue = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(queue)
@@ -27,6 +31,267 @@ class DurableInboxTests(unittest.TestCase):
         (root / "inbox.txt").write_bytes(b"one.example.com\n")
         self.root = root
         self.queue = queue.DurableInbox(root, owner_uid=os.geteuid())
+
+    def test_original_native_rotation_retains_open_fd_and_new_append(self):
+        import hashlib
+        generation = "a" * 32
+        native = self.root / ("learning-" + generation + "-1.txt")
+        source = b"known.example.com\nstay.example.org\n"
+        native.write_bytes(source)
+        initial = native.stat()
+        cut = len(b"known.example.com\n")
+        prefix = hashlib.sha256(source[:cut]).hexdigest()
+        with self.queue.exclusive():
+            with native.open("ab", buffering=0) as producer:
+                pending = self.queue._rotate_original_source(
+                    native, replacement=b"stay.example.org\n",
+                    generation=generation,
+                    expected_identity=(initial.st_dev, initial.st_ino),
+                    sealed_prefix=(cut, prefix),
+                    expected_native_image=(
+                        len(source), hashlib.sha256(source).hexdigest()))
+                producer.write(b"new-after-rename.example.net\n")
+                os.fsync(producer.fileno())
+            self.assertIsNotNone(pending)
+            self.assertEqual(native.read_bytes(), b"stay.example.org\n")
+            self.assertEqual(
+                pending.read_bytes(),
+                source + b"new-after-rename.example.net\n")
+            self.assertNotEqual(queue._identity(native),
+                                queue._identity(pending))
+            self.assertEqual(pending.stat().st_nlink, 1)
+            self.assertEqual(pending.parent, self.queue.pending)
+            self.assertRegex(
+                pending.name,
+                r"^native-" + generation + r"-1-[0-9a-f]{32}\.txt$")
+            with self.assertRaisesRegex(
+                    queue.QueueSafetyError,
+                    "native_pending_requires_qualified_ack"):
+                self.queue.acknowledge(
+                    pending, drained=lambda *args: True,
+                    committed=lambda data: True)
+            # This physical primitive CANNOT authorize any native ACK;
+            # the protected source inode persists until ALL late rows
+            # have a separately durable original destination receipt.
+            self.assertEqual(self.queue.segments(), [pending])
+
+    def test_original_native_append_during_hardlink_preserves_inode(self):
+        import hashlib
+        generation = "d" * 32
+        native = self.root / ("learning-" + generation + "-4.txt")
+        original = b"known.example.com\nkeep.example.com\n"
+        late = b"racing.example.net\n"
+        native.write_bytes(original)
+        st = native.stat()
+        identity = (st.st_dev, st.st_ino)
+        cut = len(b"known.example.com\n")
+        prefix = (cut, hashlib.sha256(original[:cut]).hexdigest())
+        native_link = queue.os.link
+
+        def append_during_link(*args, **kwargs):
+            native_link(*args, **kwargs)
+            with native.open("ab", buffering=0) as output:
+                output.write(late)
+                os.fsync(output.fileno())
+
+        with self.queue.exclusive():
+            with patch.object(queue.os, "link", side_effect=append_during_link):
+                with self.assertRaisesRegex(
+                        queue.QueueSafetyError,
+                        "raw_changed_between_link_and_replace"):
+                    self.queue._rotate_original_source(
+                        native, replacement=b"keep.example.com\n",
+                        generation=generation, expected_identity=identity,
+                        sealed_prefix=prefix,
+                        expected_native_image=(
+                            len(original), hashlib.sha256(original).hexdigest()))
+            pending = self.queue.segments()
+            self.assertEqual(len(pending), 1)
+            self.assertRegex(
+                pending[0].name,
+                r"^native-" + generation + r"-4-[0-9a-f]{32}\.txt$")
+            self.assertEqual(queue._identity(native), identity)
+            self.assertEqual(queue._identity(pending[0]), identity)
+            self.assertEqual(native.read_bytes(), original + late)
+            self.assertEqual(pending[0].read_bytes(), original + late)
+            self.assertEqual(pending[0].stat().st_nlink, 2)
+            recovered = self.queue._rotate_original_source(
+                native, replacement=b"keep.example.com\nracing.example.net\n",
+                generation=generation, expected_identity=identity,
+                sealed_prefix=prefix,
+                expected_native_image=(
+                    len(original + late),
+                    hashlib.sha256(original + late).hexdigest()))
+            self.assertEqual(recovered, pending[0])
+            self.assertEqual(native.read_bytes(),
+                             b"keep.example.com\nracing.example.net\n")
+            self.assertEqual(recovered.read_bytes(), original + late)
+            self.assertEqual(recovered.stat().st_nlink, 1)
+
+    def test_original_native_full_snapshot_changed_after_p1_refuses(self):
+        import hashlib
+        generation = "e" * 32
+        path = self.root / ("learning-" + generation + "-5.txt")
+        initial = b"known.example.com\nkeep.example.net\n"
+        path.write_bytes(initial)
+        before = path.stat()
+        prefix_size = len(b"known.example.com\n")
+        sealed = (prefix_size,
+                  hashlib.sha256(initial[:prefix_size]).hexdigest())
+        with self.queue.exclusive():
+            # A producer can append AFTER original P1 authorizes removal,
+            # yet BEFORE _rotate_original_source() even opens the file.
+            # Prefix/dev/ino still match: only the FULL snapshot catches it.
+            with path.open("ab") as producer:
+                producer.write(b"late.example.org\n")
+                producer.flush()
+                os.fsync(producer.fileno())
+            with self.assertRaisesRegex(
+                    queue.QueueSafetyError, "native_full_preimage_changed"):
+                self.queue._rotate_original_source(
+                    path, replacement=b"keep.example.net\n",
+                    generation=generation,
+                    expected_identity=(before.st_dev, before.st_ino),
+                    sealed_prefix=sealed,
+                    expected_native_image=(
+                        len(initial), hashlib.sha256(initial).hexdigest()))
+            self.assertEqual(
+                path.read_bytes(),
+                initial + b"late.example.org\n")
+            self.assertEqual(self.queue.segments(), [])
+            self.assertEqual(queue._identity(path),
+                             (before.st_dev, before.st_ino))
+
+    def test_native_pending_name_binds_original_manifest_and_profile(self):
+        import hashlib
+        gen = "e" * 32
+        path = self.root / ("learning-" + gen + "-6.txt")
+        content = b"known.example.org\nkeep.example.com\n"
+        path.write_bytes(content)
+        st = path.stat()
+        cut = len(b"known.example.org\n")
+        pending_name = f"native-{gen}-6-" + "1" * 32 + ".txt"
+        wrong_profile = f"native-{gen}-7-" + "1" * 32 + ".txt"
+        kwargs = {
+            "generation": gen,
+            "expected_identity": (st.st_dev, st.st_ino),
+            "sealed_prefix": (
+                cut, hashlib.sha256(content[:cut]).hexdigest()),
+            "expected_native_image": (
+                len(content), hashlib.sha256(content).hexdigest()),
+        }
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(
+                    queue.QueueSafetyError,
+                    "native_source_original_epoch_required"):
+                self.queue._rotate_original_source(
+                    path, replacement=b"keep.example.com\n",
+                    native_pending_name=wrong_profile, **kwargs)
+            retained = self.queue._rotate_original_source(
+                path, replacement=b"keep.example.com\n",
+                native_pending_name=pending_name, **kwargs)
+            self.assertEqual(retained.name, pending_name)
+            self.assertEqual(retained.read_bytes(), content)
+            self.assertEqual(path.read_bytes(), b"keep.example.com\n")
+            with self.assertRaisesRegex(
+                    queue.QueueSafetyError,
+                    "native_pending_requires_qualified_ack"):
+                self.queue.acknowledge(
+                    retained, drained=lambda *_: True,
+                    committed=lambda _: True)
+            self.assertTrue(retained.exists())
+
+    def test_original_native_refuses_bad_epoch_and_non_subset(self):
+        import hashlib
+        generation = "b" * 32
+        native = self.root / ("learning-" + generation + "-2.txt")
+        body = b"known.example.com\nother.example.com\n"
+        native.write_bytes(body)
+        st = native.stat()
+        identity = (st.st_dev, st.st_ino)
+        cut = len(b"known.example.com\n")
+        prefix = (cut, hashlib.sha256(body[:cut]).hexdigest())
+        with self.queue.exclusive():
+            for kwargs in (
+                {"expected_identity": (st.st_dev, st.st_ino + 1),
+                 "sealed_prefix": prefix},
+                {"expected_identity": identity,
+                 "sealed_prefix": (cut, "0" * 64)},
+                {"expected_identity": identity,
+                 "sealed_prefix": prefix},
+            ):
+                replacement = (b"not-an-original-row.example.com\n"
+                               if kwargs["sealed_prefix"] == prefix and
+                               kwargs["expected_identity"] == identity
+                               else b"other.example.com\n")
+                with self.assertRaises(queue.QueueSafetyError):
+                    self.queue._rotate_original_source(
+                        native, replacement=replacement,
+                        generation=generation,
+                        expected_native_image=(
+                            len(body), hashlib.sha256(body).hexdigest()),
+                        **kwargs)
+            with self.assertRaisesRegex(
+                    queue.QueueSafetyError,
+                    "native_compaction_must_shrink_hostlist"):
+                self.queue._rotate_original_source(
+                    native, replacement=body, generation=generation,
+                    expected_identity=identity, sealed_prefix=prefix,
+                    expected_native_image=(
+                        len(body), hashlib.sha256(body).hexdigest()))
+            self.assertEqual(self.queue.segments(), [])
+            self.assertEqual(native.read_bytes(), body)
+
+    def test_original_native_rotate_crash_after_link_retries_without_loss(self):
+        import hashlib
+        generation = "c" * 32
+        native = self.root / ("learning-" + generation + "-3.txt")
+        initial = b"known.example.com\nkeep.example.com\n"
+        native.write_bytes(initial)
+        st = native.stat()
+        identity = (st.st_dev, st.st_ino)
+        cut = len(b"known.example.com\n")
+        prefix = (cut, hashlib.sha256(initial[:cut]).hexdigest())
+        original_replace = queue.os.replace
+
+        def crash_before_replace(*args, **kwargs):
+            raise OSError("injected_before_native_replace")
+        with self.queue.exclusive():
+            with patch.object(queue.os, "replace",
+                              side_effect=crash_before_replace):
+                with self.assertRaises(OSError):
+                    self.queue._rotate_original_source(
+                        native, replacement=b"keep.example.com\n",
+                        generation=generation, expected_identity=identity,
+                        sealed_prefix=prefix,
+                        expected_native_image=(
+                            len(initial), hashlib.sha256(initial).hexdigest()))
+            pending = self.queue.segments()
+            self.assertEqual(len(pending), 1)
+            self.assertEqual(queue._identity(pending[0]), identity)
+            self.assertEqual(queue._identity(native), identity)
+            with native.open("ab") as producer:
+                producer.write(b"late.example.com\n")
+                producer.flush()
+                os.fsync(producer.fileno())
+            # The original prefix remains sealed, but this native source
+            # changed during the old link. The next isolated original P2a
+            # attempt may resume ONLY after a fresh full native snapshot:
+            # no implicit ACK or lost late producer writes.
+            restored = self.queue._rotate_original_source(
+                native, replacement=b"keep.example.com\nlate.example.com\n",
+                generation=generation, expected_identity=identity,
+                sealed_prefix=prefix,
+                expected_native_image=(
+                    len(initial + b"late.example.com\n"),
+                    hashlib.sha256(
+                        initial + b"late.example.com\n").hexdigest()))
+            self.assertEqual(restored, pending[0])
+            self.assertEqual(native.read_bytes(),
+                             b"keep.example.com\nlate.example.com\n")
+            self.assertEqual(restored.read_bytes(),
+                             initial + b"late.example.com\n")
+            self.assertEqual(restored.stat().st_nlink, 1)
 
     def test_rotation_preserves_data_and_keeps_live_path(self):
         with self.queue.exclusive():
