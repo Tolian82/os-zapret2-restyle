@@ -2680,6 +2680,16 @@ def seal_original_learning_third_progress_locked(
                 all_postimages(plan) != pinned):
             raise V2OriginalConfigRefused(
                 "learning_third_progress_source_or_postimages_raced")
+        # When a prior third cursor tip was published, a foreign GUI
+        # rewrite that restores the SAME bytes has a new ctime/mtime.
+        # Refuse it explicitly instead of letting write-once signal
+        # a generic conflicting receipt; never re-pin a new inode.
+        prior_progress_path = slot / "cursor-progress.json"
+        if (prior_progress_path.exists() or
+                prior_progress_path.is_symlink()):
+            if _read(prior_progress_path, uid) != progress:
+                raise V2OriginalConfigRefused(
+                    "learning_third_progress_postimage_identity_changed")
         _write_once(
             slot, "cursor-progress.json", progress, uid)
         if (_read(slot / "cursor-progress.json", uid) != progress or

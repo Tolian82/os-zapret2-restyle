@@ -2476,8 +2476,17 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         next_active.write_bytes(before_managed_progress)
                         self.assertEqual(
                             advance_second_cursor(), advanced)
+                        # Same bytes are not the original ctime/mtime.
+                        # The third immutable after-inode witness MUST
+                        # refuse that GUI restoration, not silently
+                        # grant a new logical cursor or a pending ACK.
+                        with self.assertRaisesRegex(
+                                V2OriginalConfigRefused,
+                                "learning_third_progress_postimage_identity_changed"):
+                            advance_third_cursor()
                         self.assertEqual(
-                            advance_third_cursor(), third_advanced)
+                            (third_slot / "cursor-progress.json").read_bytes(),
+                            frozen_third_progress)
                     # Mutating already sealed old-source prefix MUST
                     # refuse even if the new live inode remains available.
                     former_old_data = user_pending.read_bytes()
