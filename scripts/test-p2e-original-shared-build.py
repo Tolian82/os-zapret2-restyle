@@ -549,11 +549,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
 
         Production P1 still loads the complete pinned PSL and refuses
         if its qualified IDNA2008 provider is absent. This tiny PSL is
-        intentionally test-only and covers the example.com/org roots.
+        intentionally test-only and covers the example.com/net/org roots.
         """
         raw = (
             b"// ===BEGIN ICANN DOMAINS===\n"
-            b"com\norg\n"
+            b"com\nnet\norg\n"
             b"// ===END ICANN DOMAINS===\n"
             b"// ===BEGIN PRIVATE DOMAINS===\n"
             b"blogspot.com\n"
