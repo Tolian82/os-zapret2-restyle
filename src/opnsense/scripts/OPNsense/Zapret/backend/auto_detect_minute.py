@@ -243,6 +243,36 @@ def native_retire_once() -> int:
                 if (not isinstance(stopped_proof, LearningGenerationProof) or
                         stopped_proof.operation_id != stopped_proof.generation):
                     raise MinuteRefused("retirement_original_learning_owner_unqualified")
+                from auto_detect_learning_retirement import retired_learning_stopped
+                from auto_detect_fd import probe_stopped_learning_pending_fd
+                from shared_apply_seal import WORK
+                import pwd
+                gid = pwd.getpwnam(ENGINE_USER).pw_gid
+                if gid <= 0:
+                    raise MinuteRefused("retirement_original_learning_gid_unqualified")
+                queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+                receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+                with queue.exclusive():
+                    folder = receipts._generation(
+                        stopped_proof.generation, create=False)
+                    # An immutable terminal intent may have been published
+                    # before a power loss. NEVER parse a now-missing old N
+                    # through the ordinary source/P1 worker again.
+                    recovering = ((folder / "learning-retirement" /
+                                   "intent.json").exists() or
+                                  (folder / "learning-retirement" /
+                                   "intent.json").is_symlink())
+                    if recovering:
+                        finished = retired_learning_stopped(
+                            receipts, queue, stopped_proof,
+                            WORK / stopped_proof.generation,
+                            attest=attest_learning_stopped_generation,
+                            inspect=probe_stopped_learning_pending_fd,
+                            repair=True)
+                        if not finished:
+                            raise MinuteRefused("retirement_original_learning_incomplete")
+                        print("auto-detect-retire=idle")
+                        return 0
                 processed = run_native_original_v2_cycle_once(
                     learning=True, stopped_learning=True)
                 if (type(processed) is not bool or
@@ -251,9 +281,20 @@ def native_retire_once() -> int:
                 if processed:
                     print("auto-detect-retire=processed")
                     return 0
-                # NO 'idle': the original terminal N/debug source transfer
-                # is not sealed. Shell Stop/Boot cannot accept this state.
-                raise MinuteRefused("retirement_original_learning_sources_not_retired")
+                # Terminal N/debug retirement is permitted only after the
+                # SAME dynamic native cursor tip has zero open/partial WAL,
+                # every byte is ACKed, and every old inode is P2b DRAINED.
+                with queue.exclusive():
+                    finished = retired_learning_stopped(
+                        receipts, queue, stopped_proof,
+                        WORK / stopped_proof.generation,
+                        attest=attest_learning_stopped_generation,
+                        inspect=probe_stopped_learning_pending_fd,
+                        repair=True)
+                    if not finished:
+                        raise MinuteRefused("retirement_original_learning_incomplete")
+                print("auto-detect-retire=idle")
+                return 0
         proof = attest_stopped_generation()
         if not isinstance(proof, GenerationProof):
             raise MinuteRefused('missing_old_generation_proof')
@@ -310,6 +351,35 @@ def native_retired_ready() -> int:
         return 69
     try:
         require_lifecycle_lock()
+        mapping_path = COMMON_ACTIVE / MAP_NAME
+        if _entry_present(mapping_path):
+            mapping = json.loads(_secure_bytes(mapping_path, 1048576, 0))
+            if (type(mapping) is not dict or
+                    type(mapping.get("schema")) is not int or
+                    mapping["schema"] not in (2, 3)):
+                raise MinuteRefused("retired_ready_unknown_original_schema")
+            if mapping["schema"] == 3:
+                from auto_detect_owner import attest_retiring_learning_predecessor
+                from auto_detect_learning_retirement import retired_learning_stopped
+                from auto_detect_fd import probe_stopped_learning_pending_fd
+                from shared_apply_seal import WORK
+                import pwd
+                gid = pwd.getpwnam(ENGINE_USER).pw_gid
+                if gid <= 0:
+                    raise MinuteRefused("retired_ready_learning_gid_unqualified")
+                proof = attest_retiring_learning_predecessor()
+                queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+                receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+                with queue.exclusive():
+                    if (not retired_learning_stopped(
+                            receipts, queue, proof, WORK / proof.generation,
+                            attest=attest_retiring_learning_predecessor,
+                            inspect=probe_stopped_learning_pending_fd,
+                            repair=False) or
+                            attest_retiring_learning_predecessor() != proof):
+                        raise MinuteRefused("retired_ready_learning_not_terminal")
+                print("auto-detect-retire=ready")
+                return 0
         previous = attest_retiring_predecessor()
         import pwd
         gid = pwd.getpwnam(ENGINE_USER).pw_gid
