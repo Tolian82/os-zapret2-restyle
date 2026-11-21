@@ -1765,6 +1765,13 @@ def preview_original_learning_forward_windows_locked(
                     debug_bytes[:debug_end]).hexdigest(),
             },
             "native": native_cursors,
+            # Preserve exact profile provenance before the normal P1
+            # projection loses N (two YouTube learning clones may
+            # discover the SAME hostname independently).
+            "native_observations": [
+                {"native_number": number, "hostlist": name,
+                 "hostname": host}
+                for number, name, host in sorted(candidate_unique)],
             "observations": observations,
             "deduped_cross_inode": sum(
                 1 for key, paths in seen_raw.items()
@@ -2292,6 +2299,106 @@ def seal_original_learning_forward_progress_locked(
             UnicodeError, QueueSafetyError, DebugWindowRefused) as exc:
         raise V2OriginalConfigRefused(
             "learning_forward_progress_source_or_checkpoint_refused") from exc
+
+
+def preview_original_learning_late_tails_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """Read ONLY the next physical old-pending/new-live N-profile suffixes.
+
+    The already published second-slot cursor-progress checkpoint is a strict
+    prerequisite. Reuse the same original P2a/GUI/FD4/FD9/P2b/Found owner;
+    first replay the exact committed cut, then read current physically
+    attested debug and N-inode cuts. No new source WAL, P1, ACK or unlink.
+    """
+    from auto_detect_epoch_receipts import _read
+    from auto_detect_original_lock_handoff import OriginalLockRefused
+    from auto_detect_queue import QueueSafetyError
+    from auto_detect_learning_tails import qualify_learning_forward_late_delta
+    try:
+        if (not isinstance(writer, DestinationCommit) or
+                not writer.queue._held or
+                not getattr(writer, "_gui_held", False) or
+                not isinstance(workspace, Path) or
+                not workspace.is_absolute() or
+                workspace.name != proof.generation or
+                not callable(attest) or not callable(inspect)):
+            raise V2OriginalConfigRefused(
+                "learning_late_tail_original_locks_required")
+        slot = (writer.receipts.root / proof.generation /
+                "cursor-chain-v2" / "00000001")
+        path_progress = slot / "cursor-progress.json"
+        if not path_progress.exists() and not path_progress.is_symlink():
+            raise V2OriginalConfigRefused(
+                "learning_late_tail_second_cursor_not_committed")
+        recorded = _read(path_progress, writer.receipts.uid)
+
+        def current_progress():
+            return seal_original_learning_forward_progress_locked(
+                writer, proof, workspace,
+                config_fd=config_fd, config_path=config_path,
+                attest=attest, inspect=inspect)
+
+        advanced = current_progress()
+        if (advanced["progress_sha256"] !=
+                hashlib.sha256(recorded).hexdigest() or
+                advanced["cursor_advanced"] is not True or
+                advanced["native_pending_ack_authorized"] is not False):
+            raise V2OriginalConfigRefused(
+                "learning_late_tail_cursor_progress_not_original")
+        source_raw = _read(slot / "intent.json", writer.receipts.uid)
+        source = json.loads(source_raw)
+        if (hashlib.sha256(source_raw).hexdigest() !=
+                advanced["source_intent_sha256"] or
+                source["generation"] != proof.generation or
+                source["sequence"] != 1 or
+                source["profiles_count"] != len(proof.learning)):
+            raise V2OriginalConfigRefused(
+                "learning_late_tail_source_not_sealed")
+        frozen = {
+            "debug": source["debug"],
+            "native": [
+                json.loads(_read(
+                    slot / "native" / f"{number:03d}.json",
+                    writer.receipts.uid))["cursor"]
+                for number, _, _ in proof.learning],
+        }
+        original = preview_original_learning_forward_windows_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect,
+            sealed_window=frozen)
+        if (original["native"] != frozen["native"] or
+                original["debug"] != frozen["debug"] or
+                original["observations"] != source["observations"]):
+            raise V2OriginalConfigRefused(
+                "learning_late_tail_second_cut_not_original")
+        current = preview_original_learning_forward_windows_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
+        result = qualify_learning_forward_late_delta(
+            original, current, proof.learning)
+        if (current_progress() != advanced or
+                _read(path_progress, writer.receipts.uid) != recorded or
+                attest() != proof):
+            raise V2OriginalConfigRefused(
+                "learning_late_tail_owner_or_progress_raced")
+        return {
+            "generation": proof.generation,
+            "previous_sequence": 1,
+            "source_intent_sha256": advanced["source_intent_sha256"],
+            "cursor_progress_sha256": advanced["progress_sha256"],
+            **result,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (ReceiptRefused, OriginalLockRefused, QueueSafetyError,
+            DestinationRefused, DebugWindowRefused,
+            OSError, ValueError, TypeError, KeyError, AttributeError,
+            UnicodeError) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_late_tail_source_or_owner_refused") from exc
 
 
 def _recover_original_learning_partial_locked(

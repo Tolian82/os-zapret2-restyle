@@ -1725,6 +1725,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     second_slot = slot.parent / "00000001"
                     from auto_detect_original_v2_model import (
                         seal_original_learning_forward_progress_locked,
+                        preview_original_learning_late_tails_locked,
                     )
                     def advance_second_cursor(*, inspect_witness=drained):
                         with writer.exclusive_targets(), patch(
@@ -1735,7 +1736,18 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof,
                                 inspect=inspect_witness)
+                    def preview_late_tails(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return preview_original_learning_late_tails_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof,
+                                inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        preview_late_tails()
                     partial_second = [False]
                     def abort_after_one_native(folder, name, data, uid):
                         normal_original_write_once(folder, name, data, uid)
@@ -1957,6 +1969,12 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             hashlib.sha256(frozen_progress).hexdigest())
                         self.assertEqual(queue.segments(),
                                          [youtube_pending, user_pending])
+                        initial_late = preview_late_tails()
+                        self.assertEqual(initial_late["native_observations"], [])
+                        self.assertEqual(initial_late["unread_native_bytes"], 0)
+                        self.assertFalse(
+                            initial_late["native_pending_ack_authorized"])
+                        self.assertFalse(initial_late["cursor_advanced"])
                     # After the durable second intent, appends on BOTH
                     # native inodes and debug are permitted. Read-only
                     # replay verifies historical source prefixes and
@@ -1985,6 +2003,75 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         len(forward_preview()["observations"]),
                         second_result["observations_count"])
                     if not sys.platform.startswith("freebsd"):
+                        late = preview_late_tails()
+                        self.assertEqual(late["previous_sequence"], 1)
+                        self.assertEqual(late["native_observations"], [
+                            {"native_number": user_num, "hostlist": "user",
+                             "hostname": "later-new.example.net"},
+                            {"native_number": user_num, "hostlist": "user",
+                             "hostname": "later-old.example.net"},
+                        ])
+                        self.assertFalse(late["cursor_advanced"])
+                        self.assertFalse(late["native_cleanup_authorized"])
+                        self.assertFalse(
+                            late["native_pending_ack_authorized"])
+                        user_cut = json.loads(
+                            per_native[f"{user_num:03d}.json"])["cursor"]
+                        self.assertEqual(
+                            late["native"][1]["old"]["start"],
+                            user_cut["old_end"])
+                        self.assertEqual(
+                            late["native"][1]["new"]["start"],
+                            user_cut["new_end"])
+                        self.assertEqual(
+                            late["native"][1]["old"]["unread_bytes"],
+                            len(b"later-old.example.net\n"))
+                        self.assertEqual(
+                            late["native"][1]["new"]["unread_bytes"],
+                            len(b"later-new.example.net\n"))
+                        self.assertEqual(
+                            late["debug"]["start"],
+                            second_intent["debug"]["end"])
+                        self.assertEqual(
+                            preview_late_tails(), late)
+                        # Exact N is not optional when a YouTube and a
+                        # User learning clone detect the same hostname.
+                        raw_mix_debug = debug_path.read_bytes()
+                        native.write_bytes(b"later-old.example.net\n")
+                        with debug_path.open("ab", buffering=0) as debug:
+                            debug.write(native_debug(
+                                youtube_num, "later-old.example.net",
+                                learning[0][2]))
+                            os.fsync(debug.fileno())
+                        cross_origin = preview_late_tails()
+                        self.assertEqual(
+                            {(x["native_number"], x["hostlist"])
+                             for x in cross_origin["native_observations"]
+                             if x["hostname"] == "later-old.example.net"},
+                            {(youtube_num, "youtube"), (user_num, "user")})
+                        native.write_bytes(b"")
+                        debug_path.write_bytes(raw_mix_debug)
+                        self.assertEqual(preview_late_tails(), late)
+                        self.assertEqual(
+                            queue.segments(),
+                            [youtube_pending, user_pending])
+                        with user_pending.open("ab", buffering=0) as old:
+                            old.write(b"raw-without-debug.example.net\n")
+                            os.fsync(old.fileno())
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            preview_late_tails()
+                        user_pending.write_bytes(
+                            user_pending.read_bytes().replace(
+                                b"raw-without-debug.example.net\n", b""))
+                        self.assertEqual(preview_late_tails(), late)
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            preview_late_tails(
+                                inspect_witness=lambda *_a, **_k: FDState.BUSY)
+                        self.assertFalse(
+                            (second_slot / "ack.json").exists())
+                        # Completed second P1 is immutable even if the
+                        # producer grows BOTH native tails and debug.
+
                         # Completed second P1 is immutable even if the
                         # producer grows BOTH native tails and debug.
                         # Replay cannot re-commit a later minute or

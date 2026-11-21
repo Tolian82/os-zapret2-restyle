@@ -43,6 +43,8 @@
 - [ ] Update original native owner check так, чтобы он подтверждал именно множество разрешённых learning profiles/inbox вместо обязательного observer_native_number; отрицать mismatched/stale/foreign profile, не угадывать по домену.
 - [ ] Выход: проверенный final argv/map, рабочие известные User-домены проходят до Auto-профилей, unknown TCP/TLS доходит до первой learning-копии; прежние IPSET/Voice/порядок остаются штатными.
 
+**Source-only инкремент 21.11.2026, шаг к ACK:** после завершённого второго Found→managed WAL и `cursor-progress.json` добавлена отдельная read-only original FD4/FD9/P2b проверка *следующих* old-pending/new-live суффиксов всех N. Переход от второго подтверждённого курсора к новому физическому снимку сохраняет native номер каждого обучающего экземпляра, даже когда TCP/QUIC одного HOSTLIST видят одинаковый hostname. Несовпадение owner/debug/inode/Found/managed или BUSY — строгий отказ. Это не третий WAL, не P1 и не разрешение удаления: настоящий post-second P1→checkpoint, physical ACK/rebind, retire и интеграция с minute/Apply всё ещё открыты.
+
 ### 4. STEP 3 — Multi-inbox P2, нативная атрибуция и отказ при неопределённости
 
 - [ ] Для каждой обучающей native-копии выделить свой защищённый поколением --hostlist-auto input path, связанный с настоящим native profile ID. Не соединять в один неразмеченный файл, чтобы не терять provenance. Это и рабочий auto-HOSTLIST данного native-профиля, и input для existing P2, **не пассивный лог**.
