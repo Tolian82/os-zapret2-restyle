@@ -92,7 +92,7 @@ class NativeDryRunPaths(unittest.TestCase):
             str(NATIVE / f"learning-{GEN}-5.txt"),
             str(NATIVE / f"learning-{GEN}-03.txt"),
             "/tmp/learning-" + GEN + "-3.txt",
-            str(NATIVE / "../other/learning-" + GEN + "-3.txt"),
+            str(NATIVE / f"../other/learning-{GEN}-3.txt"),
         ):
             with self.subTest(forged=forged):
                 p = self.validate(self.tokens(forged, self.inputs[4]))
