@@ -225,6 +225,35 @@ def native_retire_once() -> int:
         return 69
     try:
         require_lifecycle_lock()
+        # The original post-Stop command has ONE owner, ONE FD9 and ONE
+        # PHP Config/P1 completion. Native schema3 may use the very same
+        # transaction for actual stopped N/debug events, but it must never
+        # claim terminal retirement until the N-source inode replacement
+        # and Boot-ready receipt are fully implemented.
+        mapping_path = COMMON_ACTIVE / MAP_NAME
+        if _entry_present(mapping_path):
+            mapping = json.loads(_secure_bytes(mapping_path, 1048576, 0))
+            if (type(mapping) is not dict or
+                    type(mapping.get("schema")) is not int or
+                    mapping["schema"] not in (2, 3)):
+                raise MinuteRefused("retirement_original_schema_unqualified")
+            if mapping["schema"] == 3:
+                from auto_detect_owner import attest_learning_stopped_generation
+                stopped_proof = attest_learning_stopped_generation()
+                if (not isinstance(stopped_proof, LearningGenerationProof) or
+                        stopped_proof.operation_id != stopped_proof.generation):
+                    raise MinuteRefused("retirement_original_learning_owner_unqualified")
+                processed = run_native_original_v2_cycle_once(
+                    learning=True, stopped_learning=True)
+                if (type(processed) is not bool or
+                        attest_learning_stopped_generation() != stopped_proof):
+                    raise MinuteRefused("retirement_original_learning_owner_raced")
+                if processed:
+                    print("auto-detect-retire=processed")
+                    return 0
+                # NO 'idle': the original terminal N/debug source transfer
+                # is not sealed. Shell Stop/Boot cannot accept this state.
+                raise MinuteRefused("retirement_original_learning_sources_not_retired")
         proof = attest_stopped_generation()
         if not isinstance(proof, GenerationProof):
             raise MinuteRefused('missing_old_generation_proof')
