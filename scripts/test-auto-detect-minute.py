@@ -226,7 +226,7 @@ class MinuteIngressContract(unittest.TestCase):
             with redirect_stdout(out), redirect_stderr(err):
                 self.assertEqual(minute.native_retire_preflight(), 0)
             self.assertEqual(out.getvalue(),
-                             'auto-detect-retire=original-learning-running-attested\\n')
+                             'auto-detect-retire=original-learning-running-attested\n')
             self.assertEqual(err.getvalue(), '')
             fd9.assert_called_once_with()
             legacy.assert_not_called()
@@ -274,7 +274,7 @@ class MinuteIngressContract(unittest.TestCase):
             with redirect_stdout(out):
                 self.assertEqual(minute.native_retire_preflight(), 0)
             self.assertEqual(out.getvalue(),
-                             'auto-detect-retire=original-running-attested\\n')
+                             'auto-detect-retire=original-running-attested\n')
             self.assertEqual(legacy.call_count, 2)
             learning.assert_not_called()
             receipts_type.return_value.verify_stop_only_epoch.assert_called_once()
