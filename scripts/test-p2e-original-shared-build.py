@@ -1729,6 +1729,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         prepare_original_learning_third_slot_locked,
                         seal_original_learning_third_progress_locked,
                         preview_original_learning_third_pending_retirement_locked,
+                        prepare_original_learning_third_pending_ack_locked,
                     )
                     def advance_second_cursor(*, inspect_witness=drained):
                         with writer.exclusive_targets(), patch(
@@ -1775,7 +1776,18 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof,
                                 inspect=inspect_witness)
+                    def prepare_native_ack(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return prepare_original_learning_third_pending_ack_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof,
+                                inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        prepare_native_ack()
                     with self.assertRaises(V2OriginalConfigRefused):
                         pending_retirement()
                     with self.assertRaises(V2OriginalConfigRefused):
@@ -2381,6 +2393,89 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 pending_retirement(
                                     inspect_witness=lambda *_a, **_kw:
                                         FDState.BUSY)
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                prepare_native_ack(
+                                    inspect_witness=lambda *_a, **_kw:
+                                        FDState.BUSY)
+                            # STEP 11: original write-once N ACK-prep
+                            # receipts, aggregate manifest LAST.
+                            ack_folder = third_slot / "pending-ack-prepare"
+                            ack_crashed = [False]
+                            def crash_after_first_ack_N(
+                                    folder, name, data, uid):
+                                normal_original_write_once(
+                                    folder, name, data, uid)
+                                if (folder.name == "pending-ack-prepare"
+                                        and name != "manifest.json"
+                                        and not ack_crashed[0]):
+                                    ack_crashed[0] = True
+                                    raise RuntimeError(
+                                        "synthetic_native_pending_ack_N_fsync")
+                            with patch(
+                                    "auto_detect_epoch_receipts._write_once",
+                                    side_effect=crash_after_first_ack_N):
+                                with self.assertRaisesRegex(
+                                        RuntimeError,
+                                        "synthetic_native_pending_ack_N_fsync"):
+                                    prepare_native_ack()
+                            self.assertTrue(ack_crashed[0])
+                            self.assertTrue(ack_folder.is_dir())
+                            self.assertFalse(
+                                (ack_folder / "manifest.json").exists())
+                            self.assertEqual(
+                                len(list(ack_folder.iterdir())), 1)
+                            manifest_crashed = [False]
+                            def crash_after_ack_manifest(
+                                    folder, name, data, uid):
+                                normal_original_write_once(
+                                    folder, name, data, uid)
+                                if (folder.name == "pending-ack-prepare"
+                                        and name == "manifest.json"
+                                        and not manifest_crashed[0]):
+                                    manifest_crashed[0] = True
+                                    raise RuntimeError(
+                                        "synthetic_native_pending_ack_manifest_fsync")
+                            with patch(
+                                    "auto_detect_epoch_receipts._write_once",
+                                    side_effect=crash_after_ack_manifest):
+                                with self.assertRaisesRegex(
+                                        RuntimeError,
+                                        "synthetic_native_pending_ack_manifest_fsync"):
+                                    prepare_native_ack()
+                            self.assertTrue(manifest_crashed[0])
+                            self.assertTrue(
+                                (ack_folder / "manifest.json").exists())
+                            prepared_ack = prepare_native_ack()
+                            self.assertEqual(
+                                prepared_ack["profiles_count"], 2)
+                            self.assertFalse(
+                                prepared_ack["pending_released"])
+                            self.assertFalse(
+                                prepared_ack["native_pending_ack_authorized"])
+                            self.assertFalse(
+                                prepared_ack["native_cleanup_authorized"])
+                            self.assertFalse(
+                                prepared_ack["generation_retired"])
+                            frozen_ack = {
+                                p.name: p.read_bytes()
+                                for p in ack_folder.iterdir()}
+                            self.assertEqual(
+                                len(frozen_ack), 3)
+                            self.assertEqual(
+                                prepare_native_ack(), prepared_ack)
+                            self.assertEqual(
+                                {p.name: p.read_bytes()
+                                 for p in ack_folder.iterdir()}, frozen_ack)
+                            self.assertEqual(
+                                {p: p.read_bytes() for p in observed_files},
+                                observed_files)
+                            self.assertEqual(
+                                queue.segments(),
+                                [youtube_pending, user_pending])
+                            self.assertEqual(
+                                seal_third_slot(), third)
+                            self.assertEqual(
+                                advance_third_cursor(), third_advanced)
 
                         third_intent_bytes = (
                             third_slot / "intent.json").read_bytes()
@@ -2423,6 +2518,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             user_only["unprocessed_new_bytes"], 0)
                         self.assertEqual(
                             user_only["unprocessed_old_bytes"], 0)
+                        # Live-only N appends do not alter immutable
+                        # old-pending ACK-prep SHA; new live remains unread.
+                        self.assertEqual(
+                            prepare_native_ack(), prepared_ack)
+                        self.assertEqual(
+                            {p.name: p.read_bytes()
+                             for p in ack_folder.iterdir()}, frozen_ack)
                         # A late write to OLD pending must switch the
                         # disposition to KEEP; the third P1 tip is not
                         # allowed to delete those unread bytes.
@@ -2444,6 +2546,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             late_user["unprocessed_old_bytes"], 0)
                         self.assertGreater(
                             late_user["unprocessed_new_bytes"], 0)
+                        with self.assertRaisesRegex(
+                                V2OriginalConfigRefused,
+                                "learning_pending_ack_unprocessed_old_or_unrotated"):
+                            prepare_native_ack()
+                        self.assertEqual(
+                            {p.name: p.read_bytes()
+                             for p in ack_folder.iterdir()}, frozen_ack)
                         self.assertGreaterEqual(
                             late_retirement[
                                 "retained_with_unprocessed_old"], 1)
@@ -2494,6 +2603,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         user_native.write_bytes(previous_live)
                         debug_path.write_bytes(previous_debug)
                         self.assertEqual(seal_third_slot(), third)
+                        # After write_bytes rewrites the old inode,
+                        # same-content ctime/mtime still forbids
+                        # re-sealing a different physical ACK witness.
+                        with self.assertRaisesRegex(
+                                V2OriginalConfigRefused,
+                                "learning_pending_ack_prior_inode_witness_changed"):
+                            prepare_native_ack()
                         # Exact N is not optional when a YouTube and a
                         # User learning clone detect the same hostname.
                         raw_mix_debug = debug_path.read_bytes()
@@ -2602,6 +2718,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     if third_slot.exists():
                         # Disposable fixtures only: never delete a
                         # production third source or original WAL.
+                        ack_folder = third_slot / "pending-ack-prepare"
+                        if ack_folder.exists():
+                            for artifact in ack_folder.iterdir():
+                                artifact.unlink()
+                            ack_folder.rmdir()
                         progress_third = third_slot / "cursor-progress.json"
                         if progress_third.exists():
                             progress_third.unlink()

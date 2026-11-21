@@ -226,7 +226,7 @@ def prepare_third_source_locked(
         names_slot = set(os.listdir(slot))
         if names_slot - {
                 "native", "intent.json", "destination",
-                "cursor-progress.json"}:
+                "cursor-progress.json", "pending-ack-prepare"}:
             raise V2OriginalConfigRefused(
                 "original_third_source_foreign_destination")
         if "cursor-progress.json" in names_slot and (
@@ -236,6 +236,74 @@ def prepare_third_source_locked(
                      "checkpoint.json").exists()):
             raise V2OriginalConfigRefused(
                 "original_third_source_progress_without_checkpoint")
+        if "pending-ack-prepare" in names_slot:
+            if "cursor-progress.json" not in names_slot:
+                raise V2OriginalConfigRefused(
+                    "original_third_source_pending_ack_without_progress")
+            ack_folder = slot / "pending-ack-prepare"
+            _directory(ack_folder, uid)
+            ack_names = set(os.listdir(ack_folder))
+            expected_N = {
+                f"{n:03d}.json" for n, _, _ in proof.learning}
+            if (ack_names - (expected_N | {"manifest.json"}) or
+                    ("manifest.json" in ack_names and
+                     ack_names != expected_N | {"manifest.json"})):
+                raise V2OriginalConfigRefused(
+                    "original_third_source_foreign_pending_ack")
+            ack_rows = []
+            progress_sha = hashlib.sha256(
+                _read(slot / "cursor-progress.json", uid)).hexdigest()
+            intent_sha = hashlib.sha256(
+                _read(slot / "intent.json", uid)).hexdigest()
+            for number, hostlist, path in proof.learning:
+                name = f"{number:03d}.json"
+                if name not in ack_names:
+                    continue
+                raw = _read(ack_folder / name, uid)
+                row = json.loads(raw)
+                if (raw != _canonical(row) or
+                        row.get("schema") != 3 or
+                        row.get("kind") !=
+                        "original-learning-third-pending-ack-N" or
+                        row.get("generation") != proof.generation or
+                        row.get("sequence") != 2 or
+                        row.get("native_number") != number or
+                        row.get("hostlist") != hostlist or
+                        row.get("live_path") != path or
+                        row.get("third_cursor_progress_sha256") !=
+                        progress_sha or
+                        row.get("third_source_intent_sha256") !=
+                        intent_sha or
+                        row.get("ack_authorized") is not False or
+                        row.get("unlink_authorized") is not False):
+                    raise V2OriginalConfigRefused(
+                        "original_third_source_pending_ack_N_unqualified")
+                ack_rows.append(raw)
+            if "manifest.json" in ack_names:
+                raw = _read(ack_folder / "manifest.json", uid)
+                manifest = json.loads(raw)
+                expected_manifest = {
+                    "schema": 3,
+                    "kind": "original-learning-third-pending-ack-prepared",
+                    "generation": proof.generation,
+                    "sequence": 2, "owner_pid": proof.owner.pid,
+                    "owner_start": proof.owner.started,
+                    "operation_id": proof.operation_id,
+                    "native_map_sha256": proof.native_map_sha256,
+                    "third_cursor_progress_sha256": progress_sha,
+                    "third_source_intent_sha256": intent_sha,
+                    "profiles_count": len(proof.learning),
+                    "profiles_sha256": hashlib.sha256(b"".join(
+                        hashlib.sha256(x).digest()
+                        for x in ack_rows)).hexdigest(),
+                    "ack_authorized": False,
+                    "unlink_authorized": False,
+                    "generation_retired": False,
+                }
+                if (raw != _canonical(manifest) or
+                        manifest != expected_manifest):
+                    raise V2OriginalConfigRefused(
+                        "original_third_source_pending_ack_manifest_invalid")
         if "destination" in names_slot:
             if "intent.json" not in names_slot:
                 raise V2OriginalConfigRefused(
@@ -270,7 +338,9 @@ def prepare_third_source_locked(
                         {"native", "intent.json"},
                         {"native", "intent.json", "destination"},
                         {"native", "intent.json", "destination",
-                         "cursor-progress.json"}) or
+                         "cursor-progress.json"},
+                        {"native", "intent.json", "destination",
+                         "cursor-progress.json", "pending-ack-prepare"}) or
                     set(os.listdir(native)) != allowed):
                 raise V2OriginalConfigRefused(
                     "original_third_source_not_complete")

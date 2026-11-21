@@ -2916,6 +2916,253 @@ def preview_original_learning_third_pending_retirement_locked(
             "learning_third_retirement_original_source_refused") from exc
 
 
+def prepare_original_learning_third_pending_ack_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """Write-once third original per-N old-pending ACK PREPARE, no unlink.
+
+    A genuine immutable third cursor + its original P1/Found/managed WAL
+    and all-PID P2b must prove ALL old pending inodes fully covered.
+    Publish N source witnesses first, an ordered aggregate LAST. The
+    receipt protects against a partial fsync crash, a later old append,
+    a same-content inode substitution and re-use of an unrelated cursor.
+
+    This is NOT an ACK, unlink permission or live-service operation.
+    The original source replay still requires the old inode: physical
+    deletion cannot be enabled until that replay is crash-safe.
+    """
+    import os
+    import sys
+    from auto_detect_epoch_receipts import (
+        _canonical, _directory, _read, _sync, _write_once,
+    )
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_queue import NATIVE_PENDING, QueueSafetyError
+
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not writer.queue._held or
+            not getattr(writer, "_gui_held", False) or
+            not isinstance(workspace, Path) or
+            not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(config_path, Path) or
+            not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not callable(attest) or not callable(inspect) or
+            (sys.platform.startswith("freebsd") and (
+                config_path != CONFIG_PATH or
+                writer.receipts.uid != 0 or writer.queue.uid != 0)) or
+            attest() != proof):
+        raise V2OriginalConfigRefused(
+            "learning_pending_ack_original_fd4_fd9_required")
+
+    uid = writer.receipts.uid
+    def held():
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=None if config_path == CONFIG_PATH else uid)
+        if attest() != proof:
+            raise V2OriginalConfigRefused(
+                "learning_pending_ack_original_owner_changed")
+
+    try:
+        held()
+        slot = (writer.receipts.root / proof.generation /
+                "cursor-chain-v2" / "00000002")
+        progress_raw = _read(slot / "cursor-progress.json", uid)
+        progress = json.loads(progress_raw)
+        if (progress_raw != _canonical(progress) or
+                progress.get("kind") !=
+                "original-learning-third-cursor-progress" or
+                progress.get("generation") != proof.generation or
+                progress.get("sequence") != 2 or
+                progress.get("native_pending_ack_authorized") is not False or
+                progress.get("native_cleanup_authorized") is not False):
+            raise V2OriginalConfigRefused(
+                "learning_pending_ack_third_progress_not_sealed")
+        progress_sha = hashlib.sha256(progress_raw).hexdigest()
+        source_raw = _read(slot / "intent.json", uid)
+        source_sha = hashlib.sha256(source_raw).hexdigest()
+        if source_sha != progress["source_intent_sha256"]:
+            raise V2OriginalConfigRefused(
+                "learning_pending_ack_third_source_changed")
+
+        def preview():
+            return preview_original_learning_third_pending_retirement_locked(
+                writer, proof, workspace, config_fd=config_fd,
+                config_path=config_path, attest=attest, inspect=inspect)
+
+        def qualified_N(preflight):
+            if (preflight.get("progress_sha256") != progress_sha or
+                    preflight.get("generation") != proof.generation or
+                    preflight.get("sequence") != 2 or
+                    preflight.get("native_pending_ack_authorized") is not False
+                    or preflight.get("native_cleanup_authorized") is not False
+                    or preflight.get("generation_retired") is not False or
+                    len(preflight.get("profiles", [])) != len(proof.learning)):
+                raise V2OriginalConfigRefused(
+                    "learning_pending_ack_original_preview_unqualified")
+            known_pending = set(writer.queue.segments())
+            selected = set()
+            packed = []
+            for index, (number, hostlist, live_path) in enumerate(
+                    proof.learning):
+                entry = preflight["profiles"][index]
+                if (entry["native_number"] != number or
+                        entry["hostlist"] != hostlist or
+                        entry["status"] != "covered-old-pending-no-ACK" or
+                        entry["unprocessed_old_bytes"] != 0 or
+                        entry["ack_authorized"] is not False or
+                        type(entry["old_committed_end"]) is not int or
+                        entry["old_committed_end"] <= 0 or
+                        entry["old_current_end"] !=
+                        entry["old_committed_end"]):
+                    raise V2OriginalConfigRefused(
+                        "learning_pending_ack_unprocessed_old_or_unrotated")
+                old_path = Path(entry["old_pending_path"])
+                match = NATIVE_PENDING.fullmatch(old_path.name)
+                if (old_path.parent != writer.queue.pending or
+                        old_path not in known_pending or
+                        old_path in selected or match is None or
+                        match[1] != proof.generation or
+                        int(match[2]) != number):
+                    raise V2OriginalConfigRefused(
+                        "learning_pending_ack_foreign_old_inode")
+                selected.add(old_path)
+                nr = _read(
+                    slot / "native" / f"{number:03d}.json", uid)
+                native = json.loads(nr)
+                cursor = native["cursor"]
+                if (nr != _canonical(native) or
+                        native.get("kind") !=
+                        "original-learning-third-native-cut" or
+                        native.get("native_number") != number or
+                        native.get("hostlist") != hostlist or
+                        cursor.get("new_path") != live_path or
+                        cursor.get("old_path") != str(old_path) or
+                        cursor.get("old_end") !=
+                        entry["old_committed_end"]):
+                    raise V2OriginalConfigRefused(
+                        "learning_pending_ack_native_cut_changed")
+                stat_old, data, _ = _native_rebind_stable_snapshot(
+                    old_path, uid, writer.queue.writer_gid,
+                    allowed_links=(1,))
+                digest = hashlib.sha256(data).hexdigest()
+                if (stat_old.st_dev != entry["old_device"] or
+                        stat_old.st_ino != entry["old_inode"] or
+                        stat_old.st_size != entry["old_committed_end"] or
+                        digest != cursor["old_end_sha256"]):
+                    raise V2OriginalConfigRefused(
+                        "learning_pending_ack_old_image_changed")
+                record = {
+                    "schema": 3,
+                    "kind": "original-learning-third-pending-ack-N",
+                    "generation": proof.generation, "sequence": 2,
+                    "native_number": number, "hostlist": hostlist,
+                    "live_path": live_path,
+                    "old_pending_path": str(old_path),
+                    "old_device": stat_old.st_dev,
+                    "old_inode": stat_old.st_ino,
+                    "old_size": stat_old.st_size,
+                    "old_sha256": digest,
+                    "old_ctime_ns": stat_old.st_ctime_ns,
+                    "old_mtime_ns": stat_old.st_mtime_ns,
+                    "third_cursor_progress_sha256": progress_sha,
+                    "third_source_intent_sha256": source_sha,
+                    "ack_authorized": False,
+                    "unlink_authorized": False,
+                }
+                packed.append(
+                    (f"{number:03d}.json", _canonical(record)))
+            return packed
+
+        before = preview()
+        packed = qualified_N(before)
+        payload = {
+            "schema": 3, "kind": "original-learning-third-pending-ack-prepared",
+            "generation": proof.generation, "sequence": 2,
+            "owner_pid": proof.owner.pid,
+            "owner_start": proof.owner.started,
+            "operation_id": proof.operation_id,
+            "native_map_sha256": proof.native_map_sha256,
+            "third_cursor_progress_sha256": progress_sha,
+            "third_source_intent_sha256": source_sha,
+            "profiles_count": len(packed),
+            "profiles_sha256": hashlib.sha256(b"".join(
+                hashlib.sha256(raw).digest()
+                for _, raw in packed)).hexdigest(),
+            "ack_authorized": False,
+            "unlink_authorized": False,
+            "generation_retired": False,
+        }
+        manifest_raw = _canonical(payload)
+        folder = slot / "pending-ack-prepare"
+        if folder.exists() or folder.is_symlink():
+            _directory(folder, uid)
+        else:
+            held()
+            folder.mkdir(mode=0o700)
+            _sync(slot)
+        expected = {name for name, _ in packed} | {"manifest.json"}
+        existing = set(os.listdir(folder))
+        if (existing - expected or
+                ("manifest.json" in existing and existing != expected)):
+            raise V2OriginalConfigRefused(
+                "learning_pending_ack_foreign_or_partial_manifest")
+        for name, raw in packed:
+            if name in existing and _read(folder / name, uid) != raw:
+                raise V2OriginalConfigRefused(
+                    "learning_pending_ack_prior_inode_witness_changed")
+        if ("manifest.json" in existing and
+                _read(folder / "manifest.json", uid) != manifest_raw):
+            raise V2OriginalConfigRefused(
+                "learning_pending_ack_previous_manifest_changed")
+
+        held()
+        for name, raw in packed:
+            _write_once(folder, name, raw, uid)
+        # The native producer ignores P2a. Re-attest ALL original FD4,
+        # FD9/P2b native/debug and physical full old images before the
+        # manifest can be published, not only the last N.
+        if (preview() != before or
+                qualified_N(before) != packed or
+                set(os.listdir(folder)) -
+                ({name for name, _ in packed} | {"manifest.json"})):
+            raise V2OriginalConfigRefused(
+                "learning_pending_ack_native_changed_before_manifest")
+        held()
+        _write_once(folder, "manifest.json", manifest_raw, uid)
+        if (_read(folder / "manifest.json", uid) != manifest_raw or
+                set(os.listdir(folder)) != expected or
+                preview() != before or
+                qualified_N(before) != packed):
+            raise V2OriginalConfigRefused(
+                "learning_pending_ack_postseal_native_changed")
+        held()
+        return {
+            "generation": proof.generation, "sequence": 2,
+            "manifest_sha256": hashlib.sha256(manifest_raw).hexdigest(),
+            "profiles_count": len(packed),
+            "pending_released": False,
+            "native_pending_ack_authorized": False,
+            "native_cleanup_authorized": False,
+            "generation_retired": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (ReceiptRefused, OriginalLockRefused, DestinationRefused,
+            QueueSafetyError, DebugWindowRefused, OSError, ValueError,
+            TypeError, KeyError, AttributeError, UnicodeError) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_pending_ack_original_source_refused") from exc
+
+
 def _recover_original_learning_partial_locked(
         writer: DestinationCommit, proof, workspace: Path,
         slot: Path, intent: dict, *, owned_root: Path,
