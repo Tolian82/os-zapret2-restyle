@@ -1724,6 +1724,255 @@ def preview_original_learning_forward_windows_locked(
         raise V2OriginalConfigRefused("learning_forward_original_window_refused") from exc
 
 
+def prepare_original_learning_forward_second_slot_locked(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """Seal ONE immutable original post-native forward source slot, no P1.
+
+    Existing original P2a+GUI+Config FD4+FD9/P2b are the only authorities.
+    This is cursor-chain-v2/00000001, NOT a second queue or process owner.
+    Per-N write-once receipts are staged FIRST; the one aggregate intent is
+    published LAST. That intent binds an exact source and debug window,
+    all-N cursor SHA and the hash of the COMPLETE attributed observations.
+
+    After the aggregate intent is written, recovery reattests ONLY those
+    exact old/new native prefix cuts and debug cut, even if dvtws2 appended
+    more bytes afterwards. Later bytes cannot silently join this WAL.
+    Before intent exists, conflicting partial records fail closed rather
+    than consuming any new rows to impersonate the interrupted window.
+    No cursor advancement, P1, Found, active rewrite, ACK or product hook.
+    """
+    import os
+    import sys
+    from auto_detect_epoch_receipts import (
+        _canonical, _directory, _read, _write_once, _sync,
+    )
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_queue import QueueSafetyError
+
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not writer.queue._held or not getattr(writer, "_gui_held", False) or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(config_path, Path) or not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not callable(attest) or not callable(inspect) or
+            (sys.platform.startswith("freebsd") and
+             (config_path != CONFIG_PATH or writer.receipts.uid != 0 or
+              writer.queue.uid != 0)) or
+            attest() != proof):
+        raise V2OriginalConfigRefused(
+            "learning_second_slot_original_fd4_fd9_required")
+
+    def held():
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=None if config_path == CONFIG_PATH
+            else writer.receipts.uid)
+        if attest() != proof:
+            raise V2OriginalConfigRefused("learning_second_slot_owner_changed")
+
+    def observation_digest(rows):
+        # One single canonical stream hash, even when 4096 observations
+        # would exceed the 16 KiB limit of any INDIVIDUAL private receipt.
+        return hashlib.sha256(json.dumps(
+            rows, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+    def profile_records(candidate):
+        if (type(candidate.get("native")) is not list or
+                len(candidate["native"]) != len(proof.learning)):
+            raise V2OriginalConfigRefused("learning_second_slot_invalid_native_count")
+        packed = []
+        for i, (number, name, pathname) in enumerate(proof.learning):
+            cursor = candidate["native"][i]
+            if (cursor.get("native_number") != number or
+                    cursor.get("hostlist") != name or
+                    cursor.get("new_path") not in (None, pathname)):
+                raise V2OriginalConfigRefused("learning_second_slot_native_profile_drift")
+            rec = {
+                "schema": 3,
+                "kind": "original-learning-forward-native-cut",
+                "generation": proof.generation, "sequence": 1,
+                "first_slot_sha256": candidate["first_slot_sha256"],
+                "manifest_sha256": candidate["manifest_sha256"],
+                "native_number": number, "hostlist": name,
+                "cursor": cursor,
+                "cursor_advanced": False, "ack_authorized": False,
+            }
+            packed.append((f"{number:03d}.json", _canonical(rec)))
+        return packed
+
+    def intent_for(candidate, packed):
+        return {
+            "schema": 3,
+            "kind": "original-learning-forward-second-slot-prepared",
+            "generation": proof.generation,
+            "sequence": 1,
+            "owner_pid": proof.owner.pid,
+            "owner_start": proof.owner.started,
+            "operation_id": proof.operation_id,
+            "owner_candidate_sha256": proof.owner_candidate_sha256,
+            "final_args_sha256": proof.final_args_sha256,
+            "native_map_sha256": proof.native_map_sha256,
+            "first_slot_sha256": candidate["first_slot_sha256"],
+            "native_rebind_manifest_sha256": candidate["manifest_sha256"],
+            "debug": candidate["debug"],
+            "profiles_count": len(packed),
+            "profiles_sha256": hashlib.sha256(b"".join(
+                hashlib.sha256(raw).digest() for _, raw in packed)).hexdigest(),
+            "observations_count": len(candidate["observations"]),
+            "observations_sha256": observation_digest(
+                candidate["observations"]),
+            "deduped_cross_inode": candidate["deduped_cross_inode"],
+            "cursor_advanced": False,
+            "commit_authorized": False,
+            "ack_authorized": False,
+        }
+
+    try:
+        held()
+        chain = (writer.receipts.root / proof.generation /
+                 "cursor-chain-v2")
+        _directory(chain, writer.receipts.uid)
+        names = set(os.listdir(chain))
+        if (names not in ({"00000000"}, {"00000000", "00000001"})):
+            raise V2OriginalConfigRefused("learning_second_slot_foreign_chain")
+        slot = chain / "00000001"
+        if slot.exists() or slot.is_symlink():
+            _directory(slot, writer.receipts.uid)
+            if set(os.listdir(slot)) - {"native", "intent.json"}:
+                raise V2OriginalConfigRefused("learning_second_slot_foreign_journal")
+        else:
+            slot.mkdir(mode=0o700)
+            _sync(chain)
+        native = slot / "native"
+        if native.exists() or native.is_symlink():
+            _directory(native, writer.receipts.uid)
+        else:
+            if (slot / "intent.json").exists():
+                raise V2OriginalConfigRefused("learning_second_slot_manifest_without_native")
+            native.mkdir(mode=0o700)
+            _sync(slot)
+
+        existing = slot / "intent.json"
+        if existing.exists() or existing.is_symlink():
+            # Intent is the ONLY complete transition. Never rebuild it
+            # from a newer source, even when the appenders have continued.
+            record_raw = _read(existing, writer.receipts.uid)
+            record = json.loads(record_raw)
+            rows = []
+            expected_names = []
+            for number, _, _ in proof.learning:
+                receipt_name = f"{number:03d}.json"
+                expected_names.append(receipt_name)
+                data = _read(native / receipt_name, writer.receipts.uid)
+                row = json.loads(data)
+                if (type(row) is not dict or
+                        row.get("schema") != 3 or
+                        row.get("kind") != "original-learning-forward-native-cut" or
+                        row.get("generation") != proof.generation or
+                        row.get("sequence") != 1 or
+                        row.get("native_number") != number or
+                        row.get("cursor_advanced") is not False or
+                        row.get("ack_authorized") is not False or
+                        data != _canonical(row)):
+                    raise V2OriginalConfigRefused("learning_second_slot_corrupt_native_record")
+                rows.append(row)
+            if (set(os.listdir(slot)) != {"native", "intent.json"} or
+                    set(os.listdir(native)) != set(expected_names) or
+                    record_raw != _canonical(record)):
+                raise V2OriginalConfigRefused("learning_second_slot_incomplete_sealed_journal")
+            frozen = {
+                "debug": record["debug"],
+                "native": [row["cursor"] for row in rows],
+            }
+            replay = preview_original_learning_forward_windows_locked(
+                writer, proof, workspace, config_fd=config_fd,
+                config_path=config_path, attest=attest, inspect=inspect,
+                sealed_window=frozen)
+            packed = profile_records(replay)
+            for (name, raw), row in zip(packed, rows):
+                if _canonical(row) != raw:
+                    raise V2OriginalConfigRefused(
+                        "learning_second_slot_replayed_profile_changed")
+            if record != intent_for(replay, packed):
+                raise V2OriginalConfigRefused(
+                    "learning_second_slot_original_manifest_drift")
+            held()
+            return {
+                "generation": proof.generation,
+                "sequence": 1, "slot": str(slot),
+                "intent_sha256": hashlib.sha256(record_raw).hexdigest(),
+                "profiles_count": len(packed),
+                "observations_count": len(replay["observations"]),
+                "cursor_advanced": False, "commit_authorized": False,
+                "ack_authorized": False,
+            }
+
+        candidate = preview_original_learning_forward_windows_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
+        if (not candidate["observations"] or
+                candidate["p2b_drained"] is not True or
+                candidate["commit_authorized"] is not False or
+                candidate["ack_authorized"] is not False):
+            raise V2OriginalConfigRefused("learning_second_slot_no_proven_observations")
+        packed = profile_records(candidate)
+        allowed = {name for name, _ in packed}
+        existing_records = set(os.listdir(native))
+        if existing_records - allowed:
+            raise V2OriginalConfigRefused("learning_second_slot_foreign_profile_receipt")
+        for name, raw in packed:
+            if name in existing_records and _read(
+                    native / name, writer.receipts.uid) != raw:
+                raise V2OriginalConfigRefused(
+                    "learning_second_slot_interrupted_source_conflict")
+        prepared = _canonical(intent_for(candidate, packed))
+        held()
+        for name, raw in packed:
+            _write_once(native, name, raw, writer.receipts.uid)
+        # A native append AFTER individual per-N write-once receipts is
+        # safe ONLY when the exact ORIGINAL snapshot can be reattested.
+        # New bytes are deliberately excluded from this immutable intent.
+        second = preview_original_learning_forward_windows_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect,
+            sealed_window={"debug": candidate["debug"],
+                           "native": candidate["native"]})
+        if (second != candidate or
+                set(os.listdir(native)) != allowed):
+            raise V2OriginalConfigRefused(
+                "learning_second_slot_prefix_changed_before_manifest")
+        held()
+        _write_once(slot, "intent.json", prepared, writer.receipts.uid)
+        if (set(os.listdir(slot)) != {"native", "intent.json"} or
+                _read(existing, writer.receipts.uid) != prepared):
+            raise V2OriginalConfigRefused(
+                "learning_second_slot_aggregate_intent_not_durable")
+        return {
+            "generation": proof.generation,
+            "sequence": 1, "slot": str(slot),
+            "intent_sha256": hashlib.sha256(prepared).hexdigest(),
+            "profiles_count": len(packed),
+            "observations_count": len(candidate["observations"]),
+            "cursor_advanced": False, "commit_authorized": False,
+            "ack_authorized": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (OSError, ValueError, TypeError, KeyError, AttributeError,
+            ReceiptRefused, OriginalLockRefused, QueueSafetyError,
+            DestinationRefused, DebugWindowRefused) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_second_slot_original_source_or_journal_refused") from exc
+
+
 def _recover_original_learning_partial_locked(
         writer: DestinationCommit, proof, workspace: Path,
         slot: Path, intent: dict, *, owned_root: Path,
