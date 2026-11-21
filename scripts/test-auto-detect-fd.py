@@ -93,7 +93,7 @@ class FDPortable(unittest.TestCase):
                          mock.Mock(side_effect=AssertionError("schema2_stop_called"))),
                      attest_learning_stopped_generation=(
                          attest if learning else
-                         mock.Mock(side_effect=AssertionError("schema3_stop_called")))
+                         mock.Mock(side_effect=AssertionError("schema3_stop_called"))))
              }):
             probe = (mod.probe_stopped_learning_pending_fd if learning
                      else mod.probe_stopped_pending_fd)
