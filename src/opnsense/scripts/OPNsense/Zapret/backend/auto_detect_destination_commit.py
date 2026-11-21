@@ -224,6 +224,126 @@ def _original_source_plan_fields(folder: Path, intent: dict,
             "debug_end_offset": intent["debug_end_offset"],
             "debug_end_sha256": intent["debug_end_sha256"],
         }
+    # The SECOND original same-generation schema-3 source is a virtual
+    # cursor slot, NOT a new P2 destination writer or real pending file.
+    # Reuse this exact source-bound original plan/CAS/checkpoint path.
+    if intent.get("kind") == "original-learning-forward-second-slot-prepared":
+        if (folder.name != "00000001" or
+                folder.parent.name != "cursor-chain-v2" or
+                folder.parent.parent.name != intent.get("generation") or
+                intent.get("schema") != 3 or intent.get("sequence") != 1 or
+                intent.get("ack_authorized") is not False or
+                intent.get("cursor_advanced") is not False or
+                intent.get("commit_authorized") is not False):
+            raise DestinationRefused("learning_forward_wal_not_original_second_slot")
+        raw = _read(folder / "intent.json", uid)
+        try:
+            saved = json.loads(raw)
+        except (ValueError, UnicodeError, TypeError) as exc:
+            raise DestinationRefused("learning_forward_wal_source_unreadable") from exc
+        if saved != intent or not isinstance(intent.get("observations"), list):
+            raise DestinationRefused("learning_forward_wal_intent_changed")
+        observations = intent["observations"]
+        if (not 0 < len(observations) <= 4096 or
+                len(observations) != intent.get("observations_count") or
+                any(type(row) is not dict or
+                    set(row) != {"hostname", "hostlist"} or
+                    type(row["hostname"]) is not str or
+                    row["hostlist"] not in {"youtube", "user"}
+                    for row in observations) or
+                _sha(json.dumps(
+                    observations, sort_keys=True,
+                    separators=(",", ":")).encode()) !=
+                intent.get("observations_sha256")):
+            raise DestinationRefused("learning_forward_wal_observations_not_sealed")
+        first_slot = folder.parent / "00000000"
+        _directory(first_slot, uid)
+        first_raw = _read(first_slot / "intent.json", uid)
+        if _sha(first_raw) != intent.get("first_slot_sha256"):
+            raise DestinationRefused("learning_forward_wal_first_slot_changed")
+        try:
+            original = json.loads(first_raw)
+        except (UnicodeError, ValueError, TypeError) as exc:
+            raise DestinationRefused("learning_forward_wal_first_intent_invalid") from exc
+        if (not isinstance(original, dict) or original.get("schema") != 3 or
+                original.get("sequence") != 0 or
+                original.get("generation") != intent["generation"]):
+            raise DestinationRefused("learning_forward_wal_first_intent_foreign")
+        # The original permanent Found+active managed destination MUST
+        # already have its write-once checkpoint before a second slot
+        # can legally source another P1 transaction.
+        first_plan, first_plan_raw = qualified_destination_plan(
+            first_slot, original, uid)
+        first_cp = json.loads(_read(
+            first_slot / "destination" / "checkpoint.json", uid))
+        if first_cp != {
+                "schema": 1,
+                "kind": "destination-and-cursor-committed",
+                "generation": intent["generation"],
+                "pending_name": "learning-00000000",
+                "plan_sha256": _sha(first_plan_raw),
+                "evidence": "learning-native-debug",
+                "committed_cursor_offset": original["debug_end_offset"],
+                "committed_cursor_sha256": original["debug_end_sha256"],
+                "ack_authorized": False}:
+            raise DestinationRefused("learning_forward_wal_first_checkpoint_uncommitted")
+        rebind = first_slot / "native-rebind"
+        _directory(rebind, uid)
+        if (_sha(_read(rebind / "manifest.json", uid)) !=
+                intent.get("native_rebind_manifest_sha256")):
+            raise DestinationRefused("learning_forward_wal_native_manifest_changed")
+        native_dir = folder / "native"
+        _directory(native_dir, uid)
+        if (type(intent.get("profiles_count")) is not int or
+                intent["profiles_count"] != len(original["native"]) or
+                len(original["native"]) < 1 or
+                type(intent.get("debug")) is not dict or
+                intent["debug"].get("start") != original["debug_end_offset"] or
+                intent["debug"].get("start_sha256") !=
+                original["debug_end_sha256"] or
+                intent["debug"].get("end") is None or
+                type(intent["debug"]["end"]) is not int or
+                intent["debug"]["end"] < intent["debug"]["start"] or
+                type(intent.get("profiles_sha256")) is not str or
+                not SHA256.fullmatch(intent["profiles_sha256"])):
+            raise DestinationRefused("learning_forward_wal_unqualified_debug_or_n")
+        profile_bytes = []
+        exact_names = set()
+        for first in original["native"]:
+            number = first["native_number"]
+            name = f"{number:03d}.json"
+            exact_names.add(name)
+            child_raw = _read(native_dir / name, uid)
+            child = json.loads(child_raw)
+            if (not isinstance(child, dict) or
+                    child_raw != _canonical(child) or
+                    child.get("schema") != 3 or
+                    child.get("kind") != "original-learning-forward-native-cut" or
+                    child.get("generation") != intent["generation"] or
+                    child.get("sequence") != 1 or
+                    child.get("first_slot_sha256") != _sha(first_raw) or
+                    child.get("manifest_sha256") !=
+                    intent["native_rebind_manifest_sha256"] or
+                    (child.get("native_number"), child.get("hostlist")) !=
+                    (number, first["hostlist"]) or
+                    child.get("cursor_advanced") is not False or
+                    child.get("ack_authorized") is not False):
+                raise DestinationRefused("learning_forward_wal_foreign_native_cut")
+            profile_bytes.append(hashlib.sha256(child_raw).digest())
+        if (set(os.listdir(native_dir)) != exact_names or
+                _sha(b"".join(profile_bytes)) != intent["profiles_sha256"]):
+            raise DestinationRefused("learning_forward_wal_native_cuts_changed")
+        return {
+            "schema": 3, "kind": "durable-destination-plan",
+            "generation": intent["generation"],
+            "pending_name": "learning-00000001",
+            "pending_sha256": _sha(
+                _canonical({"observations": observations})),
+            "evidence": "learning-native-debug",
+            "debug_end_offset": intent["debug"]["end"],
+            "debug_end_sha256": intent["debug"]["end_sha256"],
+            "source_intent_sha256": _sha(raw),
+        }
     if (folder.name != "00000000" or
             folder.parent.name != "cursor-chain-v2" or
             folder.parent.parent.name != intent.get("generation") or
@@ -467,7 +587,7 @@ class DestinationCommit:
             if (checkpoint.get("plan_sha256") != _sha(plan_raw) or
                     checkpoint.get("evidence") != source["evidence"] or
                     checkpoint.get("committed_cursor_offset") != source["debug_end_offset"] or
-                    checkpoint.get("committed_cursor_sha256") != intent["debug_end_sha256"]):
+                    checkpoint.get("committed_cursor_sha256") != source["debug_end_sha256"]):
                 raise DestinationRefused("checkpoint_differs_from_plan")
             return checkpoint  # never undo later GUI deletion on acknowledged replay
         # All-target preflight BEFORE any physical CAS replacement. A GUI
