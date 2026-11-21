@@ -3658,7 +3658,7 @@ def _commit_with_original_learning_slot(
         owned_root: Path, manual_hostlists: dict[str, str],
         global_exclude: str, attest, inspect=probe_pending_fd,
         psl: PublicSuffixList | None = None,
-        sequence: int = 2, prepare=None,
+        sequence: int = 2, prepare=None, stopped: bool = False,
 ) -> dict:
     """Original schema3 source -> SAME Found/managed P2k2b WAL.
 
@@ -3701,6 +3701,9 @@ def _commit_with_original_learning_slot(
         raise V2OriginalConfigRefused(
             "learning_third_original_config_fd9_model_required")
 
+    if type(stopped) is not bool:
+        raise V2OriginalConfigRefused("learning_forward_invalid_stop_mode")
+
     def config_held():
         assert_inherited_config_fd(
             config_fd, config_path,
@@ -3709,6 +3712,11 @@ def _commit_with_original_learning_slot(
         if attest() != proof:
             raise V2OriginalConfigRefused(
                 "learning_forward_original_config_owner_changed")
+        if stopped and sys.platform.startswith("freebsd"):
+            from auto_detect_owner import attest_learning_stopped_generation
+            if attest_learning_stopped_generation() != proof:
+                raise V2OriginalConfigRefused(
+                    "learning_forward_original_stopped_not_attested")
 
     if prepare is None:
         prepare = prepare_original_learning_third_slot_locked
@@ -3790,44 +3798,53 @@ def _commit_with_original_learning_slot(
                 intent["observations"], manual_hostlists,
                 old_owned, before_shared.decode("utf-8"),
                 global_exclude, psl=psl)
-            # The same original live known composer/reloader proof as
-            # first-slot P1. Never write Found without current same-PID
-            # managed after-images.
-            canonical = {}
-            for name in KNOWN_HOSTLISTS:
-                normalized = normalize(
-                    manual_hostlists[name], name)["normalized"]
-                canonical[name] = (
-                    normalized + ("\n" if normalized else ""))
-            aligned = preview_live_known_after_readonly(
-                canonical, candidate["effects"],
-                active=COMMON_ACTIVE, owned_root=owned_root,
-                owner_uid=writer.receipts.uid, attest=attest)
-            if (aligned["owner_schema"] != 3 or
-                    aligned["generation"] != proof.generation or
-                    aligned["operation"] != proof.operation_id or
-                    aligned["pid"] != proof.owner.pid or
-                    aligned["started"] != proof.owner.started or
-                    aligned["commit_authorized"] is not False or
-                    aligned["ack_authorized"] is not False):
-                raise V2OriginalConfigRefused(
-                    "learning_forward_live_generation_changed")
-            live = {}
-            for name in aligned["changed"]:
-                row = aligned["files"][name]
-                path = (COMMON_ACTIVE / "managed" /
-                        ("hostlist-" + name + ".txt"))
-                after = candidate["managed_after"][name]
-                if (row["path"] != str(path) or
-                        row["after_sha256"] !=
-                        hashlib.sha256(after).hexdigest()):
+            if stopped:
+                # Original terminal stopped-owner P1 still uses the *same*
+                # immutable source intent, same Config snapshot, same GUI
+                # lock and DestinationCommit. Only the live preimage proof
+                # changes: no running PID is inferred after explicit Stop.
+                live = _original_stopped_learning_live_preimages(
+                    writer, proof, manual_hostlists, old_owned, candidate,
+                    attest)
+            else:
+                # The same original live known composer/reloader proof as
+                # first-slot P1. Never write Found without current same-PID
+                # managed after-images.
+                canonical = {}
+                for name in KNOWN_HOSTLISTS:
+                    normalized = normalize(
+                        manual_hostlists[name], name)["normalized"]
+                    canonical[name] = (
+                        normalized + ("\n" if normalized else ""))
+                aligned = preview_live_known_after_readonly(
+                    canonical, candidate["effects"],
+                    active=COMMON_ACTIVE, owned_root=owned_root,
+                    owner_uid=writer.receipts.uid, attest=attest)
+                if (aligned["owner_schema"] != 3 or
+                        aligned["generation"] != proof.generation or
+                        aligned["operation"] != proof.operation_id or
+                        aligned["pid"] != proof.owner.pid or
+                        aligned["started"] != proof.owner.started or
+                        aligned["commit_authorized"] is not False or
+                        aligned["ack_authorized"] is not False):
                     raise V2OriginalConfigRefused(
-                        "learning_forward_live_after_mismatch")
-                live[name] = {
-                    "path": path,
-                    "before_sha256": row["before_sha256"],
-                    "after": after,
-                }
+                        "learning_forward_live_generation_changed")
+                live = {}
+                for name in aligned["changed"]:
+                    row = aligned["files"][name]
+                    path = (COMMON_ACTIVE / "managed" /
+                            ("hostlist-" + name + ".txt"))
+                    after = candidate["managed_after"][name]
+                    if (row["path"] != str(path) or
+                            row["after_sha256"] !=
+                            hashlib.sha256(after).hexdigest()):
+                        raise V2OriginalConfigRefused(
+                            "learning_forward_live_after_mismatch")
+                    live[name] = {
+                        "path": path,
+                        "before_sha256": row["before_sha256"],
+                        "after": after,
+                    }
             # Native appenders ignore P2a. Reattest the *frozen* second
             # source and every GUI Found preimage after potentially slow
             # PSL/live work. Any foreign GUI edit fails before P2k2b.
