@@ -291,6 +291,9 @@ class CursorChain:
                 _load(slot, self.receipts.uid)
                 slot.unlink()
                 continue
+            if slot.name == "anchor-native":
+                self._erase_learning_records(slot)
+                continue
             if not STEP.fullmatch(slot.name):
                 raise CursorChainRefused("foreign_old_cursor_entry")
             _directory(slot, self.receipts.uid)
@@ -306,12 +309,26 @@ class CursorChain:
                 elif entry.name in {"intent.json", "ack.json", "recovery.json"}:
                     self._check_old_file(entry)
                     entry.unlink()
+                elif entry.name in {"native", "progress"}:
+                    self._erase_learning_records(entry)
+                elif re.fullmatch(r"(?:rebind|delete)-[0-9]{3}\.json", entry.name):
+                    self._check_old_file(entry)
+                    entry.unlink()
                 else:
                     raise CursorChainRefused("foreign_old_cursor_artifact")
             slot.rmdir()
         _sync(path)
         path.rmdir()
         _sync(path.parent)
+
+    def _erase_learning_records(self, path):
+        _directory(path, self.receipts.uid)
+        for child in path.iterdir():
+            if not re.fullmatch(r"[0-9]{3}\.json", child.name):
+                raise CursorChainRefused("foreign_old_learning_record")
+            self._check_old_file(child)
+            child.unlink()
+        path.rmdir()
 
     def _check_old_file(self, path: Path) -> None:
         item = path.lstat()
@@ -356,7 +373,8 @@ class CursorChain:
         _sync(prepared)
 
     def ensure_capacity(self, proof: GenerationProof, *,
-                        attest: Callable = attest_running_generation) -> None:
+                        attest: Callable = attest_running_generation,
+                        workspace: Path | None = None) -> None:
         """Crash-recover the same owner chain, then bound 512 fully ACKed slots.
 
         Original queue FD and running generation stay unchanged. First
@@ -364,6 +382,9 @@ class CursorChain:
         the old tree away, rename the successor into place, and only then
         unlink old ACKed receipts. Each interrupted rename is recoverable.
         """
+        from auto_detect_owner import LearningGenerationProof
+        if isinstance(proof, LearningGenerationProof):
+            return self._ensure_learning_capacity(proof, workspace, attest=attest)
         if (not self.queue._held or not callable(attest) or attest() != proof):
             raise CursorChainRefused("original_rollover_queue_owner_required")
         root, epoch, epoch_raw = self._root(proof, create=False)
@@ -1123,3 +1144,543 @@ class CursorChain:
                 DestinationRefused, GenerationRefused, OSError, ValueError,
                 TypeError, KeyError, AttributeError, RuntimeError) as exc:
             raise CursorChainRefused("original_learning_first_slot_refused") from exc
+
+    # Schema3 uses these same source/destination/ACK folders from the very
+    # first physical event. The historic three-slot fixtures are not a
+    # prerequisite for an ordinary, independent N-inbox minute.
+    def learning_epoch(self, proof, workspace):
+        from auto_detect_owner import LearningGenerationProof
+        if (not isinstance(proof, LearningGenerationProof) or not self.queue._held):
+            raise CursorChainRefused("learning_cycle_original_queue_required")
+        folder, seed, seed_raw = self.receipts._learning_pretraffic(
+            proof, self.queue, workspace)
+        epoch, encoded = _load(folder / "epoch.json", self.receipts.uid)
+        if (encoded != _canonical(epoch) or epoch.get("schema") != 3 or
+                epoch.get("kind") != "original-native-learning-epoch" or
+                epoch.get("generation") != proof.generation or
+                epoch.get("operation_id") != proof.operation_id or
+                epoch.get("owner_pid") != proof.owner.pid or
+                epoch.get("owner_start") != proof.owner.started or
+                epoch.get("owner_candidate_sha256") != proof.owner_candidate_sha256 or
+                epoch.get("native_map_sha256") != proof.native_map_sha256 or
+                epoch.get("final_args_sha256") != proof.final_args_sha256 or
+                epoch.get("pretraffic_sha256") != _digest(seed_raw) or
+                epoch.get("learning") != seed["learning"] or
+                epoch.get("files") != seed["files"] or
+                epoch.get("ack_authorized") is not False):
+            raise CursorChainRefused("learning_cycle_original_epoch_changed")
+        return folder, seed, encoded
+
+    def learning_tip(self, proof, workspace):
+        folder, seed, epoch_raw = self.learning_epoch(proof, workspace)
+        root = folder / CHAIN
+        state = {}
+        for n, label, path in proof.learning:
+            zero = next(row for row in seed["learning"] if row["native_number"] == n)
+            state[n] = dict(native_number=n, hostlist=label, path=path, streams=[dict(
+                path=path, device=zero["device"], inode=zero["inode"],
+                offset=0, prefix_sha256=EMPTY_HASH)])
+        debug = dict(path=str(self.queue.root / "debug.log"),
+                     device=seed["files"][1]["device"],
+                     inode=seed["files"][1]["inode"], offset=0,
+                     prefix_sha256=EMPTY_HASH)
+        result = dict(root=root, sequence=0, cycle=0, state=state, debug=debug,
+                      previous_ack_sha256=_digest(epoch_raw), slot=None,
+                      intent=None, epoch_sha256=_digest(epoch_raw))
+        if not root.exists() and not root.is_symlink():
+            return result
+        _directory(root, self.receipts.uid)
+        entries = set(os.listdir(root))
+        if ANCHOR in entries:
+            anchor, state = _learning_checked_anchor(root, proof, epoch_raw, self.receipts.uid)
+            result.update(cycle=anchor["cycle"], state=state, debug=anchor["debug"],
+                          previous_ack_sha256=anchor["previous_ack_sha256"])
+            entries -= {ANCHOR, "anchor-native"}
+        if entries - {name for name in entries if STEP.fullmatch(name)}:
+            raise CursorChainRefused("learning_cycle_foreign_chain_entry")
+        for sequence, name in enumerate(sorted(entries)):
+            if name != f"{sequence:08d}" or sequence >= MAX_STEPS:
+                raise CursorChainRefused("learning_cycle_noncontiguous_chain")
+            slot = root / name
+            _directory(slot, self.receipts.uid)
+            if not (slot / "intent.json").exists():
+                if set(os.listdir(slot)) not in (set(), {"native"}):
+                    raise CursorChainRefused("learning_cycle_unsealed_source_has_effects")
+                # Before the aggregate intent exists no destination/native
+                # mutation is permitted. Reclaim only that incomplete
+                # private metadata, then freeze a new physical snapshot.
+                staged = slot / "native"
+                if staged.exists():
+                    _directory(staged, self.receipts.uid)
+                    for child in staged.iterdir():
+                        if not re.fullmatch(r"[0-9]{3}\.json", child.name):
+                            raise CursorChainRefused("learning_cycle_foreign_unsealed_N")
+                        _read(child, self.receipts.uid)
+                        child.unlink()
+                    staged.rmdir()
+                    _sync(slot)
+                result.update(sequence=sequence, slot=slot)
+                if name != max(entries):
+                    raise CursorChainRefused("learning_cycle_gap_before_successor")
+                return result
+            intent, raw = _load(slot / "intent.json", self.receipts.uid)
+            source = learning_cycle_source_fields(slot, intent, self.receipts.uid)
+            native = _learning_native_records(slot / "native", intent,
+                                               self.receipts.uid)
+            if (intent["sequence"] != sequence or intent["cycle"] != result["cycle"] or
+                    intent["epoch_sha256"] != result["epoch_sha256"] or
+                    intent["previous_ack_sha256"] != result["previous_ack_sha256"] or
+                    intent["debug"]["start"] != result["debug"] or
+                    {n: _learning_start(row) for n, row in native.items()} != result["state"]):
+                raise CursorChainRefused("learning_cycle_cursor_predecessor_changed")
+            ack_file = slot / "ack.json"
+            if not ack_file.exists() and not ack_file.is_symlink():
+                if name != max(entries):
+                    raise CursorChainRefused("learning_cycle_successor_before_ack")
+                result.update(sequence=sequence, slot=slot, intent=intent)
+                return result
+            ack, ack_raw = _load(ack_file, self.receipts.uid)
+            cp, cp_raw = learning_cycle_checkpoint(slot, intent, self.receipts.uid)
+            progress = _learning_native_records(slot / "progress", intent,
+                                                 self.receipts.uid, progress=True)
+            expected = dict(schema=3, kind="original-learning-cursor-acked",
+                            generation=proof.generation, sequence=sequence,
+                            cycle=result["cycle"], source_intent_sha256=_digest(raw),
+                            checkpoint_sha256=_digest(cp_raw),
+                            previous_ack_sha256=result["previous_ack_sha256"],
+                            native_sha256=_learning_records_digest(progress),
+                            debug=intent["debug"]["end"], ack_authorized=False)
+            if ack != expected or ack_raw != _canonical(ack):
+                raise CursorChainRefused("learning_cycle_ack_not_original_checkpoint")
+            result.update(sequence=sequence + 1, state=progress,
+                          debug=ack["debug"], previous_ack_sha256=_digest(ack_raw),
+                          slot=None, intent=None)
+        return result
+
+    def _ensure_learning_capacity(self, proof, workspace, *, attest):
+        """The original .next/.old anchor swap, carrying ALL N cursors.
+
+        No pending inode, unread tail, destination or producer is removed.
+        Only fully ACKed receipt history is reclaimed after the successor
+        state has been fsynced and installed atomically.
+        """
+        from auto_detect_original_v2_model import _native_rebind_stable_snapshot
+        if not self.queue._held or not callable(attest) or attest() != proof:
+            raise CursorChainRefused("learning_rollover_original_owner_required")
+        folder, seed, epoch_raw = self.learning_epoch(proof, workspace)
+        root, prepared, retired = folder / CHAIN, folder / NEXT, folder / OLD
+        if retired.exists() or retired.is_symlink():
+            _directory(retired, self.receipts.uid)
+            if not root.exists() and not root.is_symlink():
+                retired.rename(root)
+                _sync(folder)
+            elif prepared.exists() or prepared.is_symlink():
+                raise CursorChainRefused("learning_rollover_ambiguous_paths")
+            else:
+                _learning_checked_anchor(root, proof, epoch_raw, self.receipts.uid)
+                self._erase_old_tree(retired)
+        tip = self.learning_tip(proof, workspace)
+        if tip["sequence"] < MAX_STEPS:
+            if prepared.exists() or prepared.is_symlink():
+                raise CursorChainRefused("learning_rollover_without_terminal_chain")
+            return
+        if tip["slot"] is not None or tip["intent"] is not None or tip["cycle"] >= (1 << 32) - 1:
+            raise CursorChainRefused("learning_rollover_chain_not_terminal")
+        expected_pending = {Path(s["path"]) for row in tip["state"].values()
+                            for s in row["streams"] if Path(s["path"]).parent == self.queue.pending}
+        if set(self.queue.segments()) != expected_pending:
+            raise CursorChainRefused("learning_rollover_foreign_pending")
+        expected = dict(schema=3, kind="original-learning-cursor-anchor",
+                        generation=proof.generation, epoch_sha256=_digest(epoch_raw),
+                        native_map_sha256=proof.native_map_sha256,
+                        final_args_sha256=proof.final_args_sha256,
+                        cycle=tip["cycle"] + 1,
+                        previous_ack_sha256=tip["previous_ack_sha256"],
+                        native_numbers=list(tip["state"]),
+                        native_sha256=_learning_records_digest(tip["state"]),
+                        debug=tip["debug"], ack_authorized=False)
+        for cursor in [tip["debug"], *(s for row in tip["state"].values() for s in row["streams"])]:
+            st, data, _ = _native_rebind_stable_snapshot(
+                Path(cursor["path"]), self.receipts.uid, self.queue.writer_gid,
+                allowed_links=(1,))
+            _learning_prefix(cursor, st, data)
+        if not prepared.exists():
+            prepared.mkdir(mode=0o700)
+            _sync(folder)
+        _directory(prepared, self.receipts.uid)
+        if set(os.listdir(prepared)) - {ANCHOR, "anchor-native"}:
+            raise CursorChainRefused("learning_rollover_foreign_stage")
+        records = prepared / "anchor-native"
+        if not records.exists():
+            records.mkdir(mode=0o700)
+            _sync(prepared)
+        for n, row in tip["state"].items():
+            _write_once(records, f"{n:03d}.json", _canonical(row), self.receipts.uid)
+        _write_once(prepared, ANCHOR, _canonical(expected), self.receipts.uid)
+        proposed, state = _learning_checked_anchor(prepared, proof, epoch_raw, self.receipts.uid)
+        if proposed != expected or state != tip["state"] or attest() != proof or self.learning_tip(proof, workspace) != tip:
+            raise CursorChainRefused("learning_rollover_state_changed_before_swap")
+        root.rename(retired)
+        _sync(folder)
+        prepared.rename(root)
+        _sync(folder)
+        self._erase_old_tree(retired)
+        if attest() != proof or self.learning_tip(proof, workspace)["cycle"] != expected["cycle"]:
+            raise CursorChainRefused("learning_rollover_successor_not_published")
+
+    def prepare_learning_cycle(self, proof, workspace, *, attest,
+                               inspect=probe_pending_fd):
+        from auto_detect_original_v2_model import _native_rebind_stable_snapshot
+        from auto_detect_debug_window import ADD, MAX_WINDOW, _hostname
+        if not callable(attest) or attest() != proof or not callable(inspect):
+            raise CursorChainRefused("learning_cycle_owner_required")
+        self.queue._verify()
+        tip = self.learning_tip(proof, workspace)
+        if tip["sequence"] >= MAX_STEPS:
+            raise CursorChainRefused("learning_cycle_capacity_requires_rollover")
+        slot = tip["slot"] or tip["root"] / f'{tip["sequence"]:08d}'
+        if tip["intent"] is not None:
+            intent = tip["intent"]
+            # After the original durable checkpoint, replay is ACK-only.
+            # Cleaned native source paths need never be reopened for P1.
+            if (slot / "destination" / "checkpoint.json").exists():
+                learning_cycle_checkpoint(slot, intent, self.receipts.uid)
+            else:
+                self.attest_learning_cycle_prefix(proof, workspace, slot, intent,
+                                                   attest=attest, inspect=inspect)
+            return _learning_prepared(slot, intent)
+        state = tip["state"]
+        pending = {Path(s["path"]) for row in state.values()
+                   for s in row["streams"] if Path(s["path"]).parent == self.queue.pending}
+        if set(self.queue.segments()) != pending:
+            raise CursorChainRefused("learning_cycle_unattributed_pending")
+        snapshots = {}
+        source_bytes = 0
+        for row in state.values():
+            for cursor in row["streams"]:
+                path = Path(cursor["path"])
+                st, data, ident = _native_rebind_stable_snapshot(
+                    path, self.receipts.uid, self.queue.writer_gid, allowed_links=(1,))
+                _learning_prefix(cursor, st, data)
+                if inspect(path, st.st_dev, st.st_ino, owner=proof.owner,
+                           writer_gid=self.queue.writer_gid) is not FDState.DRAINED:
+                    raise CursorChainRefused("learning_cycle_native_busy")
+                snapshots[str(path)] = (st, data, ident)
+                source_bytes += len(data)
+                if source_bytes > 4 * 1024 * 1024:
+                    raise CursorChainRefused("learning_cycle_combined_native_limit")
+        dc = tip["debug"]
+        debug_st, debug_data, debug_ident = _native_rebind_stable_snapshot(
+            Path(dc["path"]), self.receipts.uid, self.queue.writer_gid,
+            allowed_links=(1,))
+        _learning_prefix(dc, debug_st, debug_data)
+        if source_bytes + len(debug_data) > 4 * 1024 * 1024:
+            raise CursorChainRefused("learning_cycle_combined_debug_limit")
+        if inspect(Path(dc["path"]), debug_st.st_dev, debug_st.st_ino,
+                   owner=proof.owner, writer_gid=self.queue.writer_gid) is not FDState.DRAINED:
+            raise CursorChainRefused("learning_cycle_debug_busy")
+        positions = {path: cursor["offset"] for row in state.values()
+                     for cursor in row["streams"] for path in [cursor["path"]]}
+        by_path = {row["path"]: row for row in state.values()}
+        observations = []
+        end = dc["offset"]
+        for line in debug_data[end:].splitlines(keepends=True):
+            if not line.endswith(b"\n") or end + len(line) - dc["offset"] > MAX_WINDOW:
+                break
+            decoded = line[:-1].decode("ascii")
+            if " : adding to " in decoded:
+                event = ADD.fullmatch(decoded)
+                if (event is None or event["path"] not in by_path or
+                        not _hostname(event["host"])):
+                    raise CursorChainRefused("learning_cycle_foreign_positive")
+                row = by_path[event["path"]]
+                if int(event["profile"]) != row["native_number"]:
+                    raise CursorChainRefused("learning_cycle_wrong_native_N")
+                encoded = (event["host"] + "\n").encode("ascii")
+                match = next((s for s in reversed(row["streams"])
+                              if snapshots[s["path"]][1][positions[s["path"]]:].startswith(encoded)), None)
+                if match is None:
+                    # Native debug precedes append_to_list_file. Keep this
+                    # line AND every unmatched raw byte for the next minute.
+                    break
+                positions[match["path"]] += len(encoded)
+                observations.append(dict(hostname=event["host"], hostlist=row["hostlist"]))
+            end += len(line)
+            if len(observations) == 32:
+                break
+        if end == dc["offset"]:
+            return None
+        native = {}
+        for n, row in state.items():
+            streams = []
+            for cursor in row["streams"]:
+                path = cursor["path"]
+                st, data, ident = snapshots[path]
+                streams.append(dict(start=cursor, end=dict(
+                    path=path, device=st.st_dev, inode=st.st_ino,
+                    offset=positions[path], prefix_sha256=_digest(data[:positions[path]])),
+                    snapshot_size=len(data), snapshot_sha256=_digest(data)))
+            native[n] = {**row, "streams": streams}
+        intent = dict(schema=3, kind="original-learning-cycle-prepared",
+                      generation=proof.generation, sequence=tip["sequence"],
+                      cycle=tip["cycle"], operation_id=proof.operation_id,
+                      owner_candidate_sha256=proof.owner_candidate_sha256,
+                      owner_pid=proof.owner.pid, owner_start=proof.owner.started,
+                      final_args_sha256=proof.final_args_sha256,
+                      native_map_sha256=proof.native_map_sha256,
+                      epoch_sha256=tip["epoch_sha256"],
+                      previous_ack_sha256=tip["previous_ack_sha256"],
+                      native_numbers=list(native),
+                      native_sha256=_learning_records_digest(native),
+                      debug=dict(start=dc, end=dict(path=dc["path"],
+                          device=debug_st.st_dev, inode=debug_st.st_ino,
+                          offset=end, prefix_sha256=_digest(debug_data[:end]))),
+                      observations=observations, ack_authorized=False)
+        for path, (st, data, ident) in snapshots.items():
+            again = _native_rebind_stable_snapshot(Path(path), self.receipts.uid,
+                self.queue.writer_gid, allowed_links=(1,))
+            if again[1:] != (data, ident):
+                raise CursorChainRefused("learning_cycle_snapshot_raced")
+        if (_native_rebind_stable_snapshot(Path(dc["path"]), self.receipts.uid,
+                self.queue.writer_gid, allowed_links=(1,))[1:] != (debug_data, debug_ident)
+                or attest() != proof):
+            raise CursorChainRefused("learning_cycle_debug_owner_raced")
+        if not tip["root"].exists():
+            tip["root"].mkdir(mode=0o700)
+            _sync(tip["root"].parent)
+        if not slot.exists():
+            slot.mkdir(mode=0o700)
+            _sync(tip["root"])
+        native_dir = slot / "native"
+        if not native_dir.exists():
+            native_dir.mkdir(mode=0o700)
+            _sync(slot)
+        _directory(native_dir, self.receipts.uid)
+        for n, row in native.items():
+            _write_once(native_dir, f"{n:03d}.json", _canonical(row), self.receipts.uid)
+        _write_once(slot, "intent.json", _canonical(intent), self.receipts.uid)
+        self.attest_learning_cycle_prefix(proof, workspace, slot, intent,
+                                          attest=attest, inspect=inspect)
+        return _learning_prepared(slot, intent)
+
+    def attest_learning_cycle_prefix(self, proof, workspace, slot, intent, *,
+                                      attest, inspect=probe_pending_fd):
+        from auto_detect_original_v2_model import _native_rebind_stable_snapshot
+        self.learning_epoch(proof, workspace)
+        learning_cycle_source_fields(slot, intent, self.receipts.uid)
+        native = _learning_native_records(slot / "native", intent, self.receipts.uid)
+        expected = {n: (label, path) for n, label, path in proof.learning}
+        if (set(native) != set(expected) or attest() != proof or
+                intent["owner_pid"] != proof.owner.pid or
+                intent["owner_start"] != proof.owner.started or
+                intent["native_map_sha256"] != proof.native_map_sha256):
+            raise CursorChainRefused("learning_cycle_sealed_owner_changed")
+        for n, row in native.items():
+            if (row["hostlist"], row["path"]) != expected[n]:
+                raise CursorChainRefused("learning_cycle_sealed_native_map_changed")
+        cursors = [s["end"] for row in native.values() for s in row["streams"]]
+        cursors.append(intent["debug"]["end"])
+        snapshots = {}
+        for _ in range(2):
+            for cursor in cursors:
+                path = Path(cursor["path"])
+                st, data, _ = _native_rebind_stable_snapshot(
+                    path, self.receipts.uid, self.queue.writer_gid, allowed_links=(1,))
+                _learning_prefix(cursor, st, data)
+                snapshots[str(path)] = (st, data)
+                if inspect(path, st.st_dev, st.st_ino, owner=proof.owner,
+                           writer_gid=self.queue.writer_gid) is not FDState.DRAINED:
+                    raise CursorChainRefused("learning_cycle_sealed_native_busy")
+            if attest() != proof:
+                raise CursorChainRefused("learning_cycle_sealed_owner_raced")
+        # Prefix hashes alone cannot authorize a forged observation. Apply
+        # the original exact ADD/N/path/native-row correlation again to the
+        # immutable start/end cuts, independently of later producer appends.
+        from auto_detect_debug_window import ADD, _raw_hosts
+        remaining = {}
+        by_path = {row["path"]: row for row in native.values()}
+        for row in native.values():
+            for stream in row["streams"]:
+                start, end = stream["start"], stream["end"]
+                st, data = snapshots[end["path"]]
+                _learning_prefix(start, st, data)
+                cut = data[start["offset"]:end["offset"]]
+                remaining[end["path"]] = _raw_hosts(cut) if cut else []
+        start, end = intent["debug"]["start"], intent["debug"]["end"]
+        st, data = snapshots[end["path"]]
+        _learning_prefix(start, st, data)
+        observations = []
+        for line in data[start["offset"]:end["offset"]].splitlines(keepends=True):
+            if not line.endswith(b"\n"):
+                raise CursorChainRefused("learning_cycle_sealed_incomplete_debug")
+            decoded = line[:-1].decode("ascii")
+            if " : adding to " not in decoded:
+                continue
+            event = ADD.fullmatch(decoded)
+            row = by_path.get(event["path"]) if event else None
+            if row is None or int(event["profile"]) != row["native_number"]:
+                raise CursorChainRefused("learning_cycle_sealed_foreign_positive")
+            matched = next((s for s in reversed(row["streams"])
+                            if remaining[s["end"]["path"]] and
+                            remaining[s["end"]["path"]][0] == event["host"]), None)
+            if matched is None:
+                raise CursorChainRefused("learning_cycle_sealed_positive_without_native")
+            remaining[matched["end"]["path"]].pop(0)
+            observations.append(dict(hostname=event["host"], hostlist=row["hostlist"]))
+        if any(remaining.values()) or observations != intent["observations"]:
+            raise CursorChainRefused("learning_cycle_sealed_observations_changed")
+        return dict(source_intent_sha256=_digest(_canonical(intent)),
+                    p2b_drained=True, commit_authorized=False, ack_authorized=False)
+
+
+def _learning_prefix(cursor, st, data):
+    if (type(cursor) is not dict or set(cursor) != {
+            "path", "device", "inode", "offset", "prefix_sha256"} or
+            type(cursor["offset"]) is not int or
+            not 0 <= cursor["offset"] <= len(data) or
+            (st.st_dev, st.st_ino) != (cursor["device"], cursor["inode"]) or
+            _digest(data[:cursor["offset"]]) != cursor["prefix_sha256"]):
+        raise CursorChainRefused("learning_cycle_prefix_changed")
+
+
+def _learning_start(row):
+    return {**row, "streams": [s["start"] for s in row["streams"]]}
+
+
+def _learning_records_digest(rows):
+    return _digest(b"".join(_canonical(rows[n]) for n in sorted(rows)))
+
+
+def _learning_native_records(folder, intent, uid, *, progress=False):
+    _directory(folder, uid)
+    expected = {f"{n:03d}.json" for n in intent["native_numbers"]}
+    if set(os.listdir(folder)) != expected:
+        raise CursorChainRefused("learning_cycle_missing_or_foreign_N")
+    result = {}
+    for n in intent["native_numbers"]:
+        row, raw = _load(folder / f"{n:03d}.json", uid)
+        if (raw != _canonical(row) or row.get("native_number") != n or
+                row.get("hostlist") not in {"youtube", "user"} or
+                type(row.get("path")) is not str or
+                not Path(row["path"]).is_absolute() or
+                type(row.get("streams")) is not list or
+                not 1 <= len(row["streams"]) <= 2):
+            raise CursorChainRefused("learning_cycle_invalid_N_record")
+        source_path = Path(row["path"])
+        if source_path.name != f'learning-{intent["generation"]}-{n}.txt':
+            raise CursorChainRefused("learning_cycle_foreign_generation_filename")
+        cursors = row["streams"] if progress else [s["start"] for s in row["streams"]]
+        if cursors[0]["path"] != row["path"]:
+            raise CursorChainRefused("learning_cycle_live_cursor_path_changed")
+        for index, cursor in enumerate(cursors):
+            if (set(cursor) != {"path", "device", "inode", "offset", "prefix_sha256"} or
+                    any(type(cursor[k]) is not int or cursor[k] < 0
+                        for k in ("device", "inode", "offset")) or cursor["inode"] == 0 or
+                    not HEX64.fullmatch(str(cursor["prefix_sha256"]))):
+                raise CursorChainRefused("learning_cycle_invalid_physical_cursor")
+            if index:
+                from auto_detect_queue import NATIVE_PENDING
+                path = Path(cursor["path"])
+                match = NATIVE_PENDING.fullmatch(path.name)
+                if (path.parent != source_path.parent / "pending" or match is None or
+                        match[1] != intent["generation"] or int(match[2]) != n):
+                    raise CursorChainRefused("learning_cycle_foreign_old_cursor")
+            if not progress:
+                end = row["streams"][index]["end"]
+                if (set(end) != set(cursor) or
+                        any(end[k] != cursor[k] for k in ("path", "device", "inode")) or
+                        type(end["offset"]) is not int or end["offset"] < cursor["offset"] or
+                        not HEX64.fullmatch(str(end["prefix_sha256"]))):
+                    raise CursorChainRefused("learning_cycle_invalid_end_cursor")
+        if (len(cursors) == 2) != ("retained_prefix" in row):
+            raise CursorChainRefused("learning_cycle_old_without_retained_prefix")
+        result[n] = row
+    if not progress and _learning_records_digest(result) != intent["native_sha256"]:
+        raise CursorChainRefused("learning_cycle_source_N_digest_changed")
+    return result
+
+
+def _learning_checked_anchor(root, proof, epoch_raw, uid):
+    anchor, raw = _load(root / ANCHOR, uid)
+    if (raw != _canonical(anchor) or set(anchor) != {
+            "schema", "kind", "generation", "epoch_sha256", "native_map_sha256",
+            "final_args_sha256", "cycle", "previous_ack_sha256", "native_numbers",
+            "native_sha256", "debug", "ack_authorized"} or
+            anchor["schema"] != 3 or anchor["kind"] != "original-learning-cursor-anchor" or
+            anchor["generation"] != proof.generation or
+            anchor["epoch_sha256"] != _digest(epoch_raw) or
+            anchor["native_map_sha256"] != proof.native_map_sha256 or
+            anchor["final_args_sha256"] != proof.final_args_sha256 or
+            type(anchor["cycle"]) is not int or not 0 < anchor["cycle"] < (1 << 32) or
+            anchor["native_numbers"] != [n for n, _, _ in proof.learning] or
+            not HEX64.fullmatch(str(anchor["previous_ack_sha256"])) or
+            anchor["ack_authorized"] is not False):
+        raise CursorChainRefused("learning_rollover_anchor_not_original_epoch")
+    state = _learning_native_records(root / "anchor-native", anchor, uid, progress=True)
+    if _learning_records_digest(state) != anchor["native_sha256"]:
+        raise CursorChainRefused("learning_rollover_anchor_N_state_changed")
+    return anchor, state
+
+
+def _learning_prepared(slot, intent):
+    return dict(slot=slot, generation=intent["generation"], sequence=intent["sequence"],
+                intent_sha256=_digest(_canonical(intent)),
+                cursor_advanced=False, commit_authorized=False, ack_authorized=False)
+
+
+def learning_cycle_source_fields(folder, intent, uid):
+    """Original DestinationCommit source codec; never reads mutable inodes."""
+    sequence = intent.get("sequence")
+    if (intent.get("schema") != 3 or
+            intent.get("kind") != "original-learning-cycle-prepared" or
+            type(sequence) is not int or not 0 <= sequence < MAX_STEPS or
+            folder.name != f"{sequence:08d}" or folder.parent.name != CHAIN or
+            folder.parent.parent.name != intent.get("generation") or
+            intent.get("ack_authorized") is not False or
+            _read(folder / "intent.json", uid) != _canonical(intent) or
+            type(intent.get("observations")) is not list or
+            len(intent["observations"]) > 32 or
+            type(intent.get("native_numbers")) is not list or
+            not 1 <= len(intent["native_numbers"]) <= 255 or
+            intent["native_numbers"] != sorted(set(intent["native_numbers"])) or
+            any(type(n) is not int or not 1 <= n <= 255 for n in intent["native_numbers"])):
+        raise CursorChainRefused("learning_cycle_wal_not_original_source")
+    _learning_native_records(folder / "native", intent, uid)
+    if sequence:
+        prev, prev_raw = _load(folder.parent / f"{sequence - 1:08d}" / "ack.json", uid)
+        if (_digest(prev_raw) != intent["previous_ack_sha256"] or
+                prev.get("generation") != intent["generation"] or
+                prev.get("sequence") != sequence - 1):
+            raise CursorChainRefused("learning_cycle_wal_previous_ack_changed")
+    elif intent["cycle"] == 0:
+        epoch = _read(folder.parent.parent / "epoch.json", uid)
+        if _digest(epoch) != intent["previous_ack_sha256"]:
+            raise CursorChainRefused("learning_cycle_wal_zero_not_original_epoch")
+    else:
+        anchor, _ = _load(folder.parent / ANCHOR, uid)
+        if (anchor.get("previous_ack_sha256") != intent["previous_ack_sha256"] or
+                anchor.get("cycle") != intent["cycle"] or
+                anchor.get("generation") != intent["generation"] or
+                anchor.get("epoch_sha256") != intent["epoch_sha256"]):
+            raise CursorChainRefused("learning_cycle_wal_zero_not_original_anchor")
+    end = intent["debug"]["end"]
+    return dict(schema=3, kind="durable-destination-plan",
+                generation=intent["generation"], pending_name="learning-" + folder.name,
+                pending_sha256=_digest(_canonical({"observations": intent["observations"]})),
+                evidence="learning-native-debug", debug_end_offset=end["offset"],
+                debug_end_sha256=end["prefix_sha256"],
+                source_intent_sha256=_digest(_canonical(intent)))
+
+
+def learning_cycle_checkpoint(slot, intent, uid, *, targets=None):
+    plan, raw = qualified_destination_plan(slot, intent, uid, targets=targets)
+    source = learning_cycle_source_fields(slot, intent, uid)
+    cp, cp_raw = _load(slot / "destination" / "checkpoint.json", uid)
+    expected = dict(schema=1, kind="destination-and-cursor-committed",
+                    generation=intent["generation"], pending_name=source["pending_name"],
+                    plan_sha256=_digest(raw), evidence=source["evidence"],
+                    committed_cursor_offset=source["debug_end_offset"],
+                    committed_cursor_sha256=source["debug_end_sha256"], ack_authorized=False)
+    if cp != expected or cp_raw != _canonical(cp):
+        raise CursorChainRefused("learning_cycle_checkpoint_not_original")
+    return cp, cp_raw

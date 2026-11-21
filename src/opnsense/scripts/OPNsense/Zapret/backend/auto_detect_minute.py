@@ -8,6 +8,7 @@ Neither this entry nor its source tests install cron or launch/stop dvtws2.
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 import stat
 import sys
@@ -16,6 +17,7 @@ from auto_detect_owner import (
     MAP_NAME, MAX_ARGS, GenerationProof, GenerationRefused,
     _secure_bytes, attest_running_generation, attest_stopped_generation,
     attest_retiring_predecessor,
+    LearningGenerationProof, attest_learning_running_generation,
 )
 from auto_detect_storage import RAW_PATH, DEBUG_PATH
 from auto_detect_original_lock_handoff import (
@@ -108,7 +110,20 @@ def native_minute_once(args: list[str]) -> int:
             # native argv can turn the refusal into a qualified worker.
             # A forged map, a stale process, and preview-only generation
             # all fail BEFORE P2a queue/Config/target access.
-            proof = attest_running_generation()
+            mapping = json.loads(_secure_bytes(COMMON_ACTIVE / MAP_NAME, 1048576, 0))
+            learning = mapping.get("schema") == 3
+            proof = (attest_learning_running_generation() if learning
+                     else attest_running_generation())
+            if learning:
+                if (not isinstance(proof, LearningGenerationProof) or
+                        proof.operation_id != proof.generation or
+                        any(Path(path).parent != QUEUE_ROOT for _, _, path in proof.learning)):
+                    raise MinuteRefused('unqualified_original_learning_generation')
+                changed = run_native_original_v2_cycle_once(learning=True)
+                if type(changed) is not bool:
+                    raise MinuteRefused('original_learning_completion_not_boolean')
+                print('auto-detect-minute=' + ('processed' if changed else 'idle'))
+                return 0
             if (not isinstance(proof, GenerationProof) or
                     proof.operation_id != proof.generation or
                     proof.raw_path != str(RAW_PATH) or

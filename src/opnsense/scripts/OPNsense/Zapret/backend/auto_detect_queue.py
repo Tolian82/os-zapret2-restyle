@@ -508,7 +508,9 @@ class DurableInbox:
                 temp.unlink()
                 _sync_directory(self.root)
 
-    def acknowledge(self, segment: Path, *, drained, committed) -> bool:
+    def acknowledge(self, segment: Path, *, drained, committed,
+                    native_source: Path | None = None,
+                    native_image: tuple | None = None) -> bool:
         """Both callbacks must independently prove safety, not just return data.
 
         drained(path, dev, inode) must be backed by native owner/FD evidence.
@@ -524,15 +526,26 @@ class DurableInbox:
         if segment.parent != self.pending or segment not in self.segments():
             raise QueueSafetyError("foreign_segment")
         if NATIVE_PENDING.fullmatch(segment.name):
-            # Only a FUTURE original per-N cursor ACK may unlink this inode
-            # after every late producer append has been reconciled.
-            raise QueueSafetyError("native_pending_requires_qualified_ack")
+            matched = NATIVE_PENDING.fullmatch(segment.name)
+            expected = self.root / ("learning-" + matched[1] + "-" + matched[2] + ".txt")
+            if (native_source != expected or type(native_image) is not tuple or
+                    len(native_image) != 4 or
+                    any(type(v) is not int or v < 0 for v in native_image[:3]) or
+                    not re.fullmatch(r"[0-9a-f]{64}", str(native_image[3]))):
+                raise QueueSafetyError("native_pending_requires_qualified_ack")
+        elif native_source is not None or native_image is not None:
+            raise QueueSafetyError("foreign_native_ack_capability")
         before = _stat_regular(segment, self.uid, max_size=MAX_SEGMENT,
                                writer_gid=self.writer_gid)
         if _identity(self.inbox) == (before.st_dev, before.st_ino):
             return False  # crash after hardlink, before replace
         if before.st_nlink != 1:
             raise QueueSafetyError("unaccounted_pending_links")
+        if native_source is not None:
+            import hashlib
+            if ((before.st_dev, before.st_ino, before.st_size) != native_image[:3] or
+                    _identity(native_source) == (before.st_dev, before.st_ino)):
+                return False
         if not drained(segment, before.st_dev, before.st_ino):
             return False
         fd = os.open(segment, os.O_RDONLY | os.O_NOFOLLOW)
@@ -544,6 +557,8 @@ class DurableInbox:
             os.close(fd)
         if len(data) > MAX_SEGMENT or (data and not data.endswith(b"\n")):
             return False  # never discard incomplete last line
+        if native_source is not None and hashlib.sha256(data).hexdigest() != native_image[3]:
+            return False
         if not committed(data):
             return False
         after = _stat_regular(segment, self.uid, max_size=MAX_SEGMENT,

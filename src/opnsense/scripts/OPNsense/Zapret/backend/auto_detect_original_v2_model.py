@@ -199,7 +199,7 @@ def preview_learning_p1_effects(
     bytes pending; unknown source cannot be guessed from its hostname.
     """
     if (not isinstance(observations, list) or
-            not 0 < len(observations) <= 4096 or
+            not 0 <= len(observations) <= 4096 or
             any(not isinstance(row, dict) or
                 set(row) != {"hostname", "hostlist"} or
                 type(row["hostname"]) is not str or
@@ -3233,6 +3233,9 @@ def _recover_original_learning_partial_locked(
         # Reuse ONE original P2a/P2b source attester. The second slot has
         # TWO immutable native inode cursors, and must not be examined by
         # the first-slot single-inode prefix attester.
+        if intent.get("kind") == "original-learning-cycle-prepared":
+            return CursorChain(writer.receipts, writer.queue).attest_learning_cycle_prefix(
+                proof, workspace, slot, intent, attest=attest, inspect=inspect)
         if type(intent.get("sequence")) is int and intent["sequence"] >= 3:
             from auto_detect_original_history_running_late import (
                 prepare_original_learning_running_late_source_locked,
@@ -3677,7 +3680,8 @@ def _commit_with_original_learning_slot(
             intent = json.loads(encoded)
             if (intent["sequence"] != sequence or
                     intent["generation"] != proof.generation or
-                    not intent["observations"]):
+                    (not intent["observations"] and
+                     intent.get("kind") != "original-learning-cycle-prepared")):
                 raise V2OriginalConfigRefused(
                     "learning_forward_third_slot_not_original")
             source = _original_source_plan_fields(slot, intent, writer.receipts.uid)
@@ -4268,3 +4272,256 @@ def commit_with_original_v2_model(
             DestinationRefused, OwnedSourcesRefused, AutoDomainPolicyError,
             DomainPolicyError, EffectiveKnownRefused) as exc:
         raise V2OriginalConfigRefused("original_config_v2_commit_refused") from exc
+
+
+def _learning_safe_native_hosts(writer, proof, row, data, *, owned_root,
+                                manual_hostlists, global_exclude, psl):
+    """Same P1 and effective composer qualify cleanup, including duplicates.
+
+    This never discovers or saves a new domain. Only an already permanent
+    same-source Found row AND the exact active managed image can retire its
+    temporary native row. Excluded, manual-only and shared rows stay native.
+    """
+    from domain_policy import _list_entries
+    owned = read_owned(owned_root, owner_uid=writer.receipts.uid)
+    if owned is None:
+        raise V2OriginalConfigRefused("learning_cycle_found_sources_absent")
+    canonical = {}
+    for name in KNOWN_HOSTLISTS:
+        value = normalize(manual_hostlists[name], name)["normalized"]
+        canonical[name] = value + ("\n" if value else "")
+    managed = compose_known(canonical, owned)
+    for name in KNOWN_HOSTLISTS:
+        image, _ = _target(COMMON_ACTIVE / "managed" /
+                            ("hostlist-" + name + ".txt"), writer.receipts.uid)
+        if image != managed[name].encode():
+            return set()  # a later GUI edit vetoes optional cleanup
+    shared, _ = _target(writer.targets["auto"], writer.receipts.uid)
+    hosts = _raw_hosts(data) if data else []
+    current = preview_learning_p1_effects(
+        [dict(hostname=host, hostlist=row["hostlist"]) for host in hosts],
+        manual_hostlists, owned, shared.decode(), global_exclude, psl=psl)
+    routes = {(r["root"], r["destination"]) for r in current["routes"]
+              if r["reason"] == "attributed"}
+    positive = {r[0] for r in _list_entries(owned[row["hostlist"]], row["hostlist"])
+                if not r[1] and not r[2]}
+    psl = psl if psl is not None else PublicSuffixList.load()
+    return {host for host in hosts
+            if psl.registrable_domain(host) in positive and
+            (psl.registrable_domain(host), row["hostlist"]) in routes}
+
+
+def _complete_original_learning_cycle_locked(
+        writer, proof, workspace, slot, intent, *, owned_root,
+        manual_hostlists, global_exclude, attest, inspect, psl):
+    """Complete this original checkpoint's rebind and original queue ACK.
+
+    Intent, destination plan, checkpoint, per-N physical operation and final
+    cursor ACK all remain in ONE original cursor slot. A missing old inode
+    is accepted only after that same slot's durable deletion intent. It can
+    finish ACK, never rerun P1 or restore an intentional GUI deletion.
+    """
+    from auto_detect_cursor_chain import (
+        _learning_native_records, _learning_records_digest,
+        learning_cycle_checkpoint, _learning_prefix,
+    )
+    from auto_detect_epoch_receipts import _canonical, _directory, _write_once, _sync
+    from auto_detect_queue import QueueSafetyError
+    uid = writer.receipts.uid
+    if not writer.queue._held or not getattr(writer, "_gui_held", False) or attest() != proof:
+        raise V2OriginalConfigRefused("learning_cycle_ack_original_locks_required")
+    cp, cp_raw = learning_cycle_checkpoint(slot, intent, uid, targets=writer.targets)
+    native = _learning_native_records(slot / "native", intent, uid)
+    progress_dir = slot / "progress"
+    if not progress_dir.exists():
+        progress_dir.mkdir(mode=0o700)
+        _sync(slot)
+    _directory(progress_dir, uid)
+    progress = {}
+
+    def drained(path, dev, inode):
+        return (attest() == proof and inspect(path, dev, inode, owner=proof.owner,
+                 writer_gid=writer.queue.writer_gid) is FDState.DRAINED)
+
+    for n, row in native.items():
+        progress_file = progress_dir / f"{n:03d}.json"
+        if progress_file.exists() or progress_file.is_symlink():
+            progress[n] = json.loads(_read(progress_file, uid))
+            continue
+        state = {k: v for k, v in row.items() if k != "streams"}
+        state["streams"] = [s["end"] for s in row["streams"]]
+        live = state["streams"][0]
+        live_path = Path(row["path"])
+        action_file = slot / f"rebind-{n:03d}.json"
+        action = None
+        if action_file.exists() or action_file.is_symlink():
+            action = json.loads(_read(action_file, uid))
+            if (action.get("source_intent_sha256") != hashlib.sha256(_canonical(intent)).hexdigest() or
+                    action.get("checkpoint_sha256") != hashlib.sha256(cp_raw).hexdigest() or
+                    action.get("native_number") != n or action.get("path") != str(live_path)):
+                raise V2OriginalConfigRefused("learning_cycle_rebind_not_original_checkpoint")
+        elif len(state["streams"]) == 1 and live["offset"]:
+            st, data, _ = _native_rebind_stable_snapshot(
+                live_path, uid, writer.queue.writer_gid, allowed_links=(1,))
+            _learning_prefix(live, st, data)
+            # Never copy an unread suffix into both old and replacement.
+            # A later append simply defers optional cleanup to a later cut.
+            if live["offset"] == len(data) and drained(live_path, st.st_dev, st.st_ino):
+                eligible = _learning_safe_native_hosts(
+                    writer, proof, row, data, owned_root=owned_root,
+                    manual_hostlists=manual_hostlists, global_exclude=global_exclude, psl=psl)
+                remove = sorted(eligible)[:32]
+                if remove:
+                    kept = b"".join(line for line in data.splitlines(keepends=True)
+                                    if line[:-1].decode("ascii") not in set(remove))
+                    identity = hashlib.sha256(_canonical(dict(
+                        source=hashlib.sha256(_canonical(intent)).hexdigest(), native=n,
+                        size=len(data), sha256=hashlib.sha256(data).hexdigest()))).hexdigest()[:32]
+                    action = dict(schema=3, native_number=n, path=str(live_path),
+                        source_intent_sha256=hashlib.sha256(_canonical(intent)).hexdigest(),
+                        checkpoint_sha256=hashlib.sha256(cp_raw).hexdigest(),
+                        device=st.st_dev, inode=st.st_ino, size=len(data),
+                        sha256=hashlib.sha256(data).hexdigest(), remove=remove,
+                        replacement_size=len(kept), replacement_sha256=hashlib.sha256(kept).hexdigest(),
+                        pending_name=f"native-{proof.generation}-{n}-{identity}.txt")
+                    _write_once(slot, action_file.name, _canonical(action), uid)
+        if action is not None:
+            pending = writer.queue.pending / action["pending_name"]
+            st = live_path.lstat()
+            if (st.st_dev, st.st_ino) == (action["device"], action["inode"]):
+                st, data, _ = _native_rebind_stable_snapshot(
+                    live_path, uid, writer.queue.writer_gid, allowed_links=(1, 2))
+                if (len(data), hashlib.sha256(data).hexdigest()) != (action["size"], action["sha256"]):
+                    # A native append won before replacement. The live name
+                    # still preserves every byte; remove only its temporary
+                    # SAME-inode hardlink, then advance the committed prefix.
+                    if pending.exists():
+                        old = pending.lstat()
+                        if (old.st_dev, old.st_ino) != (st.st_dev, st.st_ino) or st.st_nlink != 2:
+                            raise V2OriginalConfigRefused("learning_cycle_foreign_unreplaced_alias")
+                        pending.unlink()
+                        _sync(writer.queue.pending)
+                    action = None
+                else:
+                    replacement = b"".join(line for line in data.splitlines(keepends=True)
+                        if line[:-1].decode("ascii") not in set(action["remove"]))
+                    if (len(replacement), hashlib.sha256(replacement).hexdigest()) != (
+                            action["replacement_size"], action["replacement_sha256"]):
+                        raise V2OriginalConfigRefused("learning_cycle_rebind_postimage_changed")
+                    if not drained(live_path, st.st_dev, st.st_ino):
+                        raise V2OriginalConfigRefused("learning_cycle_rebind_native_busy")
+                    writer.queue._rotate_original_source(
+                        live_path, replacement=replacement, generation=proof.generation,
+                        expected_identity=(st.st_dev, st.st_ino),
+                        sealed_prefix=(live["offset"], live["prefix_sha256"]),
+                        expected_native_image=(len(data), hashlib.sha256(data).hexdigest()),
+                        native_pending_name=action["pending_name"])
+            if action is not None:
+                new_st, new_data, _ = _native_rebind_stable_snapshot(
+                    live_path, uid, writer.queue.writer_gid, allowed_links=(1,))
+                replacement_size = action["replacement_size"]
+                if ((new_st.st_dev, new_st.st_ino) == (action["device"], action["inode"]) or
+                        len(new_data) < replacement_size or
+                        hashlib.sha256(new_data[:replacement_size]).hexdigest() != action["replacement_sha256"]):
+                    raise V2OriginalConfigRefused("learning_cycle_replacement_not_original_action")
+                state["streams"] = [dict(path=str(live_path), device=new_st.st_dev,
+                    inode=new_st.st_ino, offset=replacement_size,
+                    prefix_sha256=action["replacement_sha256"]),
+                    dict(path=str(pending), device=action["device"], inode=action["inode"],
+                         offset=action["size"], prefix_sha256=action["sha256"])]
+                state["retained_prefix"] = dict(size=action["size"], sha256=action["sha256"])
+        if len(state["streams"]) == 2:
+            old = state["streams"][1]
+            old_path = Path(old["path"])
+            deletion_file = slot / f"delete-{n:03d}.json"
+            deletion = None
+            if deletion_file.exists() or deletion_file.is_symlink():
+                deletion = json.loads(_read(deletion_file, uid))
+                if (deletion.get("source_intent_sha256") != hashlib.sha256(_canonical(intent)).hexdigest() or
+                        deletion.get("checkpoint_sha256") != hashlib.sha256(cp_raw).hexdigest() or
+                        deletion.get("cursor") != old):
+                    raise V2OriginalConfigRefused("learning_cycle_delete_not_original_checkpoint")
+            if old_path.exists() or old_path.is_symlink():
+                old_st, old_data, _ = _native_rebind_stable_snapshot(
+                    old_path, uid, writer.queue.writer_gid, allowed_links=(1,))
+                _learning_prefix(old, old_st, old_data)
+                covered = state["retained_prefix"]
+                if (len(old_data) < covered["size"] or
+                        hashlib.sha256(old_data[:covered["size"]]).hexdigest() != covered["sha256"]):
+                    raise V2OriginalConfigRefused("learning_cycle_retained_old_prefix_changed")
+                safe = old["offset"] == len(old_data)
+                extra = old_data[covered["size"]:]
+                if safe and extra:
+                    eligible = _learning_safe_native_hosts(
+                        writer, proof, row, extra, owned_root=owned_root,
+                        manual_hostlists=manual_hostlists, global_exclude=global_exclude, psl=psl)
+                    safe = set(_raw_hosts(extra)) <= eligible
+                if safe and drained(old_path, old_st.st_dev, old_st.st_ino):
+                    proposed = dict(schema=3, source_intent_sha256=hashlib.sha256(_canonical(intent)).hexdigest(),
+                                    checkpoint_sha256=hashlib.sha256(cp_raw).hexdigest(), cursor=old)
+                    if deletion is None:
+                        _write_once(slot, deletion_file.name, _canonical(proposed), uid)
+                        deletion = proposed
+                    def committed(data):
+                        return (deletion == proposed and len(data) == old["offset"] and
+                                hashlib.sha256(data).hexdigest() == old["prefix_sha256"] and
+                                attest() == proof)
+                    writer.queue.acknowledge(old_path, drained=drained, committed=committed,
+                        native_source=live_path,
+                        native_image=(old_st.st_dev, old_st.st_ino, old["offset"], old["prefix_sha256"]))
+            elif deletion is None:
+                raise V2OriginalConfigRefused("learning_cycle_old_missing_without_delete_intent")
+            if not old_path.exists() and not old_path.is_symlink():
+                state["streams"] = state["streams"][:1]
+                del state["retained_prefix"]
+        _write_once(progress_dir, f"{n:03d}.json", _canonical(state), uid)
+        progress[n] = state
+    if attest() != proof:
+        raise V2OriginalConfigRefused("learning_cycle_owner_changed_before_ack")
+    ack = dict(schema=3, kind="original-learning-cursor-acked", generation=proof.generation,
+               sequence=intent["sequence"], cycle=intent["cycle"],
+               source_intent_sha256=hashlib.sha256(_canonical(intent)).hexdigest(),
+               checkpoint_sha256=hashlib.sha256(cp_raw).hexdigest(),
+               previous_ack_sha256=intent["previous_ack_sha256"],
+               native_sha256=_learning_records_digest(progress),
+               debug=intent["debug"]["end"], ack_authorized=False)
+    _write_once(slot, "ack.json", _canonical(ack), uid)
+    return ack
+
+
+def process_original_learning_cycle(
+        writer, proof, workspace, *, config_fd, config_path, owned_root,
+        manual_hostlists, global_exclude, attest, inspect=probe_pending_fd, psl=None):
+    """One original Config/FD9/P2a minute, independent native N streams.
+
+    The shared original P1/DestinationCommit handles every destination and
+    partial write. The same original queue performs physical ACK only after
+    Found and active managed. This callable never applies configuration,
+    changes process state or manipulates firewall rules.
+    """
+    from auto_detect_original_history import _held
+    chain = CursorChain(writer.receipts, writer.queue)
+    with writer.exclusive_targets():
+        _held(writer, proof, workspace, config_fd, config_path, attest)
+        chain.ensure_capacity(proof, workspace=workspace, attest=attest)
+        prepared = chain.prepare_learning_cycle(proof, workspace, attest=attest, inspect=inspect)
+    if prepared is None:
+        return False
+    sequence = prepared["sequence"]
+    def prepare(*args, **kwargs):
+        return chain.prepare_learning_cycle(proof, workspace, attest=attest, inspect=inspect)
+    _commit_with_original_learning_slot(
+        writer, proof, workspace, config_fd=config_fd, config_path=config_path,
+        owned_root=owned_root, manual_hostlists=manual_hostlists,
+        global_exclude=global_exclude, attest=attest, inspect=inspect, psl=psl,
+        sequence=sequence, prepare=prepare)
+    slot = prepared["slot"]
+    intent = json.loads(_read(slot / "intent.json", writer.receipts.uid))
+    with writer.exclusive_targets():
+        _held(writer, proof, workspace, config_fd, config_path, attest)
+        _complete_original_learning_cycle_locked(
+            writer, proof, workspace, slot, intent, owned_root=owned_root,
+            manual_hostlists=manual_hostlists, global_exclude=global_exclude,
+            attest=attest, inspect=inspect, psl=psl)
+        _held(writer, proof, workspace, config_fd, config_path, attest)
+    return True

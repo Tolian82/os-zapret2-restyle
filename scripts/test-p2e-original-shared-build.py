@@ -645,6 +645,213 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.exercise_remaining_new = True
         self.test_tz6v4_sealed_full_n_pretraffic_is_one_original_epoch()
 
+    def test_tz6v4_independent_native_minute_cycles(self):
+        """One real native file may grow while every other N stays empty."""
+        if sys.platform.startswith("freebsd"):
+            self.skipTest("Disposable Config FD is Linux source evidence only")
+        self.exercise_independent_cycles = True
+        self.test_tz6v4_sealed_full_n_pretraffic_is_one_original_epoch()
+
+    def test_tz6v4_native_cycle_partial_found_managed(self):
+        self.native_cycle_case = "partial"
+        self.test_tz6v4_independent_native_minute_cycles()
+
+    def test_tz6v4_native_cycle_post_unlink_ack_only(self):
+        self.native_cycle_case = "ack"
+        self.test_tz6v4_independent_native_minute_cycles()
+
+    def test_tz6v4_native_cycle_late_old_append(self):
+        self.native_cycle_case = "old-tail"
+        self.test_tz6v4_independent_native_minute_cycles()
+
+    def test_tz6v4_native_cycle_rollover_with_unread(self):
+        self.native_cycle_case = "rollover"
+        self.test_tz6v4_independent_native_minute_cycles()
+
+    def _exercise_independent_cycles(self, writer, proof, queue, owned_dir,
+                                     native_debug, drained):
+        import fcntl
+        import auto_detect_original_v2_model as model
+        from auto_detect_destination_commit import _target
+        from auto_detect_owned_sources import read_owned
+        active = self.root / "independent-runtime"
+        managed = active / "managed"
+        managed.mkdir(mode=0o700, parents=True)
+        manual = {"youtube": "youtube.com\n", "user": ""}
+        for name in manual:
+            path = managed / ("hostlist-" + name + ".txt")
+            path.write_text(manual[name])
+            path.chmod(0o600)
+        youtube = Path(proof.learning[0][2])
+        user = Path(proof.learning[1][2])
+        user.write_bytes(b"")
+        debug = queue.root / "debug.log"
+        debug.write_bytes(native_debug(proof.learning[0][0],
+                                       "video.example.com", str(youtube)))
+        config = self.root / "independent-config.xml"
+        config.write_bytes(b"<opnsense/>\n")
+        config.chmod(0o600)
+        config_fd = os.open(config, os.O_RDWR | os.O_NOFOLLOW)
+        fcntl.flock(config_fd, fcntl.LOCK_EX)
+
+        def live_preview(canonical, effects, **kwargs):
+            owned = read_owned(owned_dir, owner_uid=os.geteuid())
+            shared = _target(writer.targets["auto"], os.geteuid())[0].decode()
+            # This injected source-only attester replaces process/argv
+            # inspection, not P1, destination CAS, filesystem or cursor ACK.
+            from auto_detect_destination_commit import _edit
+            from auto_detect_effective_known import compose_known
+            after = dict(owned)
+            for name, change in effects.items():
+                if name in after:
+                    after[name] = _edit(after[name].encode(),
+                                        change["add"], change["remove"]).decode()
+            composed = compose_known(canonical, after)
+            files, changed = {}, []
+            for name in manual:
+                path = managed / ("hostlist-" + name + ".txt")
+                before = path.read_bytes()
+                image = composed[name].encode()
+                files[name] = dict(path=str(path),
+                    before_sha256=hashlib.sha256(before).hexdigest(),
+                    after_sha256=hashlib.sha256(image).hexdigest())
+                if before != image:
+                    changed.append(name)
+            return dict(owner_schema=3, generation=proof.generation,
+                        operation=proof.operation_id, pid=proof.owner.pid,
+                        started=proof.owner.started, changed=changed,
+                        files=files, commit_authorized=False,
+                        ack_authorized=False)
+
+        def run(**kwargs):
+            return model.process_original_learning_cycle(
+                writer, proof, self.work, config_fd=config_fd,
+                config_path=config, owned_root=owned_dir,
+                manual_hostlists=manual, global_exclude="",
+                attest=lambda: proof, inspect=drained,
+                psl=self._tz6v4_psl_for_fixtures(), **kwargs)
+        try:
+            with patch.object(model, "COMMON_ACTIVE", active), patch.object(
+                    model, "preview_live_known_after_readonly", live_preview):
+                case = getattr(self, "native_cycle_case", "ordinary")
+                root = writer.receipts.root / proof.generation / "cursor-chain-v2"
+                if case == "partial":
+                    from auto_detect_destination_commit import _replace, DestinationRefused
+                    def crash_after_found(path, *args, **kwargs):
+                        _replace(path, *args, **kwargs)
+                        if path == writer.targets["youtube"]:
+                            raise DestinationRefused("injected_after_found_before_managed")
+                    with patch("auto_detect_destination_commit._replace", crash_after_found):
+                        with self.assertRaises((V2OriginalConfigRefused, DestinationRefused)):
+                            run()
+                    self.assertEqual(writer.targets["youtube"].read_bytes(), b"example.com\n")
+                    self.assertEqual((managed / "hostlist-youtube.txt").read_bytes(), b"youtube.com\n")
+                    self.assertEqual(youtube.read_bytes(), b"video.example.com\n")
+                    self.assertFalse((root / "00000000" / "ack.json").exists())
+                    user.write_bytes(b"mail.example.org\n")
+                    with debug.open("ab") as out:
+                        out.write(native_debug(proof.learning[1][0], "mail.example.org", str(user)))
+                    self.assertTrue(run())
+                    self.assertEqual(user.read_bytes(), b"mail.example.org\n")
+                    self.assertEqual(writer.targets["user"].read_bytes(), b"")
+                    self.assertTrue(run())
+                    self.assertEqual(writer.targets["user"].read_bytes(), b"example.org\n")
+                    self.assertEqual(queue.segments(), [])
+                    self.assertFalse(run())
+                    return
+                if case == "ack":
+                    import auto_detect_epoch_receipts as receipts_module
+                    original_write = receipts_module._write_once
+                    def crash_after_unlink(folder, name, *args):
+                        if folder.name == "progress" and name == f"{proof.learning[0][0]:03d}.json":
+                            self.assertEqual(queue.segments(), [])
+                            raise OSError("injected_after_unlink_before_cursor_ack")
+                        return original_write(folder, name, *args)
+                    with patch.object(receipts_module, "_write_once", crash_after_unlink):
+                        with self.assertRaises(OSError):
+                            run()
+                    self.assertEqual(youtube.read_bytes(), b"")
+                    self.assertFalse((root / "00000000" / "ack.json").exists())
+                    writer.targets["youtube"].write_bytes(b"")
+                    (managed / "hostlist-youtube.txt").write_bytes(b"youtube.com\n")
+                    self.assertTrue(run())
+                    self.assertEqual(writer.targets["youtube"].read_bytes(), b"")
+                    self.assertEqual((managed / "hostlist-youtube.txt").read_bytes(), b"youtube.com\n")
+                    self.assertTrue((root / "00000000" / "ack.json").exists())
+                    self.assertFalse(run())
+                    return
+                if case == "old-tail":
+                    old_fd = os.open(youtube, os.O_WRONLY | os.O_APPEND)
+                    physical_rotate = queue._rotate_original_source
+                    def append_after_cut(*args, **kwargs):
+                        result = physical_rotate(*args, **kwargs)
+                        os.write(old_fd, b"www.late-boundary.org\n")
+                        with debug.open("ab") as out:
+                            out.write(native_debug(proof.learning[0][0], "www.late-boundary.org", str(youtube)))
+                        return result
+                    try:
+                        with patch.object(queue, "_rotate_original_source", append_after_cut):
+                            self.assertTrue(run())
+                        self.assertEqual(len(queue.segments()), 1)
+                        self.assertIn(b"www.late-boundary.org\n", queue.segments()[0].read_bytes())
+                        self.assertNotIn(b"late-boundary.org\n", writer.targets["youtube"].read_bytes())
+                    finally:
+                        os.close(old_fd)
+                    self.assertTrue(run())
+                    self.assertIn(b"late-boundary.org\n", writer.targets["youtube"].read_bytes())
+                    self.assertEqual(queue.segments(), [])
+                    self.assertEqual(youtube.read_bytes(), b"")
+                    self.assertFalse(run())
+                    return
+                self.assertTrue(run())
+                self.assertEqual(writer.targets["youtube"].read_bytes(),
+                                 b"example.com\n")
+                self.assertEqual(writer.targets["user"].read_bytes(), b"")
+                self.assertEqual((managed / "hostlist-youtube.txt").read_bytes(),
+                                 b"youtube.com\nexample.com\n")
+                self.assertEqual(youtube.read_bytes(), b"")
+                self.assertEqual(queue.segments(), [])
+                self.assertFalse(run())
+                user.write_bytes(b"mail.example.org\n")
+                with debug.open("ab") as out:
+                    out.write(native_debug(proof.learning[1][0],
+                                           "mail.example.org", str(user)))
+                self.assertTrue(run())
+                self.assertEqual(writer.targets["user"].read_bytes(),
+                                 b"example.org\n")
+                self.assertEqual((managed / "hostlist-user.txt").read_bytes(),
+                                 b"example.org\n")
+                self.assertEqual(user.read_bytes(), b"")
+                self.assertFalse(run())
+                root = writer.receipts.root / proof.generation / "cursor-chain-v2"
+                self.assertTrue((root / "00000000" / "ack.json").exists())
+                self.assertTrue((root / "00000001" / "ack.json").exists())
+                self.assertFalse((root / "00000002").exists())
+                if case == "rollover":
+                    import auto_detect_cursor_chain as cursors
+                    youtube.write_bytes(b"www.rollover-boundary.net\n")
+                    with debug.open("ab") as out:
+                        out.write(native_debug(proof.learning[0][0], "www.rollover-boundary.net", str(youtube)))
+                    rename = Path.rename
+                    def interrupted_swap(path, target):
+                        result = rename(path, target)
+                        if path == root and Path(target).name == cursors.OLD:
+                            raise OSError("injected_after_predecessor_rename")
+                        return result
+                    with patch.object(cursors, "MAX_STEPS", 2):
+                        with patch.object(Path, "rename", interrupted_swap):
+                            with self.assertRaises(OSError):
+                                run()
+                        self.assertEqual(youtube.read_bytes(), b"www.rollover-boundary.net\n")
+                        self.assertTrue(run())
+                        self.assertFalse(run())
+                    self.assertIn(b"rollover-boundary.net\n", writer.targets["youtube"].read_bytes())
+                    anchor = json.loads((root / "anchor.json").read_bytes())
+                    self.assertEqual(anchor["cycle"], 1)
+                    self.assertTrue((root / "00000000" / "ack.json").exists())
+        finally:
+            os.close(config_fd)
+
     def test_tz6v4_sealed_full_n_pretraffic_is_one_original_epoch(self):
         """Real shared generator + sealed active schema3 + protected inodes.
 
@@ -884,6 +1091,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 writer = DestinationCommit(
                     epoch, queue, targets,
                     self.root / "source-test-gui.lock")
+                if getattr(self, "exercise_independent_cycles", False):
+                    self._exercise_independent_cycles(
+                        writer, proof, queue, owned_dir, native_debug, drained)
+                    return
                 protected = [debug_path, native, user_native,
                              shared, targets["youtube"], targets["user"]]
                 originals = {str(path): path.read_bytes()

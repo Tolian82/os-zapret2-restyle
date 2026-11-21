@@ -155,6 +155,7 @@ class MinuteIngressContract(unittest.TestCase):
                  patch.object(minute, 'inspect_inert_release',
                               side_effect=MinuteRefused(
                                   'native_observer_worker_ack_not_authorized')), \
+                 patch.object(minute, '_secure_bytes', return_value=b'{"schema":2}'), \
                  patch.object(minute, 'attest_running_generation',
                               side_effect=owner if isinstance(owner, Exception) else None,
                               return_value=None if isinstance(owner, Exception) else owner), \
@@ -176,6 +177,28 @@ class MinuteIngressContract(unittest.TestCase):
         rc, out, err, called = run_once(True, bad)
         self.assertEqual((rc, out, called), (69, '', 0))
         self.assertIn('auto-detect-minute-refused=MinuteRefused', err)
+
+    def test_learning_minute_reuses_original_config_owner_with_fd9(self):
+        from auto_detect_owner import LearningGenerationProof
+        generation = 'a' * 32
+        proof = LearningGenerationProof(
+            OwnerToken(4242, 'Sun Nov 15 08:00:00 2026', '/tmp/dvtws2'),
+            generation, generation, 'b' * 64, 'c' * 64, 'd' * 64,
+            ((3, 'youtube', str(minute.QUEUE_ROOT / ('learning-' + generation + '-3.txt'))),))
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock'), \
+             patch.object(minute, 'inspect_inert_release', side_effect=MinuteRefused(
+                 'native_observer_worker_ack_not_authorized')), \
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":3}'), \
+             patch.object(minute, 'attest_running_generation') as legacy, \
+             patch.object(minute, 'attest_learning_running_generation', return_value=proof), \
+             patch.object(minute, 'run_native_original_v2_cycle_once', return_value=True) as original, \
+             redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(minute.native_minute_once([]), 0)
+        original.assert_called_once_with(learning=True)
+        legacy.assert_not_called()
+        self.assertEqual(output.getvalue(), 'auto-detect-minute=processed\n')
 
     def test_native_tick_denied_without_inherited_fd9_before_source_read(self):
         with patch.object(minute.sys, 'platform', 'freebsd15'), \

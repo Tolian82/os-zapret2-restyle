@@ -664,6 +664,9 @@ def _original_source_plan_fields(folder: Path, intent: dict,
             "debug_end_offset": intent["debug_end_offset"],
             "debug_end_sha256": intent["debug_end_sha256"],
         }
+    if intent.get("kind") == "original-learning-cycle-prepared":
+        from auto_detect_cursor_chain import learning_cycle_source_fields
+        return learning_cycle_source_fields(folder, intent, uid)
     if intent.get("kind") in ("original-learning-running-fourth-source-prepared",
                               "original-learning-running-source-prepared"):
         return _original_running_late_source_plan_fields(folder, intent, uid)
