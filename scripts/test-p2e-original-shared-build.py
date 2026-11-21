@@ -1867,6 +1867,26 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 writer, proof, self.work,
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof, inspect=inspect_witness)
+                    from auto_detect_original_history_release_guard import (
+                        seal_original_learning_release_guard_locked,
+                        preview_original_learning_release_guard_locked,
+                    )
+                    def seal_original_release_guard(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return seal_original_learning_release_guard_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof, inspect=inspect_witness)
+                    def preview_original_release_guard(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return preview_original_learning_release_guard_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof, inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
                     with self.assertRaises(V2OriginalConfigRefused):
                         archive_release_preview()
@@ -2839,6 +2859,79 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 preview_independent_positive(
                                     inspect_witness=lambda *_a, **_kw:
                                         FDState.BUSY)
+                            # STEP 15b3a: without a durable all-N guard
+                            # the source-independent inspector MUST refuse
+                            # even though independent OLD/Found/debug proof
+                            # is available. Seal one original write-once
+                            # pre-unlink guard; do not perform any unlink.
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                preview_original_release_guard()
+                            import auto_detect_original_history_release_guard as rg
+                            from unittest.mock import patch as guard_patch
+                            release_path = history_root / "release-guard.json"
+                            original_guard_writer = rg._write_once
+                            crashed_guard = [False]
+                            def crash_after_release_guard(
+                                    folder, name, content, uid):
+                                original_guard_writer(
+                                    folder, name, content, uid)
+                                if name == "release-guard.json" and not crashed_guard[0]:
+                                    crashed_guard[0] = True
+                                    raise RuntimeError(
+                                        "synthetic_guard_durable_before_return")
+                            with guard_patch(
+                                    "auto_detect_original_history_release_guard._write_once",
+                                    side_effect=crash_after_release_guard):
+                                with self.assertRaisesRegex(
+                                        RuntimeError,
+                                        "synthetic_guard_durable_before_return"):
+                                    seal_original_release_guard()
+                            self.assertTrue(crashed_guard[0])
+                            sealed_guard = seal_original_release_guard()
+                            self.assertEqual(
+                                sealed_guard["old_archive_state"], "all-retained")
+                            self.assertEqual(
+                                sealed_guard["missing_old_native_numbers"], [])
+                            self.assertEqual(
+                                sorted(sealed_guard["retained_old_native_numbers"]),
+                                sorted([youtube_num, user_num]))
+                            self.assertFalse(
+                                sealed_guard["archive_unlink_authorized"])
+                            self.assertFalse(
+                                sealed_guard["native_pending_ack_authorized"])
+                            self.assertFalse(
+                                sealed_guard["physical_old_archive_cleanup_authorized"])
+                            self.assertEqual(
+                                seal_original_release_guard(), sealed_guard)
+                            self.assertEqual(
+                                preview_original_release_guard(), sealed_guard)
+                            self.assertEqual(
+                                read_independent_history(), history_image)
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                preview_original_release_guard(
+                                    inspect_witness=lambda *_a, **_kw:
+                                        FDState.BUSY)
+                            # A damaged write-once guard cannot be replaced.
+                            guard_backup = release_path.read_bytes()
+                            release_path.write_bytes(b"{}\n")
+                            try:
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_release_guard()
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    seal_original_release_guard()
+                            finally:
+                                release_path.write_bytes(guard_backup)
+                            # Unknown entries in the original archive
+                            # cannot silently become a missing N.
+                            foreign_guard_entry = archive_folder / "foreign.txt"
+                            foreign_guard_entry.write_bytes(b"foreign\n")
+                            try:
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_original_release_guard()
+                            finally:
+                                foreign_guard_entry.unlink()
+                            self.assertEqual(
+                                preview_original_release_guard(), sealed_guard)
                             # Deliberately simulate a missing archived
                             # inode ONLY inside this disposable fixture:
                             # old first/second/third source replay must
@@ -2870,6 +2963,57 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     preview_independent_wal(), committed_wal)
                                 self.assertEqual(
                                     read_independent_postimages(), final_postimages)
+                                # The first physical OLD is absent: inspect
+                                # the bounded partial archive rather than
+                                # assuming old-source replay can continue.
+                                partial_guard = preview_original_release_guard()
+                                self.assertEqual(
+                                    partial_guard["old_archive_state"],
+                                    "partially-missing")
+                                self.assertEqual(
+                                    partial_guard["missing_old_native_numbers"],
+                                    [youtube_num])
+                                self.assertFalse(
+                                    partial_guard["archive_unlink_authorized"])
+                                # Deliberately park the second OLD inode as
+                                # well, still outside the original journals.
+                                user_missing_path = (
+                                    archive_folder / f"{user_num:03d}.txt")
+                                parked_user_source = (
+                                    self.root / "test-only-detached-user.txt")
+                                user_missing_path.rename(parked_user_source)
+                                try:
+                                    all_missing_guard = (
+                                        preview_original_release_guard())
+                                    self.assertEqual(
+                                        all_missing_guard["old_archive_state"],
+                                        "all-missing")
+                                    self.assertEqual(
+                                        sorted(all_missing_guard[
+                                            "missing_old_native_numbers"]),
+                                        sorted([youtube_num, user_num]))
+                                    self.assertFalse(
+                                        all_missing_guard[
+                                            "native_pending_ack_authorized"])
+                                finally:
+                                    parked_user_source.rename(
+                                        user_missing_path)
+                                # An identical byte sequence at a *different*
+                                # physical inode is not a verified archive.
+                                # Disposable fixture only: preserve original
+                                # inode by its parked path, then restore it.
+                                import shutil as guard_shutil
+                                guard_shutil.copy2(out_of_tree, missing_old)
+                                try:
+                                    with self.assertRaises(
+                                            V2OriginalConfigRefused):
+                                        preview_original_release_guard()
+                                finally:
+                                    missing_old.unlink()
+                                self.assertEqual(
+                                    preview_original_release_guard()[
+                                        "old_archive_state"],
+                                    "partially-missing")
                                 with self.assertRaises(
                                         V2OriginalConfigRefused):
                                     seal_third_slot()
@@ -2943,6 +3087,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     learning[1][2]))
                                 os.fsync(debug.fileno())
                             positive_late = preview_independent_positive()
+                            post_positive_guard = preview_original_release_guard()
+                            self.assertEqual(post_positive_guard["positive_event_count"], 1)
+                            self.assertEqual(post_positive_guard["old_archive_state"],
+                                             "all-retained")
                             self.assertEqual(
                                 positive_late["positive_event_count"], 1)
                             self.assertIn(

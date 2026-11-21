@@ -107,6 +107,9 @@ def _read_history_once(writer, proof):
     if (root / "postimages.json").exists() or (root / "postimages.json").is_symlink():
         _read(root / "postimages.json", uid)
         available.add("postimages.json")
+    if (root / "release-guard.json").exists() or (root / "release-guard.json").is_symlink():
+        _read(root / "release-guard.json", uid)
+        available.add("release-guard.json")
     if set(os.listdir(root)) != expected | available:
         raise V2OriginalConfigRefused("native_history_unsealed_or_foreign_N")
     archive_manifest = _read(archive / "manifest.json", uid)
@@ -305,7 +308,7 @@ def seal_original_learning_independent_history_locked(
         if _read_archive_plan(writer, proof) != before:
             raise V2OriginalConfigRefused("native_history_old_changed_during_copy")
         expected = {f"{n:03d}" for n, _, _ in proof.learning}
-        if set(os.listdir(root)) - (expected | {"manifest.json", "postimages.json"}):
+        if set(os.listdir(root)) - (expected | {"manifest.json", "postimages.json", "release-guard.json"}):
             raise V2OriginalConfigRefused("native_history_foreign_folder")
         slot, prepared_folder, archive = _archive_paths(writer, proof)
         packed = []

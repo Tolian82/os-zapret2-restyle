@@ -169,7 +169,7 @@ def seal_original_learning_independent_postimages_locked(
         root = _history_root(writer, proof)
         if set(os.listdir(root)) - (
                 {f"{n:03d}" for n, _, _ in proof.learning} |
-                {"manifest.json", "postimages.json"}):
+                {"manifest.json", "postimages.json", "release-guard.json"}):
             raise V2OriginalConfigRefused("native_postimages_foreign_history_entry")
         _held(writer, proof, workspace, config_fd, config_path, attest)
         _write_once(root, "postimages.json", expected, writer.receipts.uid)
