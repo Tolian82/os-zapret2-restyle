@@ -2079,6 +2079,60 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         self.assertFalse(third["commit_authorized"])
                         self.assertFalse(third["ack_authorized"])
                         self.assertEqual(seal_third_slot(), third)
+                        # Third original destination SOURCE provenance is
+                        # already qualified without starting another P1.
+                        # This is the sole existing DestinationCommit
+                        # source-plan codec, not a new backend writer.
+                        from auto_detect_destination_commit import (
+                            _original_source_plan_fields,
+                            DestinationRefused,
+                        )
+                        third_prepared = json.loads(
+                            (third_slot / "intent.json").read_bytes())
+                        third_fields = _original_source_plan_fields(
+                            third_slot, third_prepared, os.geteuid())
+                        self.assertEqual(
+                            third_fields["pending_name"],
+                            "learning-00000002")
+                        self.assertEqual(
+                            third_fields["previous_cursor_progress_sha256"],
+                            advanced["progress_sha256"])
+                        self.assertEqual(
+                            third_fields["source_intent_sha256"],
+                            third["intent_sha256"])
+                        self.assertFalse(
+                            (third_slot / "destination").exists())
+                        # A forged N cut or previous cursor must NEVER
+                        # qualify even if its JSON is otherwise parseable.
+                        child_path = (
+                            third_slot / "native" /
+                            f"{user_num:03d}.json")
+                        original_child = child_path.read_bytes()
+                        forged = json.loads(original_child)
+                        forged["cursor"]["old_end"] += 1
+                        child_path.write_bytes(
+                            (json.dumps(forged, sort_keys=True,
+                                        separators=(",", ":")) +
+                             "\n").encode())
+                        with self.assertRaises(DestinationRefused):
+                            _original_source_plan_fields(
+                                third_slot, third_prepared, os.geteuid())
+                        child_path.write_bytes(original_child)
+                        previous_progress = (
+                            second_slot / "cursor-progress.json")
+                        progress_original = previous_progress.read_bytes()
+                        previous_progress.write_bytes(
+                            progress_original.replace(
+                                b'"cursor_advanced":true',
+                                b'"cursor_advanced":false'))
+                        with self.assertRaises(DestinationRefused):
+                            _original_source_plan_fields(
+                                third_slot, third_prepared, os.geteuid())
+                        previous_progress.write_bytes(progress_original)
+                        self.assertEqual(
+                            _original_source_plan_fields(
+                                third_slot, third_prepared, os.geteuid()),
+                            third_fields)
                         third_intent_bytes = (
                             third_slot / "intent.json").read_bytes()
                         third_intent = json.loads(third_intent_bytes)
