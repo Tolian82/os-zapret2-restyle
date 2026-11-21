@@ -1206,6 +1206,11 @@ def inspect_original_learning_native_rebind_locked(
             selected_pending.add(pending)
         if {p.name for p in writer.queue.segments()} - selected_pending:
             raise V2OriginalConfigRefused("learning_rebind_inspector_foreign_pending")
+        # A source-bound archive handoff may relocate OLD inodes without
+        # discarding any physical byte. Its receipt is part of this SAME
+        # generation's original FD9 cursor-chain, never a second queue.
+        from auto_detect_original_native_archive import _read_archive_plan
+        archive_state = _read_archive_plan(writer, proof)
         snapshots = {}
         observations = []
         observed_seed_by_name = {}
@@ -1224,6 +1229,12 @@ def inspect_original_learning_native_rebind_locked(
             pending_name = record["pending_name"]
             retained_path = (writer.queue.pending / pending_name
                              if pending_name is not None else None)
+            if (retained_path is not None and archive_state is not None):
+                physical, old_receipt = archive_state[0][number]
+                if old_receipt["old_pending_path"] != str(retained_path):
+                    raise V2OriginalConfigRefused(
+                        "learning_rebind_foreign_archived_pending")
+                retained_path = physical
             if retained_path is None:
                 if ((st.st_dev, st.st_ino) != old or st.st_nlink != 1 or
                         end > len(data) or
@@ -1374,6 +1385,9 @@ def inspect_original_learning_native_rebind_locked(
         # NOT just the last profile: dvtws2 can append without P2a lock.
         if {p.name for p in writer.queue.segments()} - selected_pending:
             raise V2OriginalConfigRefused("learning_rebind_inspector_pending_changed")
+        if _read_archive_plan(writer, proof) != archive_state:
+            raise V2OriginalConfigRefused(
+                "learning_rebind_archived_inode_raced")
         for path, (witness, sha) in snapshots.items():
             _, content, after = _native_rebind_stable_snapshot(
                 path, writer.receipts.uid, writer.queue.writer_gid,
@@ -1697,16 +1711,27 @@ def preview_original_learning_forward_windows_locked(
                          seed["new_live_inode"]["inode"])):
                     raise V2OriginalConfigRefused("learning_forward_unqualified_inode_seed")
                 path_old = writer.queue.pending / seed["old_pending_name"]
+                # Preserve the immutable LOGICAL old pending path in N
+                # cursor receipts. A source-bound archive transition may
+                # change only the physical path used to read those bytes.
+                from auto_detect_original_native_archive import _read_archive_plan
+                archive_state = _read_archive_plan(writer, proof)
+                source_old = path_old
                 if path_old not in writer.queue.segments():
-                    raise V2OriginalConfigRefused("learning_forward_old_pending_not_retained")
+                    if archive_state is None or (
+                            archive_state[0][number][1][
+                                "old_pending_path"] != str(path_old)):
+                        raise V2OriginalConfigRefused(
+                            "learning_forward_old_pending_not_retained")
+                    source_old = archive_state[0][number][0]
                 old_st, old_data, _ = _native_rebind_stable_snapshot(
-                    path_old, uid, gid, allowed_links=(1,))
+                    source_old, uid, gid, allowed_links=(1,))
                 if ((old_st.st_dev, old_st.st_ino) != expected_old or
                         prior_end > len(old_data) or
                         hashlib.sha256(old_data[:prior_end]).hexdigest() !=
                         first["end_sha256"]):
                     raise V2OriginalConfigRefused("learning_forward_old_preimage_mismatch")
-                pinned_sources.append((path_old, old_st.st_dev, old_st.st_ino))
+                pinned_sources.append((source_old, old_st.st_dev, old_st.st_ino))
                 frozen = (sealed_window["native"][index]
                           if sealed_window is not None else None)
                 old_end = (frozen["old_end"] if frozen is not None

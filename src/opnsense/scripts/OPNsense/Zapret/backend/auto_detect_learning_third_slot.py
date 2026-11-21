@@ -226,7 +226,8 @@ def prepare_third_source_locked(
         names_slot = set(os.listdir(slot))
         if names_slot - {
                 "native", "intent.json", "destination",
-                "cursor-progress.json", "pending-ack-prepare"}:
+                "cursor-progress.json", "pending-ack-prepare",
+                "pending-ack-archive"}:
             raise V2OriginalConfigRefused(
                 "original_third_source_foreign_destination")
         if "cursor-progress.json" in names_slot and (
@@ -304,6 +305,12 @@ def prepare_third_source_locked(
                         manifest != expected_manifest):
                     raise V2OriginalConfigRefused(
                         "original_third_source_pending_ack_manifest_invalid")
+        if "pending-ack-archive" in names_slot:
+            if "pending-ack-prepare" not in names_slot:
+                raise V2OriginalConfigRefused(
+                    "original_third_archive_without_prepared_ack")
+            from auto_detect_original_native_archive import _read_archive_plan
+            _read_archive_plan(writer, proof)
         if "destination" in names_slot:
             if "intent.json" not in names_slot:
                 raise V2OriginalConfigRefused(
@@ -340,7 +347,10 @@ def prepare_third_source_locked(
                         {"native", "intent.json", "destination",
                          "cursor-progress.json"},
                         {"native", "intent.json", "destination",
-                         "cursor-progress.json", "pending-ack-prepare"}) or
+                         "cursor-progress.json", "pending-ack-prepare"},
+                        {"native", "intent.json", "destination",
+                         "cursor-progress.json", "pending-ack-prepare",
+                         "pending-ack-archive"}) or
                     set(os.listdir(native)) != allowed):
                 raise V2OriginalConfigRefused(
                     "original_third_source_not_complete")

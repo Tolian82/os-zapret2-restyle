@@ -1785,6 +1785,18 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof,
                                 inspect=inspect_witness)
+                    from auto_detect_original_native_archive import (
+                        archive_original_learning_pending_locked,
+                    )
+                    def archive_pending(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return archive_original_learning_pending_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof,
+                                inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
                     with self.assertRaises(V2OriginalConfigRefused):
                         prepare_native_ack()
@@ -2476,6 +2488,85 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 seal_third_slot(), third)
                             self.assertEqual(
                                 advance_third_cursor(), third_advanced)
+                            # STEP 12: physical P2a pending ARCHIVE, no
+                            # unlink of an old source inode. One N moves,
+                            # crashes after rename+fsync, another call
+                            # recovers from the original immutable plan.
+                            archive_folder = (
+                                third_slot / "pending-ack-archive")
+                            from auto_detect_original_native_archive import (
+                                _move_original_pending as original_move,
+                            )
+                            failed_move = [False]
+                            def move_then_fail(source, destination):
+                                original_move(source, destination)
+                                if not failed_move[0]:
+                                    failed_move[0] = True
+                                    raise RuntimeError(
+                                        "synthetic_native_archive_after_first_rename")
+                            with patch(
+                                    "auto_detect_original_native_archive._move_original_pending",
+                                    side_effect=move_then_fail):
+                                with self.assertRaisesRegex(
+                                        RuntimeError,
+                                        "synthetic_native_archive_after_first_rename"):
+                                    archive_pending()
+                            self.assertTrue(failed_move[0])
+                            self.assertEqual(len(queue.segments()), 1)
+                            self.assertTrue(
+                                (archive_folder / "manifest.json").exists())
+                            archived_result = archive_pending()
+                            self.assertEqual(
+                                archived_result["profiles_archived"], 2)
+                            self.assertTrue(
+                                archived_result["pending_relocated"])
+                            self.assertTrue(
+                                archived_result["pending_bytes_preserved"])
+                            self.assertFalse(
+                                archived_result[
+                                    "native_pending_ack_authorized"])
+                            self.assertFalse(
+                                archived_result["archive_unlink_authorized"])
+                            self.assertFalse(
+                                archived_result["generation_retired"])
+                            self.assertEqual(queue.segments(), [])
+                            self.assertEqual(
+                                archive_pending(), archived_result)
+                            self.assertEqual(seal_third_slot(), third)
+                            self.assertEqual(
+                                advance_third_cursor(), third_advanced)
+                            self.assertEqual(
+                                pending_retirement(), pending_preview)
+                            self.assertEqual(
+                                (archive_folder / f"{youtube_num:03d}.txt").read_bytes(),
+                                observed_files[youtube_pending])
+                            self.assertEqual(
+                                (archive_folder / f"{user_num:03d}.txt").read_bytes(),
+                                observed_files[user_pending])
+                            self.assertEqual(
+                                user_native.read_bytes(),
+                                observed_files[user_native])
+                            # Fixture-only reset to continue the legacy
+                            # late-append test on physical pending names.
+                            for number, pending in (
+                                    (youtube_num, youtube_pending),
+                                    (user_num, user_pending)):
+                                (archive_folder / f"{number:03d}.txt").rename(
+                                    pending)
+                            (archive_folder / "manifest.json").unlink()
+                            archive_folder.rmdir()
+                            for receipt in ack_folder.iterdir():
+                                receipt.unlink()
+                            # Re-pin fixture-only old ctime (rename changed
+                            # inode metadata); PRODUCTION never rewrites
+                            # original immutable ACK receipts.
+                            prepared_ack = prepare_native_ack()
+                            frozen_ack = {
+                                p.name: p.read_bytes()
+                                for p in ack_folder.iterdir()}
+                            self.assertEqual(queue.segments(),
+                                             [youtube_pending, user_pending])
+                            self.assertEqual(seal_third_slot(), third)
 
                         third_intent_bytes = (
                             third_slot / "intent.json").read_bytes()
