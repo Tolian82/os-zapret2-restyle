@@ -1466,18 +1466,18 @@ class CursorChain:
                         not drained(archive, old_stat)):
                     raise CursorChainRefused("learning_debug_cut_positive_old_changed")
                 tail = old_data[intent["old_size"]:]
-                if len(tail) > 256 * 1024 or not tail.endswith(b"\\n"):
+                if len(tail) > 256 * 1024 or not tail.endswith(b"\n"):
                     raise CursorChainRefused("learning_debug_cut_positive_tail_unbounded")
                 rows = {(n, path) for n, _, path in proof.learning}
                 events = 0
                 for line in tail.splitlines(keepends=True):
-                    if not line.endswith(b"\\n"):
+                    if not line.endswith(b"\n"):
                         raise CursorChainRefused("learning_debug_cut_positive_partial_line")
                     try:
                         decoded = line[:-1].decode("ascii")
                     except UnicodeDecodeError as exc:
                         raise CursorChainRefused("learning_debug_cut_positive_nonascii") from exc
-                    if "\\x00" in decoded or "\\r" in decoded:
+                    if "\x00" in decoded or "\r" in decoded:
                         raise CursorChainRefused("learning_debug_cut_positive_control_byte")
                     if " : adding to " not in decoded:
                         continue
