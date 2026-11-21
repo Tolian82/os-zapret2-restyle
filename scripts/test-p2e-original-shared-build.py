@@ -1856,6 +1856,17 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 writer, proof, self.work,
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof, inspect=inspect_witness)
+                    from auto_detect_original_history_positive import (
+                        preview_original_learning_independent_positive_locked,
+                    )
+                    def preview_independent_positive(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return preview_original_learning_independent_positive_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof, inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
                     with self.assertRaises(V2OriginalConfigRefused):
                         archive_release_preview()
@@ -2815,6 +2826,19 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     postimage_original)
                             self.assertEqual(
                                 read_independent_postimages(), final_postimages)
+                            positive_baseline = preview_independent_positive()
+                            self.assertTrue(positive_baseline[
+                                "new_positive_debug_attribution_verified"])
+                            self.assertEqual(
+                                positive_baseline["positive_event_count"], 0)
+                            self.assertFalse(positive_baseline[
+                                "archive_unlink_authorized"])
+                            self.assertFalse(positive_baseline[
+                                "native_pending_ack_authorized"])
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                preview_independent_positive(
+                                    inspect_witness=lambda *_a, **_kw:
+                                        FDState.BUSY)
                             # Deliberately simulate a missing archived
                             # inode ONLY inside this disposable fixture:
                             # old first/second/third source replay must
@@ -2908,11 +2932,45 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 live.write(
                                     (late_live_domain + "\n").encode())
                                 os.fsync(live.fileno())
+                            # Producer appends native AFTER the debug
+                            # positive; this inverted/crashed fixture must
+                            # REFUSE instead of claiming an unmatched N.
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                preview_independent_positive()
                             with debug_path.open("ab", buffering=0) as debug:
                                 debug.write(native_debug(
                                     user_num, late_live_domain,
                                     learning[1][2]))
                                 os.fsync(debug.fileno())
+                            positive_late = preview_independent_positive()
+                            self.assertEqual(
+                                positive_late["positive_event_count"], 1)
+                            self.assertIn(
+                                {"native_number": user_num,
+                                 "hostlist": "user",
+                                 "hostname": late_live_domain},
+                                positive_late["positive_native_observations"])
+                            self.assertTrue(positive_late[
+                                "all_final_destinations_inode_pinned"])
+                            self.assertFalse(positive_late[
+                                "source_independent_transaction_replay_available"])
+                            # No original OLD inode is required even for
+                            # a positive NEW append after archival.
+                            missing_after_late = (
+                                archive_folder / f"{youtube_num:03d}.txt")
+                            parked_late = (
+                                self.root / "test-only-positive-absent-old.txt")
+                            missing_after_late.rename(parked_late)
+                            try:
+                                self.assertEqual(
+                                    preview_independent_positive(),
+                                    positive_late)
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    archive_release_preview()
+                            finally:
+                                parked_late.rename(missing_after_late)
+                            self.assertEqual(
+                                preview_independent_positive(), positive_late)
                             archive_late = pending_retirement()
                             late_user = next(
                                 item for item in archive_late["profiles"]
@@ -2956,6 +3014,24 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 user_native.read_bytes())
                             self.assertFalse(
                                 (third_slot / "ack.json").exists())
+                            # Native debug writes the positive BEFORE the
+                            # native append. A debug-only, crash-interrupted
+                            # event must not be accepted as a durable find.
+                            orphan_debug_original = debug_path.read_bytes()
+                            orphan_name = "post-archive-debug-only.example.net"
+                            with debug_path.open("ab", buffering=0) as debug:
+                                debug.write(native_debug(
+                                    user_num, orphan_name, learning[1][2]))
+                                os.fsync(debug.fileno())
+                            try:
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_independent_positive()
+                            finally:
+                                # Only disposable test fixtures may restore
+                                # a producer file for the next scenario.
+                                debug_path.write_bytes(orphan_debug_original)
+                            self.assertEqual(
+                                preview_independent_positive(), positive_late)
                             # Mismatched N on positive debug is NOT proof
                             # of the new native User observation. Reject
                             # it instead of confirming a YouTube find.
@@ -2971,6 +3047,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     learning[0][2]))
                                 os.fsync(debug.fileno())
                             with self.assertRaises(V2OriginalConfigRefused):
+                                preview_independent_positive()
+                            with self.assertRaises(V2OriginalConfigRefused):
                                 pending_retirement()
                             with self.assertRaises(V2OriginalConfigRefused):
                                 archive_pending()
@@ -2984,6 +3062,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             debug_path.write_bytes(debug_copy)
                             self.assertEqual(
                                 archive_pending(), archived_result)
+                            self.assertEqual(
+                                preview_independent_positive(), positive_late)
                             # Foreign archive entry and a hardlink alias
                             # must NEVER qualify as a root-private N.
                             archived_user = (
