@@ -960,6 +960,40 @@ def attest_retiring_predecessor(*,
         raise GenerationRefused("retiring_previous_generation_not_attested") from exc
 
 
+def attest_retiring_learning_predecessor(*,
+                                       journal: Path = Path("/var/db/zapret2/shared-apply"),
+                                       work_root: Path = WORK,
+                                       active: Path = COMMON_ACTIVE,
+                                       child_pidfile: Path = CHILD_PID,
+                                       monitor_pidfile: Path = MONITOR_PID,
+                                       epoch_root: Path = Path("/var/db/zapret2/auto-detect-epochs"),
+                                       runner=subprocess.run) -> LearningGenerationProof:
+    """The same original stopped schema3 predecessor in prepared/activating.
+
+    No synthesized new owner: reuse exactly the existing immutable epoch,
+    original shared Apply previous journal, sealed N map and zero live
+    engine/supervisor proofs. The normal committed STOPPED owner is allowed.
+    """
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise GenerationRefused("native_root_retiring_learning_fd9_required")
+    try:
+        from auto_detect_epoch_receipts import ReceiptRefused
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        proof = _attest_stopped_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            epoch_root=epoch_root, runner=runner, owner_uid=0,
+            allow_transition=True, learning_schema3=True)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("retiring_learning_previous_not_schema3")
+        return proof
+    except (OSError, ValueError, TypeError, UnicodeError,
+            subprocess.SubprocessError, SharedOperationError,
+            SharedBundleError, ExclusionError, ReceiptRefused) as exc:
+        raise GenerationRefused("retiring_learning_previous_not_attested") from exc
+
+
 def main() -> int:
     raise SystemExit("P2c owner attester is not an active collector or installer")
 
