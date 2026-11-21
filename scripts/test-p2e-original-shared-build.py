@@ -2360,7 +2360,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         # rewrite the managed image.
                         self.assertEqual(
                             forward_commit_fixture(), recovered_second)
-                        self.assertEqual(next_active.read_bytes(), after_next)
+                        # Replaying the OLD second checkpoint must NEVER
+                        # roll back an already committed THIRD managed
+                        # postimage or reapply an older source.
+                        self.assertEqual(
+                            next_active.read_bytes(), third_after_active)
+                        self.assertEqual(
+                            third_commit_fixture(), third_checkpoint)
                         self.assertEqual(
                             advance_second_cursor(), advanced)
                         self.assertEqual(
