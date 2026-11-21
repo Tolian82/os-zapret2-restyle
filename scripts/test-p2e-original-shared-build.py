@@ -689,6 +689,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.native_cycle_case = "debug-cut-late-old"
         self.test_tz6v4_independent_native_minute_cycles()
 
+    def test_tz6v4_debug_cut_retains_late_old_native_positive(self):
+        self.native_cycle_case = "debug-cut-late-positive"
+        self.test_tz6v4_independent_native_minute_cycles()
+
     def test_tz6v4_malformed_positive_is_not_skipped_as_diagnostic(self):
         self.native_cycle_case = "foreign-positive"
         self.test_tz6v4_independent_native_minute_cycles()
@@ -851,7 +855,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertFalse((root / "00000001" / "ack.json").exists())
                     return
                 if case in ("diagnostic-highwater", "debug-cut-crash",
-                            "debug-cut-repeat", "debug-cut-late-old", "debug-cut-part"):
+                            "debug-cut-repeat", "debug-cut-late-old",
+                            "debug-cut-late-positive", "debug-cut-part"):
                     # The original one-PHP/FD9 WAL still commits/ACKs the
                     # unchanged N cursors. All bytes are real on disk and
                     # no worker, engine signal or Config mutation is faked.
@@ -905,7 +910,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     out.write(native_debug(proof.learning[1][0],
                                            "mail.example.org", str(user)))
                 if case in ("diagnostic-highwater", "debug-cut-crash",
-                            "debug-cut-repeat", "debug-cut-late-old", "debug-cut-part"):
+                            "debug-cut-repeat", "debug-cut-late-old",
+                            "debug-cut-late-positive", "debug-cut-part"):
                     # A newly appended real native hostname makes the
                     # previously qualified candidate obsolete before P1.
                     self.assertIsNone(chain.learning_debug_highwater_candidate(
@@ -917,7 +923,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                  b"example.org\n")
                 self.assertEqual(user.read_bytes(), b"")
                 if case in ("diagnostic-highwater", "debug-cut-crash",
-                            "debug-cut-repeat", "debug-cut-late-old", "debug-cut-part"):
+                            "debug-cut-repeat", "debug-cut-late-old",
+                            "debug-cut-late-positive", "debug-cut-part"):
                     # Native User has been committed AFTER the original
                     # highwater candidate became stale. The next original
                     # FD9/P2a cycle can now make a safe physical debug cut.
@@ -939,17 +946,26 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         self.assertTrue((previous_slot / cursors.DEBUG_CUT_FRESH).exists())
                         self.assertFalse((previous_slot / cursors.DEBUG_CUT_INTENT).exists())
                         self.assertEqual(debug.stat().st_ino, old_inode)
-                    if case in ("debug-cut-crash", "debug-cut-late-old"):
+                    if case in ("debug-cut-crash", "debug-cut-late-old",
+                                "debug-cut-late-positive"):
                         import auto_detect_cursor_chain as cursors
                         original_replace = os.replace
                         def interrupted_debug_cut(source, target):
                             result = original_replace(source, target)
                             if Path(source).name == cursors.DEBUG_CUT_FRESH:
-                                if case == "debug-cut-late-old":
-                                    # Native used an old open FD after the
-                                    # cut, and its bytes remain protected.
+                                if case in ("debug-cut-late-old",
+                                            "debug-cut-late-positive"):
+                                    # Simulate a native writer whose old FD
+                                    # survived os.replace after the P2b scan.
                                     with (previous_slot / cursors.DEBUG_CUT_OLD).open("ab") as fp:
-                                        fp.write(b"late-old-native-diagnostic\n")
+                                        if case == "debug-cut-late-old":
+                                            fp.write(b"late-old-native-diagnostic\n")
+                                        else:
+                                            fp.write(native_debug(
+                                                proof.learning[0][0],
+                                                "late.example.net", str(youtube)))
+                                    if case == "debug-cut-late-positive":
+                                        youtube.write_bytes(b"late.example.net\n")
                                 raise OSError("injected_after_original_debug_replace")
                             return result
                         with patch.object(cursors.os, "replace", interrupted_debug_cut):
@@ -957,15 +973,16 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 run()
                         self.assertTrue((previous_slot / cursors.DEBUG_CUT_OLD).is_file())
                         self.assertNotEqual(debug.stat().st_ino, old_inode)
-                        if case == "debug-cut-late-old":
+                        if case == "debug-cut-late-positive":
                             from auto_detect_cursor_chain import CursorChainRefused
                             with self.assertRaisesRegex(
                                     CursorChainRefused, "learning_debug_cut_late_old_append"):
                                 run()
                             self.assertTrue((previous_slot / cursors.DEBUG_CUT_OLD).is_file())
                             self.assertFalse((previous_slot / cursors.DEBUG_CUT_RETIRE).exists())
-                            self.assertIn(b"late-old-native-diagnostic\n",
+                            self.assertIn(b"late.example.net\n",
                                           (previous_slot / cursors.DEBUG_CUT_OLD).read_bytes())
+                            self.assertEqual(youtube.read_bytes(), b"late.example.net\n")
                             self.assertEqual((managed / "hostlist-user.txt").read_bytes(),
                                              b"example.org\n")
                             return
@@ -976,6 +993,17 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                     "debug-cut-complete.json",
                                     "debug-cut-retire.json"):
                         self.assertTrue((previous_slot / receipt).is_file())
+                    if case == "debug-cut-late-old":
+                        retired = json.loads(
+                            (previous_slot / "debug-cut-retire.json").read_bytes())
+                        self.assertEqual(
+                            retired["late_diagnostic_bytes"],
+                            len(b"late-old-native-diagnostic\n"))
+                        self.assertEqual(
+                            retired["retained_size"],
+                            full_size + len(native_debug(
+                                proof.learning[1][0], "mail.example.org", str(user)))
+                            + len(b"late-old-native-diagnostic\n"))
                     self.assertFalse(
                         (previous_slot / "debug-cut-retained.log").exists())
                     self.assertFalse(
@@ -1004,7 +1032,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertTrue((root / "00000000" / "ack.json").exists())
                 self.assertTrue((root / "00000001" / "ack.json").exists())
                 if case in ("diagnostic-highwater", "debug-cut-crash",
-                            "debug-cut-repeat", "debug-cut-late-old", "debug-cut-part"):
+                            "debug-cut-repeat", "debug-cut-late-old",
+                            "debug-cut-late-positive", "debug-cut-part"):
                     self.assertTrue((root / "00000002" / "ack.json").exists())
                     if case == "debug-cut-repeat":
                         self.assertTrue((root / "00000003" / "ack.json").exists())
