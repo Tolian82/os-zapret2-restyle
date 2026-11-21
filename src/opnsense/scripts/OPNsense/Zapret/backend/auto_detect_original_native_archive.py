@@ -380,10 +380,29 @@ def archive_original_learning_pending_locked(
                 raise V2OriginalConfigRefused("native_archive_postmove_not_proven")
         held()
         final = _read_archive_plan(writer, proof)
+        # A fully archived replay has no pending names left, but new
+        # native live/debug bytes can still grow independently. The
+        # original sealed third progress only validates FROZEN cuts:
+        # it cannot replace a CURRENT all-N P2b/positive-provenance
+        # check. Do not return success on an unmatched or wrong-N event.
+        current = preview_original_learning_third_pending_retirement_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
         if (final is None or final[1] != previous or
                 any(final[0][number][0] !=
                     archive / f"{number:03d}.txt"
                     for number, _, _ in proof.learning) or
+                current["progress_sha256"] !=
+                    previous["third_cursor_progress_sha256"] or
+                current["native_pending_ack_authorized"] is not False or
+                current["native_cleanup_authorized"] is not False or
+                current["generation_retired"] is not False or
+                len(current["profiles"]) != len(proof.learning) or
+                any(row["native_number"] != number or
+                    row["status"] != "covered-old-pending-no-ACK" or
+                    row["unprocessed_old_bytes"] != 0
+                    for (number, _, _), row in zip(
+                        proof.learning, current["profiles"])) or
                 seal_original_learning_third_progress_locked(
                     writer, proof, workspace, config_fd=config_fd,
                     config_path=config_path, attest=attest,
