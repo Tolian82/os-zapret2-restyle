@@ -859,10 +859,40 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertEqual(writer.targets["user"].read_bytes(), b"")
                     self.assertTrue((root / "00000001" / "ack.json").exists())
                     self.assertFalse(run())
+                    from auto_detect_cursor_chain import CursorChainRefused
+                    from auto_detect_fd import FDState
+                    chain = CursorChain(writer.receipts, queue)
+                    candidate = chain.learning_debug_highwater_candidate(
+                        proof, self.work, attest=lambda: proof, inspect=drained)
+                    self.assertIsNotNone(candidate)
+                    self.assertEqual(candidate["schema"], 3)
+                    self.assertEqual(candidate["debug"]["offset"], full_size)
+                    self.assertEqual(candidate["next_sequence"], 2)
+                    self.assertTrue(candidate["source_fully_acked"])
+                    self.assertTrue(candidate["p2b_drained"])
+                    self.assertFalse(candidate["cut_authorized"])
+                    self.assertFalse(candidate["ack_authorized"])
+                    self.assertEqual(
+                        candidate["previous_ack_sha256"],
+                        tip["previous_ack_sha256"])
+                    with self.assertRaisesRegex(
+                            CursorChainRefused, "learning_debug_cut_native_fd_busy"):
+                        chain.learning_debug_highwater_candidate(
+                            proof, self.work, attest=lambda: proof,
+                            inspect=lambda *args, **kwargs: FDState.BUSY)
+                    with self.assertRaisesRegex(
+                            CursorChainRefused, "learning_debug_cut_original_owner_required"):
+                        chain.learning_debug_highwater_candidate(
+                            proof, self.work, attest=lambda: None, inspect=drained)
                 user.write_bytes(b"mail.example.org\n")
                 with debug.open("ab") as out:
                     out.write(native_debug(proof.learning[1][0],
                                            "mail.example.org", str(user)))
+                if case == "diagnostic-highwater":
+                    # A newly appended real native hostname makes the
+                    # previously qualified candidate obsolete before P1.
+                    self.assertIsNone(chain.learning_debug_highwater_candidate(
+                        proof, self.work, attest=lambda: proof, inspect=drained))
                 self.assertTrue(run())
                 self.assertEqual(writer.targets["user"].read_bytes(),
                                  b"example.org\n")
