@@ -1787,7 +1787,17 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 inspect=inspect_witness)
                     from auto_detect_original_native_archive import (
                         archive_original_learning_pending_locked,
+                        preview_original_learning_archive_release_locked,
                     )
+                    def archive_release_preview(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return preview_original_learning_archive_release_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof,
+                                inspect=inspect_witness)
                     def archive_pending(*, inspect_witness=drained):
                         with writer.exclusive_targets(), patch(
                                 "auto_detect_original_v2_model.COMMON_ACTIVE",
@@ -1798,6 +1808,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 attest=lambda: proof,
                                 inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        archive_release_preview()
                     with self.assertRaises(V2OriginalConfigRefused):
                         prepare_native_ack()
                     with self.assertRaises(V2OriginalConfigRefused):
@@ -2546,6 +2558,116 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             self.assertEqual(
                                 user_native.read_bytes(),
                                 observed_files[user_native])
+                            # STEP 14: original final release remains
+                            # BLOCKED although queue.pending is empty:
+                            # first/second/third history still opens the
+                            # exact archived old inode for replay.
+                            release_preview = archive_release_preview()
+                            self.assertTrue(
+                                release_preview[
+                                    "archive_relocation_qualified"])
+                            self.assertTrue(
+                                release_preview[
+                                    "archive_required_for_original_replay"])
+                            self.assertFalse(
+                                release_preview[
+                                    "source_independent_replay_available"])
+                            self.assertFalse(
+                                release_preview["archive_unlink_authorized"])
+                            self.assertFalse(
+                                release_preview[
+                                    "native_pending_ack_authorized"])
+                            self.assertFalse(
+                                release_preview["generation_retired"])
+                            self.assertEqual(
+                                release_preview["profiles_count"], 2)
+                            self.assertEqual(
+                                release_preview["release_blocker"],
+                                "first_second_third_original_replay_requires_old_inode")
+                            self.assertEqual(
+                                archive_release_preview(), release_preview)
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                archive_release_preview(
+                                    inspect_witness=lambda *_a, **_kw:
+                                        FDState.BUSY)
+                            self.assertEqual(queue.segments(), [])
+                            # The audit creates NO release marker/ACK
+                            # and never changes the original source bytes.
+                            self.assertFalse(
+                                (third_slot /
+                                 "archive-release-ready.json").exists())
+                            self.assertEqual(
+                                (archive_folder / f"{youtube_num:03d}.txt").read_bytes(),
+                                observed_files[youtube_pending])
+                            self.assertEqual(
+                                (archive_folder / f"{user_num:03d}.txt").read_bytes(),
+                                observed_files[user_pending])
+                            # Deliberately simulate a missing archived
+                            # inode ONLY inside this disposable fixture:
+                            # old first/second/third source replay must
+                            # refuse, not declare it safe to delete.
+                            missing_old = (
+                                archive_folder / f"{youtube_num:03d}.txt")
+                            out_of_tree = (
+                                third_slot / "test-only-detached-source.txt")
+                            missing_old.rename(out_of_tree)
+                            try:
+                                with self.assertRaises(
+                                        V2OriginalConfigRefused):
+                                    archive_release_preview()
+                                with self.assertRaises(
+                                        V2OriginalConfigRefused):
+                                    seal_third_slot()
+                            finally:
+                                out_of_tree.rename(missing_old)
+                            self.assertEqual(
+                                archive_release_preview(),
+                                release_preview)
+                            # If an old archive is appended after N=1
+                            # was read but while N=2 is being checked,
+                            # ALL-N final physical reread must refuse.
+                            import auto_detect_original_v2_model as origin_model
+                            from unittest.mock import patch as patch_module
+                            previous_snap = (
+                                origin_model._native_rebind_stable_snapshot)
+                            raced_snap = [False]
+                            def late_archive_in_first_N(path, *args, **kwargs):
+                                result = previous_snap(path, *args, **kwargs)
+                                if (path == archive_folder /
+                                        f"{user_num:03d}.txt"
+                                        and not raced_snap[0]):
+                                    raced_snap[0] = True
+                                    with (archive_folder /
+                                          f"{youtube_num:03d}.txt").open(
+                                              "ab", buffering=0) as out:
+                                        out.write(
+                                            b"late-archive-race.example.net\n")
+                                        os.fsync(out.fileno())
+                                return result
+                            archived_youtube = (
+                                archive_folder / f"{youtube_num:03d}.txt")
+                            old_stat = archived_youtube.stat()
+                            with patch_module(
+                                    "auto_detect_original_v2_model._native_rebind_stable_snapshot",
+                                    side_effect=late_archive_in_first_N):
+                                with self.assertRaises(
+                                        V2OriginalConfigRefused):
+                                    archive_release_preview()
+                            self.assertTrue(raced_snap[0])
+                            self.assertIn(
+                                b"late-archive-race.example.net\n",
+                                archived_youtube.read_bytes())
+                            # Test-only restoration, never production
+                            # truncate of an original archived source.
+                            archived_youtube.write_bytes(
+                                observed_files[youtube_pending])
+                            os.utime(
+                                archived_youtube, ns=(
+                                    old_stat.st_atime_ns,
+                                    old_stat.st_mtime_ns))
+                            self.assertEqual(
+                                archive_release_preview(),
+                                release_preview)
                             # STEP 13: archived OLD remains covered
                             # while a NEW live native/positive-debug pair
                             # is still unread. Replaying an old cursor or
@@ -2584,6 +2706,15 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             self.assertEqual(
                                 archive_pending(), archived_result)
                             self.assertEqual(queue.segments(), [])
+                            late_release = archive_release_preview()
+                            self.assertEqual(
+                                late_release["profiles_count"], 2)
+                            self.assertFalse(
+                                late_release["archive_unlink_authorized"])
+                            self.assertGreater(
+                                next(x["unprocessed_new_bytes"]
+                                     for x in late_release["profiles"]
+                                     if x["native_number"] == user_num), 0)
                             with self.assertRaises(V2OriginalConfigRefused):
                                 prepare_native_ack()
                             self.assertEqual(

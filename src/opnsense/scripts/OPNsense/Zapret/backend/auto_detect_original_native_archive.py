@@ -200,7 +200,155 @@ def _read_archive_plan(writer, proof):
             _read(archive / "manifest.json", uid) != plan_raw or
             _read(prepared / "manifest.json", uid) != prepared_raw):
         raise V2OriginalConfigRefused("native_archive_orphan_or_raced_inode")
+    # The producer is NOT a participant in P2a. N=1 can grow while
+    # N=2 is being read and still leave the archive directory and
+    # write-once manifest unchanged. Re-open EVERY old inode after the
+    # all-N walk; same N, source bytes, inode, size and mtime are
+    # mandatory, even when the initial read passed.
+    for n, _, _ in proof.learning:
+        physical, row = current[n]
+        st, data, _ = _native_rebind_stable_snapshot(
+            physical, uid, writer.queue.writer_gid, allowed_links=(1,))
+        if ((st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns) !=
+                (row["old_device"], row["old_inode"],
+                 row["old_size"], row["old_mtime_ns"]) or
+                hashlib.sha256(data).hexdigest() != row["old_sha256"]):
+            raise V2OriginalConfigRefused(
+                "native_archive_all_N_changed_after_read")
     return current, expected_plan
+
+
+
+def preview_original_learning_archive_release_locked(
+        writer, proof, workspace: Path, *,
+        config_fd: int, config_path: Path, attest,
+        inspect=probe_pending_fd,
+) -> dict:
+    """Read-only release *blocker* for original committed native history.
+
+    A third committed P1/cursor is evidence that OLD bytes are covered,
+    NOT that the original first/second/third replay can work after
+    deletion. Today that replay still reopens the original archived inode.
+    Refuse to turn a relocation certificate into unlink authorization.
+
+    This is import-only diagnostics. In particular it neither creates
+    receipts nor calls a mutating archive/ACK/retire/Stop/Config function.
+    A later independent history-replay implementation must replace this
+    explicit blocker; an empty original pending queue is insufficient.
+    """
+    from auto_detect_original_v2_model import (
+        V2OriginalConfigRefused,
+        preview_original_learning_third_pending_retirement_locked,
+    )
+    from auto_detect_destination_commit import DestinationCommit
+    from auto_detect_owner import LearningGenerationProof
+
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not writer.queue._held or
+            not getattr(writer, "_gui_held", False) or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(config_path, Path) or
+            not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not callable(attest) or not callable(inspect) or
+            (sys.platform.startswith("freebsd") and (
+                config_path != CONFIG_PATH or writer.receipts.uid != 0 or
+                writer.queue.uid != 0)) or attest() != proof):
+        raise V2OriginalConfigRefused(
+            "native_release_original_owner_fd4_fd9_required")
+    try:
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=(None if config_path == CONFIG_PATH
+                       else writer.receipts.uid))
+        before = _read_archive_plan(writer, proof)
+        if before is None:
+            raise V2OriginalConfigRefused(
+                "native_release_no_source_bound_archive")
+        preview = preview_original_learning_third_pending_retirement_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
+        second = _read_archive_plan(writer, proof)
+        if (second != before or
+                preview.get("generation") != proof.generation or
+                preview.get("sequence") != 2 or
+                preview.get("progress_sha256") !=
+                before[1]["third_cursor_progress_sha256"] or
+                preview.get("native_pending_ack_authorized") is not False or
+                preview.get("native_cleanup_authorized") is not False or
+                preview.get("generation_retired") is not False or
+                len(preview.get("profiles", [])) != len(proof.learning) or
+                attest() != proof):
+            raise V2OriginalConfigRefused(
+                "native_release_archive_or_third_cursor_raced")
+        rows = []
+        for (n, hostlist, _), disposition in zip(
+                proof.learning, preview["profiles"]):
+            physical, original = before[0][n]
+            expected = (_archive_paths(writer, proof)[2] /
+                        f"{n:03d}.txt")
+            if (disposition["native_number"] != n or
+                    disposition["hostlist"] != hostlist or
+                    disposition["old_pending_path"] !=
+                    original["old_pending_path"] or
+                    disposition["old_device"] != original["old_device"] or
+                    disposition["old_inode"] != original["old_inode"] or
+                    disposition["old_current_end"] != original["old_size"] or
+                    disposition["unprocessed_old_bytes"] != 0 or
+                    disposition["status"] != "covered-old-pending-no-ACK" or
+                    disposition["ack_authorized"] is not False or
+                    physical != expected):
+                raise V2OriginalConfigRefused(
+                    "native_release_archive_not_fully_covered")
+            rows.append({
+                "native_number": n,
+                "hostlist": hostlist,
+                "original_pending_path": original["old_pending_path"],
+                "archive_path": str(physical),
+                "archive_device": original["old_device"],
+                "archive_inode": original["old_inode"],
+                "archive_sha256": original["old_sha256"],
+                "unprocessed_old_bytes": 0,
+                "unprocessed_new_bytes":
+                    disposition["unprocessed_new_bytes"],
+                "archive_required_for_original_replay": True,
+            })
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=(None if config_path == CONFIG_PATH
+                       else writer.receipts.uid))
+        if _read_archive_plan(writer, proof) != before or attest() != proof:
+            raise V2OriginalConfigRefused(
+                "native_release_old_archive_changed_after_preview")
+        return {
+            "generation": proof.generation,
+            "sequence": 2,
+            "kind": "original-learning-native-archive-release-blocker",
+            "profiles_count": len(rows),
+            "profiles": rows,
+            "third_cursor_progress_sha256":
+                before[1]["third_cursor_progress_sha256"],
+            "archive_manifest_sha256": hashlib.sha256(_read(
+                _archive_paths(writer, proof)[2] / "manifest.json",
+                writer.receipts.uid)).hexdigest(),
+            "archive_relocation_qualified": True,
+            "source_independent_replay_available": False,
+            "archive_required_for_original_replay": True,
+            "release_blocker":
+                "first_second_third_original_replay_requires_old_inode",
+            "native_pending_ack_authorized": False,
+            "archive_unlink_authorized": False,
+            "generation_retired": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (OSError, ValueError, KeyError, TypeError, AttributeError,
+            UnicodeError, ReceiptRefused, OriginalLockRefused,
+            QueueSafetyError) as exc:
+        raise V2OriginalConfigRefused(
+            "native_release_original_replay_refused") from exc
 
 
 def _move_original_pending(source: Path, archived: Path) -> None:
