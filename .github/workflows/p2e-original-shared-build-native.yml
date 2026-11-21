@@ -114,6 +114,9 @@ jobs:
             (
               /usr/bin/lockf -s -t 30 9
               PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-auto-detect-storage-lifetime.py
+              # Root FD9, real FreeBSD inode rename/fsync/directory semantics.
+              # Process/Config attestations in this fixture remain injected.
+              PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-auto-detect-learning-retirement.py
             ) 9>/var/run/zapret2-lifecycle.lock
             GITHUB_ACTIONS=true ZAPRET2_P2G_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
               /usr/local/bin/python3 scripts/test-auto-detect-storage.py --native
