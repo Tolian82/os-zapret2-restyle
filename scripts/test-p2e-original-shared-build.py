@@ -1993,16 +1993,16 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     # replay verifies historical source prefixes and
                     # recovers EXACT old observations, not new candidates.
                     with user_pending.open("ab", buffering=0) as old:
-                        old.write(b"later-old.example.net\n")
+                        old.write(b"later-old.alpha.com\n")
                         os.fsync(old.fileno())
                     with user_native.open("ab", buffering=0) as live:
-                        live.write(b"later-new.example.net\n")
+                        live.write(b"later-new.beta.org\n")
                         os.fsync(live.fileno())
                     with debug_path.open("ab", buffering=0) as debug:
                         debug.write(
-                            native_debug(user_num, "later-old.example.net",
+                            native_debug(user_num, "later-old.alpha.com",
                                          learning[1][2]) +
-                            native_debug(user_num, "later-new.example.net",
+                            native_debug(user_num, "later-new.beta.org",
                                          learning[1][2]))
                         os.fsync(debug.fileno())
                     self.assertEqual(seal_second_slot(), second_result)
@@ -2020,9 +2020,9 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         self.assertEqual(late["previous_sequence"], 1)
                         self.assertEqual(late["native_observations"], [
                             {"native_number": user_num, "hostlist": "user",
-                             "hostname": "later-new.example.net"},
+                             "hostname": "later-new.beta.org"},
                             {"native_number": user_num, "hostlist": "user",
-                             "hostname": "later-old.example.net"},
+                             "hostname": "later-old.alpha.com"},
                         ])
                         self.assertFalse(late["cursor_advanced"])
                         self.assertFalse(late["native_cleanup_authorized"])
@@ -2038,10 +2038,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             user_cut["new_end"])
                         self.assertEqual(
                             late["native"][1]["old"]["unread_bytes"],
-                            len(b"later-old.example.net\n"))
+                            len(b"later-old.alpha.com\n"))
                         self.assertEqual(
                             late["native"][1]["new"]["unread_bytes"],
-                            len(b"later-new.example.net\n"))
+                            len(b"later-new.beta.org\n"))
                         self.assertEqual(
                             late["debug"]["start"],
                             second_intent["debug"]["end"])
@@ -2133,6 +2133,126 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             _original_source_plan_fields(
                                 third_slot, third_prepared, os.geteuid()),
                             third_fields)
+                        # The third SOURCE now enters the EXISTING
+                        # DestinationCommit P1->Found->managed WAL, not
+                        # another owner or write mechanism.
+                        from auto_detect_original_v2_model import (
+                            commit_with_original_learning_third_slot,
+                        )
+                        third_effects = preview_learning_p1_effects(
+                            third_prepared["observations"],
+                            {"youtube": "youtube.com\n", "user": ""},
+                            read_owned(
+                                owned_dir, owner_uid=os.geteuid()),
+                            shared.read_text(), "",
+                            psl=self._tz6v4_psl_for_fixtures())
+                        self.assertEqual(third_effects["effects"], {
+                            "user": {
+                                "add": ["alpha.com", "beta.org"],
+                                "remove": [],
+                            },
+                        })
+                        third_before_active = next_active.read_bytes()
+                        third_after_active = (
+                            third_effects["managed_after"]["user"])
+                        self.assertNotEqual(
+                            third_before_active, third_after_active)
+                        def third_live_preview(*_args, **kwargs):
+                            self.assertEqual(kwargs["active"], active_root)
+                            return {
+                                "owner_schema": 3,
+                                "generation": proof.generation,
+                                "operation": proof.operation_id,
+                                "pid": proof.owner.pid,
+                                "started": proof.owner.started,
+                                "changed": ["user"],
+                                "files": {"user": {
+                                    "path": str(next_active),
+                                    "before_sha256": hashlib.sha256(
+                                        third_before_active).hexdigest(),
+                                    "after_sha256": hashlib.sha256(
+                                        third_after_active).hexdigest(),
+                                }},
+                                "commit_authorized": False,
+                                "ack_authorized": False,
+                            }
+                        def third_commit_fixture(*, exclude=""):
+                            with patch(
+                                    "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                    active_root), patch(
+                                    "auto_detect_original_v2_model.preview_live_known_after_readonly",
+                                    side_effect=third_live_preview):
+                                return commit_with_original_learning_third_slot(
+                                    writer, proof, self.work,
+                                    config_fd=cfg_fd, config_path=config_path,
+                                    owned_root=owned_dir,
+                                    manual_hostlists={
+                                        "youtube": "youtube.com\n", "user": ""},
+                                    global_exclude=exclude,
+                                    attest=lambda: proof, inspect=drained,
+                                    psl=self._tz6v4_psl_for_fixtures())
+                        third_checkpoint = None
+                        if sys.platform.startswith("freebsd"):
+                            # Synthetic config cannot impersonate the
+                            # actual OPNsense inherited /conf FD4.
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                third_commit_fixture()
+                        else:
+                            from auto_detect_destination_commit import (
+                                _replace as original_third_replace,
+                            )
+                            third_writes = [0]
+                            def crash_third_after_found(*args, **kwargs):
+                                original_third_replace(*args, **kwargs)
+                                third_writes[0] += 1
+                                if third_writes[0] == 1:
+                                    raise DestinationRefused(
+                                        "fixture_third_found_write_crash")
+                            with patch(
+                                    "auto_detect_destination_commit._replace",
+                                    side_effect=crash_third_after_found):
+                                with self.assertRaises((
+                                        DestinationRefused,
+                                        V2OriginalConfigRefused)):
+                                    third_commit_fixture()
+                            self.assertEqual(third_writes, [1])
+                            self.assertTrue((
+                                third_slot / "destination" /
+                                "plan.json").exists())
+                            self.assertFalse((
+                                third_slot / "destination" /
+                                "checkpoint.json").exists())
+                            self.assertEqual(
+                                next_active.read_bytes(),
+                                third_before_active)
+                            self.assertIn(
+                                b"alpha.com\n", targets["user"].read_bytes())
+                            self.assertEqual(
+                                seal_third_slot(), third)
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                third_commit_fixture(
+                                    exclude="alpha.com\n")
+                            third_checkpoint = third_commit_fixture()
+                            self.assertEqual(
+                                third_checkpoint["pending_name"],
+                                "learning-00000002")
+                            self.assertFalse(
+                                third_checkpoint["ack_authorized"])
+                            self.assertEqual(
+                                next_active.read_bytes(),
+                                third_after_active)
+                            self.assertIn(
+                                b"beta.org\n", targets["user"].read_bytes())
+                            self.assertEqual(
+                                third_commit_fixture(), third_checkpoint)
+                            self.assertEqual(
+                                seal_third_slot(), third)
+                            self.assertEqual(
+                                seal_second_slot(), second_result)
+                            self.assertEqual(
+                                advance_second_cursor(), advanced)
+                            self.assertFalse(
+                                (third_slot / "ack.json").exists())
                         third_intent_bytes = (
                             third_slot / "intent.json").read_bytes()
                         third_intent = json.loads(third_intent_bytes)
@@ -2182,8 +2302,12 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             third["observations_count"])
                         self.assertEqual(seal_second_slot(), second_result)
                         self.assertEqual(advance_second_cursor(), advanced)
-                        self.assertFalse(
-                            (third_slot / "destination").exists())
+                        if third_checkpoint is None:
+                            self.assertFalse(
+                                (third_slot / "destination").exists())
+                        else:
+                            self.assertEqual(
+                                third_commit_fixture(), third_checkpoint)
                         self.assertFalse(
                             (third_slot / "ack.json").exists())
                         with self.assertRaises(V2OriginalConfigRefused):
@@ -2198,17 +2322,17 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         # Exact N is not optional when a YouTube and a
                         # User learning clone detect the same hostname.
                         raw_mix_debug = debug_path.read_bytes()
-                        native.write_bytes(b"later-old.example.net\n")
+                        native.write_bytes(b"later-old.alpha.com\n")
                         with debug_path.open("ab", buffering=0) as debug:
                             debug.write(native_debug(
-                                youtube_num, "later-old.example.net",
+                                youtube_num, "later-old.alpha.com",
                                 learning[0][2]))
                             os.fsync(debug.fileno())
                         cross_origin = preview_late_tails()
                         self.assertEqual(
                             {(x["native_number"], x["hostlist"])
                              for x in cross_origin["native_observations"]
-                             if x["hostname"] == "later-old.example.net"},
+                             if x["hostname"] == "later-old.alpha.com"},
                             {(youtube_num, "youtube"), (user_num, "user")})
                         native.write_bytes(b"")
                         debug_path.write_bytes(raw_mix_debug)
@@ -2282,6 +2406,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     # Disposable test teardown only: production MUST
                     # preserve the immutable third source journal.
                     if third_slot.exists():
+                        # Disposable fixtures only: never delete a
+                        # production third source or original WAL.
+                        if (third_slot / "destination").exists():
+                            for artifact in (
+                                    third_slot / "destination").iterdir():
+                                artifact.unlink()
+                            (third_slot / "destination").rmdir()
                         for receipt in (third_slot / "native").iterdir():
                             receipt.unlink()
                         (third_slot / "intent.json").unlink()

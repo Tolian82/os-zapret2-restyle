@@ -2888,6 +2888,222 @@ def commit_with_original_learning_forward_second_slot(
             "learning_forward_original_config_wal_refused") from exc
 
 
+def commit_with_original_learning_third_slot(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path,
+        owned_root: Path, manual_hostlists: dict[str, str],
+        global_exclude: str, attest, inspect=probe_pending_fd,
+        psl: PublicSuffixList | None = None,
+) -> dict:
+    """Original schema3 third-slot P1 -> SAME Found/managed P2k2b WAL.
+
+    This import-only primitive is NOT connected to Apply, minute, or
+    dvtws2. Never infer observations after the durable 00000001 intent:
+    the original forward source reattests exactly its immutable old
+    pending/new live/debug cuts, even while newer writes grow each inode.
+    The ONE existing P2a/GUI/PHP inherited Config FD4 and owner FD9
+    remain locked throughout, and the existing DestinationCommit alone
+    writes permanent Found first, active managed next, then checkpoint.
+    An interrupted original plan reuses the SAME old preimages and P1,
+    never a fresh candidate or an independent config/storage writer.
+    No physical native source cleanup, cursor advancement or ACK here.
+    """
+    import sys
+    from auto_detect_epoch_receipts import _canonical
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_destination_commit import _file_identity
+
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not writer.queue._held or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(owned_root, Path) or not owned_root.is_absolute() or
+            set(writer.targets) != {"auto", *KNOWN_HOSTLISTS} or
+            any(writer.targets[name] != owned_root / (name + ".txt")
+                for name in KNOWN_HOSTLISTS) or
+            not isinstance(config_path, Path) or not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not callable(attest) or not callable(inspect) or
+            (sys.platform.startswith("freebsd") and
+             (config_path != CONFIG_PATH or
+              writer.receipts.uid != 0 or writer.queue.uid != 0)) or
+            attest() != proof):
+        raise V2OriginalConfigRefused(
+            "learning_third_original_config_fd9_model_required")
+
+    def config_held():
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=None if config_path == CONFIG_PATH
+            else writer.receipts.uid)
+        if attest() != proof:
+            raise V2OriginalConfigRefused(
+                "learning_forward_original_config_owner_changed")
+
+    def original_third_source():
+        result = prepare_original_learning_forward_third_slot_locked(
+            writer, proof, workspace, config_fd=config_fd,
+            config_path=config_path, attest=attest, inspect=inspect)
+        if (result["sequence"] != 2 or
+                result["cursor_advanced"] is not False or
+                result["commit_authorized"] is not False or
+                result["ack_authorized"] is not False):
+            raise V2OriginalConfigRefused(
+                "learning_third_unqualified_original_source")
+        return result
+
+    try:
+        config_held()
+        with writer.exclusive_targets():
+            config_held()
+            prepared = original_third_source()
+            slot = Path(prepared["slot"])
+            encoded = _read(slot / "intent.json", writer.receipts.uid)
+            if hashlib.sha256(encoded).hexdigest() != prepared["intent_sha256"]:
+                raise V2OriginalConfigRefused(
+                    "learning_forward_source_intent_changed")
+            intent = json.loads(encoded)
+            if (intent["sequence"] != 2 or
+                    intent["generation"] != proof.generation or
+                    not intent["observations"]):
+                raise V2OriginalConfigRefused(
+                    "learning_forward_third_slot_not_original")
+            raw = _canonical({"observations": intent["observations"]})
+            checkpoint_file = slot / "destination" / "checkpoint.json"
+            plan_file = slot / "destination" / "plan.json"
+            if checkpoint_file.exists() or checkpoint_file.is_symlink():
+                # A completed original checkpoint cannot reapply a user
+                # deletion or use newer native observations.
+                plan, plan_raw = qualified_destination_plan(
+                    slot, intent, writer.receipts.uid, targets=writer.targets)
+                checkpoint = json.loads(
+                    _read(checkpoint_file, writer.receipts.uid))
+                expected = {
+                    "schema": 1,
+                    "kind": "destination-and-cursor-committed",
+                    "generation": proof.generation,
+                    "pending_name": "learning-00000002",
+                    "plan_sha256": hashlib.sha256(plan_raw).hexdigest(),
+                    "evidence": "learning-native-debug",
+                    "committed_cursor_offset": intent["debug"]["end"],
+                    "committed_cursor_sha256": intent["debug"]["end_sha256"],
+                    "ack_authorized": False,
+                }
+                if checkpoint != expected or attest() != proof:
+                    raise V2OriginalConfigRefused(
+                        "learning_forward_checkpoint_replay_changed")
+                config_held()
+                return checkpoint
+            if plan_file.exists() or plan_file.is_symlink():
+                recovered = _recover_original_learning_partial_locked(
+                    writer, proof, workspace, slot, intent,
+                    owned_root=owned_root,
+                    manual_hostlists=manual_hostlists,
+                    global_exclude=global_exclude, attest=attest,
+                    inspect=inspect, psl=psl,
+                    config_fd=config_fd, config_path=config_path)
+                config_held()
+                return recovered
+            old_owned = read_owned(
+                owned_root, owner_uid=writer.receipts.uid)
+            if old_owned is None:
+                raise V2OriginalConfigRefused(
+                    "learning_forward_found_sources_absent")
+            before_shared, before_stat = _target(
+                writer.targets["auto"], writer.receipts.uid)
+            candidate = preview_learning_p1_effects(
+                intent["observations"], manual_hostlists,
+                old_owned, before_shared.decode("utf-8"),
+                global_exclude, psl=psl)
+            # The same original live known composer/reloader proof as
+            # first-slot P1. Never write Found without current same-PID
+            # managed after-images.
+            canonical = {}
+            for name in KNOWN_HOSTLISTS:
+                normalized = normalize(
+                    manual_hostlists[name], name)["normalized"]
+                canonical[name] = (
+                    normalized + ("\n" if normalized else ""))
+            aligned = preview_live_known_after_readonly(
+                canonical, candidate["effects"],
+                active=COMMON_ACTIVE, owned_root=owned_root,
+                owner_uid=writer.receipts.uid, attest=attest)
+            if (aligned["owner_schema"] != 3 or
+                    aligned["generation"] != proof.generation or
+                    aligned["operation"] != proof.operation_id or
+                    aligned["pid"] != proof.owner.pid or
+                    aligned["started"] != proof.owner.started or
+                    aligned["commit_authorized"] is not False or
+                    aligned["ack_authorized"] is not False):
+                raise V2OriginalConfigRefused(
+                    "learning_forward_live_generation_changed")
+            live = {}
+            for name in aligned["changed"]:
+                row = aligned["files"][name]
+                path = (COMMON_ACTIVE / "managed" /
+                        ("hostlist-" + name + ".txt"))
+                after = candidate["managed_after"][name]
+                if (row["path"] != str(path) or
+                        row["after_sha256"] !=
+                        hashlib.sha256(after).hexdigest()):
+                    raise V2OriginalConfigRefused(
+                        "learning_forward_live_after_mismatch")
+                live[name] = {
+                    "path": path,
+                    "before_sha256": row["before_sha256"],
+                    "after": after,
+                }
+            # Native appenders ignore P2a. Reattest the *frozen* second
+            # source and every GUI Found preimage after potentially slow
+            # PSL/live work. Any foreign GUI edit fails before P2k2b.
+            repeat = original_third_source()
+            new_owned = read_owned(
+                owned_root, owner_uid=writer.receipts.uid)
+            new_shared, new_stat = _target(
+                writer.targets["auto"], writer.receipts.uid)
+            if (repeat != prepared or new_owned != old_owned or
+                    new_shared != before_shared or
+                    _file_identity(new_stat) != _file_identity(before_stat)):
+                raise V2OriginalConfigRefused(
+                    "learning_forward_p1_sources_changed_before_wal")
+            config_held()
+            result = writer._locked_commit(
+                slot, intent, raw, candidate["effects"], live=live)
+            plan, plan_raw = qualified_destination_plan(
+                slot, intent, writer.receipts.uid, targets=writer.targets)
+            expected = {
+                "schema": 1,
+                "kind": "destination-and-cursor-committed",
+                "generation": proof.generation,
+                "pending_name": "learning-00000002",
+                "plan_sha256": hashlib.sha256(plan_raw).hexdigest(),
+                "evidence": "learning-native-debug",
+                "committed_cursor_offset": intent["debug"]["end"],
+                "committed_cursor_sha256": intent["debug"]["end_sha256"],
+                "ack_authorized": False,
+            }
+            if (result != expected or
+                    not checkpoint_file.exists() or
+                    attest() != proof):
+                raise V2OriginalConfigRefused(
+                    "learning_forward_destination_checkpoint_not_durable")
+            config_held()
+            return result
+    except V2OriginalConfigRefused:
+        raise
+    except (ReceiptRefused, OriginalLockRefused, DestinationRefused,
+            OwnedSourcesRefused, EffectiveKnownRefused,
+            AutoDomainPolicyError, DomainPolicyError,
+            OSError, ValueError, TypeError, KeyError, AttributeError,
+            UnicodeError) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_forward_original_config_wal_refused") from exc
+
+
 def commit_with_original_learning_first_slot(
         writer: DestinationCommit, proof, workspace: Path, *,
         config_fd: int, config_path: Path,
