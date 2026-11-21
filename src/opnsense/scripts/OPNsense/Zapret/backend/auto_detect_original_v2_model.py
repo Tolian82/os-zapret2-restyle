@@ -1994,6 +1994,8 @@ def _recover_original_learning_partial_locked(
         slot: Path, intent: dict, *, owned_root: Path,
         manual_hostlists: dict[str, str], global_exclude: str,
         attest, inspect, psl: PublicSuffixList | None,
+        config_fd: int | None = None,
+        config_path: Path | None = None,
 ) -> dict:
     """Resume ONE already-published original WAL preimage, never a new P1.
 
@@ -2028,11 +2030,31 @@ def _recover_original_learning_partial_locked(
             (slot / "destination" / "checkpoint.json").exists() or
             (slot / "destination" / "checkpoint.json").is_symlink()):
         raise V2OriginalConfigRefused("learning_partial_sealed_plan_required")
-    prefix = attest_original_learning_sealed_prefix_locked(
-        writer.queue, writer.receipts, proof, workspace, intent,
-        attest=attest, inspect=inspect)
+    def original_source_recheck():
+        # Reuse ONE original P2a/P2b source attester. The second slot has
+        # TWO immutable native inode cursors, and must not be examined by
+        # the first-slot single-inode prefix attester.
+        if intent.get("sequence") == 1:
+            if config_fd is None or config_path is None:
+                raise V2OriginalConfigRefused(
+                    "learning_forward_partial_requires_original_config_fd")
+            answer = prepare_original_learning_forward_second_slot_locked(
+                writer, proof, workspace, config_fd=config_fd,
+                config_path=config_path, attest=attest, inspect=inspect)
+            return {
+                "source_intent_sha256": answer["intent_sha256"],
+                "p2b_drained": True,
+                "commit_authorized": False,
+                "ack_authorized": False,
+            }
+        return attest_original_learning_sealed_prefix_locked(
+            writer.queue, writer.receipts, proof, workspace, intent,
+            attest=attest, inspect=inspect)
+    prefix = original_source_recheck()
     if (prefix["source_intent_sha256"] != plan["source_intent_sha256"]
-            or not prefix["p2b_drained"]):
+            or not prefix["p2b_drained"] or
+            prefix["commit_authorized"] is not False or
+            prefix["ack_authorized"] is not False):
         raise V2OriginalConfigRefused("learning_partial_source_changed")
 
     # Original auto-owned P1 sources cannot be recomputed from a partly
@@ -2117,9 +2139,7 @@ def _recover_original_learning_partial_locked(
             "path": path, "before_sha256": row["before"],
             "after": expected_after,
         }
-    recheck = attest_original_learning_sealed_prefix_locked(
-        writer.queue, writer.receipts, proof, workspace, intent,
-        attest=attest, inspect=inspect)
+    recheck = original_source_recheck()
     if recheck != prefix or attest() != proof:
         raise V2OriginalConfigRefused("learning_partial_source_raced")
     # The EXISTING original CAS writer checks physical per-target inode
