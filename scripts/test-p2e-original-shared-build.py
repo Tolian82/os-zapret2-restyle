@@ -1745,18 +1745,21 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     # An interrupted INCOMPLETE slot cannot change its
                     # already written N window just because the producer
                     # later appended additional rows or debug positives.
-                    with user_native.open("ab", buffering=0) as producer:
+                    # The first source-only receipt belongs to YouTube:
+                    # changing that SAME sealed N cursor before the
+                    # aggregate manifest must refuse instead of silently
+                    # widening the interrupted transaction.
+                    with native.open("ab", buffering=0) as producer:
                         producer.write(b"partial-late.example.net\n")
                         os.fsync(producer.fileno())
                     with debug_path.open("ab", buffering=0) as debug:
                         debug.write(native_debug(
-                            user_num, "partial-late.example.net",
-                            learning[1][2]))
+                            youtube_num, "partial-late.example.net",
+                            learning[0][2]))
                         os.fsync(debug.fileno())
                     with self.assertRaises(V2OriginalConfigRefused):
                         seal_second_slot()
-                    user_native.write_bytes(
-                        b"late.example.org\nafter-seal-new.example.net\n")
+                    native.write_bytes(b"")
                     debug_path.write_bytes(
                         first_debug + second_debug + second_tail)
                     second_result = seal_second_slot()
