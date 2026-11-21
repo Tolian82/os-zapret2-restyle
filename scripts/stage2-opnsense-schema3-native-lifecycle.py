@@ -242,7 +242,17 @@ def execute() -> dict:
     # without invoking its later ordinary GUI Apply or modifying Config.
     config_before_upstream = CONFIG.read_bytes()
     g04_runtime = module("stage2-opnsense-g04-native-runtime.py")
-    engine_sha = g04_runtime.setup_upstream()
+    try:
+        engine_sha = g04_runtime.setup_upstream()
+    except Exception as exc:
+        # Never retry, skip or substitute the original G03 install owner.
+        # A native setup failure must expose its actual bounded log/state,
+        # not a misleading schema3 Apply failure or silent background task.
+        g03 = module("stage2-opnsense-g03-first-install.py")
+        g03.bounded_disposable_failure_evidence()
+        raise Refused(
+            "CANARY_ORIGINAL_G03_SETUP_FAILED:" +
+            type(exc).__name__ + ":" + str(exc)[:200]) from exc
     require(ENGINE.is_file() and not ENGINE.is_symlink() and
             hashlib.sha256(ENGINE.read_bytes()).hexdigest() == engine_sha and
             CONFIG.read_bytes() == config_before_upstream and
