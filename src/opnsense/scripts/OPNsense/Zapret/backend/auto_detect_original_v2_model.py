@@ -3594,6 +3594,64 @@ def commit_with_original_learning_forward_second_slot(
             "learning_forward_original_config_wal_refused") from exc
 
 
+def _original_stopped_learning_live_preimages(
+        writer, proof, manual_hostlists, old_owned, projection, attest):
+    """Original FD4/FD9 STOPPED P1: no RUNNING PID inference or second writer.
+
+    The sealed original stopped owner (not a supplied test callback alone on
+    FreeBSD) proves that the SAME active release still belongs to the old
+    generation. Require actual managed files to match their current saved
+    manual+Found composition BEFORE the existing original destination CAS
+    writes anything. A GUI edit, missing source or foreign managed image
+    refuses; never resurrect a manually deleted Found entry.
+    """
+    from auto_detect_destination_commit import _file_identity
+    from auto_detect_owner import LearningGenerationProof
+    if (not isinstance(proof, LearningGenerationProof) or
+            not writer.queue._held or not writer._gui_held or
+            not callable(attest) or attest() != proof or
+            set(manual_hostlists) != set(KNOWN_HOSTLISTS) or
+            set(old_owned) != set(KNOWN_HOSTLISTS) or
+            projection.get("commit_authorized") is not False or
+            projection.get("ack_authorized") is not False):
+        raise V2OriginalConfigRefused("learning_stopped_original_p1_owner_required")
+    if sys.platform.startswith("freebsd"):
+        # Production cannot turn a synthetic FD9 callback into a STOPPED
+        # lifecycle witness: prove the real saved owner/epoch and zero
+        # dvtws2/supervisor under the *same* lifecycle lock.
+        from auto_detect_owner import attest_learning_stopped_generation
+        if attest_learning_stopped_generation() != proof:
+            raise V2OriginalConfigRefused("learning_stopped_original_owner_not_stopped")
+    canonical = {}
+    for name in KNOWN_HOSTLISTS:
+        normalized = normalize(manual_hostlists[name], name)["normalized"]
+        canonical[name] = normalized + ("\\n" if normalized else "")
+    composed = compose_known(canonical, old_owned)
+    live = {}
+    pinned = {}
+    for name in KNOWN_HOSTLISTS:
+        path = COMMON_ACTIVE / "managed" / ("hostlist-" + name + ".txt")
+        before, stat_before = _target(path, writer.receipts.uid)
+        expected_before = composed[name].encode("utf-8")
+        expected_after = projection["managed_after"][name]
+        if before != expected_before:
+            raise V2OriginalConfigRefused("learning_stopped_managed_manual_found_drift")
+        pinned[name] = (path, before, _file_identity(stat_before))
+        if before != expected_after:
+            live[name] = {
+                "path": path,
+                "before_sha256": hashlib.sha256(before).hexdigest(),
+                "after": expected_after,
+            }
+    for name, (path, before, identity) in pinned.items():
+        again, stat_after = _target(path, writer.receipts.uid)
+        if again != before or _file_identity(stat_after) != identity:
+            raise V2OriginalConfigRefused("learning_stopped_original_managed_raced")
+    if attest() != proof:
+        raise V2OriginalConfigRefused("learning_stopped_original_owner_raced")
+    return live
+
+
 def _commit_with_original_learning_slot(
         writer: DestinationCommit, proof, workspace: Path, *,
         config_fd: int, config_path: Path,
