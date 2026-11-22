@@ -655,6 +655,20 @@ def native_partial_payload_interruption(archive, target, digest):
         "finish": run([str(SERVICE), "pkg-update-finish",
                        stage_sha, stage_ver], timeout=45).returncode,
     }
+    # Exact failure taxonomy is required before changing the protected
+    # post-extract guard. Never dump Config, private files, or service stdout.
+    print("NATIVE_PROTECTED_MIDEXTRACT_REFUSAL_EVIDENCE=" + json.dumps({
+        "status_rc": status.returncode,
+        "denied_rc": denied,
+        "record_unchanged": ACTIVE.is_file() and sha(ACTIVE) == record_before,
+        "record_phase": (json.loads(ACTIVE.read_text()).get("phase")
+                         if ACTIVE.is_file() else "missing"),
+        "config_unchanged": sha(CONFIG) == saved_config,
+        "pkgdb_version": installed_version() if run(
+            ["pkg", "query", "%v", NAME]).returncode == 0 else "unavailable",
+        "service_bytes_qualified": sha(SERVICE) == sha(
+            ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"),
+    }, sort_keys=True), flush=True)
     need(status.returncode == 1 and all(x == 69 for x in denied.values()) and
          sha(ACTIVE) == record_before and sha(CONFIG) == saved_config,
          "MIDEXTRACT_UNAUTHORIZED_LIFECYCLE_AFTER_KILL")
