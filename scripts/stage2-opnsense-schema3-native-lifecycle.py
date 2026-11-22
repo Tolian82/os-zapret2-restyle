@@ -529,6 +529,69 @@ def execute(*, crash: bool = False) -> dict:
             ident, learning, debug_inode, CONFIG.read_bytes(), g04_runtime)
         return {"source_sha": head, **result}
 
+    # A genuine first Auto Apply was not sufficient: reproduce the owner's
+    # failing action while a REAL schema3 learner is already RUNNING.
+    # The ordinary native FD9 path must accept both unchanged and changed
+    # Settings submissions, safely retire the preceding N/debug epoch,
+    # retain the saved Config, and start exactly one new real dvtws2.
+    initial_generation = ident
+    initial_pid = first_pid
+    def running_auto_apply(fields: dict, gate: str, old_generation: str,
+                           old_pid: int) -> tuple[str, int]:
+        submit = envelope(fields, saved)
+        attempt = subprocess.run(
+            [str(SERVICE), "shared-apply-run", "strategies", submit],
+            env=owner_service_environment(), capture_output=True, text=True,
+            timeout=420, check=False)
+        require(attempt.returncode == 0 and
+                re.search(r"(?m)^applied-id=[0-9a-f]{32}$", attempt.stdout),
+                "CANARY_RUNNING_SCHEMA3_" + gate + "_APPLY_REFUSED:rc=" +
+                str(attempt.returncode) + ":" +
+                (attempt.stdout + attempt.stderr)[-700:])
+        new_generation = committed_id()
+        new_pid = check_process(True)
+        require(new_pid is not None and
+                new_pid != old_pid and new_generation != old_generation,
+                "CANARY_RUNNING_SCHEMA3_" + gate + "_OWNER_NOT_REPLACED")
+        # The original Stop must durably retire the preceding learning
+        # sources before a new generation may own the same native paths.
+        old_retired = EPOCHS / old_generation / "learning-retirement"
+        require((old_retired / "intent.json").is_file() and
+                (old_retired / "ready.json").is_file() and
+                not (old_retired / "ready.json").is_symlink(),
+                "CANARY_RUNNING_SCHEMA3_" + gate + "_OLD_EPOCH_NOT_TERMINAL")
+        return new_generation, new_pid
+
+    # No changes to saved user fields (the original owner's failing case).
+    ident, first_pid = running_auto_apply(
+        {"general": {"enabled": "1", "waninterface": "lo0"},
+         "hostlist": {"mode": "auto"}},
+        "UNCHANGED", ident, first_pid)
+    learning, debug_inode = schema3_receipts(ident, first_pid)
+    require(ET.fromstring(CONFIG.read_bytes()).findtext(
+                "./OPNsense/Zapret/hostlist/mode") == "auto",
+            "CANARY_RUNNING_SCHEMA3_UNCHANGED_MODE_DRIFT")
+
+    # A valid but harmless persisted preference change exercises the
+    # other failed GUI case without changing WAN, profiles or target mode.
+    ident, first_pid = running_auto_apply(
+        {"general": {"autorestart": "daily"}}, "EDITED", ident, first_pid)
+    learning, debug_inode = schema3_receipts(ident, first_pid)
+    require(ET.fromstring(CONFIG.read_bytes()).findtext(
+                "./OPNsense/Zapret/general/autorestart") == "daily",
+            "CANARY_RUNNING_SCHEMA3_EDITED_CONFIG_NOT_SAVED")
+    # Return the original user preference before the ordinary lifecycle
+    # Stop/Boot/Restart test, and attest the third safe transition.
+    ident, first_pid = running_auto_apply(
+        {"general": {"autorestart": "off"}}, "RESTORED", ident, first_pid)
+    learning, debug_inode = schema3_receipts(ident, first_pid)
+    saved_root = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
+    require(saved_root is not None and
+            saved_root.findtext("general/autorestart") == "off" and
+            saved_root.findtext("general/waninterface") == "lo0" and
+            saved_root.findtext("hostlist/mode") == "auto",
+            "CANARY_RUNNING_SCHEMA3_ORIGINAL_MODEL_NOT_RESTORED")
+
     # Operator-authorized Stop only, no SIGSTOP/SIGCONT, no second daemon.
     service_action("stop")
     check_process(False)
@@ -573,6 +636,11 @@ def execute(*, crash: bool = False) -> dict:
         "native_learning_profiles": len(learning),
         "original_fd9_config_and_p2c_process": True,
         "terminal_n_debug_retirement": True,
+        "running_unchanged_apply": True,
+        "running_edited_apply": True,
+        "running_original_preference_restored": True,
+        "pre_existing_generation": initial_generation,
+        "pre_existing_pid": initial_pid,
         "new_epoch_on_boot_and_restart": True,
         "one_engine_at_each_active_checkpoint": True,
         "real_isp_positive_attribution_tested": False,
