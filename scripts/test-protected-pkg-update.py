@@ -195,6 +195,23 @@ class ProtectedPkgUpdate(unittest.TestCase):
                 with self.assertRaisesRegex(m.Refused, "POSTINSTALL_PHASE_REFUSED"):
                     m.postinstall_attest()
 
+    def test_native_interrupted_finish_missing_pid_reports_failure_not_exception(self):
+        fixture_path = ROOT / "scripts" / "stage5-native-protected-update.py"
+        spec = importlib.util.spec_from_file_location(
+            "protected_native_missing_pid_fixture", fixture_path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        with tempfile.TemporaryDirectory() as temp:
+            missing = Path(temp) / "dvtws2.pid"
+            self.assertEqual(fixture.read_pid_if_present(missing), "missing")
+            missing.write_text("10101\\n")
+            self.assertEqual(fixture.read_pid_if_present(missing), "10101")
+            missing.write_text("bad PID\\n")
+            self.assertEqual(fixture.read_pid_if_present(missing), "missing")
+            missing.unlink()
+            missing.symlink_to("/etc/passwd")
+            self.assertEqual(fixture.read_pid_if_present(missing), "missing")
+
     def test_native_runtime_release_cache_is_disposable_only(self):
         fixture_path = ROOT / "scripts" / "stage5-native-protected-update.py"
         spec = importlib.util.spec_from_file_location(

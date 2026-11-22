@@ -369,6 +369,23 @@ def interrupted_prepare_diagnostic(prepare, old_id, config_before):
     }
 
 
+def read_pid_if_present(path: Path) -> str:
+    """Read one PID without following symlinks; a missing file is evidence."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return "missing"
+    try:
+        with os.fdopen(fd, "rb") as source:
+            info = os.fstat(source.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > 64:
+                return "missing"
+            value = source.read(65).decode("ascii").strip().split()
+        return value[0] if len(value) == 1 and value[0].isdecimal() else "missing"
+    except (OSError, UnicodeError):
+        return "missing"
+
+
 def native_interrupted_handoff(archive, version, digest):
     """A real *inter-process* incomplete handoff, never owner recovery.
 
@@ -466,10 +483,26 @@ def native_interrupted_handoff(archive, version, digest):
                  timeout=150)
     now = json.loads(JOURNAL.read_text())
     new_id = now.get("detail", {}).get("id", "")
-    pid = Path("/var/run/dvtws2.pid").read_text().strip().split()[0]
+    # A refused/uncertain finish may leave no PID file. Capture its original
+    # refusal BEFORE the mandatory fail-closed assertion, not a FileNotFound
+    # exception that masks the actual protected-restore failure.
+    pid = read_pid_if_present(Path("/var/run/dvtws2.pid"))
+    finish_guard = re.search(
+        r"(?m)^shared-apply-guard=(activate|activated-journal|activated-bundle|"
+        r"activated-probe|config-save|epoch-journal|saved-readback|saved-probe|"
+        r"ipfw-commit|committed-probe|epoch-schema|epoch-dispatch|"
+        r"epoch-attest|epoch-receipt)$", finish.stderr)
+    phase = now.get("phase")
     result = {
         "schema": 1,
         "exact_native_pkg": replace.returncode == 0,
+        "finish_guard": finish_guard.group(1) if finish_guard else "unknown",
+        "finish_boot_refused": "pkg-update-finish-failed=boot" in finish.stderr,
+        "pidfile_state": "present" if pid.isdecimal() else "missing",
+        "shared_journal_phase": phase if phase in (
+            "committed", "prepared", "activating", "activated",
+            "config-saved", "epoch-finalizing", "requires-review",
+            "restored") else "other",
         "finish_rc": finish.returncode,
         "final_receipt": "zapret-pkg-update-committed=1" in finish.stdout,
         "original_epoch_retired": verified_old_auto_retirement(
