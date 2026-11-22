@@ -255,15 +255,38 @@ def main():
     env = {**os.environ, "BACKEND_DIR": str(staged), "PYTHONDONTWRITEBYTECODE": "1"}
     finish = run([str(SERVICE), "pkg-update-finish", BROKEN[1], BROKEN[0]],
                  env=env, timeout=330)
-    recovered = (finish.returncode == 0 and
-                 "zapret-pkg-update-committed=1" in finish.stdout and
-                 status() == 0 and installed() == BROKEN[0] and
-                 not RECORD.exists() and not MARKER.exists() and
-                 digest(CONFIG) == config_sha and digest(engine) == engine_sha)
+    # Once the 109 record is durably closed, a standalone installed 109
+    # status consumer may differ from the same original-FD9 native attester
+    # supplied with patched canonical learning sources. Capture both, plus
+    # the actual native process census; no inferred PID or status success.
+    staged_rc = run([str(SERVICE), "status"], env=env, timeout=50).returncode
+    ordinary_rc = status()
+    census = run(["ps", "-axo", "comm="], timeout=30)
+    names = census.stdout.splitlines() if census.returncode == 0 else []
+    engine_present = any(name.strip().rsplit("/", 1)[-1] == "dvtws2"
+                         for name in names)
+    monitor_present = Path("/var/run/zapret2-supervisor-monitor.pid").is_file()
+    measured = {
+        "finish_rc0": finish.returncode == 0,
+        "finish_receipt": "zapret-pkg-update-committed=1" in finish.stdout,
+        "staged_attester_running": staged_rc == 0,
+        "installed109_attester_running": ordinary_rc == 0,
+        "pid_file_present": PIDFILE.is_file(),
+        "real_dvtws2_process_present": engine_present,
+        "monitor_pid_file_present": monitor_present,
+        "pkg_is_109": installed() == BROKEN[0],
+        "record_closed": not RECORD.exists(),
+        "restart_marker_closed": not MARKER.exists(),
+        "shared_apply_committed": state().get("phase") == "committed",
+        "config_sha_unchanged": digest(CONFIG) == config_sha,
+        "engine_sha_unchanged": digest(engine) == engine_sha,
+    }
+    # Keep this first pass strict. A false stage/installed state indicates
+    # the original package owner cannot yet claim safely-running service.
+    recovered = all(measured.values())
     print("P0_OWNER_NATIVE_GUARDED_109_FINISH=" +
-          json.dumps({"verified": recovered, "rc": finish.returncode,
-                      "running": status() == 0, "record_cleared": not RECORD.exists(),
-                      "pkg": installed()}), flush=True)
+          json.dumps({"verified": recovered, "checks": measured},
+                     sort_keys=True), flush=True)
     need(recovered, "ORIGINAL_FD9_GUARDED_109_RECOVERY_REFUSED")
     # Normal installed package-owned protected upgrade, no direct pkg add.
     upgrade = run([str(SERVICE), "pkg-update", str(fixed)],
