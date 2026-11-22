@@ -22,6 +22,7 @@ Read through EOF in this order:
 
 | Need | Primary document |
 |---|---|
+| **APPROVED one JSON runtime manifest + clean install and diagnostics** | [Declarative runtime architecture and acceptance](architecture/ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md); [global DEV-066/067](PROJECT_PRINCIPLES.md); [approved RFC #1229](https://github.com/Tolian82/os-zapret2-restyle/issues/1229); [TZ6v4 §6.2](architecture/TZ_6v4.md) |
 | **CURRENT DEV-065 — exactly one FD9 Start/Stop implementation** | [Canonical real UI/FD9 source route audit and implementation contract](architecture/ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md); [global DEV-065](PROJECT_PRINCIPLES.md); [TZ6v4 §6.1](architecture/TZ_6v4.md); [first-priority plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) |
 | **CURRENT `_117` owner incidents / controls acceptance** | [Owner Lab RESTORE_FAILED, Auto-domain absence, and UI buttons evidence/matrix](verification/evidence/2026-11-22-owner-live-117-lab-autodetect-controls.md); [active plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md); [#1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223), [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224), [#1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225) |
 | Current `_117.pkg` testing publication | [Immutable release evidence](verification/evidence/testing-publications/v0.6.5_117.md); owner `_111` protected-upgrade/Apply still pending |

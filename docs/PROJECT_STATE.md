@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 22 November 2026 — DEV-065 one original FD9 Start/Stop owner; lifecycle first (CURRENT)
+## 22 November 2026 — owner APPROVED declarative startup, XML adapters, clean install and error receipts (CURRENT)
+
+**Identity:** source-only `v0.6.5_121`, `VERSION=0.6.5`, `PLUGIN_REVISION=121`; prospective `os-zapret2-restyle-0.6.5_121.pkg` **not built or published**. Owner hardware remains on installed `_117` with last confirmed RUNNING after manual Stop→Start. The prior real GUI Apply observations PASS; Lab `job.iDvhRh` stage90/99 RESTORE_FAILED and YouTube Auto missing in Found OPEN.
+
+**Binding owner decision:** [#1229](https://github.com/Tolian82/os-zapret2-restyle/issues/1229) and [normative design](architecture/ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md): unique `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh` contains physical Start/Stop/Status only; a pure validator/compiler from OPNsense XML (future pfSense XML adapter) and registered lists produces ONE sealed, generated JSON main manifest of enabled/disabled refs, Target Mode, profile order, Voice/Auto, native map and IPFW; never inlines domain/IP/strategy content or creates another Config writer. Stored Found/managed are permitted protected hot-update references, not a second editable manifest.
+
+**New priority gates:** fresh package installation without Zapret2 engine/settings/active manifest must not auto-install or start; GUI/status distinguish plugin/engine/config/manifest/running states and preserve first-install defaults only once. Stable errors and bounded sanitized original stderr/exit for engine, supervisor, IPFW, setup, configd and Lab must surface in GUI/read-only status and protected diagnostics. DRAFT PR #1228 `_121` from prior design is incomplete and must be reconciled; no package or source implementation of this full design yet.
+## 22 November 2026 — DEV-065 one original FD9 Start/Stop owner; lifecycle first (HISTORICAL)
 
 **Current identity:** source-only `v0.6.5_120`, `VERSION=0.6.5`, `PLUGIN_REVISION=120`; prospective `os-zapret2-restyle-0.6.5_120.pkg` **not built/published**. Physical installed and latest immutable testing `.pkg` is `_117` (not `_118`/`_119`/`_120`). The owner manually stopped and started after Lab and verified `zapret is running`, `status_rc=0`. Independent owner Strategies unchanged+edited Apply checks PASS. Lab stage 90/99 `RESTORE_FAILED` remains OPEN.
 
