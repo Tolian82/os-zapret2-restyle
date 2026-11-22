@@ -88,10 +88,12 @@ def inspect_regular(path: Path, *, private: bool) -> None:
          "PACKAGE_PERMISSIONS_REFUSED")
 
 
-def native_command(args: list[str], timeout: int = 90) -> subprocess.CompletedProcess:
+def native_command(args: list[str], timeout: int = 90, *,
+                   env: dict[str, str] | None = None,
+                   binary: bool = False) -> subprocess.CompletedProcess:
     try:
-        return subprocess.run(args, text=True, capture_output=True,
-                              check=False, timeout=timeout)
+        return subprocess.run(args, text=not binary, capture_output=True,
+                              check=False, timeout=timeout, env=env)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise Refused("NATIVE_COMMAND_FAILED_OR_TIMED_OUT") from exc
 
@@ -266,10 +268,11 @@ def complete(digest: str, version: str) -> None:
     print("pkg-update-committed=1")
 
 
-def stage_archive(path: Path) -> tuple[Path, str, str]:
+def stage_archive(path: Path, *, continuation: bool = False) -> tuple[Path, str, str]:
     root_and_private_base()
-    need(not ACTIVE.exists() and not ACTIVE.is_symlink(),
-         "PREVIOUS_UPDATE_REQUIRES_REVIEW")
+    if not continuation:
+        need(not ACTIVE.exists() and not ACTIVE.is_symlink(),
+             "PREVIOUS_UPDATE_REQUIRES_REVIEW")
     need(path.is_absolute(), "ABSOLUTE_PACKAGE_PATH_REQUIRED")
     inspect_regular(path, private=False)
     fd, target = tempfile.mkstemp(prefix="incoming-", suffix=".pkg", dir=BASE)
@@ -352,12 +355,274 @@ def replace(path: Path) -> None:
         raise
 
 
+def continuation_predecessor(data: dict) -> tuple[dict, str]:
+    """Retain the exact failed POST_INSTALL record inside the SAME journal."""
+    link = data.get("continuation")
+    need(isinstance(link, dict) and set(link) == {"record", "sha256"} and
+         isinstance(link["record"], str), "CONTINUATION_PROOF_MISSING")
+    raw = link["record"].encode("utf-8")
+    need(0 < len(raw) <= 4096 and
+         hashlib.sha256(raw).hexdigest() == link["sha256"],
+         "CONTINUATION_PREDECESSOR_CHANGED")
+    prior = json.loads(raw)
+    need(isinstance(prior, dict) and prior.get("schema") == 1 and
+         prior.get("phase") == "postinstall-attested" and
+         type(prior.get("was_running")) is bool and
+         "continuation" not in prior and
+         data.get("from_version") == prior.get("to_version") and
+         data.get("was_running") is prior["was_running"],
+         "CONTINUATION_PREDECESSOR_INVALID")
+    validated_stage(prior["stage"], prior["sha256"], prior["to_version"])
+    return prior, link["sha256"]
+
+
+def continue_record(raw: str, digest: str, version: str,
+                    expected_record: str) -> None:
+    """Original FD9 only; shell has independently proved committed STOPPED.
+
+    No runtime/Config writes, no source graft and no unlink of the old record.
+    Atomic replacement publishes either the intact old operation or the new
+    prepared operation containing its exact bytes and archive identity.
+    """
+    fd9_is_original_owner()
+    root_and_private_base()
+    need(re.fullmatch(r"[a-f0-9]{64}", expected_record) is not None,
+         "RECORD_SHA_REQUIRED")
+    data = read_active()
+    current_raw = ACTIVE.read_bytes()
+    need(hashlib.sha256(current_raw).hexdigest() == expected_record and
+         json.loads(current_raw) == data, "ACTIVE_OPERATION_CHANGED")
+    validated_stage(raw, digest, version)
+    if "continuation" in data:
+        prior, _ = continuation_predecessor(data)
+        need(data["stage"] == raw and data["sha256"] == digest and
+             data["to_version"] == version, "CONTINUATION_TARGET_CHANGED")
+        current = installed_version()
+        need(current in (prior["to_version"], version),
+             "CONTINUATION_INSTALLED_IDENTITY_CHANGED")
+        if data["phase"] == "postinstall-attested":
+            need(current == version, "SUCCESSOR_NOT_INSTALLED")
+            print("zapret-pkg-update-continue=finish")
+        else:
+            print("zapret-pkg-update-continue=prepared")
+        return
+    need(data["phase"] == "postinstall-attested" and
+         type(data.get("was_running")) is bool and
+         installed_version() == data.get("to_version"),
+         "POSTINSTALL_CONTINUATION_REQUIRED")
+    validated_stage(data["stage"], data["sha256"], data["to_version"])
+    ordering = native_command(["/usr/sbin/pkg", "version", "-t", version,
+                               data["to_version"]])
+    need(ordering.returncode == 0 and ordering.stdout.strip() == ">",
+         "CONTINUATION_REQUIRES_NEWER_PACKAGE")
+    updated = {"schema": 1, "phase": "prepared", "stage": raw,
+               "sha256": digest, "to_version": version,
+               "from_version": data["to_version"],
+               "was_running": data["was_running"],
+               "continuation": {"record": current_raw.decode("utf-8"),
+                                "sha256": expected_record}}
+    body = (json.dumps(updated, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    need(len(body) <= 4096, "CONTINUATION_RECORD_TOO_LARGE")
+    fd, tmp = tempfile.mkstemp(prefix=".continue-", dir=BASE)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as output:
+            output.write(body)
+            output.flush()
+            os.fsync(output.fileno())
+        # Compare again immediately before the one journal publication.
+        need(ACTIVE.read_bytes() == current_raw, "ACTIVE_OPERATION_CHANGED")
+        os.replace(tmp, ACTIVE)
+        durable_directory()
+    finally:
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+    print("zapret-pkg-update-continue=prepared")
+
+
+def continue_postinstall(path: Path, original_record_sha: str) -> None:
+    """Explicit recovery of one failed restore, using ordinary native pkg.
+
+    May run from a verified package staging tree; installed sources remain
+    untouched until pkg replaces its whole payload. Original archive flock
+    serializes recovery coordinators; FD9 remains owned only by the service.
+    """
+    root_and_private_base()
+    data = read_active()
+    prior = data
+    if "continuation" in data:
+        prior, previous_sha = continuation_predecessor(data)
+        need(previous_sha == original_record_sha, "ORIGINAL_RECORD_SHA_MISMATCH")
+    else:
+        need(data["phase"] == "postinstall-attested" and
+             hash_file(ACTIVE) == original_record_sha,
+             "POSTINSTALL_CONTINUATION_REQUIRED")
+    old_archive = validated_stage(prior["stage"], prior["sha256"], prior["to_version"])
+    # Lock the retained ORIGINAL archive, not a second lifecycle/Config lock.
+    fd = os.open(old_archive, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Refused("CONTINUATION_ALREADY_RUNNING") from exc
+        identity = os.fstat(fd)
+        named = old_archive.lstat()
+        need((identity.st_dev, identity.st_ino) == (named.st_dev, named.st_ino)
+             and read_active() == data, "ACTIVE_OPERATION_CHANGED")
+        need(path.is_absolute(), "ABSOLUTE_PACKAGE_PATH_REQUIRED")
+        inspect_regular(path, private=False)
+        if "continuation" in data:
+            stage = validated_stage(data["stage"], data["sha256"], data["to_version"])
+            digest, version = data["sha256"], data["to_version"]
+            need(hash_file(path) == digest and manifest_identity(path) == version,
+                 "CONTINUATION_TARGET_CHANGED")
+        else:
+            stage, digest, version = stage_archive(path, continuation=True)
+        expected = hash_file(ACTIVE)
+        clean_env = {"PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin",
+                     "LC_ALL": "C"}
+        staged_env = {**clean_env, "SCRIPT_DIR": str(SCRIPT_DIR),
+                      "BACKEND_DIR": str(SCRIPT_DIR / "backend"),
+                      "PYTHON_RUNTIME": str(SCRIPT_DIR / "python_runtime.sh"),
+                      "ZAPRET_INSTALLED_SUPERVISOR_LOOP":
+                      "/usr/local/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh"}
+        prepared = native_command([str(SERVICE), "pkg-update-continue-prepare",
+                                   str(stage), digest, version, expected],
+                                  timeout=90, env=staged_env)
+        need(prepared.returncode == 0, "NATIVE_CONTINUATION_REFUSED")
+        if "zapret-pkg-update-continue=prepared" in prepared.stdout:
+            package = native_command(["/usr/sbin/pkg", "-o", "REPO_AUTOUPDATE=false",
+                                      "add", "-f", str(stage)], timeout=240,
+                                     env=clean_env)
+            combined = package.stdout + "\n" + package.stderr
+            need(package.returncode == 0 and
+                 not any(marker in combined for marker in FAILURE_MARKERS) and
+                 "zapret-pkg-postinstall-guarded=1" in combined,
+                 "PACKAGE_OPERATION_NOT_CONFIRMED")
+        else:
+            need("zapret-pkg-update-continue=finish" in prepared.stdout,
+                 "NATIVE_CONTINUATION_RECEIPT_MISSING")
+        need(installed_version() == version, "WRONG_INSTALLED_SUCCESSOR")
+        installed_service = "/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
+        finished = native_command([installed_service, "pkg-update-finish", digest,
+                                   version], timeout=120, env=clean_env)
+        need(finished.returncode == 0 and
+             "zapret-pkg-update-committed=1" in finished.stdout and
+             not ACTIVE.exists() and not ACTIVE.is_symlink(),
+             "RUNTIME_RESTORE_REQUIRES_REVIEW")
+        stage.unlink()
+        durable_directory()
+        print("pkg-update=verified-continued-and-restored")
+    finally:
+        os.close(fd)
+
+
+def stage_recovery_code(package: Path, expected_sha: str) -> Path:
+    """Read a verified package's existing service into private staging.
+
+    Archive names never select filesystem destinations. There is no external
+    installer asset, installed-source patch, Config writer or hook override.
+    The bootstrap itself must be the exact coordinator from this same .pkg.
+    """
+    root_and_private_base()
+    need(package.is_absolute() and
+         re.fullmatch(r"[a-f0-9]{64}", expected_sha) is not None,
+         "RECOVERY_PACKAGE_SHA_REQUIRED")
+    inspect_regular(package, private=False)
+    need(hash_file(package) == expected_sha, "RECOVERY_PACKAGE_CHANGED")
+    manifest_identity(package)
+    manifest = json.loads(native_command(
+        ["/usr/bin/tar", "-xOf", str(package), "+MANIFEST"]).stdout)
+    index = native_command(["/usr/bin/tar", "-tf", str(package)])
+    need(index.returncode == 0 and len(index.stdout) <= 4 * 1024 * 1024 and
+         isinstance(manifest.get("files"), dict), "RECOVERY_PACKAGE_INDEX_REFUSED")
+    prefixes = ("usr/local/opnsense/scripts/OPNsense/Zapret/",
+                "usr/local/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/")
+    selected = {}
+    for member in index.stdout.splitlines():
+        key = member.removeprefix("./").removeprefix("/")
+        if not key.startswith(prefixes) or key.endswith("/"):
+            continue
+        need(re.fullmatch(r"[A-Za-z0-9_./-]+", key) is not None and
+             all(part not in ("", ".", "..") for part in key.split("/")) and
+             key not in selected and "/" + key in manifest["files"],
+             "RECOVERY_PACKAGE_MEMBER_REFUSED")
+        selected[key] = member
+    coordinator = prefixes[0] + "protected_pkg_update.py"
+    need(coordinator in selected and prefixes[0] + "zapret_service.sh" in selected,
+         "RECOVERY_SERVICE_MISSING")
+    me = Path(__file__)
+    inspect_regular(me, private=False)
+    own = native_command(["/usr/bin/tar", "-xOf", str(package), selected[coordinator]],
+                         binary=True)
+    need(own.returncode == 0 and own.stdout == me.read_bytes(),
+         "RECOVERY_COORDINATOR_SOURCE_MISMATCH")
+    root = Path(tempfile.mkdtemp(prefix="code-", dir=BASE))
+    total = 0
+    for key, member in sorted(selected.items()):
+        item = native_command(["/usr/bin/tar", "-xOf", str(package), member],
+                              binary=True)
+        body = item.stdout
+        total += len(body)
+        need(item.returncode == 0 and len(body) <= 4 * 1024 * 1024 and
+             total <= 32 * 1024 * 1024, "RECOVERY_CODE_SIZE_REFUSED")
+        target = root / key
+        target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                     0o755 if key.endswith(".sh") else 0o644)
+        with os.fdopen(fd, "wb") as output:
+            output.write(body)
+            output.flush()
+            os.fsync(output.fileno())
+    need(hash_file(package) == expected_sha, "RECOVERY_PACKAGE_CHANGED")
+    # Persist the complete uninstalled tree BEFORE allowing its FD9 entry.
+    for directory in sorted((p for p in root.rglob("*") if p.is_dir()),
+                            key=lambda p: len(p.parts), reverse=True):
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    durable_directory()
+    return root / prefixes[0]
+
+
+def bootstrap_continuation(package: Path, digest: str, target: Path,
+                           original_record_sha: str) -> None:
+    stage = stage_recovery_code(package, digest)
+    environment = {"PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin",
+                   "LC_ALL": "C", "SCRIPT_DIR": str(stage),
+                   "BACKEND_DIR": str(stage / "backend"),
+                   "PYTHON_RUNTIME": str(stage / "python_runtime.sh")}
+    completed = native_command([str(stage / "zapret_service.sh"),
+                               "pkg-update-continue", str(target),
+                               original_record_sha], timeout=480, env=environment)
+    need(completed.returncode == 0 and
+         "pkg-update=verified-continued-and-restored" in completed.stdout,
+         "STAGED_CONTINUATION_REQUIRES_REVIEW")
+    print("pkg-recovery=verified-installed-and-restored")
+
+
 def main(argv: list[str]) -> int:
     try:
         need(len(argv) >= 2, "MODE_REQUIRED")
         if argv[1] == "replace":
             need(len(argv) == 3, "PACKAGE_ARGUMENT_REQUIRED")
             replace(Path(argv[2]))
+        elif argv[1] == "continue-postinstall":
+            need(len(argv) == 4, "CONTINUATION_ARGUMENTS_REQUIRED")
+            continue_postinstall(Path(argv[2]), argv[3])
+        elif argv[1] == "continue-record":
+            need(len(argv) == 6, "CONTINUATION_RECORD_ARGUMENTS_REQUIRED")
+            continue_record(argv[2], argv[3], argv[4], argv[5])
+        elif argv[1] == "bootstrap-continuation":
+            need(len(argv) == 6, "RECOVERY_BOOTSTRAP_ARGUMENTS_REQUIRED")
+            bootstrap_continuation(Path(argv[2]), argv[3], Path(argv[4]), argv[5])
         elif argv[1] == "record":
             need(len(argv) == 6, "RECORD_ARGUMENTS_REQUIRED")
             record(argv[2], argv[3], argv[4], argv[5])
