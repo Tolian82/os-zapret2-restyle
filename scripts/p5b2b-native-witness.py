@@ -1047,6 +1047,12 @@ try {
              'new-observer-minute-restarted-engine')
         need(hashlib.sha256(CONFIG.read_bytes()).hexdigest() == original_config,
              'new-id-boot-mutated-saved-manual-model')
+        # DEV-069/TZ6v5 S16 excludes synthetic upstream HTTP/RST
+        # Autohostlist failure-detection challenges from plugin CI.
+        # Default witness qualifies original schema3 Stop, terminal ACK
+        # archive, new-ID Boot and idle native owner only.
+        if os.environ.get("ZAPRET2_P5B2B_UPSTREAM_EXPERIMENT") != "1":
+            return
         # Reuse the already-qualified P0 real FreeBSD loopback HTTP/RST
         # client against THIS installed service's original IPFW/FD9 owner.
         # All changes remain disposable-VM-only; no raw/debug forgery.
@@ -1190,6 +1196,10 @@ try {
                       ('complete' if cleanup_ok else 'unqualified'), flush=True)
             else:
                 need(cleanup_ok, 'installed-auto-final-generation-not-retired')
+                if os.environ.get("ZAPRET2_P5B2B_UPSTREAM_EXPERIMENT") != "1":
+                    print('P2_INSTALLED_ORIGINAL_AUTO_LIFECYCLE='
+                          'PASS_NATIVE_SCHEMA3_STOP_NEW_ID_BOOT_FINAL_RETIRE_ONLY',
+                          flush=True)
 
 
 def self_test():

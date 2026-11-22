@@ -70,6 +70,7 @@ STATE_DIR="${TMP_ROOT}/state"
 SERVICE_STATE="${TMP_ROOT}/service.state"
 STOP_FAIL="${TMP_ROOT}/stop.fail"
 SHARED_JOURNAL="${TMP_ROOT}/operation.json"
+PROTECTED_RECORD="${TMP_ROOT}/pkg-update-record"
 LIFECYCLE_LOCK="${TMP_ROOT}/lifecycle.lock"
 LEGACY_MARKER="${STATE_DIR}/pkg-upgrade.restart"
 REPLACEMENT_MARKER="${STATE_DIR}/pkg-replacement.restart"
@@ -97,6 +98,11 @@ write_mock "${TMP_ROOT}/service" \
     '    ;;' \
     '  *) exit 64 ;;' \
     'esac'
+write_mock "${TMP_ROOT}/sysctl" \
+    'printf "%s\n" "sysctl:$*" >> "${TRACE}"' \
+    '[ "$*" = "-n net.inet.ip.fw.default_to_accept" ] || exit 64' \
+    '[ "${MOCK_IPFW_SYSCTL_FAIL:-0}" != 1 ] || exit 69' \
+    'printf "%s\n" "${MOCK_IPFW_POLICY:-1}"'
 write_mock "${TMP_ROOT}/lockf" \
     '[ "$1" = -s ] && [ "$2" = -t ] && [ "$4" = 9 ]'
 write_mock "${TMP_ROOT}/pgrep" \
@@ -146,6 +152,10 @@ run_pre_install()
     SERVICE_SCRIPT="${TMP_ROOT}/service" UPGRADE_STATE_DIR="${STATE_DIR}" \
     SHARED_APPLY_JOURNAL="${SHARED_JOURNAL}" LIFECYCLE_LOCK_FILE="${LIFECYCLE_LOCK}" \
     LOCKF_BIN="${TMP_ROOT}/lockf" LEGACY_FD9_REQUIRED="${LEGACY_FD9_REQUIRED:-0}" \
+    PROTECTED_UPDATE_RECORD="${PROTECTED_RECORD}" \
+    IPFW_SYSCTL_BIN="${TMP_ROOT}/sysctl" \
+    MOCK_IPFW_POLICY="${MOCK_IPFW_POLICY:-1}" \
+    MOCK_IPFW_SYSCTL_FAIL="${MOCK_IPFW_SYSCTL_FAIL:-0}" \
     UPGRADE_RESTART_MARKER="${LEGACY_MARKER}" \
     REPLACEMENT_RESTART_MARKER="${REPLACEMENT_MARKER}" \
     "${PRE_INSTALL}"
@@ -179,8 +189,44 @@ run_post_install()
 reset_case()
 {
     : > "${TRACE}"
-    rm -f "${RELOADED}" "${STOP_FAIL}" "${LEGACY_MARKER}" "${REPLACEMENT_MARKER}" "${SHARED_JOURNAL}" "${INIT_FAIL}"
+    rm -f "${RELOADED}" "${STOP_FAIL}" "${LEGACY_MARKER}" "${REPLACEMENT_MARKER}" "${SHARED_JOURNAL}" "${PROTECTED_RECORD}" "${INIT_FAIL}"
 }
+
+# The successor IPFW policy probe is read-only and must run before Stop.
+reset_case
+printf '%s\n' running > "${SERVICE_STATE}"
+if MOCK_IPFW_POLICY=0 run_pre_install > "${TMP_ROOT}/policy-denied" 2>&1; then
+    fail "running replacement accepted incompatible IPFW default policy"
+fi
+grep -Fq 'default_to_accept != 1' "${TMP_ROOT}/policy-denied" ||
+    fail "running IPFW policy refusal missing"
+assert_absent "${REPLACEMENT_MARKER}"
+grep -Fxq running "${SERVICE_STATE}" ||
+    fail "incompatible IPFW policy stopped original service"
+if grep -Fq 'service:stop' "${TRACE}"; then
+    fail "incompatible policy called original Stop"
+fi
+
+# Previously protected STOPPED with pending restart must still gate.
+reset_case
+printf '%s\n' stopped > "${SERVICE_STATE}"
+: > "${REPLACEMENT_MARKER}"
+if MOCK_IPFW_POLICY=0 run_pre_install > "${TMP_ROOT}/legacy-denied" 2>&1; then
+    fail "stopped restart intent bypassed IPFW policy gate"
+fi
+assert_present "${REPLACEMENT_MARKER}"
+grep -Fxq stopped "${SERVICE_STATE}" ||
+    fail "policy check mutated stopped original"
+
+# Deliberately STOPPED without restart intent can update under default-deny.
+reset_case
+printf '%s\n' stopped > "${SERVICE_STATE}"
+MOCK_IPFW_POLICY=0 run_pre_install ||
+    fail "intentional STOPPED-to-STOPPED update refused"
+assert_absent "${REPLACEMENT_MARKER}"
+if grep -Fq 'sysctl:' "${TRACE}"; then
+    fail "no-restart path invoked unnecessary IPFW startup policy"
+fi
 
 # Forced pkg add -f replacement: PKG_UPGRADE is absent. The incoming pre-install
 # records running state before the installed old pre-deinstall can stop the service.
