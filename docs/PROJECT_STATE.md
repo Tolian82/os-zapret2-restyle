@@ -2,7 +2,7 @@
 
 ## 22 November 2026 — owner-live recovery accepted, TZ6v4 functional acceptance next (CURRENT)
 
-**Exact source identity:** `v0.6.5_116` / `PLUGIN_REVISION=116` is a documentation-only source revision; **no `_116.pkg` was built or published**. On the owner's actual OPNsense the installed plugin is **`os-zapret2-restyle-0.6.5_111`**, after the verified native continuation carried by the published immutable `_114.pkg` and installing the immutable `_111.pkg`.
+**Exact source identity:** `v0.6.5_116` / `VERSION=0.6.5` / `PLUGIN_REVISION=116` / prospective `os-zapret2-restyle-0.6.5_116.pkg` is a documentation-only source revision; **no `_116.pkg` was built or published**. On the owner's actual OPNsense the installed plugin is **`os-zapret2-restyle-0.6.5_111`**, after the verified native continuation carried by the published immutable `_114.pkg` and installing the immutable `_111.pkg`.
 
 **Owner-live result, [#1213](https://github.com/Tolian82/os-zapret2-restyle/issues/1213) CLOSED:** the user supplied the actual root-console output `pkg-recovery=verified-installed-and-restored`, `recovery_rc=0`, `os-zapret2-restyle-0.6.5_111`, `zapret is running`, `status_rc=0`. This confirms the specific held `_107→_109` `postinstall-attested` STOPPED incident was restored on the physical owner device. The initial handoff used an invalid bare `python_runtime.sh -` invocation and refused before entering Python; the owner then used the same package-contained transaction with the installed runtime's valid `-c` argument, not a journal reset, installed-module graft, unguarded direct pkg replacement or manual PID manipulation. [Evidence and corrected one-time historical command](verification/evidence/2026-11-22-postinstall-package-continuation.md).
 
