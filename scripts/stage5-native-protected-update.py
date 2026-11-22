@@ -24,6 +24,8 @@ ACTIVE = Path("/var/db/zapret2/pkg-update/operation.json")
 MARKER = Path("/var/run/zapret2-restyle/pkg-replacement.restart")
 JOURNAL = Path("/var/db/zapret2/shared-apply/operation.json")
 EPOCHS = Path("/var/db/zapret2/auto-detect-epochs")
+RUNTIME = Path("/usr/local/etc/zapret2/runtime-v2")
+PRODUCERS = Path("/var/db/zapret2-auto-detect")
 CONFIG = Path("/conf/config.xml")
 
 
@@ -89,11 +91,92 @@ def seed_qualified_stable_tag_for_disposable_guest(g03):
           flush=True)
 
 
+def original_auto_generation(old_id: str, required: bool) -> tuple[int, list[dict]]:
+    """Read installed original owner map, not GUI mode or test flags."""
+    path = RUNTIME / "auto-detect-generation.json"
+    if not required:
+        need(not path.exists() and not path.is_symlink(),
+             "LIST_HAS_UNEXPECTED_ACTIVE_AUTO_GENERATION")
+        return 0, []
+    need(path.is_file() and not path.is_symlink() and
+         path.lstat().st_uid == 0 and path.lstat().st_nlink == 1,
+         "AUTO_NATIVE_GENERATION_MAP_UNTRUSTED")
+    mapping = json.loads(path.read_bytes())
+    schema = mapping.get("schema")
+    need(type(schema) is int and schema in (2, 3) and
+         mapping.get("generation") == old_id,
+         "AUTO_NATIVE_GENERATION_OWNER_MISMATCH")
+    learning = []
+    if schema == 3:
+        learning = [row for row in mapping.get("profiles", [])
+                    if isinstance(row, dict) and row.get("role") == "learning"]
+        need(len(learning) >= 1 and
+             all(type(row.get("native_number")) is int and
+                 row.get("auto_inbox") == str(
+                     PRODUCERS / ("learning-" + old_id + "-" +
+                                  str(row["native_number"]) + ".txt"))
+                 for row in learning),
+             "AUTO_SCHEMA3_NATIVE_N_SCOPE_UNQUALIFIED")
+    return schema, learning
+
+
+def verified_old_auto_retirement(old_id: str, schema: int,
+                                 learning: list[dict]) -> bool:
+    """Exact schema-specific stopped archive proof; never fake retired.json."""
+    root = EPOCHS / old_id
+    if schema == 2:
+        return (root / "retired.json").is_file()
+    if schema != 3 or not learning:
+        return False
+    folder = root / "learning-retirement"
+    intent = folder / "intent.json"
+    ready = folder / "ready.json"
+    if (not intent.is_file() or intent.is_symlink() or
+            not ready.is_file() or ready.is_symlink()):
+        return False
+    raw = intent.read_bytes()
+    try:
+        plan, receipt = json.loads(raw), json.loads(ready.read_bytes())
+    except (ValueError, UnicodeError):
+        return False
+    if (plan.get("schema") != 3 or
+            plan.get("generation") != old_id or
+            receipt.get("schema") != 3 or
+            receipt.get("generation") != old_id or
+            receipt.get("intent_sha256") != hashlib.sha256(raw).hexdigest() or
+            not isinstance(plan.get("sources"), list) or
+            len(plan["sources"]) != len(learning) + 1):
+        return False
+    names = {Path(row["auto_inbox"]).name for row in learning}
+    seen = set()
+    for row in plan["sources"]:
+        if (not isinstance(row, dict) or
+                row.get("name") not in names | {"debug.log"} or
+                row["name"] in seen or
+                not isinstance(row.get("image"), list) or
+                len(row["image"]) != 4):
+            return False
+        seen.add(row["name"])
+        archived = folder / ("old-" + row["name"])
+        if not archived.is_file() or archived.is_symlink():
+            return False
+        data = archived.read_bytes()
+        st = archived.stat()
+        if ([st.st_dev, st.st_ino, len(data),
+             hashlib.sha256(data).hexdigest()] != row["image"] or
+                (row["name"] != "debug.log" and
+                 ((PRODUCERS / row["name"]).exists() or
+                  (PRODUCERS / row["name"]).is_symlink())):
+            return False
+    return seen == names | {"debug.log"}
+
+
 def native_running_reinstall(archive, target, candidate_sha):
     """Both LIST and AUTO on one genuinely installed native OPNsense guest.
 
-    LIST has no obligation to create a P2 auto-detect epoch. Only AUTO
-    requires the observer epoch/retirement receipts.
+    LIST has no auto epoch. AUTO must prove either the original schema2
+    retirement receipt or the fully physical original schema3 N/debug terminal
+    intent+ready, not merely an EXIT_CODE or a changed generation ID.
     """
     witness = original_fixture("p5b2b-native-witness.py", "protected_native_witness")
     old_bridge = original_fixture("test-own70-native-package-handoff.py",
@@ -130,10 +213,14 @@ def native_running_reinstall(archive, target, candidate_sha):
              run([str(SERVICE), "status"]).returncode == 0,
              "REAL_PREDECESSOR_NOT_RUNNING_" + label)
         old_epoch_present = (EPOCHS / old_id / "epoch.json").is_file()
+        old_schema, old_learning = original_auto_generation(
+            old_id, observer_required)
         if observer_required:
-            need(old_epoch_present, "AUTO_PREDECESSOR_EPOCH_MISSING")
+            need(old_epoch_present and old_schema in (2, 3),
+                 "AUTO_PREDECESSOR_EPOCH_MISSING")
         else:
-            need(not old_epoch_present, "LIST_UNEXPECTED_OBSERVER_EPOCH")
+            need(not old_epoch_present and old_schema == 0,
+                 "LIST_UNEXPECTED_OBSERVER_EPOCH")
         config_before = sha(CONFIG)
         replaced = run([str(SERVICE), "pkg-update", str(archive)], timeout=320)
         status_after = run([str(SERVICE), "status"], timeout=30)
@@ -144,16 +231,24 @@ def native_running_reinstall(archive, target, candidate_sha):
                    else "missing")
         why = re.search(r"(?m)^pkg-update-refused=([A-Z0-9_]+)$",
                         replaced.stderr)
+        new_schema, new_learning = original_auto_generation(
+            new_id, observer_required) if status_after.returncode == 0 else (0, [])
+        retired_verified = verified_old_auto_retirement(
+            old_id, old_schema, old_learning) if observer_required else False
         evidence = {
             "schema": 1, "scope": label, "observer_required": observer_required,
             "predecessor_epoch_exists": old_epoch_present,
+            "predecessor_native_schema": old_schema,
+            "successor_native_schema": new_schema,
+            "native_learning_profiles_before": len(old_learning),
+            "native_learning_profiles_after": len(new_learning),
             "protected_running_replacement_rc": replaced.returncode,
             "refusal": why.group(1) if why else "none",
             "verified_receipt":
                 "pkg-update=verified-installed-and-restored" in replaced.stdout,
             "after_status_rc": status_after.returncode,
-            "old_epoch_retired":
-                (EPOCHS / old_id / "retired.json").is_file(),
+            "old_epoch_retired": retired_verified,
+            "original_terminal_receipt_schema": old_schema,
             "journal_committed": successor.get("phase") == "committed",
             "generation_changed": new_id != old_id,
             # Ordinary common boot reuses the committed ID. Only a stopped
@@ -185,7 +280,10 @@ def native_running_reinstall(archive, target, candidate_sha):
             evidence["no_restart_marker"])
         if observer_required:
             checks = (checks and evidence["old_epoch_retired"] and
-                      evidence["successor_epoch_exists"])
+                      evidence["successor_epoch_exists"] and
+                      old_schema == new_schema and
+                      (len(old_learning) >= 1 and len(new_learning) >= 1
+                       if old_schema == 3 else True))
         else:
             # LIST has no observer and therefore cannot fabricate an epoch.
             checks = checks and not evidence["successor_epoch_exists"]
@@ -195,23 +293,27 @@ def native_running_reinstall(archive, target, candidate_sha):
 
     check_running_replacement("LIST", observer_required=False)
 
-    # Native user action explicitly turns on AUTO. Unlike LIST, AUTO must
-    # produce a committed P2 observer epoch before pkg replacement.
+    # Native user action explicitly turns on AUTO. Unlike LIST, AUTO now
+    # must create a per-profile schema3 epoch, not the old global observer.
     auto_apply = run(["/usr/local/sbin/configctl", "zapret", "shared_apply",
                       "strategies", old_bridge.request("auto")], timeout=240)
     auto_state = json.loads(JOURNAL.read_text())
     auto_id = auto_state.get("detail", {}).get("id", "")
     auto_epoch = (EPOCHS / auto_id / "epoch.json").is_file()
+    auto_schema, auto_learning = original_auto_generation(auto_id, True)
     print("NATIVE_PROTECTED_AUTO_PREFLIGHT=" + json.dumps({
         "configctl_rc": auto_apply.returncode,
         "native_applied_receipt": "applied-id=" in auto_apply.stdout,
         "journal_committed": auto_state.get("phase") == "committed",
         "native_service_running": run([str(SERVICE), "status"]).returncode == 0,
         "observer_epoch_present": auto_epoch,
+        "native_schema": auto_schema,
+        "learning_profiles": len(auto_learning),
     }, sort_keys=True), flush=True)
     need(auto_apply.returncode == 0 and
          "applied-id=" in auto_apply.stdout and
          auto_state.get("phase") == "committed" and auto_epoch and
+         auto_schema == 3 and len(auto_learning) >= 1 and
          run([str(SERVICE), "status"]).returncode == 0,
          "NATIVE_AUTO_SHARED_APPLY_NOT_COMMITTED")
     check_running_replacement("AUTO", observer_required=True)
