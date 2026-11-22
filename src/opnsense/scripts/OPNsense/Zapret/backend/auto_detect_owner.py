@@ -182,7 +182,7 @@ def _valid_learning_proposal(raw: bytes, owner: dict, original: bytes,
     from auto_detect_origin_map import LEARNING_PROPOSAL
     from auto_detect_owned_sources import KNOWN_HOSTLISTS
     from auto_detect_storage import DEBUG_PATH, ROOT
-    from global_exclusions import BASE, visible
+    from global_exclusions import BASE, GLOBAL_POLICY_TRAILING, visible
 
     if (not isinstance(raw, bytes) or len(raw) > MAX_MAP or
             not isinstance(original, bytes) or not isinstance(argv, bytes) or
@@ -308,13 +308,21 @@ def _valid_learning_proposal(raw: bytes, owner: dict, original: bytes,
         seen.add(expected_inbox)
         clone = [token for token in visible(original_row)
                  if token.partition("=")[0] not in BASE]
+        # Independently reconstruct only Stage-3's exact GENERATED terminal
+        # policy suffix. The producer must never move arbitrary user-authored
+        # arguments, drop exclusions, change first-match working profiles, or
+        # append native auto arguments *after* required global excludes.
+        canonical_suffix = []
+        while clone and clone[-1] in GLOBAL_POLICY_TRAILING:
+            canonical_suffix.insert(0, clone.pop())
         actual = proposed_rows[len(original_rows) + index]
         # --new is the boundary token and is deliberately not in segments().
         if (not clone or
                 actual != clone + [
                     f"--hostlist-auto={expected_inbox}",
                     "--hostlist-auto-retrans-reset=0",
-                ] or sum(token.startswith("--hostlist=") for token in clone) != 1 or
+                ] + canonical_suffix or
+                sum(token.startswith("--hostlist=") for token in clone) != 1 or
                 any(token.startswith("--hostlist-auto") for token in clone)):
             raise GenerationRefused("learning_native_profile_is_not_exact_clone")
         attested.append((native_number, hostlist, expected_inbox))

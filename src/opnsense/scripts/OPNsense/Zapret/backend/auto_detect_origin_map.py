@@ -17,7 +17,9 @@ import sys
 from auto_detect_storage import RAW_PATH, DEBUG_PATH
 
 import profile_policy
-from global_exclusions import ARGS_LIMIT, BASE, ExclusionError, is_stun, segments, templates_and_imports, visible
+from global_exclusions import (ARGS_LIMIT, BASE, ExclusionError,
+                               GLOBAL_POLICY_REFERENCE, GLOBAL_POLICY_TRAILING,
+                               is_stun, segments, templates_and_imports, visible)
 
 
 class AttributionError(ValueError):
@@ -232,7 +234,7 @@ def build_map(*, generation: str, mode: str, strategy: bytes, bindings: bytes,
 
 def _original_global_policy_paths(release: Path) -> tuple:
     """Reuse the one Stage 3 manifest and canonical global exclusion policy."""
-    reference = Path("/usr/local/etc/zapret2/runtime-v2")
+    reference = GLOBAL_POLICY_REFERENCE
     return (release / "managed/hostlist-exclude.txt",
             str(reference / "managed/hostlist-exclude.txt"),
             release / "managed/ipset-exclude.txt",
@@ -401,7 +403,16 @@ def plan_learning_tier(mapping: dict, original: bytes, *,
                  if t.partition("=")[0] not in BASE]
         if not clone:
             raise AttributionError("empty original learning profile")
-        learning.append((source, hostlist, found, clone))
+        # Stage-3 canonical global exclusions are terminal on each executable
+        # row. They are the only generated tokens allowed to move within a
+        # LEARNING copy: new --hostlist-auto arguments belong before them.
+        # Preserve authored filter order, user exclusions and every ordinary
+        # profile byte-for-byte. The original global_exclusions.audit remains
+        # mandatory and independently rejects a noncanonical final ordering.
+        global_tail = []
+        while clone and clone[-1] in GLOBAL_POLICY_TRAILING:
+            global_tail.insert(0, clone.pop())
+        learning.append((source, hostlist, found, clone, global_tail))
     # Native numbers account for *all* regular executable profiles, including
     # Voice/IPSET and unknown profiles skipped for learning.
     ordinary_numbers = [r["native_number"] for r in working
@@ -412,13 +423,14 @@ def plan_learning_tier(mapping: dict, original: bytes, *,
 
     projected = original_text.split()
     result = list(working)
-    for source, hostlist, found, clone in learning:
+    for source, hostlist, found, clone, global_tail in learning:
         next_number += 1
         native_inbox = str(RAW_PATH.parent /
                            f"learning-{owner_id}-{next_number}.txt")
         projected.extend(["--new", *clone,
                           f"--hostlist-auto={native_inbox}",
-                          "--hostlist-auto-retrans-reset=0"])
+                          "--hostlist-auto-retrans-reset=0",
+                          *global_tail])
         result.append({
             "native_number": next_number,
             "role": "learning",

@@ -27,6 +27,15 @@ ARGS_LIMIT = 262144
 NAME = re.compile(r"^[a-zA-Z0-9_.-]{1,100}$")
 BASE = {"--port", "--lua-init", "--blob", "--daemon", "--user", "--uid", "--gid"}
 
+# One canonical Stage-3 policy owner shared with schema3 independent argv
+# attestation. These reference paths are fixed native release destinations,
+# never user-supplied exclusion arguments or alternative policy witnesses.
+GLOBAL_POLICY_REFERENCE = Path("/usr/local/etc/zapret2/runtime-v2")
+GLOBAL_POLICY_TRAILING = frozenset((
+    "--hostlist-exclude=" + str(GLOBAL_POLICY_REFERENCE / "managed/hostlist-exclude.txt"),
+    "--ipset-exclude=" + str(GLOBAL_POLICY_REFERENCE / "managed/ipset-exclude.txt"),
+))
+
 
 def segments(text: str) -> list[list[str]]:
     if len(text.encode("utf-8")) > ARGS_LIMIT or "\x00" in text or "\r" in text:

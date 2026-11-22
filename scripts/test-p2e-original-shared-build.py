@@ -83,7 +83,8 @@ class OriginalSharedGeneration(unittest.TestCase):
         # Intentionally no engine executable: this is the normal offline
         # shared release builder, not a new or installed dvtws2 instance.
 
-    def build(self, strategy: str, *, voice_on=False, mode="auto"):
+    def build(self, strategy: str, *, voice_on=False, mode="auto",
+              exclude_domains="", exclude_ipset=""):
         config = self.work / "rendered-zapret.conf"
         values = {
             "ZAPRET_ENABLED": "1", "HOSTLIST_MODE": mode,
@@ -92,7 +93,8 @@ class OriginalSharedGeneration(unittest.TestCase):
             "TRAFFIC_ARGS": strategy, "YOUTUBE_DOMAINS": "youtube.com",
             "USER_DOMAINS": "example.org", "TELEGRAM_IPS": "91.108.13.10",
             "DISCORD_IPS": "", "X_IPS": "", "SIP_IPS": "", "CUSTOM_IPS": "",
-            "EXCLUDE_DOMAINS": "", "EXCLUDE_IPSET": "", "EXTRA_ARGS": "",
+            "EXCLUDE_DOMAINS": exclude_domains,
+            "EXCLUDE_IPSET": exclude_ipset, "EXTRA_ARGS": "",
         }
         config.write_text("".join(k + "=" + shlex.quote(v) + "\n" for k, v in values.items()))
         write_xml(self.work / "candidate.xml", voice_on=voice_on)
@@ -209,6 +211,76 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                              {"id": self.work.name, "candidate": "d" * 64},
                              projected)
 
+
+    def test_tz6v4_learning_global_exclusions_retain_canonical_final_order(self):
+        """Regression: real owner's nonempty global exclusions refused Boot.
+
+        Invoke the actual original orchestrator with both exclusion families:
+        Stage 3 adds generated tokens as an executable profile suffix. Auto
+        learning must insert native flags *before* that suffix. No test-only
+        guessed map, disabled exclusion audit or runtime Config mutation.
+        """
+        from global_exclusions import audit, compose, segments
+        mapped, args = self.build(
+            "--filter-tcp=443\n--filter-l7=tls\n<HOSTLIST:youtube>\n"
+            "--lua-desync=fake\n--new\n--filter-tcp=443\n"
+            "<HOSTLIST:user>\n--lua-desync=fake\n",
+            exclude_domains="ads.example.com\n",
+            exclude_ipset="198.51.100.0/24\n",
+        )
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        policy = origin._original_global_policy_paths(self.release)
+        audit(original.decode("utf-8"), *policy)
+        projected, proposal = origin.plan_learning_tier(
+            source, original, owner_id=self.work.name,
+            owner_candidate_sha256="d" * 64)
+        self.assertEqual([row["hostlist"] for row in proposal["profiles"]
+                          if row["role"] == "learning"], ["youtube", "user"])
+        audit(projected.decode("utf-8"), *policy)
+        self.assertEqual(compose(projected.decode("utf-8"), *policy),
+                         projected.decode("utf-8"))
+        rows = segments(projected.decode("utf-8"))
+        domain = "--hostlist-exclude=" + policy[1]
+        ipset = "--ipset-exclude=" + policy[3]
+        self.assertEqual(len(rows), 4)
+        for row in rows:
+            self.assertEqual(row[-2:], [domain, ipset])
+            self.assertEqual(row.count(domain), 1)
+            self.assertEqual(row.count(ipset), 1)
+        for row in rows[2:]:
+            auto = next(i for i, token in enumerate(row)
+                        if token.startswith("--hostlist-auto="))
+            self.assertLess(auto, row.index(domain))
+            self.assertLess(auto, row.index(ipset))
+        # Working profiles are untouched; source bindings remain independently
+        # attributed; no learner gets Voice/IPSET or extra user selectors.
+        self.assertEqual([x for x in projected.decode("utf-8").split()
+                          if not x.startswith("--hostlist-auto-debug=")]
+                         [:len(original.split())], original.decode("utf-8").split())
+        self.assertEqual(args.read_bytes(), original)
+        encoded = json.dumps(proposal, sort_keys=True).encode()
+        self.assertEqual(
+            len(owner._valid_learning_proposal(
+                encoded, {"id": self.work.name, "candidate": "d" * 64},
+                original, projected)), 2)
+        # A proposal with a noncanonical learned suffix remains refused even
+        # when the forged map digest is adjusted to match the altered argv.
+        forged_rows = segments(projected.decode("utf-8"))
+        learning_row = forged_rows[2]
+        learning_row[-2:] = list(reversed(learning_row[-2:]))
+        forged_tokens = projected.decode("utf-8").split()
+        canonical_tokens = rows[2]
+        start = len(rows[0]) + 1 + len(rows[1]) + 1
+        forged_tokens[start:start + len(canonical_tokens)] = learning_row
+        forged_args = " ".join(forged_tokens).encode("utf-8")
+        forged_record = dict(proposal,
+                             final_args_sha256=hashlib.sha256(forged_args).hexdigest())
+        with self.assertRaises(owner.GenerationRefused):
+            owner._valid_learning_proposal(
+                json.dumps(forged_record).encode(),
+                {"id": self.work.name, "candidate": "d" * 64},
+                original, forged_args)
 
     def test_tz6v4_learning_map_has_independent_native_proof(self):
         mapped, args = self.build(
