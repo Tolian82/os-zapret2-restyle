@@ -5686,19 +5686,21 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.assertLess(applied.index('apply_runtime_probe "$_shared_apply_root/release"'),
                         finish_call)
 
-    def test_tz6v4_schema3_shared_apply_canary_stays_ci_only(self):
-        """Production retains P2h/schema2; schema3 gets exact FD9 native trial."""
+    def test_tz6v4_schema3_auto_is_selected_by_native_source_mode(self):
+        """Explicit Auto switches to protected per-profile N; List/All stay schema2."""
         service = (BACKEND.parent / "zapret_service.sh").read_text()
         begin = service.index("shared_apply_prepare_service()\n")
         end = service.index("extra_resources_native_previous_owner_service()\n", begin)
         stage = service[begin:end]
-        stage_flat = " ".join(" ".join(line.strip().rstrip("\\") for line in stage.splitlines()).split())
-        for token in ('ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL',
-                      'ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE',
-                      'ZAPRET2_NATIVE_BUILD_CI', 'GITHUB_ACTIONS',
-                      'preflight-learning "$_shared_work" "$_shared_auto_digest"',
-                      'promote-learning "$_shared_work" "$_shared_auto_digest"',
-                      'verify-learning-active "$_shared_work" "$_shared_auto_digest"'):
+        stage_flat = " ".join(" ".join(line.strip().rstrip("\\")
+                                   for line in stage.splitlines()).split())
+        for token in (
+            '.mode | select(.=="auto" or .=="list" or .=="all")',
+            'if [ "$_shared_target_mode" = auto ]; then',
+            'preflight-learning "$_shared_work" "$_shared_auto_digest"',
+            'promote-learning "$_shared_work" "$_shared_auto_digest"',
+            'verify-learning-active "$_shared_work" "$_shared_auto_digest"',
+        ):
             self.assertIn(token, stage_flat)
         self.assertLess(stage_flat.index('preflight-learning "$_shared_work"'),
                         stage_flat.index('promote-learning "$_shared_work"'))
@@ -5708,6 +5710,15 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         stage_flat.index('shared_apply_bundle_service seal "$1"'))
         self.assertIn('preview "$_shared_work" "$_shared_auto_digest"', stage_flat)
         self.assertIn('promote "$_shared_work" "$_shared_auto_digest"', stage_flat)
+        # Test-runner flags must never become the authority deciding whether
+        # a real user's explicit GUI Auto engages schema3 or legacy observer.
+        for forbidden in ("ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL",
+                          "ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE",
+                          "ZAPRET2_NATIVE_BUILD_CI", "GITHUB_ACTIONS"):
+            self.assertNotIn(forbidden, stage_flat)
+        # Unqualified Auto fails without any silent fallback to schema2.
+        self.assertLess(stage_flat.index('preflight-rejected=runtime-build'),
+                        stage_flat.index('preview "$_shared_work"'))
         applied = service[service.index("shared_apply_execute_service()\n"):
                           service.index("shared_apply_wan_save_service()\n")]
         self.assertIn('.schema | select(. == 2 or . == 3)', applied)
@@ -5718,7 +5729,6 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         applied.index('apply_runtime_probe "$_shared_apply_root/release"'))
         self.assertLess(applied.index('auto_detect_origin_map.py" verify-learning-active'),
                         applied.index('shared_apply_record_service prepared'))
-        # The original postlaunch owner chooses exact schema3 P2c attestation.
         self.assertIn('_shared_epoch_verb=finish-learning-epoch', applied)
 
     def test_p2f_native_candidate_preview_and_promotion_precede_original_seal(self):

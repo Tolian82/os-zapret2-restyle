@@ -221,10 +221,25 @@ def stopped_receipts(generation: str, learning: list[dict],
             "CANARY_NATIVE_STOPPED_DEBUG_INODE_NOT_RETIRED")
 
 
+def owner_service_environment() -> dict[str, str]:
+    """Exercise real explicit Auto without a schema3 CI traffic switch.
+
+    The CI host still needs its own guard flags to install and run the
+    disposable OPNsense canary. None are passed as schema3 authorization to
+    the *ordinary* original FD9 Apply/Start/Stop/Restart subprocesses.
+    """
+    env = os.environ.copy()
+    env.pop("ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL", None)
+    env.pop("ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE", None)
+    return env
+
+
 def service_action(verb: str) -> None:
     require(verb in ("start", "stop", "restart"),
             "CANARY_UNTRUSTED_SERVICE_VERB")
-    result = command(str(SERVICE), verb, timeout=180)
+    result = subprocess.run([str(SERVICE), verb], env=owner_service_environment(),
+                            capture_output=True, text=True, timeout=180,
+                            check=False)
     require(result.returncode == 0,
             "CANARY_" + verb.upper() + "_REFUSED:rc=" +
             str(result.returncode) + ":" +
@@ -383,8 +398,10 @@ def execute(*, crash: bool = False) -> dict:
     request = envelope(
         {"general": {"waninterface": "lo0", "enabled": "1"},
          "hostlist": {"mode": "auto"}}, saved)
-    run = command(str(SERVICE), "shared-apply-run", "strategies", request,
-                  timeout=420)
+    run = subprocess.run(
+        [str(SERVICE), "shared-apply-run", "strategies", request],
+        env=owner_service_environment(), capture_output=True, text=True,
+        timeout=420, check=False)
     require(run.returncode == 0 and
             re.search(r"(?m)^applied-id=[0-9a-f]{32}$", run.stdout),
             "CANARY_REAL_SHARED_APPLY_REFUSED:rc=" +
