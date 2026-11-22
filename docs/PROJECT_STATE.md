@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 22 ноября 2026 — CURRENT: пять команд службы, guarded reload, Apply planner (docs-only)
+## 23 ноября 2026 — CURRENT: canonical upstream manual.en.md, запрет повторных проверок (docs-only)
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=126`, `v0.6.5_126` — docs-only candidate от `main _125 e60bc1d2`; `os-zapret2-restyle-0.6.5_126.pkg` **не построен**. Owner installed `_117.pkg` (не изменён). Lab #1224 и native Auto #1223 OPEN, PR #1228 CLOSED without merge.
+
+**Владелец повторно утвердил:** [официальный upstream manual.en.md](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) — аксиома по всем прямо описанным функциям движка. Не тестировать/не оспаривать engine auto-reread HOSTLIST/IPSet после изменения и SIGHUP reload на следующем пакете. [DEV-069](PROJECT_PRINCIPLES.md), [правило](architecture/ZAPRET2_UPSTREAM_MANUAL_CANON.md), [ТЗ_6v5 §5.1/V5-13](architecture/TZ_6v5.md), [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) ограничивают native proof нашим Apply/diff/owner/file commit/PID signal/IPFW/GUI/rollback, которых manual не описывает. **Нового кода и нового пакета нет.**
+
+
+## 22 ноября 2026 — пять команд службы, guarded reload, Apply planner (историческая документационная веха)
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=125`, `v0.6.5_125` docs-only PR candidate поверх **merged `main _124 d429aff7`** ([PR #1233](https://github.com/Tolian82/os-zapret2-restyle/pull/1233)). Prospective `os-zapret2-restyle-0.6.5_125.pkg` **не существует**. Owner installed `_117.pkg`, manual Stop→Start RUNNING и два Strategies Apply PASS; Lab #1224 RESTORE_FAILED и Auto #1223 missing Found OPEN. Новые пять команд/reload planner ещё не реализованы и native PASS не получали.
 
