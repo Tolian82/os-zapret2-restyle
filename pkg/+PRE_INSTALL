@@ -17,6 +17,7 @@ KLDSTAT_BIN="${KLDSTAT_BIN:-/sbin/kldstat}"
 IPFW_BIN="${IPFW_BIN:-/sbin/ipfw}"
 PYTHON_BIN="${PYTHON_BIN:-/usr/local/bin/python3}"
 COLD_INSPECT_BIN="${COLD_INSPECT_BIN:-/usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py}"
+PROTECTED_UPDATE_RECORD="${PROTECTED_UPDATE_RECORD:-/var/db/zapret2/pkg-update/operation.json}"
 
 # A test package can arrive while the INSTALLED (older) service has a
 # committed, stopped common journal and NO ipfw/ipdivert kernel modules.
@@ -154,8 +155,15 @@ case "${service_status}" in
         : > "${REPLACEMENT_RESTART_MARKER}" || exit 1
         ;;
     1)
-        # Preserve an existing replacement marker when retrying an interrupted
-        # package transaction whose earlier pre-install already stopped service.
+        # STOPPED alone does not prove a STOPPED-to-STOPPED replacement:
+        # an older protected updater may have already stopped RUNNING and
+        # retained its restart marker / prepared operation for postinstall.
+        # Require compatible IPFW policy when restoration may be requested.
+        if [ -e "${REPLACEMENT_RESTART_MARKER}" ] || [ -L "${REPLACEMENT_RESTART_MARKER}" ] ||
+           [ -e "${UPGRADE_RESTART_MARKER}" ] || [ -L "${UPGRADE_RESTART_MARKER}" ] ||
+           [ -e "${PROTECTED_UPDATE_RECORD}" ] || [ -L "${PROTECTED_UPDATE_RECORD}" ]; then
+            preinstall_ipfw_policy_compatible || exit 1
+        fi
         ;;
     2)
         # Never stop unverified runtime via legacy lifecycle.

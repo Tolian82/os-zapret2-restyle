@@ -153,6 +153,20 @@ firewall_restore_rules "$2" 19000 19099
         self.assertLess(gate, marker)
         self.assertLess(gate, stop)
         self.assertIn('case "${service_status}" in\n    0)', hook[:gate])
+        # A prior legacy updater may have stopped a RUNNING owner already:
+        # STOPPED + any restart marker / protected journal is NOT safe to
+        # upgrade under default-deny without the same policy preflight.
+        stopped = hook.index("\n    1)\n", hook.index('case "${service_status}" in'))
+        failed = hook.index("\n    2)\n", stopped)
+        branch = hook[stopped:failed]
+        for required in (
+            "REPLACEMENT_RESTART_MARKER", "UPGRADE_RESTART_MARKER",
+            "PROTECTED_UPDATE_RECORD", "preinstall_ipfw_policy_compatible || exit 1",
+        ):
+            self.assertIn(required, branch)
+        self.assertIn('[ -L "${PROTECTED_UPDATE_RECORD}" ]', branch)
+        self.assertLess(branch.index("PROTECTED_UPDATE_RECORD"),
+                        branch.index("preinstall_ipfw_policy_compatible || exit 1"))
         executable = "\n".join(line for line in helper.splitlines()\n                               if not line.lstrip().startswith("#"))\n        self.assertNotRegex(executable, r"\b(delete|flush|add)\b")
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
