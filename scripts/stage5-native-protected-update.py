@@ -633,6 +633,12 @@ def native_partial_payload_interruption(archive, target, digest):
     prepared_status_rc = run([str(SERVICE), "status"]).returncode
     prepared_retired = verified_old_auto_retirement(
         old_id, old_schema, old_learning)
+    retire_reason = re.search(
+        r"auto-detect-retire-refused=([A-Za-z][A-Za-z0-9_]*)",
+        prepared.stderr)
+    terminal = EPOCHS / old_id / "learning-retirement"
+    archived_names = [row["name"] for row in old_learning]
+    archived_names.append("debug.log")
     print("NATIVE_PROTECTED_MIDEXTRACT_PREPARE_EVIDENCE=" + json.dumps({
         "prepare_rc": prepared.returncode,
         "prepare_receipt": prepared_receipt,
@@ -641,6 +647,16 @@ def native_partial_payload_interruption(archive, target, digest):
         "old_schema": old_schema,
         "old_learning_N_count": len(old_learning),
         "old_terminal_retired": prepared_retired,
+        "retire_refusal_type": retire_reason.group(1) if retire_reason else "none",
+        "intent_exists": (terminal / "intent.json").is_file(),
+        "ready_exists": (terminal / "ready.json").is_file(),
+        "archived_source_count": sum(
+            (terminal / ("old-" + name)).is_file()
+            for name in archived_names),
+        "remaining_native_N_count": sum(
+            (PRODUCERS / name).is_file()
+            for name in archived_names[:-1]),
+        "debug_present": (PRODUCERS / "debug.log").is_file(),
         "service_status_rc": prepared_status_rc,
         "config_unchanged": sha(CONFIG) == saved_config,
         "old_pid_present": Path("/var/run/dvtws2.pid").exists(),
