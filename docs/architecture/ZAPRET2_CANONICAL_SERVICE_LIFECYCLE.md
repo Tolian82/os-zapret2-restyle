@@ -1,5 +1,7 @@
 # Canonical FD9-owned Start/Stop — actual source-route audit and implementation contract
 
+> **Нормативное продолжение:** [ТЗ_6v5](TZ_6v5.md) и [новый активный S00–S20 план](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). Приведённый ниже route audit — сохраняемый исходный снимок, не утверждение, что код уже консолидирован.
+
 **Owner decision / effective immediately:** 22 November 2026. **Global mandatory rule:** [DEV-065](../PROJECT_PRINCIPLES.md). **Normative project TZ:** [ТЗ_6v4 §6.1](TZ_6v4.md). **Tracking:** [#1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225); Lab [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224); Auto [#1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223).
 
 ## 1. User-visible acceptance and exact current physical facts

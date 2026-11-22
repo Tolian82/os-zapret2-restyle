@@ -1,8 +1,15 @@
 # os-zapret2-restyle — master plan
 
-**CURRENT 22 Nov 2026: approved declarative runtime system.** One `zapret_service.sh` handles Start/Stop/Status; one **generated sealed JSON** launch manifest references independent enabled/disabled lists, profile order, Voice/Auto and IPFW; platform-specific OPNsense/future pfSense settings are XML; genuine clean install without engine/config and categorized diagnostics are mandatory. This is **source-only `_121` documentation**, **no `_121.pkg`**. Installed owner remains `_117` RUNNING after manual recovery. [Approved contract](architecture/ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md), [RFC #1229](https://github.com/Tolian82/os-zapret2-restyle/issues/1229).
+## Current priority — ТЗ_6v5 (22 ноября 2026)
 
-## Current priority
+**Единственный активный маршрут:** [ТЗ_6v5](architecture/TZ_6v5.md) → [S00–S20 от source-only `_121` к одному проверенному launcher](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). Документационный кандидат `_122` (пока не merged; `_122.pkg` не существует). На устройстве владельца `_117.pkg`, ручной Stop→Start RUNNING и два Strategies Apply PASS; Lab #1224 и Auto #1223 OPEN. Draft #1228 pre-manifest partial не merge.
+
+**Порядок:** S00 docs → S01 #1228 reconcile → S02 source routes → S03 RED → S04–S06 safe empty install/status/errors → S07–S09 XML adapter/compiler/refs parity → S10–S14 sealed activation + ONE physical Start/Stop/Status for all callers → S15 Lab restore → S16 native Auto → S17 native OPNsense → S18 release gate → S19 exact published testing .pkg → S20 owner acceptance.
+
+
+**HISTORICAL baseline before TZ6v5 (22 Nov 2026): approved declarative runtime system.** One `zapret_service.sh` handles Start/Stop/Status; one **generated sealed JSON** launch manifest references independent enabled/disabled lists, profile order, Voice/Auto and IPFW; platform-specific OPNsense/future pfSense settings are XML; genuine clean install without engine/config and categorized diagnostics are mandatory. This is **source-only `_121` documentation**, **no `_121.pkg`**. Installed owner remains `_117` RUNNING after manual recovery. [Approved contract](architecture/ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md), [RFC #1229](https://github.com/Tolian82/os-zapret2-restyle/issues/1229).
+
+## Historical pre-TZ6v5 priority
 
 1. **P0-A design freeze + safe clean install:** validate `architecture/ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md`, statuses for missing plugin/engine/Config/manifest, approved first-install defaults, non-start and structured redacted native errors, read-only GUI/status behavior. Existing #1228 partial code must be rebased or redesigned, not prematurely merged.
 2. **P0-B pure compiler:** derive `enabled/disabled`, `all/list/auto`, explicit targets, effective manual+Found, Voice ON validation, working/learning native first-match and source map using existing registry/storage; create sealed main JSON with **refs only** and exact equivalence against current `dvtws.args`/native state.

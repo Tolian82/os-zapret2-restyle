@@ -1,6 +1,15 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 22 November 2026 — owner APPROVED declarative startup, XML adapters, clean install and error receipts (CURRENT)
+## 22 ноября 2026 — CURRENT: ТЗ_6v5 и план S00–S20 (документационный PR)
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=122`, source candidate `v0.6.5_122` (PR candidate до merge); prospective `os-zapret2-restyle-0.6.5_122.pkg` **не построен и не опубликован**; base `main 0.6.5_121` SHA `62b64e82`; в данной docs-only ветке предложен `PLUGIN_REVISION=122`, до merge это **не** состояние main и **не** новый `.pkg`. Физически у владельца installed `0.6.5_117.pkg`, после ручного Stop→Start RUNNING; два Strategies Apply PASS. Lab #1224 stage90/99 RESTORE_FAILED, native Auto #1223 missing Found, routes #1225 остаются OPEN.
+
+**Approved architecture:** [ТЗ_6v5](architecture/TZ_6v5.md) и новый [план S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). Единственный source XML Config + registered text lists → pure read-only platform adapter + compiler/validator → sealed immutable reference-only JSON manifest → один physical Start/Stop/Status в `zapret_service.sh` (original FD9), диагностика actual owner/stage/rc/redacted native stderr и безопасная clean install без engine/config/manifest. Прежний ТЗ_6v4 native Auto contract сохранён. Полная source реализация пока **не существует**; Draft PR #1228 содержит лишь частичный pre-manifest Lab/pkg dispatcher, требует rework/rebase после этого docs merge.
+
+**Next action:** S01 reconcile #1228, S02 full route audit, S03 RED, S04–S09 compiler/status/empty-install, S10–S14 canonical runtime, S15–S18 native/Lab/Auto, S19 test .pkg, S20 owner. No owner device action in this docs scope.
+
+
+## 22 November 2026 — owner APPROVED declarative startup, XML adapters, clean install and error receipts (HISTORICAL baseline)
 
 **Identity:** source-only `v0.6.5_121`, `VERSION=0.6.5`, `PLUGIN_REVISION=121`; prospective `os-zapret2-restyle-0.6.5_121.pkg` **not built or published**. Owner hardware remains on installed `_117` with last confirmed RUNNING after manual Stop→Start. The prior real GUI Apply observations PASS; Lab `job.iDvhRh` stage90/99 RESTORE_FAILED and YouTube Auto missing in Found OPEN.
 

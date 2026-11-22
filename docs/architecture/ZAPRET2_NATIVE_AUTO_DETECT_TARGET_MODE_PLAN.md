@@ -1,4 +1,10 @@
-## CURRENT APPROVED architecture gate — one JSON launch manifest + Start/Stop/Status + clean install (22 Nov 2026)
+# Native Auto-detect — исторический накопительный план P0–P5 (ТЗ_6v2–6v4)
+
+**НОВЫЙ И ЕДИНСТВЕННЫЙ АКТИВНЫЙ ПОШАГОВЫЙ ПЛАН:** [ТЗ_6v5, S00–S20](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), критерии: [ТЗ_6v5](TZ_6v5.md). Этот документ ниже сохраняет ранее утверждённые этапы, статусы и технические доказательства ТЗ_6v2–6v4 **как историческую запись**, но даже блок с датой 22.11.2026 более не определяет следующий шаг. ТЗ_6v4 продолжает действовать по native Auto; новый порядок управляет изменением launcher/manifest/status.
+
+---
+
+## HISTORICAL architecture gate (22 Nov 2026) — replaced as active plan by TZ_6v5
 
 **APPROVED by owner, not yet implemented:** [RFC #1229](https://github.com/Tolian82/os-zapret2-restyle/issues/1229), normative [TZ6v4 §6.2](TZ_6v4.md), global DEV-066/DEV-067 and [complete manifest contract](ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md). The one source file `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh` owns only physical **Start/Stop/Status** and original FD9 lifecycle; Target Mode, resource enabled flags, exclusions, first-match strategy order, Voice and Auto are derived *before launch* by a pure compiler from XML GUI settings and the existing text-file registry and exposed as a sealed immutable JSON root manifest of **references**, not list/strategy bodies. All Start/Stop callers delegate to this one script. Keep native schema3 auto state/FD9/Config/P1/ACK exactly as previously approved.
 
