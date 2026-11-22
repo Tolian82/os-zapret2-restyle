@@ -22,7 +22,7 @@ Read through EOF in this order:
 
 | Need | Primary document |
 |---|---|
-| P0 #1213 held postinstall recovery | [Original FD9 whole-package continuation and qualification](verification/evidence/2026-11-22-postinstall-package-continuation.md) |
+| P0 #1213 completed owner-live recovery | [Original FD9 whole-package continuation and qualification](verification/evidence/2026-11-22-postinstall-package-continuation.md) |
 | #1052 approved behavior | [Original native discovery/FD9 contract](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [**ТЗ_6v3** — текущее чтение/реестр/FormData](architecture/TZ_6v3.md) (код/приёмка OPEN), [ТЗ_6v2 — сохраняемые GUI/FD9 правила](architecture/TZ_6v2.md) |
 | #1052 staged work | [ТЗ_6v3 — активные S0–S5 поверх исторического P0–P5 плана](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) |
 | P2e completed original-builder qualification | [Original shared-builder witness](verification/P2E_ORIGINAL_SHARED_BUILDER.md); [P0–P2 proof map](verification/README.md) |
