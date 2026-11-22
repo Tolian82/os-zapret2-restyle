@@ -202,33 +202,6 @@ def _plan(receipts, queue, proof, workspace, tip, folder, attest, inspect,
 
 
 
-def _ci_abrupt_retirement_fault(proof: LearningGenerationProof) -> None:
-    """CI-only real process death after FIRST fsynced archived native-N inode.
-
-    Not reachable in ordinary product Stop. Original caller already holds
-    FD9/P2a, real STOPPED/P2b source checks and the durable terminal intent.
-    The exact generation and all disposable official-Mk environment guards
-    are required. Only the original Python *worker* exits, never dvtws2;
-    Boot re-enters without the fault environment and replays that intent.
-    """
-    if (os.environ.get("ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH") != proof.generation or
-            len(proof.learning) < 2 or
-            not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
-            not Path("/usr/local/opnsense").is_dir() or
-            os.environ.get("GITHUB_ACTIONS") != "true" or
-            os.environ.get("ZAPRET2_NATIVE_BUILD_CI") != "1" or
-            os.environ.get("ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE") != "1" or
-            os.environ.get("ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL") != "1" or
-            os.environ.get("ZAPRET2_STAGE2_REAL_CLEAN_INSTALL") != "1" or
-            os.environ.get("ZAPRET2_G04_DISPOSABLE_NATIVE") != "1" or
-            os.environ.get("ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK") != "1" or
-            len(os.environ.get("ZAPRET2_NATIVE_PROJECT_SHA", "")) != 40):
-        return
-    # No finally/atexit: actual abruptly killed original Python worker.
-    os.write(2, b"TZ6V4_DISPOSABLE_CRASH_AFTER_FIRST_N_ARCHIVE\n")
-    os._exit(86)
-
-
 def _fresh_debug(path, receipts, queue):
     if not _entry(path):
         return False
@@ -251,7 +224,7 @@ def _retire_files(receipts, queue, proof, folder, plan, attest, inspect,
     """
     temp = queue.root / (".learning-retire-" + proof.generation + "-debug")
     _root_entries(queue, proof, temporary=True)
-    for source_position, row in enumerate(plan["sources"]):
+    for row in plan["sources"]:
         name = row["name"]
         old = row["image"]
         live = queue.root / name
@@ -295,8 +268,6 @@ def _retire_files(receipts, queue, proof, folder, plan, attest, inspect,
             _sync(folder)
             _image(archived, receipts, queue, expected=old)
             _drained(archived, old, proof, queue, inspect)
-            if source_position == 0 and name != "debug.log":
-                _ci_abrupt_retirement_fault(proof)
         if name == "debug.log":
             if not _entry(live):
                 if not repair:

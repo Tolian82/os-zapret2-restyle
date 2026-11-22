@@ -247,6 +247,85 @@ def service_action(verb: str) -> None:
 
 
 
+def _install_disposable_retirement_overlay(path: Path, content: bytes,
+                                           original: bytes) -> None:
+    """Atomic same-directory test-only source replacement on a throwaway VM."""
+    require(path.is_file() and not path.is_symlink() and
+            path.lstat().st_uid == 0 and path.lstat().st_nlink == 1 and
+            path.read_bytes() in (original, content),
+            "CANARY_INSTALLED_BACKEND_NOT_EXACT")
+    current = path.lstat()
+    pending = path.with_name(".tz6v4-retirement-crash-overlay")
+    require(not pending.exists() and not pending.is_symlink(),
+            "CANARY_DISPOSABLE_OVERLAY_LEFT_BEHIND")
+    fd = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                 os.O_NOFOLLOW, 0o600)
+    try:
+        os.fchown(fd, current.st_uid, current.st_gid)
+        os.fchmod(fd, stat.S_IMODE(current.st_mode))
+        with os.fdopen(fd, "wb", closefd=False) as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(pending, path)
+    parent_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(parent_fd)
+    finally:
+        os.close(parent_fd)
+    require(path.read_bytes() == content,
+            "CANARY_DISPOSABLE_BACKEND_OVERLAY_NOT_ATOMIC")
+
+
+def _only_disposable_crash_overlay(generation: str):
+    """Return (installed_path, original_source) after strictly guarded patch.
+
+    This overlay exists ONLY in the VM, NEVER in the pkg or repository
+    backend. Every ordinary engine/service call is made on unmodified
+    product source; the deliberately interrupted Stop alone sees the patch.
+    """
+    native_root()  # refuse Linux/user/appliance misuse before any file edit
+    source = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/backend/"
+                  "auto_detect_learning_retirement.py")
+    repository_source = HERE.parent / (
+        "src/opnsense/scripts/OPNsense/Zapret/backend/"
+        "auto_detect_learning_retirement.py")
+    require(repository_source.is_file() and
+            not repository_source.is_symlink() and
+            source.is_file() and not source.is_symlink() and
+            source.read_bytes() == repository_source.read_bytes(),
+            "CANARY_NATIVE_INSTALLED_SOURCE_NOT_SAME_GIT_BLOB")
+    original = source.read_bytes()
+    require(b"ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH" not in original and
+            b"os._exit(86)" not in original,
+            "CANARY_FAULT_INJECTION_SHIPPED_IN_USER_PACKAGE")
+    anchor = (
+        '            _image(archived, receipts, queue, expected=old)\\n'
+        '            _drained(archived, old, proof, queue, inspect)\\n'
+        '        if name == "debug.log":'
+    )
+    # Static string literals must contain literal newline, not backslash-n.
+    anchor = anchor.replace("\\n", "\n")
+    injection = (
+        '            if (name == Path(proof.learning[0][2]).name and\\n'
+        '                    os.environ.get("ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH")\\n'
+        '                    == proof.generation):\\n'
+        '                os.write(2, b"TZ6V4_DISPOSABLE_CRASH_AFTER_FIRST_N_ARCHIVE\\\\n")\\n'
+        '                os._exit(86)\\n'
+    ).replace("\\n", "\n").replace('ARCHIVE\\\\n', 'ARCHIVE\\n')
+    code = original.decode("utf-8")
+    require(code.count(anchor) == 1 and
+            generation.isascii() and re.fullmatch("[a-f0-9]{32}", generation),
+            "CANARY_NATIVE_SOURCE_INJECTION_POINT_NOT_UNIQUE")
+    altered = code.replace(anchor, anchor.replace(
+        '        if name == "debug.log":', injection + '        if name == "debug.log":'))
+    overlay = altered.encode("utf-8")
+    _install_disposable_retirement_overlay(source, overlay, original)
+    return source, original, overlay
+
+
 def interrupted_original_retirement(generation: str, learning: list[dict],
                                     original_debug_inode: int,
                                     saved_config: bytes, g04_runtime) -> dict:
@@ -258,13 +337,21 @@ def interrupted_original_retirement(generation: str, learning: list[dict],
     immutable plan under the same FD9 policy and a new running epoch.
     """
     require(len(learning) >= 2, "CANARY_CRASH_REQUIRES_MULTI_N_LEARNING")
-    fault_env = dict(os.environ)
-    fault_env["ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH"] = generation
-    stop = subprocess.run([str(SERVICE), "stop"], env=fault_env,
-                          capture_output=True, text=True, timeout=180,
-                          check=False)
+    source, original_source, overlay = _only_disposable_crash_overlay(generation)
+    try:
+        fault_env = dict(os.environ)
+        fault_env["ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH"] = generation
+        stop = subprocess.run([str(SERVICE), "stop"], env=fault_env,
+                              capture_output=True, text=True, timeout=180,
+                              check=False)
+    finally:
+        # Even when Stop fails or the old worker exits abruptly, the parent
+        # canary always restores the EXACT original installed source before
+        # inspecting/restarting the original FD9 owner.
+        _install_disposable_retirement_overlay(source, original_source, overlay)
     require(stop.returncode != 0 and
-            "TZ6V4_DISPOSABLE_CRASH_AFTER_FIRST_N_ARCHIVE" in stop.stderr,
+            "TZ6V4_DISPOSABLE_CRASH_AFTER_FIRST_N_ARCHIVE" in stop.stderr and
+            source.read_bytes() == original_source,
             "CANARY_EXPECTED_ORIGINAL_WORKER_EXIT_NOT_OBSERVED:rc=" +
             str(stop.returncode) + ":" + stop.stderr[-300:])
 
@@ -335,6 +422,8 @@ def interrupted_original_retirement(generation: str, learning: list[dict],
             "CANARY_RECOVERED_NATIVE_FINAL_STOP_NOT_CLEAN")
     return {
         "status": "PASS_TZ6V4_DISPOSABLE_SCHEMA3_INTERRUPTED_STOP_BOOT_RECOVERY",
+        "crash_overlay_restored_before_real_boot": True,
+        "packaged_backend_contains_no_crash_hook": True,
         "initial_generation": generation,
         "recovered_generation": boot_id,
         "recovered_real_dvtws2_pid": boot_pid,
