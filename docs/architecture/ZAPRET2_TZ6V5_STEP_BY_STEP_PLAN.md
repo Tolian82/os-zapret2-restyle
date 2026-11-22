@@ -32,6 +32,8 @@
 
 ### S01. Пересмотреть PR #1228 на фактическом новом main
 
+**Решение S01 от 23.11.2026:** [полная 12-файловая KEEP / REWORK / DROP матрица](ZAPRET2_TZ6V5_S01_PR1228_DISPOSITION.md), исходный PR #1228 закрыт без merge, не cherry-pick; новый текущий base = merged `main v0.6.5_129` (`c7167b0c`), один следующий source branch `feat/tz6v5-s01-s02-lifecycle-audit`, кандидат `_130` **только документация + revision**. S02/S03 не выполнены, S04–S20 не начаты; никаких новых `.pkg` и никаких owner actions. Историческое описание S01 ниже сохраняет первоначальные критерии.
+
 1. Прочитать diff, CI/native failures и полный список 12 файлов #1228, особенно partial `original_fd9_lifecycle_transition` (только Lab/pkg) и pre-manifest `_121`.
 2. Сверить с новой схемой: сначала clean-install/Status/чистый compiler; удалить/переработать конфликтующие предположения вместо слепого переноса старой реализации.
 3. Либо безопасно rebase/rework тот же Draft PR, либо закрыть superseded с объяснением и открыть **один** новый product PR. Номер product revision = актуальный `main+1`, без параллельных PR с одинаковой ревизией.
@@ -302,10 +304,10 @@
 
 | Гейт | Этапы | На 22.11.2026 | Документ завершения |
 | --- | --- | --- | --- |
-| G0 | S00–S03 | S00 — документация в работе; S01–S03 не начаты | exact-head docs merge, audit, RED |
+| G0 | S00–S03 | S00 — merged; S01 — 12/12 disposition на одной ветке `_130` (документационный checkpoint, PR/CI отдельно); S02/S03 — NOT RUN | [S01 matrix](ZAPRET2_TZ6V5_S01_PR1228_DISPOSITION.md), затем exact S02 audit и S03 RED |
 | G1 | S04–S09 | NOT RUN | empty-install/status/compiler parity + secure refs |
 | G2 | S10–S14 | NOT RUN; #1228 только partial | five commands + safe Reload/Restart + FD9 rollback |
 | G3 | S15–S18 | OPEN: Lab #1224, Auto #1223 | actual native restoration + Found |
 | G4 | S19–S20 | NOT RUN для нового пакета | immutable published .pkg + owner evidence |
 
-**Первое действие после завершения документационного PR — S01**, затем S02 и S03. Ни один этап не требует прямо сейчас менять работающий owner `_117`, повторять опасный Lab или вручную вмешиваться в PID, IPFW, native inbox или журнал.
+**Актуальная очередь после документального S01 checkpoint — S02 read-only route map, затем S03 fail-first RED.** Нет переноса старого #1228 и нет разрешения запускать S04 без доказательств S02/S03. Ни один этап не требует прямо сейчас менять работающий owner `_117`, повторять опасный Lab или вручную вмешиваться в PID, IPFW, native inbox или журнал.

@@ -1,3 +1,15 @@
+## 23 ноября 2026 — CURRENT: TZ6v5 S01 completion evidence; S02 next
+
+**Prospective testing package name ONLY (NOT BUILT / NOT PUBLISHED):** `os-zapret2-restyle-0.6.5_130.pkg`. This is a source identity token required by CI, not a release asset. Existing owner install `_117` remains untouched.
+
+**Source identity for this checkpoint:** `VERSION=0.6.5`, `PLUGIN_REVISION=130`, `v0.6.5_130` is source-only in PR #1239 (base merged `main v0.6.5_129`); neither `_129.pkg` nor `_130.pkg` published. No owner appliance activity.
+
+**Base:** [PR #1237](https://github.com/Tolian82/os-zapret2-restyle/pull/1237) **MERGED** `main c7167b0c`, source `0.6.5_129` (IPFW numeric scope). **No testing `_129.pkg`**, owner installed `_117.pkg` unchanged. Current single next working branch: `feat/tz6v5-s01-s02-lifecycle-audit`, candidate source-only `0.6.5_130`. Do not treat the archived headings below as current.
+
+**S01 decision:** [full 12-file KEEP / REWORK / DROP for closed, unmerged #1228](architecture/ZAPRET2_TZ6V5_S01_PR1228_DISPOSITION.md). Old partial Lab/pkg `original_fd9_lifecycle_transition` and extracted-mock test are **not** reusable accepted product code. Keep inherited-FD9, owner refusal, WAN-first and pkg restoration *requirements*, with S02 actual route audit/S03 real RED before new implementation. V5-17 is merged IPFW **source** work, not new installed plugin. **Next: S02 → S03 → S04–S20 gates**, one physical launcher and verified JSON runtime only in later steps. No package built, no owner actions; #1223/#1224/#1225 OPEN.
+
+---
+
 # os-zapret2-restyle — current handoff
 
 ## 23 ноября 2026 — CURRENT: IPFW source implementation 19000–19099 (product PR)
