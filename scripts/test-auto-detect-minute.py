@@ -294,6 +294,43 @@ class MinuteIngressContract(unittest.TestCase):
         attest.assert_not_called()
         compose.assert_not_called()
 
+    def test_original_stopped_config_bridge_refusal_uses_static_marker_only(self):
+        from auto_detect_original_lock_handoff import OriginalLockRefused
+        known = OriginalLockRefused('original_config_child_deadline')
+        self.assertEqual(minute.original_lock_guard(known),
+                         'original_config_child_deadline')
+        secret = 'youtube.example.test /conf/config.xml 9:foo'
+        self.assertEqual(minute.original_lock_guard(OriginalLockRefused(secret)),
+                         'unknown')
+        self.assertIsNone(minute.original_lock_guard(RuntimeError(secret)))
+
+        from types import SimpleNamespace
+        from auto_detect_owner import LearningGenerationProof
+        generation = 'a' * 32
+        proof = LearningGenerationProof(
+            OwnerToken(4242, 'Sun Nov 15 08:00:00 2026', '/tmp/dvtws2'),
+            generation, generation, 'b' * 64, 'c' * 64, 'd' * 64,
+            ((3, 'youtube', str(minute.QUEUE_ROOT /
+                    ('learning-' + generation + '-3.txt'))),))
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \\
+             patch.object(minute.os, 'geteuid', return_value=0), \\
+             patch.object(minute, 'require_lifecycle_lock'), \\
+             patch.object(minute, '_entry_present', return_value=True), \\
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":3}'), \\
+             patch('pwd.getpwnam', return_value=SimpleNamespace(pw_gid=65534)), \\
+             patch('auto_detect_owner.attest_learning_stopped_generation',
+                   return_value=proof), \\
+             patch.object(minute, 'DurableInbox') as queue, \\
+             patch.object(minute, 'EpochReceipts') as receipts, \\
+             patch.object(minute, 'run_native_original_v2_cycle_once',
+                          side_effect=known), \\
+             redirect_stderr(io.StringIO()) as output:
+            receipts.return_value._generation.return_value = Path('/tmp')
+            self.assertEqual(minute.native_retire_once(), 69)
+        self.assertIn('auto-detect-retire-original-guard=original_config_child_deadline',
+                      output.getvalue())
+        self.assertNotIn(secret, output.getvalue())
+
     def test_schema3_retirement_reports_only_qualified_static_guard(self):
         from auto_detect_learning_retirement import LearningRetirementRefused
         qualified = LearningRetirementRefused("stopped_learning_source_fd_busy")

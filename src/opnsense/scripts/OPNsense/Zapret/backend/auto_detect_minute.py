@@ -263,6 +263,55 @@ def learning_retirement_guard(exc: BaseException) -> str | None:
     return reason if reason in _SAFE_LEARNING_RETIRE_GUARDS else "unknown"
 
 
+# Failure attribution, NOT a permission: expose ONLY literal source-defined
+# OriginalLockRefused categories from the original FD9/P2a/Config bridge.
+# Child stderr/stdout, Config, domain and dynamic exception text stay private.
+_SAFE_ORIGINAL_LOCK_GUARDS = frozenset((
+    "invalid_original_config_fd",
+    "unsafe_original_config_inode",
+    "original_config_unlocked",
+    "foreign_config_open_description",
+    "original_config_lock_unavailable",
+    "invalid_original_pending_cycle",
+    "original_pending_missing",
+    "original_config_child_deadline",
+    "original_config_owner_unavailable",
+    "original_config_child_rc69",
+    "original_config_child_refused",
+    "original_config_child_receipt_unavailable",
+    "invalid_original_owner_result",
+    "unqualified_original_owner_result",
+    "original_v2_queue_config_owner_required",
+    "missing_original_open_cursor_folder",
+    "missing_pending_identity_not_proven",
+    "missing_pending_without_original_checkpoint",
+    "original_post_unlink_ack_not_durable",
+    "original_v2_intent_or_owner_changed",
+    "original_owner_changed_after_config_child",
+    "original_physical_ack_not_durable",
+    "original_v2_transaction_or_ack_unavailable",
+    "original_native_fd9_required",
+    "original_native_fd9_not_held",
+    "original_writer_gid_not_qualified",
+    "stopped_learning_requires_original_mode",
+    "learning_minute_cannot_be_retired_raw",
+    "original_native_v2_source_unavailable",
+    "oversized_original_model",
+    "original_native_fd9_and_model_required",
+    "unqualified_original_writer_gid",
+    "original_pending_not_in_queue",
+    "learning_original_generation_changed_in_child",
+    "original_v2_checkpoint_not_authorization",
+))
+
+
+def original_lock_guard(exc: BaseException) -> str | None:
+    if type(exc) is not OriginalLockRefused:
+        return None
+    reason = str(exc)
+    return reason if reason in _SAFE_ORIGINAL_LOCK_GUARDS else "unknown"
+
+
 def native_retire_once() -> int:
     """One old-owner post-Stop Config/P1/ACK, never a cron restart gate.
 
@@ -388,6 +437,10 @@ def native_retire_once() -> int:
         guard = learning_retirement_guard(exc)
         if guard is not None:
             print('auto-detect-retire-guard=' + guard, file=sys.stderr)
+        original_guard = original_lock_guard(exc)
+        if original_guard is not None:
+            print('auto-detect-retire-original-guard=' + original_guard,
+                  file=sys.stderr)
         print('auto-detect-retire-refused=' + type(exc).__name__, file=sys.stderr)
         return 69
 

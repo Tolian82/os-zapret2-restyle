@@ -149,10 +149,19 @@ def _original_completion_locked(queue: DurableInbox, pending: Path, *,
             stderr=subprocess.DEVNULL,
             pass_fds=(original_fd, 9) if retired or learning else (original_fd,),
             timeout=timeout, check=False, close_fds=True)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except subprocess.TimeoutExpired as exc:
+        # A PHP parent has an independently bounded native Config/P1 child.
+        # Distinguish its deadline from transport failures for operator Stop
+        # evidence. Do not log private Config, argv, stderr or child output.
+        raise OriginalLockRefused('original_config_child_deadline') from exc
+    except OSError as exc:
         raise OriginalLockRefused('original_config_owner_unavailable') from exc
-    if result.returncode != 0 or not result.stdout or len(result.stdout) > 16384:
+    if result.returncode != 0:
+        if result.returncode == 69:
+            raise OriginalLockRefused('original_config_child_rc69')
         raise OriginalLockRefused('original_config_child_refused')
+    if not result.stdout or len(result.stdout) > 16384:
+        raise OriginalLockRefused('original_config_child_receipt_unavailable')
     try:
         response = json.loads(result.stdout)
     except (UnicodeError, ValueError) as exc:
