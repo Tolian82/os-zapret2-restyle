@@ -351,7 +351,10 @@ def interrupted_prepare_diagnostic(prepare, old_id, config_before):
         "active_record_exists": ACTIVE.is_file() and not ACTIVE.is_symlink(),
         "restart_marker_exists": MARKER.is_file(),
         "status_rc": status,
-        "retired_epoch_exists": (EPOCHS / old_id / "retired.json").is_file(),
+        "retired_epoch_exists": (
+            (EPOCHS / old_id / "retired.json").is_file() or
+            (EPOCHS / old_id / "learning-retirement" / "ready.json").is_file()
+        ),
         "old_config_unchanged": CONFIG.is_file() and sha(CONFIG) == config_before,
         "owner_appliance_modified": False,
     }
@@ -377,6 +380,8 @@ def native_interrupted_handoff(archive, version, digest):
          (EPOCHS / old_id / "epoch.json").is_file() and
          run([str(SERVICE), "status"]).returncode == 0,
          "INTERRUPT_PREDECESSOR_AUTO_NOT_RUNNING")
+    old_schema, old_learning = original_auto_generation(old_id, True)
+    need(old_schema == 3, "INTERRUPT_PREDECESSOR_NOT_NATIVE_SCHEMA3")
     before_config = sha(CONFIG)
     old_pid = Path("/var/run/dvtws2.pid").read_text().strip().split()[0]
     need(old_pid.isdecimal(), "INTERRUPT_PREDECESSOR_PID_INVALID")
@@ -458,7 +463,9 @@ def native_interrupted_handoff(archive, version, digest):
         "exact_native_pkg": replace.returncode == 0,
         "finish_rc": finish.returncode,
         "final_receipt": "zapret-pkg-update-committed=1" in finish.stdout,
-        "original_epoch_retired": (EPOCHS / old_id / "retired.json").is_file(),
+        "original_epoch_retired": verified_old_auto_retirement(
+            old_id, old_schema, old_learning),
+        "original_epoch_schema": old_schema,
         "successor_epoch_committed":
             now.get("phase") == "committed" and new_id != old_id and
             (EPOCHS / new_id / "epoch.json").is_file(),
@@ -504,6 +511,8 @@ def native_interrupt_during_postinstall(archive, version, digest):
          (EPOCHS / old_id / "epoch.json").is_file() and
          run([str(SERVICE), "status"]).returncode == 0,
          "ABORT_PREDECESSOR_NOT_VERIFIED_RUNNING_AUTO")
+    old_schema, old_learning = original_auto_generation(old_id, True)
+    need(old_schema == 3, "ABORT_PREDECESSOR_NOT_NATIVE_SCHEMA3")
     previous_config = sha(CONFIG)
     stage, stage_sha, stage_version = product.stage_archive(archive)
     need(stage_sha == digest and stage_version == version,
@@ -512,7 +521,7 @@ def native_interrupt_during_postinstall(archive, version, digest):
                     str(stage), stage_sha, stage_version], timeout=150)
     need(prepared.returncode == 0 and
          "zapret-pkg-update-prepared=1" in prepared.stdout and
-         (EPOCHS / old_id / "retired.json").is_file() and
+         verified_old_auto_retirement(old_id, old_schema, old_learning) and
          run([str(SERVICE), "status"]).returncode == 1 and
          MARKER.is_file() and ACTIVE.is_file(),
          "ABORT_REAL_PREPARE_NOT_COMMITTED_STOPPED")
@@ -574,7 +583,7 @@ def native_interrupt_during_postinstall(archive, version, digest):
     need(all(rc == 69 for rc in denied.values()) and
          run([str(SERVICE), "status"]).returncode == 1 and
          sha(ACTIVE) == before_record and
-         (EPOCHS / old_id / "retired.json").is_file() and
+         verified_old_auto_retirement(old_id, old_schema, old_learning) and
          sha(CONFIG) == previous_config,
          "ABORT_UNAUTHORISED_START_OR_FINISH")
     print("NATIVE_PROTECTED_KILLED_IN_POSTINSTALL=" + json.dumps({
@@ -606,6 +615,8 @@ def native_partial_payload_interruption(archive, target, digest):
          (EPOCHS / old_id / "epoch.json").is_file() and
          run([str(SERVICE), "status"]).returncode == 0,
          "MIDEXTRACT_REQUIRES_REAL_RUNNING_AUTO")
+    old_schema, old_learning = original_auto_generation(old_id, True)
+    need(old_schema == 3, "MIDEXTRACT_PREDECESSOR_NOT_NATIVE_SCHEMA3")
     saved_config = sha(CONFIG)
     stage, stage_sha, stage_ver = product.stage_archive(archive)
     need(stage_sha == digest and stage_ver == target,
@@ -615,7 +626,7 @@ def native_partial_payload_interruption(archive, target, digest):
     need(prepared.returncode == 0 and
          "zapret-pkg-update-prepared=1" in prepared.stdout and
          ACTIVE.is_file() and MARKER.is_file() and
-         (EPOCHS / old_id / "retired.json").is_file() and
+         verified_old_auto_retirement(old_id, old_schema, old_learning) and
          run([str(SERVICE), "status"]).returncode == 1,
          "MIDEXTRACT_PREPARE_DID_NOT_STOP_OWNER")
     record_before = sha(ACTIVE)
@@ -628,7 +639,7 @@ def native_partial_payload_interruption(archive, target, digest):
     need(restored > 0 and still_marked + missing > 0 and foreign == 0 and
          ACTIVE.is_file() and sha(ACTIVE) == record_before and
          MARKER.is_file() and sha(CONFIG) == saved_config and
-         (EPOCHS / old_id / "retired.json").is_file() and
+         verified_old_auto_retirement(old_id, old_schema, old_learning) and
          sha(stage) == digest,
          "MIDEXTRACT_GUARD_OR_PRESERVATION_LOST")
     # Before executing an installed command, independently require its source
