@@ -2,6 +2,8 @@
 
 ## Current priority — ТЗ_6v5 (22 ноября 2026)
 
+**Подтверждённый обязательный WAN-first acceptance V5-11:** [ТЗ_6v5 `6.1](architecture/TZ_6v5.md), [LC-06/11/12](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md), [G05](verification/G05_WAN_ONLY_NATIVE.md) → [G08](verification/G08_PRESTART_LAB_NATIVE.md). При Enabled=OFF и пустых пользовательских Strategy/Lists можно сохранить WAN без upstream и основного manifest, затем штатно установить engine и запускать Standard/Extended Lab **до первого ordinary Start**. Предварительные отказы: WAN отсутствует → wan-required, WAN валиден/engine отсутствует → engine-not-installed; ноль Job/IPFW. Проверять на S03/S06/S09/S15/S17, не заменять доказательство новым тестом на владельце. Исторический G08 installed-native PASS, новая реализация **не принята**. В docs-only `v0.6.5_123` изменяются только ТЗ/план/справочные документы, `_123.pkg` нет.
+
 **Единственный активный маршрут:** [ТЗ_6v5](architecture/TZ_6v5.md) → [S00–S20 от source-only `_121` к одному проверенному launcher](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). Документационный кандидат `_122` (пока не merged; `_122.pkg` не существует). На устройстве владельца `_117.pkg`, ручной Stop→Start RUNNING и два Strategies Apply PASS; Lab #1224 и Auto #1223 OPEN. Draft #1228 pre-manifest partial не merge.
 
 **Порядок:** S00 docs → S01 #1228 reconcile → S02 source routes → S03 RED → S04–S06 safe empty install/status/errors → S07–S09 XML adapter/compiler/refs parity → S10–S14 sealed activation + ONE physical Start/Stop/Status for all callers → S15 Lab restore → S16 native Auto → S17 native OPNsense → S18 release gate → S19 exact published testing .pkg → S20 owner acceptance.

@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 22 ноября 2026 — CURRENT: ТЗ_6v5 и план S00–S20 (документационный PR)
+## 22 ноября 2026 — CURRENT: обязательная WAN-first / prestart Lab регрессия ТЗ_6v5
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=123`, `v0.6.5_123` (только docs PR candidate поверх merged `main _122`, SHA `2844573a`); prospective `os-zapret2-restyle-0.6.5_123.pkg` **не создан**. Owner installed `_117.pkg`, последний verified manual Stop→Start RUNNING и два Strategies Apply PASS; #1224 Stage90 RESTORE_FAILED, #1223 Auto no Found, #1225 GUI routes остаются OPEN.
+
+**Canon preserved:** [LC-06/11/12](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md), native [G05 WAN-only](verification/G05_WAN_ONLY_NATIVE.md) и [G08 Standard/Extended before ordinary Start](verification/G08_PRESTART_LAB_NATIVE.md): ранее подтверждены на одноразовой OPNsense 26.7. WAN сохраняется при Enabled=OFF, user-empty Strategy/Lists и отсутствии upstream engine и ordinary manifest под оригинальным FD9/SharedConfigCommit без запуска; после установки upstream настоящая Standard/Extended Lab доступна **без первого ordinary Start**, возвращает STOPPED и очищает только свои ресурсы. В ТЗ_6v5 добавлены [`6.1/V5-11](architecture/TZ_6v5.md), в [S00–S20 плане](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) — явные регрессии до/после manifest и lifecycle cutover. No product code/package changes; historical G08 PASS не доказывает новый код.
+
+
+## 22 ноября 2026 — ТЗ_6v5 и план S00–S20 (HISTORICAL docs checkpoint)
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=122`, source candidate `v0.6.5_122` (PR candidate до merge); prospective `os-zapret2-restyle-0.6.5_122.pkg` **не построен и не опубликован**; base `main 0.6.5_121` SHA `62b64e82`; в данной docs-only ветке предложен `PLUGIN_REVISION=122`, до merge это **не** состояние main и **не** новый `.pkg`. Физически у владельца installed `0.6.5_117.pkg`, после ручного Stop→Start RUNNING; два Strategies Apply PASS. Lab #1224 stage90/99 RESTORE_FAILED, native Auto #1223 missing Found, routes #1225 остаются OPEN.
 
