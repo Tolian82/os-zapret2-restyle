@@ -6,6 +6,7 @@
 
 - **MANDATORY UPSTREAM CANON:** [официальный manual.en.md](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) → [правило DEV-069: не проверять описанное поведение движка](ZAPRET2_UPSTREAM_MANUAL_CANON.md).
 - **CLI Emergency Contract:** [ТЗ_6v5 §5.5–5.6: guarded `--force` и read-only `--help`](TZ_6v5.md), [DEV-070](../PROJECT_PRINCIPLES.md); новая регрессия V5-15/16 в [S00–S20](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+- **IPFW Allocation:** [Normal 19000–19099, current Lab 19100–19131, future comparative 19140–19200](TZ_6v5.md) — [DEV-071](../PROJECT_PRINCIPLES.md), numbers outside these are not ours.
 - **CURRENT:** [ТЗ_6v5 — единая конфигурация и исполнитель](TZ_6v5.md) → [пошаговый исполнимый план S00–S20](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md); [подробный JSON-контракт](ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md) и [FD9 route audit](ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md).
 - [#1052 specification](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) и [исторический P0–P5 план](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md).
 - [Voice UDP ports, extra IPv6 checkbox and P2P](VOICE_PORTS_IPV6_P2P_FUTURE.md) — retained long-term plan, per the latest owner instruction; detailed proposals remain distinct from implemented behavior.

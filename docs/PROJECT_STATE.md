@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 23 ноября 2026 — CURRENT: guarded `--force` и безопасный `--help` (docs-only)
+## 23 ноября 2026 — CURRENT: IPFW numeric allocation documented (NOT product accepted)
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=128`, `v0.6.5_128` docs-only candidate поверх merged `main _127 0615ab30`; `os-zapret2-restyle-0.6.5_128.pkg` **не создан**, владелец на `_117.pkg`. Рабочая OPNsense не затрагивалась.
+
+**Решение владельца:** [DEV-071](PROJECT_PRINCIPLES.md), [ТЗ_6v5 §5.7/V5-17](architecture/TZ_6v5.md), [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), [README](../README.md): Normal/Strategies/Voice rule IDs **19000–19099**, Lab **19100–19131**, future comparative **19140–19200** (не использован и не очищается), всё остальное — **чужое**. Только номер определяет область, никаких новых ownership/collision scans. Правки launcher, orchestrator, preview, purge и запрет системного 65534 находятся **только в продуктовом PR #1237**; после принятия нового ТЗ они ещё должны пройти проверку. В docs-only `main` их нет. Source/CI и последующая native приёмка ещё требуются; старые owner/Lab/Auto проблемы сохраняют OPEN.
+
+
+## 23 ноября 2026 — guarded `--force` и безопасный `--help` (предыдущая документационная веха)
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=127`, `v0.6.5_127` — docs PR candidate от merged `main _126 945d9a29`. Prospective `os-zapret2-restyle-0.6.5_127.pkg` не создан. Физически owner по-прежнему на `_117.pkg`, рабочий runtime не менялся; #1223/#1224 OPEN.
 

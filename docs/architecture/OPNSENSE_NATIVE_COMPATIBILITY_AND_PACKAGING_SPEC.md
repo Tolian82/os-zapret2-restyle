@@ -200,7 +200,7 @@ Use only the official `Mk/plugins.mk` / FreeBSD `pkg` path with `pkg/+PRE_INSTAL
 
 ### IPFW/PF scope set by the owner
 
-- Fixed **IPFW rule numbers**, not network or divert ports: **19000–19010** for ordinary Zapret2/Strategies and **19100–19131** for Strategy Lab. Document both in README and current technical documentation.
+- **Fixed, exclusively allocated IPFW rule numbers** (not TCP/UDP or divert ports): **19000–19099** for normal Zapret2/Strategies/Voice; **19100–19131** for current Strategy Lab; **19140–19200** for future comparative checks, **reserved but not yet implemented and excluded from present cleanup**. All other numbers, including **19132–19139**, are outside the plugin's allocated range and must never be modified or removed by Zapret2. Rule-number allocation itself defines scope; no extra per-rule ownership/collision verification is needed. Update the launcher/generator/preview/purge to the same numbers, and ensure these operations do not target anything outside their active allocated range. Keep older completed tests/evidence as history.
 - No new per-number collision checks, foreign-rule inventory, dynamic number allocator, ownership database, rule-manager refactor, shaper-flush listener, automatic restoration or extra standalone tests for those hypothetical scenarios.
 - Retain the already existing safe cold-IPFW module-loading behavior, checked only as part of normal installed service acceptance.
 - Keep existing `pfctl -d; pfctl -e` unchanged. No OPNsense-only `sync_fw_hooks.py` / `pfilctl` migration. Future pfSense port is a separate task.

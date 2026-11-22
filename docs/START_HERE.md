@@ -1,6 +1,15 @@
 # os-zapret2-restyle — current handoff
 
-## 23 ноября 2026 — CURRENT: `--force` и `--help` для единого launcher (docs-only)
+## 23 ноября 2026 — CURRENT: IPFW numeric allocation 19000–19099 (docs-only)
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=128`, `v0.6.5_128` — **только документационная** кандидатная ревизия поверх merged `main _127 0615ab30`. Prospective `os-zapret2-restyle-0.6.5_128.pkg` **не собран и не опубликован**; на owner OPNsense по-прежнему установлен `_117.pkg`.
+
+**Решение владельца:** IPFW принадлежит Zapret2 **только по номеру**: Normal/Strategies/Voice **19000–19099** (увеличено с 19000–19010), нынешняя Strategy Lab **19100–19131**, сравнительная Lab **19140–19200** — **лишь будущий резерв, не объект текущей очистки**. Всё вне этих диапазонов, включая 19132–19139, — **не наше**, никакие stop/restart/force/rollback/purge не должны его трогать; дополнительные foreign-rule или rule-expression ownership scans запрещены. [DEV-071](PROJECT_PRINCIPLES.md) · [ТЗ_6v5 §5.7/V5-17](architecture/TZ_6v5.md) · [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) · [главная страница](../README.md).
+
+**Реализация в коде — отдельно:** требования `RULE_BASE=19000`, `RULE_MAX=19099` к `zapret_service.sh`, синхронизация orchestrator/preview/purge и запрет добавления IPFW `65534` описаны в [ТЗ_6v5](architecture/TZ_6v5.md). Изменения продукта готовятся и проверяются в отдельном [PR #1237](https://github.com/Tolian82/os-zapret2-restyle/pull/1237), **но в эту docs-only ревизию не входят**. Никакой native PASS или установленной реализации ещё не заявлено. Архитектура FD9, WAN-first, P1/P2 и канон upstream остаются неизменны.
+
+
+## 23 ноября 2026 — `--force` и `--help` (предыдущая документационная веха)
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=127`, `v0.6.5_127` — кандидат документации от merged `main _126 945d9a29`. Prospective `os-zapret2-restyle-0.6.5_127.pkg` **не создан и не опубликован**. У владельца установлен `_117.pkg` без изменений; Lab #1224 и Auto #1223 остаются OPEN.
 
