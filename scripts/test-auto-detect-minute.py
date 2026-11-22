@@ -312,18 +312,18 @@ class MinuteIngressContract(unittest.TestCase):
             generation, generation, 'b' * 64, 'c' * 64, 'd' * 64,
             ((3, 'youtube', str(minute.QUEUE_ROOT /
                     ('learning-' + generation + '-3.txt'))),))
-        with patch.object(minute.sys, 'platform', 'freebsd15'), \\
-             patch.object(minute.os, 'geteuid', return_value=0), \\
-             patch.object(minute, 'require_lifecycle_lock'), \\
-             patch.object(minute, '_entry_present', return_value=True), \\
-             patch.object(minute, '_secure_bytes', return_value=b'{"schema":3}'), \\
-             patch('pwd.getpwnam', return_value=SimpleNamespace(pw_gid=65534)), \\
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock'), \
+             patch.object(minute, '_entry_present', return_value=True), \
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":3}'), \
+             patch('pwd.getpwnam', return_value=SimpleNamespace(pw_gid=65534)), \
              patch('auto_detect_owner.attest_learning_stopped_generation',
-                   return_value=proof), \\
-             patch.object(minute, 'DurableInbox') as queue, \\
-             patch.object(minute, 'EpochReceipts') as receipts, \\
+                   return_value=proof), \
+             patch.object(minute, 'DurableInbox') as queue, \
+             patch.object(minute, 'EpochReceipts') as receipts, \
              patch.object(minute, 'run_native_original_v2_cycle_once',
-                          side_effect=known), \\
+                          side_effect=known), \
              redirect_stderr(io.StringIO()) as output:
             receipts.return_value._generation.return_value = Path('/tmp')
             self.assertEqual(minute.native_retire_once(), 69)
