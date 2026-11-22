@@ -23,6 +23,7 @@ from auto_detect_epoch_receipts import EpochReceipts
 from auto_detect_fd import FDState, OwnerToken
 from auto_detect_learning_retirement import (
     LearningRetirementRefused, retired_learning_stopped,
+    _ci_abrupt_retirement_fault,
 )
 from auto_detect_owner import LearningGenerationProof
 from auto_detect_queue import DurableInbox
@@ -100,6 +101,26 @@ class StoppedLearningRetirementTests(unittest.TestCase):
             return retired_learning_stopped(
                 self.receipts, self.queue, self.proof, self.work,
                 attest=lambda: self.proof, inspect=inspect, repair=repair)
+
+    def test_disposable_fault_injection_never_applies_to_legacy_single_N(self):
+        # A leaked CI environment cannot kill ordinary one-N portable tests.
+        guard = {
+            "GITHUB_ACTIONS": "true",
+            "ZAPRET2_NATIVE_BUILD_CI": "1",
+            "ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE": "1",
+            "ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL": "1",
+            "ZAPRET2_STAGE2_REAL_CLEAN_INSTALL": "1",
+            "ZAPRET2_G04_DISPOSABLE_NATIVE": "1",
+            "ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK": "1",
+            "ZAPRET2_NATIVE_PROJECT_SHA": "a" * 40,
+            "ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH": GEN,
+        }
+        with patch.dict(os.environ, guard), patch(
+                "auto_detect_learning_retirement.os._exit",
+                side_effect=AssertionError("CI guard bypass")):
+            _ci_abrupt_retirement_fault(self.proof)
+            with patch("auto_detect_learning_retirement.sys.platform", "freebsd"):
+                _ci_abrupt_retirement_fault(self.proof)
 
     def test_terminal_archive_and_readonly_boot_ready(self):
         tip = self.tip()
