@@ -89,6 +89,21 @@ def _drained(path, row, proof, queue, inspect):
         observed = inspect(path, row[0], row[1], owner=proof.owner,
                            writer_gid=queue.writer_gid)
         if observed is FDState.DRAINED:
+            if attempt:
+                # A writer could have appended and closed during the passive
+                # pause. Never use a now-DRAINED census to bless stale bytes
+                # from the preceding image/checkpoint or old inode identity.
+                try:
+                    st, data, _ = _native_rebind_stable_snapshot(
+                        path, queue.uid, queue.writer_gid, allowed_links=(1,))
+                except (OSError, ValueError, RuntimeError, TypeError) as exc:
+                    raise LearningRetirementRefused(
+                        "stopped_learning_source_changed") from exc
+                if ([st.st_dev, st.st_ino, len(data),
+                     hashlib.sha256(data).hexdigest()] != row or
+                        len(data) > MAX_NATIVE):
+                    raise LearningRetirementRefused(
+                        "stopped_learning_source_changed")
             return
         if observed not in (FDState.BUSY, FDState.UNKNOWN):
             raise LearningRetirementRefused("stopped_learning_source_fd_unknown")

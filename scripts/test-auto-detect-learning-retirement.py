@@ -190,6 +190,29 @@ class StoppedLearningRetirementTests(unittest.TestCase):
         sleep.assert_called_once_with(0.15)
         self.assertFalse(self.native.exists())
 
+    def test_fd_closes_after_uncommitted_append_but_source_is_not_retired(self):
+        tip = self.tip()
+        saw_native = False
+
+        def changed_then_closed(path, *args, **kwargs):
+            nonlocal saw_native
+            if Path(path) == self.native and not saw_native:
+                saw_native = True
+                with self.native.open("ab") as writer:
+                    writer.write(b"uncommitted-after-stop\\n")
+                return FDState.BUSY
+            return FDState.DRAINED
+
+        with patch("auto_detect_learning_retirement.time.sleep"):
+            with self.assertRaisesRegex(
+                    LearningRetirementRefused,
+                    "stopped_learning_source_changed"):
+                self.run_retire(tip=tip, inspect=changed_then_closed)
+        self.assertTrue(saw_native)
+        self.assertTrue(self.native.exists())
+        self.assertFalse(
+            (self.epoch / "learning-retirement" / "intent.json").exists())
+
     def test_fd_unknown_or_busy_never_authorizes_retirement(self):
         for observation, reason in (
                 (FDState.BUSY, "stopped_learning_source_fd_busy"),
