@@ -90,6 +90,13 @@ def self_test() -> None:
             decoded["fields"]["hostlist"]["mode"] == "auto" and
             decoded["sync"] == {"telegramips_baseline": ""},
             "CANARY_ENVELOPE_ROUNDTRIP_INVALID")
+    backend = HERE.parent / ("src/opnsense/scripts/OPNsense/Zapret/"
+                             "backend/auto_detect_learning_retirement.py")
+    require(backend.is_file(), "CANARY_ORIGINAL_BACKEND_SOURCE_MISSING")
+    patched = _render_native_fault_overlay(backend.read_bytes(), "a" * 32)
+    require(b"ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH" in patched and
+            b"os._exit(86)" in patched,
+            "CANARY_DISPOSABLE_OVERLAY_PROJECTION_INVALID")
     print("TZ6V4_SCHEMA3_NATIVE_SOURCE=PASS")
 
 
@@ -279,6 +286,37 @@ def _install_disposable_retirement_overlay(path: Path, content: bytes,
             "CANARY_DISPOSABLE_BACKEND_OVERLAY_NOT_ATOMIC")
 
 
+def _render_native_fault_overlay(original: bytes, generation: str) -> bytes:
+    """Pure test-fixture projection; no write until disposable root attested."""
+    lf = chr(10)
+    anchor = lf.join((
+        '            _image(archived, receipts, queue, expected=old)',
+        '            _drained(archived, old, proof, queue, inspect)',
+        '        if name == "debug.log":',
+    ))
+    injected = lf.join((
+        '            if (name == Path(proof.learning[0][2]).name and',
+        '                    os.environ.get("ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH")',
+        '                    == proof.generation):',
+        '                os.write(2, b"TZ6V4_DISPOSABLE_CRASH_AFTER_FIRST_N_ARCHIVE'
+        + chr(92) + 'n")',
+        '                os._exit(86)',
+        '',
+    ))
+    require(isinstance(original, bytes) and
+            re.fullmatch("[a-f0-9]{32}", generation) is not None,
+            "CANARY_FAULT_PLAN_UNQUALIFIED")
+    code = original.decode("utf-8")
+    require(code.count(anchor) == 1 and
+            "ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH" not in code and
+            "os._exit(86)" not in code,
+            "CANARY_NATIVE_SOURCE_INJECTION_POINT_NOT_UNIQUE")
+    altered = code.replace(anchor, anchor.replace(
+        '        if name == "debug.log":', injected + '        if name == "debug.log":'))
+    compile(altered, "<only-disposable-native-fault-injection>", "exec")
+    return altered.encode("utf-8")
+
+
 def _only_disposable_crash_overlay(generation: str):
     """Return (installed_path, original_source) after strictly guarded patch.
 
@@ -301,27 +339,7 @@ def _only_disposable_crash_overlay(generation: str):
     require(b"ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH" not in original and
             b"os._exit(86)" not in original,
             "CANARY_FAULT_INJECTION_SHIPPED_IN_USER_PACKAGE")
-    anchor = (
-        '            _image(archived, receipts, queue, expected=old)\\n'
-        '            _drained(archived, old, proof, queue, inspect)\\n'
-        '        if name == "debug.log":'
-    )
-    # Static string literals must contain literal newline, not backslash-n.
-    anchor = anchor.replace("\\n", "\n")
-    injection = (
-        '            if (name == Path(proof.learning[0][2]).name and\\n'
-        '                    os.environ.get("ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH")\\n'
-        '                    == proof.generation):\\n'
-        '                os.write(2, b"TZ6V4_DISPOSABLE_CRASH_AFTER_FIRST_N_ARCHIVE\\\\n")\\n'
-        '                os._exit(86)\\n'
-    ).replace("\\n", "\n").replace('ARCHIVE\\\\n', 'ARCHIVE\\n')
-    code = original.decode("utf-8")
-    require(code.count(anchor) == 1 and
-            generation.isascii() and re.fullmatch("[a-f0-9]{32}", generation),
-            "CANARY_NATIVE_SOURCE_INJECTION_POINT_NOT_UNIQUE")
-    altered = code.replace(anchor, anchor.replace(
-        '        if name == "debug.log":', injection + '        if name == "debug.log":'))
-    overlay = altered.encode("utf-8")
+    overlay = _render_native_fault_overlay(original, generation)
     _install_disposable_retirement_overlay(source, overlay, original)
     return source, original, overlay
 
