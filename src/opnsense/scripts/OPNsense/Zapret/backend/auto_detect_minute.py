@@ -214,6 +214,53 @@ def native_retire_preflight() -> int:
         return 69
 
 
+# Refusal diagnostics are not authorization: only source-defined constant codes
+# may leave the original FD9 retirement worker. Never print a raw exception.
+_SAFE_LEARNING_RETIRE_GUARDS = frozenset((
+    "stopped_original_fd9_owner_required",
+    "stopped_original_root_required",
+    "stopped_learning_source_changed",
+    "stopped_learning_source_fd_not_drained",
+    "stopped_learning_unacknowledged_source",
+    "stopped_learning_final_tip_untrusted",
+    "stopped_learning_native_stream_unretired",
+    "stopped_learning_foreign_producer_entry",
+    "stopped_learning_corrupt_terminal_intent",
+    "stopped_learning_terminal_plan_changed",
+    "stopped_learning_terminal_cursor_not_ack",
+    "stopped_learning_orphan_terminal_ready",
+    "stopped_learning_legacy_inbox_not_empty",
+    "stopped_learning_terminal_bytes_not_acked",
+    "stopped_learning_owner_changed_before_terminal",
+    "stopped_learning_new_debug_not_empty",
+    "stopped_learning_native_archive_alias",
+    "stopped_learning_debug_temp_alias",
+    "stopped_learning_original_source_missing",
+    "stopped_learning_original_owner_changed",
+    "stopped_learning_cross_device_archive",
+    "stopped_learning_debug_replacement_missing",
+    "stopped_learning_debug_not_replaced",
+    "stopped_learning_debug_old_inode_reused",
+    "stopped_learning_native_not_retired",
+    "stopped_learning_owner_changed_after_rename",
+    "stopped_learning_unconsumed_debug_temporary",
+    "stopped_learning_foreign_archive_entry",
+    "stopped_learning_original_inbox_changed",
+    "stopped_learning_old_native_name_remains",
+    "stopped_learning_new_debug_missing",
+    "stopped_learning_owner_changed_before_ready",
+    "stopped_learning_ready_drift",
+))
+
+
+def learning_retirement_guard(exc: BaseException) -> str | None:
+    from auto_detect_learning_retirement import LearningRetirementRefused
+    if type(exc) is not LearningRetirementRefused:
+        return None
+    reason = str(exc)
+    return reason if reason in _SAFE_LEARNING_RETIRE_GUARDS else "unknown"
+
+
 def native_retire_once() -> int:
     """One old-owner post-Stop Config/P1/ACK, never a cron restart gate.
 
@@ -336,6 +383,9 @@ def native_retire_once() -> int:
         return 0
     except (MinuteRefused, OriginalLockRefused, GenerationRefused,
             ReceiptRefused, OSError, ValueError, RuntimeError, KeyError) as exc:
+        guard = learning_retirement_guard(exc)
+        if guard is not None:
+            print('auto-detect-retire-guard=' + guard, file=sys.stderr)
         print('auto-detect-retire-refused=' + type(exc).__name__, file=sys.stderr)
         return 69
 

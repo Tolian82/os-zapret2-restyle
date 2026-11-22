@@ -195,6 +195,44 @@ class ProtectedPkgUpdate(unittest.TestCase):
                 with self.assertRaisesRegex(m.Refused, "POSTINSTALL_PHASE_REFUSED"):
                     m.postinstall_attest()
 
+    def test_midextract_missing_service_module_is_strictly_pre_dispatch(self):
+        fixture_path = ROOT / "scripts" / "stage5-native-protected-update.py"
+        spec = importlib.util.spec_from_file_location(
+            "protected_midextract_refusal_fixture", fixture_path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        with tempfile.TemporaryDirectory() as tmp:
+            service = Path(tmp) / "zapret_service.sh"
+            backend = Path(tmp) / "backend"
+            backend.mkdir()
+            module = backend / "launcher.sh"
+            verified = result([], 1, stderr=(
+                "ERROR: required backend module is missing: " +
+                str(module) + "\n"))
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(
+                    verified, service),
+                "missing-required-module-before-dispatch")
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(result([], 69), service),
+                "guard-69")
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(result([], 1), service),
+                "unqualified")
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(
+                    result([], 1, stderr="ERROR: other refusal\n"), service),
+                "unqualified")
+            module.write_text("#!/bin/sh\n")
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(
+                    verified, service), "unqualified")
+            module.unlink()
+            module.symlink_to("/etc/passwd")
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(
+                    verified, service), "unqualified")
+
     def test_native_interrupted_finish_missing_pid_reports_failure_not_exception(self):
         fixture_path = ROOT / "scripts" / "stage5-native-protected-update.py"
         spec = importlib.util.spec_from_file_location(

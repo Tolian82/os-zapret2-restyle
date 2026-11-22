@@ -644,6 +644,53 @@ def native_interrupt_during_postinstall(archive, version, digest):
 
 
 
+# Native pkg may be SIGKILLed after unlinking one *required* .sh module.
+# The original installed service then exits 1 before dispatch (fail-closed),
+# not 69 from its intact lifecycle gate. Admit only a physically absent,
+# exact built-in module with the original fixed pre-dispatch stderr.
+_ORIGINAL_SERVICE_MODULES = frozenset((
+    "common",
+    "config",
+    "parser",
+    "registry",
+    "storage",
+    "targets",
+    "target_mode",
+    "profile_normalizer",
+    "profile_pipeline",
+    "exclude",
+    "blobs",
+    "ports",
+    "firewall",
+    "generator",
+    "validator",
+    "atomic",
+    "stage",
+    "launcher",
+    "supervisor",
+    "orchestrator",
+    "apply_runtime",
+))
+
+
+def classify_native_interrupted_refusal(result, service=SERVICE):
+    if result.returncode == 69:
+        return "guard-69"
+    if result.returncode != 1 or result.stdout:
+        return "unqualified"
+    match = re.fullmatch(
+        r"ERROR: required backend module is missing: "
+        r"(/[^\\n]+/backend/([a-z_]+)\\.sh)\\n?",
+        result.stderr)
+    if match is None or match.group(2) not in _ORIGINAL_SERVICE_MODULES:
+        return "unqualified"
+    path = Path(match.group(1))
+    if (path.parent != service.parent / "backend" or
+            path.exists() or path.is_symlink()):
+        return "unqualified"
+    return "missing-required-module-before-dispatch"
+
+
 def native_partial_payload_interruption(archive, target, digest):
     """Genuine partial file extraction (test guest only), never a restore path."""
     fixture = original_fixture("stage5-native-pkg-midextract.py", "real_pkg_extraction")
@@ -729,18 +776,22 @@ def native_partial_payload_interruption(archive, target, digest):
          sha(SERVICE) == sha(ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"),
          "MIDEXTRACT_INSTALLED_SERVICE_UNTRUSTED")
     status = run([str(SERVICE), "status"], timeout=45)
-    denied = {
-        "start": run([str(SERVICE), "start"], timeout=45).returncode,
-        "apply": run([str(SERVICE), "shared-apply-run"], timeout=45).returncode,
-        "repeat": run([str(SERVICE), "pkg-update", str(archive)], timeout=45).returncode,
+    denied_processes = {
+        "start": run([str(SERVICE), "start"], timeout=45),
+        "apply": run([str(SERVICE), "shared-apply-run"], timeout=45),
+        "repeat": run([str(SERVICE), "pkg-update", str(archive)], timeout=45),
         "finish": run([str(SERVICE), "pkg-update-finish",
-                       stage_sha, stage_ver], timeout=45).returncode,
+                       stage_sha, stage_ver], timeout=45),
     }
+    denied = {key: value.returncode for key, value in denied_processes.items()}
+    classes = {key: classify_native_interrupted_refusal(value)
+               for key, value in denied_processes.items()}
     # Exact failure taxonomy is required before changing the protected
     # post-extract guard. Never dump Config, private files, or service stdout.
     print("NATIVE_PROTECTED_MIDEXTRACT_REFUSAL_EVIDENCE=" + json.dumps({
         "status_rc": status.returncode,
         "denied_rc": denied,
+        "denied_class": classes,
         "record_unchanged": ACTIVE.is_file() and sha(ACTIVE) == record_before,
         "record_phase": (json.loads(ACTIVE.read_text()).get("phase")
                          if ACTIVE.is_file() else "missing"),
@@ -750,8 +801,13 @@ def native_partial_payload_interruption(archive, target, digest):
         "service_bytes_qualified": sha(SERVICE) == sha(
             ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"),
     }, sort_keys=True), flush=True)
-    need(status.returncode == 1 and all(x == 69 for x in denied.values()) and
-         sha(ACTIVE) == record_before and sha(CONFIG) == saved_config,
+    need(status.returncode == 1 and
+         all(kind in ("guard-69", "missing-required-module-before-dispatch")
+             for kind in classes.values()) and
+         sha(ACTIVE) == record_before and sha(CONFIG) == saved_config and
+         ACTIVE.is_file() and MARKER.is_file() and
+         verified_old_auto_retirement(old_id, old_schema, old_learning) and
+         not Path("/var/run/dvtws2.pid").exists(),
          "MIDEXTRACT_UNAUTHORIZED_LIFECYCLE_AFTER_KILL")
     print("NATIVE_PROTECTED_MIDEXTRACT=" + json.dumps({
         "schema": 1, "actual_pkg_killed": True,

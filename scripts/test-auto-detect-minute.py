@@ -294,6 +294,34 @@ class MinuteIngressContract(unittest.TestCase):
         attest.assert_not_called()
         compose.assert_not_called()
 
+    def test_schema3_retirement_reports_only_qualified_static_guard(self):
+        from auto_detect_learning_retirement import LearningRetirementRefused
+        qualified = LearningRetirementRefused("stopped_learning_source_fd_not_drained")
+        self.assertEqual(
+            minute.learning_retirement_guard(qualified),
+            "stopped_learning_source_fd_not_drained")
+        private = "private config.example.org /conf/config.xml"
+        self.assertEqual(
+            minute.learning_retirement_guard(LearningRetirementRefused(private)),
+            "unknown")
+        self.assertIsNone(minute.learning_retirement_guard(RuntimeError(private)))
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock'), \
+             patch.object(minute, '_entry_present', return_value=True), \
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":3}'), \
+             patch('auto_detect_owner.attest_learning_stopped_generation',
+                   side_effect=qualified), \
+             redirect_stderr(io.StringIO()) as output:
+            self.assertEqual(minute.native_retire_once(), 69)
+        self.assertIn(
+            'auto-detect-retire-guard=stopped_learning_source_fd_not_drained',
+            output.getvalue())
+        self.assertIn(
+            'auto-detect-retire-refused=LearningRetirementRefused',
+            output.getvalue())
+        self.assertNotIn(private, output.getvalue())
+
     def test_native_entry_refuses_foreign_platform_and_cli_args(self):
         self.assertEqual(native_minute_once(['arbitrary']), 64)
         if sys.platform.startswith('freebsd') and os.geteuid() == 0:
