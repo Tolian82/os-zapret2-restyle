@@ -10,6 +10,8 @@
 
 **Точный объём RU/EN (V5-12):** проверять **только** ошибки прежнего физического `Start/Stop/Restart` и связанные с этими переходами сообщения через GUI/Apply/Voice/Lab/pkg/boot. Не проводить аудит всех переводов Voice/Strategies/Lab. Для старых lifecycle ошибок — KEEP/ADAPT/REMOVE по действительным producer и GUI consumer; новые реальные ошибки единого Start/Stop/Restart — RU/EN через прежние механизмы. [ТЗ_6v5 `7.1](TZ_6v5.md).
 
+**Новое обязательное расширение ТЗ_6v5 (V5-13/V5-14):** публичный `zapret_service.sh start|stop|restart|reload|status`, а при нижнем «Применить» pure diff-planner выбирает `NO_CHANGE|RELOAD|RESTART|START|STOP|SAVE_ONLY|REFUSE` по **effective** sealed state. `reload` допускается **только** для проверенного перечитывания содержимого уже подключённых HOSTLIST/IPSet без остановки dvtws2/supervisor/IPFW. Новые argv/Voice/Target Mode/WAN/divert и mixed changes → один full restart. Не считать `SIGHUP`/rc0 фактом уже выполненного reread; lazy engine reload допускает `RELOAD_REQUESTED`. При ошибка reload нет скрытого restart. Дополнительные CLI опции только allowlisted; native stderr/exit/stage и RU/EN **lifecycle-only** mappings. [Нормативный контракт `5.1–5.4](TZ_6v5.md). Предыдущий WAN-first/G05→G08 остаётся обязательным.
+
 **Неприкосновенные инварианты:** один original FD9/Config writer/долговечный журнал, один `dvtws2`, original `shared_apply_operation`, native P1/P2/FD и WAL/ACK, только собственный IPFW; без SIGSTOP/SIGCONT, observer/second daemon, несанкционированных остановок для Auto, PID-journal deletion или угаданного recovery. Подтверждённый manual/Found/managed и исправный операторский Stop важнее неподтверждённых Auto-строк.
 
 ## G0 — документы, исходники и воспроизводимый RED (S00–S03)
@@ -38,6 +40,8 @@
 
 4. Для **старого Start/Stop/Restart** составить ограниченный реестр `emitter → stage/reason/rc → GUI caller/handler → RU/EN`, включая физические переходы при Apply, Voice, Lab restore, pkg/boot. Не инвентаризировать посторонние ошибки валидации и списков.
 
+5. Инвентаризация каждого реального GUI/configd/Apply/Boot/Lab/pkg вызова старого `reconfigure` и `restart`: есть ли hidden Stop→Start, как подтверждается terminal result, что сохранено в original FD9. Отдельно перечислить list-only paths и текущие P1/CAS/ACK/managed hot-writers. Выделить только lifecycle RU/EN строки для миграции.
+
 **GO:** полная таблица физических writers и их callers, включая обходные paths и наследование FD9. **NO-GO:** проверены только публичные CLI три команды.
 
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
@@ -47,6 +51,8 @@
 3. Проверить, что тесты действительно вызывают производственный генератор/templates и **падают на доказуемом дефекте**; Lab stage90 RED и Auto learning RED добавлять по объективной физической трассе, не фальсифицируя событие.
 
 4. RED-тесты старых переводов Start/Stop/Restart: показать реальные sources, доходимость до обоих языков; отдельно фикстуры исчезнувших source stages, чтобы stale lifecycle errors не пережили refactor. Сохранённые Lab/operation receipts не считать «мёртвыми» без проверки.
+
+5. RED fixture на old/next effective semantic diff: NO_CHANGE, HOSTLIST/IPSet bytes only, изменение source ref, reorder profiles, DPI/Voice/Target Mode/WAN/divert, mixed diff, stopped/incomplete/foreign. Доказуемо падают и тесты «reload не меняет PID/owned IPFW», lazy reread→REQUESTED, failure→no hidden restart, CLI unknown option rc64, old/new lifecycle GUI RU/EN.
 
 **GO:** baseline и воспроизводимый RED доступны CI. **NO-GO:** unit mocks или grep объявлены native доказательством.
 
@@ -67,6 +73,8 @@
 3. RED→GREEN для `ENGINE_NOT_INSTALLED`, `CONFIG_UNINITIALIZED`, `MANIFEST_UNAVAILABLE`, `MANIFEST_INVALID`, `ENGINE_EXIT_EARLY`, `WAN_UNAVAILABLE`, `IPFW_ATTACH_FAILED`, `LAB_RESTORE_FAILED`; ограничить/очистить stderr, секреты/домены/IP/args не раскрывать.
 
 4. Сохранить уже существующие RU/EN сообщения о запуске/остановке/перезапуске и правдивом состоянии после ошибки; новый diagnostic code полезен GUI только если связан с действительным lifecycle failure. Не переделывать остальные сообщения.
+
+5. Расширить diagnostic envelope `action,stage,code,exit_status,runtime_before/after,generation,verification,stderr_excerpt,log_ref` для пяти команд; native engine/supervisor early/delayed errors без raw sensitive args. `status --json` читает последнее событие, не пишет его. `reload --check` read-only, различает RELOAD_SAFE/RESTART_REQUIRED/NOT_RUNNING/REFUSE.
 
 **GO:** действительный stage/rc + последняя ошибка показаны в CLI/GUI; no-write/secret tests PASS. **NO-GO:** зелёный Status лишь по PID.
 
@@ -94,6 +102,8 @@
 3. Гарантировать все обычные working профили перед learning; known User не перехватывается YouTube learner, нет hidden `<HOSTLIST:auto>` или observer, exact final native number map.
 4. Сравнить parity S03: actual `dvtws.args`, capture IPFW/Voice/source-map по каждой ветке. Pure compiler не управляет процессом/IPFW/FD9.
 
+5. Сделать deterministic semantic structural fingerprint и чистый classification planner: content-only linked active HOSTLIST/IPSet refs кандидат RELOAD_SAFE; изменение argv, Source Map, IPFW, selectors, Voice, WAN, engine version или смешанные edits → RESTART_REQUIRED. Данные Found/managed остаются отдельным original mutable P1 path; не обещать runtime reload для неподключённого списка.
+
 **GO:** parity и negative tests GREEN без изменение native first-match. **NO-GO:** новая схема молча меняет DPI args.
 
 ### S09. Root manifest и полная attestation refs
@@ -103,6 +113,8 @@
 3. Live Found/managed content **не** фиксировать вечным SHA immutable JSON; разрешить только исходные P1/CAS/ACK hot-updates. В редакторе данные могут измениться до Apply, но active поколение не меняется преждевременно.
 4. Test missing/stale/modified/oversize/invalid/foreign refs, race, old generation.
 5. Active immutable JSON и `dvtws.args` — требования **ordinary** Start/Apply, не защищённого Lab Job со своей временной конфигурацией при сохранённом WAN и установленном engine.
+
+6. Root manifest фиксирует structural fingerprint и список разрешённых mutable references без pin SHA их live contents. Переключение structural generation требует guarded restart; reload не публикует новый arbitrary active root/epoch без валидной operation receipt. Проверить tamper и валидность old/new refs.
 
 **GO:** valid candidate + tamper refusals, без второго user-editable config.
 
@@ -114,6 +126,8 @@
 2. Под `shared_apply_operation.py`/original FD9 проверить immutable plan→candidate→sealed promotion→semantic rollback; предусмотреть crash после prepare/promote/restore, не создавать второй журнал/lock.
 3. Не приводить старые исторические схемы runtime через новый compatibility fallback «на всякий случай» (DEV-050); сохранять только rollback конкретной текущей операции.
 
+4. В рамках existing sealed `shared_apply_operation` предусмотреть staged list-only commit и protected rollback, проверку old bytes/revisions/CAS. Если multi-file изменение нельзя сделать семантически согласованным без Stop, classification = RESTART_REQUIRED до мутации; ни второй writer, ни второй журнал.
+
 **GO:** immutable candidate preflight и crash recovery подтверждены; ни одна пользовательская data write не обойдена.
 
 ### S11. Единственный физический Start
@@ -124,6 +138,8 @@
 
 4. Для отказов **физического Start** проверить source/error stage/rc, существующее GUI уведомление в RU и EN; новый genuine Start error оформить в обеих локалях без висящего неиспользуемого ключа.
 
+5. Реализовать общий результат пяти команд с кодом/стадией/exit и проверкой before/after. `restart` внутри dispatcher вызывает единственные physical Stop→Start; не вводить второй способ `exec`/`kill`. Системный `status` остаётся read-only; parse options строго action-specific.
+
 **GO:** exact Start state and errors; нет скрытой альтернативной ветки.
 
 ### S12. Единственный физический Stop
@@ -133,6 +149,8 @@
 3. Native negative: late append, stopped/no owner, foreign owner, wrong epoch/lock, external IPFW missing (#1210 — отдельная диагностика, НЕ новый auto-heal), interrupted Stop/Resume; неизвестный owner → fail-closed, никакого `pkill`/`rm pid`.
 
 4. Для отказов **физического Stop** проверить RU/EN уведомления в GUI и честное состояние; сообщения устаревшего Stop, чей producer исчез, адаптировать/удалить.
+
+5. `restart` при RUNNING делает действительно полный graceful Stop→Start по original FD9 и P2/N/epoch retirement, затем terminal readiness + rollback на failure; при intentionally STOPPED не стартует. Ошибка второго Start не выдаёт success.
 
 **GO:** безопасный операторский Stop и подтверждённая защита чужого состояния.
 
@@ -145,6 +163,8 @@
 
 5. При переводе всех callers на единый физический Start/Stop заменить **только** их старые GUI error reason/translation mappings. Сохранить поддерживаемые исторические Lab restore и protected package recovery receipts; не трогать независимые Voice/Input/Strategy/Lab messages.
 
+6. **Путь Apply:** заменить старый `reconfigure` на decision engine `NO_CHANGE|RELOAD|RESTART|START|STOP|SAVE_ONLY|REFUSE`; все toolbar/Voice/Lab/pkg/Boot делегируют к тем же guarded physical transitions. Для list-only применять reload без дублирующей команды restart. Обычный `reload` на STOPPED возвращает NOT_RUNNING, не Auto-start. Проверить System Services/reconfigure compatibility.
+
 **GO:** один physical dispatcher и одна политика, все пути из S02 трассируются. **NO-GO:** альтернативный direct exec/kill/IPFW script.
 
 ### S14. Apply/Restart/Boot/rollback end-to-end
@@ -154,6 +174,8 @@
 3. Проверить native N/debug retirement, P1/CAS/ACK/Found protection, service state после каждого результата; original restoration error важнее промежуточного успешного UI.
 
 4. Инъекции отказов при Stop→Start/restart, failed Start after Stop и rollback: сверить фактическую причину/стадию с RU/EN уведомлением именно о service transition, исключить ложный «Restart successful».
+
+5. End-to-end native reload: изменить только активный checked HOSTLIST/IPSet при RUNNING, подтвердить точный old/new PID+birth/argv/supervisor+IPFW и реальное reread без SIGSTOP; SIGHUP только verified owner. На lazy reread вернуть REQUESTED, пока не подтверждено, а failure/injected crash — rollback или UNCERTAIN без fallback restart. Сравнить с forced full restart для structural/mixed change и no-op.
 
 **GO:** original FD9 tests + equivalent native tests PASS; rc=0 недостаточно без physical witness.
 
@@ -184,15 +206,19 @@
 
 4. На disposable native OPNsense проверить RU/EN GUI отображение фактических отказов Start/Stop/Restart, в том числе вызванных через Apply/Lab/pkg; для опасных сценариев использовать контролируемые negative fixtures, а не устройство владельца.
 
+5. На exact-head disposable OPNsense v1.0.7/FreeBSD проверить supported dvtws2 SIGHUP/list auto-reread (последующий пакет может быть необходим), hot mutable refs, semantic diff decisions, сохранность PID/IPFW и отсутствие другого writer. Проверить реальные stderr/rc причины Start/Stop/Restart/Reload, unsafe signal refusal, options parser и RU/EN lifecycle GUI. Старый upstream manpage сам по себе native PASS не даёт.
+
 **GO:** affected native scenarios on exact code candidate PASS, critical restore FAIL eliminated.
 
 ### S18. Перед тестовой публикацией
 
-1. Сверить ТЗ_6v5 V5-01…V5-12 на уровне source/CI/native; OPEN owner-live строки не подменять.
+1. Сверить ТЗ_6v5 V5-01…V5-14 на уровне source/CI/native; OPEN owner-live строки не подменять.
 2. Обновить facts `PROJECT_STATE`/`ROADMAP`/`START_HERE` и issue statuses только по доказательствам. Проверить exact candidate revision, зависимости/ABI, official Mk package build.
 3. Squash merge **product** PR только после safety checks/native gate; не объявлять stable или pfSense support.
 
 4. V5-12 проверять **только** по old/new Start/Stop/Restart-related UI errors: нет orphan keys от удалённого lifecycle, все существенные действующие отказные ветки имеют RU/EN, сохранённые старые записи читаются; общий аудит иных переводов не требуется.
+
+5. Отдельный gate **V5-13/V5-14**: перечень классифицированных полей и доказанные result codes, native списочный reload без Stop, structural restart, mixed restart только один раз, no-op, stop/off, incomplete refusal, no hidden auto fallback, action option allowlist, engine errors/локализованные lifecycle failures. Никакой тестовой .pkg до PASS.
 
 **GO:** конкретный merged main SHA готов к **testing** .pkg, с сохранением owner-live OPEN.
 
@@ -216,7 +242,9 @@
 
 6. Подтвердить RU/EN обратную связь **только по Start/Stop/Restart** и неудачным переходам службы в Apply/Lab; другие GUI переводы остаются вне V5-12.
 
-**DONE:** функциональность подтверждена на соответствующих source/native/owner уровнях, включая WAN-first/G05→G08/V5-11 и строго ограниченный lifecycle RU/EN V5-12; любые непроверенные строки остаются OPEN.
+7. Приёмка на owner OPNsense **после disposable native PASS**: при изменении только содержимого активного HOSTLIST/IPSet у «Применить» PID/IPFW не меняется; при изменении стратегии/порядка проверяется полноценный restart. Показать result `RELOAD_REQUESTED` отдельно от verified, а при ошибке — точную безопасную RU/EN причину. Не выполнять опасные failure injection на реальном роутере.
+
+**DONE:** функциональность подтверждена на соответствующих source/native/owner уровнях, включая WAN-first/G05→G08/V5-11, lifecycle RU/EN V5-12, native reload V5-13 и пять команд/diagnostics V5-14; любые непроверенные строки остаются OPEN.
 
 ---
 
@@ -226,7 +254,7 @@
 | --- | --- | --- | --- |
 | G0 | S00–S03 | S00 — документация в работе; S01–S03 не начаты | exact-head docs merge, audit, RED |
 | G1 | S04–S09 | NOT RUN | empty-install/status/compiler parity + secure refs |
-| G2 | S10–S14 | NOT RUN; #1228 только partial | single Start/Stop/Status + FD9 rollback |
+| G2 | S10–S14 | NOT RUN; #1228 только partial | five commands + safe Reload/Restart + FD9 rollback |
 | G3 | S15–S18 | OPEN: Lab #1224, Auto #1223 | actual native restoration + Found |
 | G4 | S19–S20 | NOT RUN для нового пакета | immutable published .pkg + owner evidence |
 

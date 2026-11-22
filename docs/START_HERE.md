@@ -1,6 +1,15 @@
 # os-zapret2-restyle — current handoff
 
-## 22 ноября 2026 — CURRENT: только сообщения прежнего Start/Stop/Restart (ТЗ_6v5 V5-12)
+## 22 ноября 2026 — CURRENT: Start/Stop/Restart/Reload/Status и безопасное Apply (docs-only)
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=125`, `v0.6.5_125` — docs-only candidate поверх **merged `main v0.6.5_124`** (`d429aff7`, [PR #1233](https://github.com/Tolian82/os-zapret2-restyle/pull/1233)). Prospective `os-zapret2-restyle-0.6.5_125.pkg` **не собран и не опубликован**. У владельца остаётся `_117.pkg`.
+
+**Новый утверждённый интерфейс [ТЗ_6v5 `5.1–5.4](architecture/TZ_6v5.md), [DEV-068](PROJECT_PRINCIPLES.md):** пять команд `start|stop|restart|reload|status`. `restart` — полный Stop→Start, `reload` — только доказанный live reread уже подключённых HOSTLIST/IPSet с тем же dvtws2/PID/supervisor/IPFW/argv. Apply до мутаций выбирает `NO_CHANGE|RELOAD|RESTART|START|STOP|SAVE_ONLY|REFUSE`. Отказ reload не запускает скрытый restart, `SIGHUP` и shell rc не доказывают факт reread. Дополнительные параметры CLI строго ограничены (`status --json`, `reload --check`), native engine errors транслируются в исходную диагностику и в RU/EN **только применительно к service lifecycle**. Активный [план S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) дополнен V5-13/14.
+
+**Сохранить:** WAN-only Save и Lab до первого ordinary Start G05/G08, отдельный P1/CAS/ACK Found hot-write, original FD9 и один Config writer. Draft #1228 не готов; Lab #1224 и native Auto #1223 OPEN. Нового runtime-кода или пакета в docs PR нет.
+
+
+## 22 ноября 2026 — ошибки прежнего Start/Stop/Restart (предыдущая документационная веха)
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=124`, `v0.6.5_124` — docs-only PR candidate на базе merged `main _123` (`b0dbbbfd`). Prospective `os-zapret2-restyle-0.6.5_124.pkg` **не строился и не публиковался**. На владельческом OPNsense по-прежнему `_117.pkg`; Lab #1224 и Auto #1223 OPEN, рабочая служба не затрагивалась.
 

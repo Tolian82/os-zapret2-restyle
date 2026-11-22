@@ -71,7 +71,7 @@
 
 ## 5. Интерфейс единого исполнителя и подтверждение результата
 
-Публичные контрактные команды `zapret_service.sh start`, `stop`, `status`. `restart`/`reconfigure` и совместимые OPNsense configd actions могут существовать как **композиции** этих единственных физических переходов, под одним непрерывным original FD9, а не как собственные алгоритмы. Привилегированный внутренний вызов может передавать **проверенный ID release/operation**; внешний CLI не вправе передавать произвольный путь или argv.
+**Пять публичных команд:** `zapret_service.sh start|stop|restart|reload|status`. `restart` — полноценный Stop→Start **через те же единственные физические переходы** под original FD9; `reload` — обновление только подтверждённых live-данных без остановки `dvtws2`, нового supervisor/owned IPFW или прекращения divert. `status` — read-only. Прежние `reconfigure`/configd entrypoints остаются совместимыми фасадами Apply planner, а не дополнительными физическими Start/Stop. Привилегированный внутренний вызов может передавать только проверенный release/operation ID, внешний CLI не принимает произвольные пути/argv.
 
 - **Start:** проверяет единственного original owner, закрытость/согласованность предыдущей операции, sealed manifest + exact release, двигатель, WAN, ownership IPFW и конфигурацию capture; запускает ровно один supervisor/`dvtws2`, подтверждает реальное RUNNING и generation/owner; при отказе выдаёт причинную стадию и не оставляет ложного success.
 - **Stop:** останавливает **только подтверждённый свой** runtime из действующих защищённых epoch/owner receipts, корректно завершает native retirement с исходными пределами и удаляет только подтверждённые plugin-owned IPFW; может безопасно остановить ранее аттестованный owner **даже если editable source или новый manifest недоступен**, если старое защищённое подтверждение достаточно. Не угадывает по PID и не удаляет чужие процессы/правила.
@@ -80,6 +80,55 @@
 - **Другие вызовы:** Strategies/Voice toolbar, OPNsense System Services, Strategy Lab, protected `pkg-update`, `Установить версию` *upstream engine* (не plugin pkg), Auto Restart и runtime-failure callbacks не реализуют второй service lifecycle. Временный Lab обязательно возвращает доэкспериментальное RUNNING→RUNNING и STOPPED→STOPPED на норме/ошибке/timeout/cancel.
 
 Запрещены самопроизвольный Stop/Restart ради Auto-detect, `SIGSTOP/SIGCONT`, второй `dvtws2`, обход оригинального FD9, «лечебный» `pkill`, `rm pid`, широкий IPFW flush и автоматическое исправление чужого owner. Операторские explicit Stop/Restart/Apply имеют приоритет доступности над **неподтверждёнными** новыми Auto-событиями, сохраняя уже committed Found/managed и original safety (DEV-064).
+
+### 5.1. Reload — только доказанные изменения без остановки
+
+**Утверждённое требование:** при «Применить» сначала проверять, можно ли применить весь candidate без Stop/Start. Если да — `reload`. Если нет — один guarded полный `restart`. **Запрещено** переименовать старый `reconfigure` в `reload`, сохранив скрытую остановку.
+
+**Основание для проверки, не готовый PASS:** upstream Zapret2 (`dvtws2` на BSD) поддерживает reread hostlist/ipset при изменении файлов; `SIGHUP` помечает списки для принудительного перечитывания **при следующем пакете**. Источники: upstream `docs/manual.md`, `nfq2/nfqws.c`, `ipset/def.sh`. Это не означает live-изменение CLI аргументов, DPI, Lua, профилей, WAN или IPFW. Поддержку на установленной OPNsense 26.7 / FreeBSD 15 / конкретной версии `dvtws2` нужно подтвердить отдельно.
+
+**Все условия `RELOAD_SAFE` обязательны:**
+
+1. Доказан оригинальный `RUNNING`: PID+birth+argv, supervisor, committed sealed generation, original FD9/epoch и только свои IPFW. Не должно быть pending/foreign/incomplete operation.
+2. Pure compiler сравнил verified active и candidate. Неизменны engine executable/version, exact argv, native profile order/first-match/source map, Target Mode, Voice параметры, WAN, divert port/IPFW, logical list IDs и *пути* существующих ссылок. Может отличаться **только содержимое** уже подключённых и проверенных HOSTLIST/IPSet, включая Exclude. Изменение самой ссылки/селекторов, неиспользуемых данных или структурной схемы не превращается в reload.
+3. Списки подготовлены и валидированы через текущий registry/storage, original FD9/`shared_apply_operation`/единственный Config writer, а protected Found/managed — через P1/CAS/ACK. Есть old-byte snapshots, revision checks и возможность доказуемого rollback. Для нескольких файлов нельзя обещать мгновенную атомарность видимости в движке: если нужен недостижимый all-or-nothing cutover — `RESTART_REQUIRED`.
+4. Перед сигналом повторно проверить точный `dvtws2` PID+birth/argv owner. При необходимости `SIGHUP` отправляется **только** этому процессу, без `killall`, `SIGSTOP/SIGCONT`, остановки supervisor, изменения IPFW или второго engine.
+5. `kill -HUP`/shell rc=0 не означает, что новые данные уже прочитаны. Пока native подтверждение невозможно из-за lazy reread, вернуть `RELOAD_REQUESTED/PENDING_VERIFICATION`, **не** `APPLIED_VERIFIED`. Отдельный native тест обязан наблюдать actual list effect и прежний PID/IPFW. В случае failed/partial list commit — только доказанное восстановление предыдущих файлов и semantics; при невозможности `RELOAD_UNCERTAIN/REQUIRES_REVIEW`. **Никакого тайного restart после failed reload**.
+
+Прямой `reload` на намеренно STOPPED не делает Start: `NOT_RUNNING`. WAN-only Save при отсутствии движка/manifest и prestart Lab G05→G08 сохраняют независимость. Фоновый P2 Found/managed обновляется своим существующим hot-write механизмом и не вызывает команду reload службы автоматически.
+
+### 5.2. Restart и правило выбора при «Применить»
+
+`restart` — **полный** Stop→Start под одним original FD9 с original P2/epoch retirement, новым процессом и проверенным новым owner/IPFW, из текущей sealed операции. Если Start после Stop не удался, выполнять прежний semantic rollback по тому же журналу и честно показывать `RESTART_FAILED`/`RESTORE_FAILED`; никогда «Перезапущена» по одному rc. `restart` на намеренно STOPPED не должен скрыто запускать службу, для этого существует `start`. Auto-minute не инициирует restart.
+
+**До мутаций** Apply planner сравнивает старый verified runtime и новый effective candidate:
+
+| Состояние / изменение | Единственное решение |
+| --- | --- |
+| STOPPED + Enabled OFF | `SAVE_ONLY` |
+| STOPPED + Enabled ON + готовый engine/WAN/manifest | `START` |
+| RUNNING + Enabled OFF | `STOP` |
+| RUNNING + effective snapshot полностью тот же | `NO_CHANGE` |
+| RUNNING + только подтверждённые изменения содержимого подключённых HOSTLIST/IPSet | `RELOAD` |
+| RUNNING + новые DPI args, профили, Lua/Voice, Target Mode, engine, WAN, divert/IPFW, порядок/source refs | `RESTART` |
+| RUNNING + смешанные structural/list changes | `RESTART` **один раз**, без предварительного reload |
+| INCOMPLETE/FOREIGN, stale owner, неподтверждённая attestation | `REFUSE` |
+
+Решение не принимается по имени изменённого поля GUI. Сравниваются exact structural fingerprints, зарегистрированные mutable refs и активные поколения. Тот же original `shared_apply_operation` и `SharedConfigCommit` отвечают за atomicity, Config/list writes и rollback: **никакого второго writer или журнала**. Не выдавать HTTP 200 как verified success без terminal state. `NO_CHANGE` не посылает сигнал, `RELOAD_REQUESTED` не лжёт о фактической активации, и потеря подтверждения не вызывает перезапуска.
+
+### 5.3. Расширяемые параметры CLI
+
+Команды имеют вид `zapret_service.sh <action> [declared options]` со строгой проверкой action-specific allowlist, длины/количества аргументов и rc 64 `INVALID_ARGUMENT` для неподдерживаемых. Минимум: `status --json` read-only, `reload --check [--json]` read-only diff/preflight без signal/записи; остальные базовые команды без необязательных параметров. В будущем допустимы аутентифицированные root-only `--expect-generation=<id>`/`--operation=<sealed-id>` **только** после native qualification original FD9, не произвольные пути. Нельзя принимать произвольный `--manifest`, `--args`, PID, signal, shell fragments, `eval`, runtime env override. Прежние configd/installer/Lab внутренние action имена могут быть совместимыми фасадами, не новыми физическими процессными менеджерами.
+
+### 5.4. Ошибки launcher, dvtws2 и жизненного цикла GUI RU/EN
+
+Нормализованный lifecycle receipt: `schema, action, operation_id, code, stage, exit_status, runtime_before, runtime_after, active_generation, verification, stderr_excerpt, log_ref`. `verification=verified|requested|uncertain|refused` обязателен для честного различения engine reload requested и confirmed. Реальные причины native `dvtws2`/supervisor: stderr, early exit, signal, log stage и код, bounded sanitized excerpt. Запись в прежнее protected error storage (не отдельная БД/писатель); статус read-only видит последнюю ошибку, в том числе delayed engine exit. Не показывать конфиги/полный argv, приватные домены/IP, токены или full debug, не заменять известную первопричину общим «ошибка»; secondary rollback error отдельно.
+
+Примеры кодов, реализовывать только при настоящем producer: `ENGINE_NOT_INSTALLED, WAN_REQUIRED, MANIFEST_INVALID, FD9_BUSY, FOREIGN_OWNER, ENGINE_EXIT_EARLY, STOP_FAILED, RESTART_FAILED, RESTART_REQUIRED, RELOAD_NOT_SUPPORTED, RELOAD_REQUESTED, RELOAD_FAILED, RELOAD_UNCERTAIN, RESTORE_FAILED`. Если engine cause неизвестна — `ENGINE_ERROR_UNCLASSIFIED` с bounded safe excerpt. GUI отображает релевантные ошибки этих пяти команд, прежде всего Start/Stop/Restart, через уже существующие RU/EN уведомления.
+
+**V5-12 остаётся строго ограниченным** переводами старого Start/Stop/Restart и связанными service transitions из Apply/Voice/Lab/pkg/Boot: KEEP/ADAPT/REMOVE по реально достижимому producer; новые `RELOAD_*`/restart error добавляются RU/EN по аналогии, **только когда реально возникают**. Общий перевод других ошибок Voice/Strategies/Lab вне scope. Поддерживаемые исторические receipts не теряют читаемость.
+
+**V5-13:** exact native proof list-only reload без смены PID/supervisor/IPFW и с фактическим reread; NO_CHANGE без сигнала; structural/mixed→полный Restart; unsafe/uncertain→refuse, без скрытого auto-restart. **V5-14:** все пять команд/strict options/native error receipt/GUI RU+EN lifecycle путь имеют source+native доказательство до testing package.
 
 ## 6. Чистая установка и пять независимых состояний
 
@@ -174,9 +223,11 @@
 | V5-07 | Native Lab RUNNING→RUNNING, STOPPED→STOPPED и ошибка/timeout/cancel/прерванное восстановление дают правдивые receipts |
 | V5-08 | Native Auto подтверждённым событием попадает в нужные persistent Found и hot managed на том же `dvtws2`, без Apply/Restart |
 | V5-09 | Native OPNsense и защищённые upgrade/rollback, Voice/Strategies Apply, WAN и пакетные сценарии проходят на **точном** исходнике |
-| V5-10 | Только после source/native приёмки, включая V5-11 и V5-12, — один testing `.pkg` с SHA/ABI/source identity; отдельно owner-live проверка на физическом устройстве; stable/pfSense не объявлять по одному CI |
+| V5-10 | Только после source/native приёмки, включая V5-11–V5-14, — один testing `.pkg` с SHA/ABI/source identity; отдельно owner-live проверка на физическом устройстве; stable/pfSense не объявлять по одному CI |
 | V5-11 | WAN-only Save при `Enabled=OFF`, отсутствии upstream и отсутствии user strategy сохраняет WAN; после явной установки engine Standard/Extended Lab работают до первого ordinary Start без active runtime manifest, завершают Stage90 STOPPED→STOPPED и не оставляют ресурсов. Отсутствие WAN первее отсутствия движка, и ни один отказ не создаёт Job/IPFW |
 
 | V5-12 | **Только для сообщений прежнего Start/Stop/Restart**, включая их физические переходы через Apply, Voice, Lab restore, package update и boot: source→reason/stage→GUI→RU/EN проверены; действующие сохранены/адаптированы, недостижимые старые переводы удалены в обеих локалях без ущерба историческому recovery; новые lifecycle failures информируют пользователя на двух языках. Остальные GUI-переводы вне охвата |
+| V5-13 | Список-only verified reload сохраняет PID/supervisor/IPFW, фактический reread подтверждён, Apply корректно выбирает NO_CHANGE/RELOAD/RESTART/START/STOP/SAVE_ONLY; нет скрытого рестарта после ошибки |
+| V5-14 | Пять команд и строгие action options, typed native dvtws2/supervisor errors, truthful verification, RU/EN lifecycle GUI delivery проверены на exact FreeBSD native перед тестовой сборкой |
 
 **Граница фактов на 22.11.2026:** merged documentation-only `main v0.6.5_121`, установленная у владельца тестовая `_117`, ручной Stop→Start RUNNING и два Strategies Apply PASS. ТЗ_6v5 — **критерий будущей реализации**, а не сообщение о завершённой работе. Исполнение идёт строго по [шагам и блокирующим гейтам](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
