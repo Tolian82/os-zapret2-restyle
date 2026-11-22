@@ -8,6 +8,7 @@ on:
       - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py
       - scripts/test-p2e-original-shared-build.py
+      - scripts/test-tz6v5-s03-original-red.py
       - scripts/test-tz6v4-schema3-dryrun.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/validator.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py
@@ -54,6 +55,7 @@ jobs:
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p2i-original-preview-native.py --self-test
           python3 -m py_compile scripts/test-tz6v4-schema3-dryrun.py
+          python3 -m py_compile scripts/test-tz6v5-s03-original-red.py
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-tz6v4-schema3-dryrun.py
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-voice-ipfw-adapter.py
           python3 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py scripts/test-auto-detect-post-drop.py
@@ -116,6 +118,19 @@ jobs:
                 raise SystemExit("P2E_REFUSED_NOT_ROOT_FREEBSD")
             PY
             PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-p2e-original-shared-build.py
+            # TZ6v5 S03: the SAME actual legacy generator, no installed engine
+            # or ordinary Start. Deliberately enforce proof of expected RED.
+            ZAPRET2_S03_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 \
+              scripts/test-tz6v5-s03-original-red.py \
+              --capture --disposable-native-status \
+              --report /tmp/tz6v5-s03-original-source-red.json
+            if PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-tz6v5-s03-original-red.py \
+              --target --report /tmp/tz6v5-s03-original-source-red.json; then
+              echo '::error::S03 target falsely passed before required implementation'
+              exit 1
+            fi
+            PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-tz6v5-s03-original-red.py \
+              --verify-red --report /tmp/tz6v5-s03-original-source-red.json
             PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-tz6v4-schema3-dryrun.py
             PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-voice-ipfw-adapter.py
             # Run the already-approved uninterrupted debug-only 2-MiB cut

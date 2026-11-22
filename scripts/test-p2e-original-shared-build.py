@@ -84,14 +84,15 @@ class OriginalSharedGeneration(unittest.TestCase):
         # shared release builder, not a new or installed dvtws2 instance.
 
     def build(self, strategy: str, *, voice_on=False, mode="auto",
-              exclude_domains="", exclude_ipset=""):
+              exclude_domains="", exclude_ipset="", youtube_domains="youtube.com",
+              user_domains="example.org", rule_max="19010"):
         config = self.work / "rendered-zapret.conf"
         values = {
             "ZAPRET_ENABLED": "1", "HOSTLIST_MODE": mode,
             "WAN_IF": "lo0", "DIVERT_PORT": "19899",
-            "RULE_BASE": "19000", "RULE_MAX": "19010",
-            "TRAFFIC_ARGS": strategy, "YOUTUBE_DOMAINS": "youtube.com",
-            "USER_DOMAINS": "example.org", "TELEGRAM_IPS": "91.108.13.10",
+            "RULE_BASE": "19000", "RULE_MAX": rule_max,
+            "TRAFFIC_ARGS": strategy, "YOUTUBE_DOMAINS": youtube_domains,
+            "USER_DOMAINS": user_domains, "TELEGRAM_IPS": "91.108.13.10",
             "DISCORD_IPS": "", "X_IPS": "", "SIP_IPS": "", "CUSTOM_IPS": "",
             "EXCLUDE_DOMAINS": exclude_domains,
             "EXCLUDE_IPSET": exclude_ipset, "EXTRA_ARGS": "",

@@ -1,3 +1,11 @@
+# 23 Nov 2026 — CURRENT TZ6v5 S03a real-generator expected RED candidate
+
+**Source candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=132`, `v0.6.5_132` branch `feat/tz6v5-s03-original-generator-red` based on merged `main _131 3742188b`. `os-zapret2-restyle-0.6.5_132.pkg` is ONLY a **prospective name, NOT built/published**; owner last-confirmed `_117.pkg` untouched. All product runtime `src/` unchanged.
+
+**S03a:** [real legacy generator matrix + expected fail-first proofs](architecture/ZAPRET2_TZ6V5_S03_ORIGINAL_GENERATOR_RED.md). Actual `orchestrator_build_release`/source-map/Voice/Target Mode, large/empty/invalid, native learning argv threshold missing, CLI help/reload, reference manifest, opt-in disposable FreeBSD native status lockfile/JSON, exact RED assert. P2e disposable OPNsense workflow wired, exact-head CI still to be confirmed; **not** full S03 GO or installed native PASS. G05→G08, complete diff/force, RU/EN routes and Lab/Auto provider witness remain open. #1223/#1224/#1225 remain OPEN. S04–S20 NOT RUN.
+
+---
+
 ## 23 ноября 2026 — S01 PR #1228 disposition на main _129 (НОВЫЙ CURRENT handoff)
 
 **Prospective testing package name ONLY (NOT BUILT / NOT PUBLISHED):** `os-zapret2-restyle-0.6.5_130.pkg`. This is a source identity token required by CI, not a release asset. Existing owner install `_117` remains untouched.

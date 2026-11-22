@@ -12,6 +12,17 @@
 
 # os-zapret2-restyle — current handoff
 
+## 23 ноября 2026 — CURRENT: ТЗ_6v5 S03a old-generator RED candidate
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=132`, `v0.6.5_132`, based on merged `main v0.6.5_131` (`3742188b`), branch `feat/tz6v5-s03-original-generator-red`. Prospective only `os-zapret2-restyle-0.6.5_132.pkg` **NOT BUILT / NOT PUBLISHED**. Owner last confirmed installed `_117.pkg` unchanged.
+
+**S03a actual source-run tests:** [real original release generator/source-map/Voice/Target Mode matrix, negative and expected-RED contracts](architecture/ZAPRET2_TZ6V5_S03_ORIGINAL_GENERATOR_RED.md). The new probe uses the **existing production** `orchestrator_build_release` fixture and native source-map projection. It tests absent schema-3 learning fail-threshold, absent CLI help/reload, absent root reference-only manifest; on **explicitly disposable FreeBSD**, also real status JSON and read-only FD9 absence. Attached to P2e isolated OPNsense workflow; **CI witness PENDING**, not native installed engine PASS. Scope = tests/fixture/workflow/docs + Makefile; **no production source changes**.
+
+**Next:** complete remaining S03 RED: diff classifier/Reload, G05→G08, own/foreign PID/force, lifecycle RU/EN, exact IPFW, native restore and owner traces. **Full S03 NO-GO, S04–S20 NOT RUN**, #1223/#1224/#1225 open. No installed package changes.
+
+---
+
+
 ## 23 ноября 2026 — CURRENT: ТЗ_6v5 S02 audit source checkpoint; next S03
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=131`, `v0.6.5_131` — documentation/source-only candidate on merged `main v0.6.5_130` (`0b001459`), branch `feat/tz6v5-s02-actual-route-audit`. **Prospective artifact filename ONLY:** `os-zapret2-restyle-0.6.5_131.pkg` — **NOT BUILT / NOT PUBLISHED**; owner last-confirmed installed `_117.pkg` unchanged.

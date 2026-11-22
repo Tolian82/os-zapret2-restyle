@@ -8,6 +8,10 @@
 
 # os-zapret2-restyle — master plan
 
+## 23 November 2026 — S03a actual-generator fail-first probe
+
+[Live S03a test and remaining S03 matrix](architecture/ZAPRET2_TZ6V5_S03_ORIGINAL_GENERATOR_RED.md): source-only `v0.6.5_132` (prospective `os-zapret2-restyle-0.6.5_132.pkg` NOT built), based on accepted `main _131` (`3742188b`). Real old orchestrator/Voice/Target Mode/source map generates synthetic `dvtws.args`; expected RED checks schema3 Auto learning missing fail-threshold, help/reload, immutable reference-only manifest and disposable FreeBSD status JSON/FD9 read-only. Hooked to existing P2e isolated OPNsense native CI; **pending exact-head CI result**, not accepted current runtime, not S03 complete. Full diff/force/G05→G08/locale/PID/native Lab gates remain; owner `_117` unchanged. Do not proceed to S04 until remaining S03 is GO.
+
 ## 23 November 2026 — S02 source route audit / NEXT S03
 
 On merged source-only `main v0.6.5_130` (`0b001459`), the [pinned S02 all-caller code route map](architecture/ZAPRET2_TZ6V5_S02_ACTUAL_LIFECYCLE_ROUTE_AUDIT.md) records GUI/API/configd/FD9 physical transitions, Run/Stop/Restart/Apply/Voice/Lab/pkg/upstream/boot/callback/Auto, old lifecycle-only RU/EN, IPFW numeric scope and raw PID/SIGKILL low-level helpers. This is **source-level read-only GO**, NOT native implementation/owner approval. Next source-only `v0.6.5_131` (prospective package `os-zapret2-restyle-0.6.5_131.pkg` **not built/published**) carries only documentation and Makefile revision. S03 actual generator RED/parity and V5-01–17 failures next, then S04–S20. Old three-icon screenshot tooltip/handler not owner-verified; #1223/#1224/#1225 remain OPEN. Owner last installed `_117.pkg` untouched. Historical candidate wording below should not be mistaken for current work.
