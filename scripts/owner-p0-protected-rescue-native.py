@@ -156,6 +156,74 @@ def stage_backend(pkg, m):
     return dest
 
 
+def disposable_attested_package_code_handoff(staged, original_pkg):
+    """DIAGNOSTIC ONLY: match fixed-PHP absolute child source boundary.
+
+    Installed PHP intentionally executes a fixed /usr/local backend child,
+    ignoring the temporary BACKEND_DIR used by original service FD9. Its
+    Python process loads the still-old 109 verifier and returns rc69. In this
+    single disposable VM only, test whether replacing exactly THREE source-
+    proven Python modules with bytes from immutable published 111 removes
+    the inconsistent package child. This method is NOT an owner procedure.
+    """
+    import uuid
+    archive = run(["/usr/bin/tar", "-tf", str(original_pkg)], timeout=30)
+    need(archive.returncode == 0, "109_ORIGINAL_PACKAGE_INDEX_UNAVAILABLE")
+    names = archive.stdout.splitlines()
+    private_original = STAGE / "original109-code"
+    private_original.mkdir(mode=0o700)
+    private_original.chmod(0o700)
+    for name in PATCH:
+        key = "usr/local/opnsense/scripts/OPNsense/Zapret/backend/" + name
+        members = [x for x in names
+                   if x.lstrip("/").removeprefix("./") == key]
+        need(len(members) == 1, "ORIGINAL109_MODULE_MEMBER_MISSING")
+        source109 = run(["/usr/bin/tar", "-xOf", str(original_pkg), members[0]],
+                        timeout=30, binary=True)
+        target = BACKEND / name
+        replacement = staged / name
+        old_meta = target.lstat()
+        need(source109.returncode == 0 and
+             source109.stdout == target.read_bytes() and
+             old_meta.st_uid == 0 and old_meta.st_nlink == 1 and
+             not target.is_symlink() and
+             replacement.is_file() and not replacement.is_symlink() and
+             replacement.stat().st_uid == 0 and
+             digest(replacement) != digest(target),
+             "109_MODULE_NOT_EXACT_OR_STAGED_MODULE_UNQUALIFIED")
+        original = private_original / name
+        with original.open("xb") as backup:
+            backup.write(source109.stdout)
+            backup.flush()
+            os.fsync(backup.fileno())
+        original.chmod(0o600)
+        pending = BACKEND / (".p0-diagnostic-" + uuid.uuid4().hex)
+        fd = os.open(pending, os.O_CREAT | os.O_EXCL | os.O_WRONLY |
+                     getattr(os, "O_NOFOLLOW", 0), 0o644)
+        with os.fdopen(fd, "wb") as output:
+            with replacement.open("rb") as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b""):
+                    output.write(block)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(pending, target)
+        root_fd = os.open(BACKEND, os.O_RDONLY | os.O_DIRECTORY |
+                          getattr(os, "O_NOFOLLOW", 0))
+        try:
+            os.fsync(root_fd)
+        finally:
+            os.close(root_fd)
+        need(digest(target) == digest(replacement) and
+             target.lstat().st_nlink == 1,
+             "DISPOSABLE_111_SOURCE_MISMATCH_AFTER_REPLACEMENT")
+    print("P0_DIAGNOSTIC_ONLY_FIXED_PHP_ABSOLUTE_CHILD_SOURCE=" +
+          json.dumps({"package_owned_modules": len(PATCH),
+                      "installed_pkgdb_still_109": installed() == BROKEN[0],
+                      "restored_config_unchanged": RECORD.exists() is False,
+                      "not_qualified_for_owner": True},
+                     sort_keys=True), flush=True)
+
+
 def main():
     gate()
     protected = module("stage5-native-protected-update.py", "p0_protected")
@@ -295,64 +363,14 @@ def main():
           json.dumps({"verified": recovered, "checks": measured},
                      sort_keys=True), flush=True)
     need(recovered, "ORIGINAL_FD9_GUARDED_109_RECOVERY_REFUSED")
-    # Disposable diagnosis: the protected coordinator suppresses stdout and
-    # stderr from its ORIGINAL FD9 pkg-update-prepare child. Invoke that SAME
-    # original native prepare exactly once with a root-only SHA-qualified
-    # incoming archive so source-specific guard categories can be classified.
-    # This test does NOT bypass FD9 or issue any owner appliance command.
-    import uuid
-    incoming = RECORD.parent / ("incoming-p0diag-" + uuid.uuid4().hex + ".pkg")
-    fd = os.open(incoming, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
-                 getattr(os, "O_NOFOLLOW", 0), 0o600)
-    with os.fdopen(fd, "wb") as output:
-        with fixed.open("rb") as source:
-            for block in iter(lambda: source.read(1024 * 1024), b""):
-                output.write(block)
-        output.flush()
-        os.fsync(output.fileno())
-    need(digest(incoming) == FIXED[1], "NATIVE_111_PRIVATE_INCOMING_SHA_MISMATCH")
-    prepare = run([str(SERVICE), "pkg-update-prepare",
-                   str(incoming), FIXED[1], FIXED[0]], env=env, timeout=250)
-    marker_text = prepare.stderr + "\n" + prepare.stdout
-    known_guards = ("auto-detect-retire-refused=MinuteRefused",
-                    "auto-detect-retire-refused=OriginalLockRefused",
-                    "auto-detect-retire-refused=LearningRetirementRefused",
-                    "auto-detect-retire-guard=",
-                    "auto-detect-retire-original-guard=",
-                    "native-common-stopped=",
-                    "zapret-pkg-update-prepared=1")
-    # The native producer itself prints only source-defined, pre-whitelisted
-    # guard IDs; never forward raw child stderr, shell traces or Config data.
-    native_guard_match = re.search(
-        r"(?m)^auto-detect-retire-original-guard=([a-z0-9_]{1,70})$",
-        marker_text)
-    native_guard = (native_guard_match.group(1)
-                    if native_guard_match else "unknown")
-    print("P0_NATIVE_DIRECT_ORIGINAL_PREPARE=" + json.dumps({
-        "rc": prepare.returncode,
-        "original_lock_guard": native_guard,
-        "markers": {key: key in marker_text for key in known_guards},
-        "record_phase":
-            json.loads(RECORD.read_bytes()).get("phase") if RECORD.is_file()
-            else "absent",
-        "engine_present": PIDFILE.is_file(),
-        "marked_restart": MARKER.is_file(),
-        "config_sha_unchanged": digest(CONFIG) == config_sha,
-        "dvtws2_sha_unchanged": digest(engine) == engine_sha,
-    }, sort_keys=True), flush=True)
-    need(prepare.returncode == 0 and
-         "zapret-pkg-update-prepared=1" in prepare.stdout,
-         "DIRECT_ORIGINAL_FD9_111_PREPARE_REFUSED")
-    # A successful original prepare continues with exact package-owned
-    # POST_INSTALL + original successor FD9 finish, as the coordinator would.
-    upgrade_pkg = run(["/usr/sbin/pkg", "-o", "REPO_AUTOUPDATE=false",
-                       "add", "-f", str(incoming)], env=env, timeout=270)
-    need(upgrade_pkg.returncode == 0 and
-         "zapret-pkg-postinstall-guarded=1" in
-         (upgrade_pkg.stdout + upgrade_pkg.stderr) and
-         installed() == FIXED[0], "DISPOSABLE_POSTINSTALL_111_NOT_CONFIRMED")
-    upgrade = run([str(SERVICE), "pkg-update-finish", FIXED[1], FIXED[0]],
-                  env=env, timeout=330)
+    # The fixed absolute PHP child in installed 109 uses ORIGINAL installed
+    # modules, not BACKEND_DIR. Disposably prove the source split before
+    # proposing any production rescue: change ONLY exact verified packages'
+    # three native Python files, backup old bytes, keep the existing FD9,
+    # and immediately exercise the normal one-shot package-owned updater.
+    disposable_attested_package_code_handoff(staged, broken)
+    upgrade = run([str(SERVICE), "pkg-update", str(fixed)],
+                  env=env, timeout=480)
     # P0 stage classification is bounded to fixed public reason tokens. The
     # protected coordinator deliberately hides child stderr/Config from logs.
     reason_match = re.search(
