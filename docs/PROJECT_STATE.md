@@ -1,6 +1,15 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 22 November 2026 — owner-live restore blocker; v0.6.5_111 source candidate (CURRENT)
+## 22 November 2026 — published _111 testing package; _112 documentation tail (CURRENT)
+
+**Exact revision identity:** `v0.6.5_112`, `VERSION=0.6.5`, `PLUGIN_REVISION=112`, and identity name `os-zapret2-restyle-0.6.5_112.pkg` refer to the **source-only documentation revision**. No `_112.pkg` was built or published.
+
+**Published native fix:** [v0.6.5_111.pkg](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_111/os-zapret2-restyle-0.6.5_111.pkg) has ABI `FreeBSD:15:amd64` and SHA-256 `7257f54d74ef10fedc30d75e5e4a13861253bc8ad64d64ab232c537c2a56fae3`; GitHub tag `v0.6.5_111` points to merged source `b4c6b19cc014b556915eaf1a8b4e792a0785fad3` ([PR #1214](https://github.com/Tolian82/os-zapret2-restyle/pull/1214)). All seven exact-head scoped FreeBSD/original-generator and genuine disposable native OPNsense checks PASS. Repair preserves the canonical Stage-3 global exclusions in cloned learning profiles and independently validates profile identity; original FD9, working Voice and Config ownership remain unchanged. [Publication record](verification/evidence/testing-publications/v0.6.5_111.md). Stable Pages/pkg repository not promoted.
+
+**CRITICAL owner device, [issue #1213](https://github.com/Tolian82/os-zapret2-restyle/issues/1213):** Still installed `_109`, stopped `dvtws2` and retained original protected `postinstall-attested` operation after `_107→_109`; shared Apply record remains `committed`. The actual `pkg-update-finish` emitted P2 global exclusion order refusal and `native-common-boot-guard=build-preflight`, not PID guard. A published `_111.pkg` is **not** itself a safe ordinary upgrade over this protected state. Do not delete journals, run `pkg add -f` over current installation, purge or rewrite Config. The next bounded task is an owner-controlled and qualified original-FD9 recovery using only attested source from `_111.pkg`, then restoring package ownership, saved WAN/Voice/Found and verified RUNNING status. No owner recovery claim yet.
+
+**Publisher record tail:** [45007284330](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45007284330) built/uploaded/verified the physical package, tag and source and cleaned the temporary publisher branch. Overall workflow failed only because GitHub Actions cannot create a PR; [PR #1215](https://github.com/Tolian82/os-zapret2-restyle/pull/1215) completes GH-061 manually, docs only plus revision bump. No `_112.pkg`.
+## 22 November 2026 — owner-live restore blocker; v0.6.5_111 source candidate (HISTORICAL)
 
 **Revision identity:** `v0.6.5_111`; `VERSION=0.6.5`, `PLUGIN_REVISION=111`, only a proposed `os-zapret2-restyle-0.6.5_111.pkg` (not yet built/published).
 
