@@ -1,15 +1,16 @@
 # os-zapret2-restyle — master plan
 
-**CURRENT 22 Nov 2026:** `_117` protected real owner upgrade and Strategies edited/unedited Apply accepted; Lab `RESTORE_FAILED`, native YouTube Auto not found, and cross-surface control parity are new P0. Source-only `_119` documents all three **before diagnosis or code**; no `_119.pkg`. [Evidence/matrix](verification/evidence/2026-11-22-owner-live-117-lab-autodetect-controls.md).
+**CURRENT 22 Nov 2026:** owner confirmed manually restored original `_117` service RUNNING (`status_rc=0`), and demanded **one implementation of Start/Stop, all others delegate**. The global `DEV-065` / [ТЗ_6v4 §6.1](architecture/TZ_6v4.md) is now the highest priority. Source-only `_120` captures the design and audit, no `_120.pkg`; owner still installed `_117`. [Canonical control audit](architecture/ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md) and [owner field matrix](verification/evidence/2026-11-22-owner-live-117-lab-autodetect-controls.md).
 
 ## Current priority
 
-1. **P0 Lab restore:** [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224), job `job.iDvhRh` stage 90/99 `RESTORE_FAILED`, post-Lab state unknown. Read-only original engine/FD9/epoch/Config/IPFW/journal inventory first; then reproduce RUNNING/STOPPED previous state recovery under timeout/cancel/error on disposable OPNsense. No repeated owner lifecycle actions.
-2. **P0 shared control semantics:** [#1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225). Strategies + Voice toolbar Play/circular-arrow/Stop, Zapret2 Service Start/Stop, both `Применить`, Lab start/stop/restore, `Установить версию`: verify actual tooltip/handler/configd/original FD9, guards and terminal state. Equivalent intent => equivalent safety/outcome; installer vs Apply vs Lab remain distinct semantics.
-3. **P0 native Auto:** [#1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223), [#1052](https://github.com/Tolian82/os-zapret2-restyle/issues/1052). TIMEOUT and interrupted router curl are not native append proof. Trace proper WAN IPFW capture→profile-N inbox/debug→original minute→P1/ACK→`youtube_found` and active managed; former explicit fail-threshold=1 is absent from schema3, a hypothesis only.
-4. **Completion:** narrow observed RED→GREEN user journeys; one real engine, original FD9/Config/Voice/WAN/IPFW and safe stopped/running Lab state; exact-head disposable native CI and protected upgrade before any new immutable `.pkg`. Real owner per-profile findings/Voice/Boot/reinstall/purge remain OPEN; no stable/pfSense promotion.
+1. **P0 — canonical Start/Stop [#1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225):** audit exact handlers for screenshots' Play/Restart/Stop, Strategies/Voice/Service buttons, both Apply paths, Lab special start/stop, `Установить версию`, protected `.pkg` update and recovery; refactor duplicated owner selection and transition implementations behind ONE original FD9-protected start/stop without a second FD9/Config writer. Preserve distinct operation pre/post/rollback semantics.
+2. **P0 — Lab terminal restore [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224):** `job.iDvhRh` stage 90/99 RESTORE_FAILED; manual Stop→Start subsequent RUNNING is accepted but not a Lab PASS. Fix duplicated Lab lifecycle routing and inspect its native schema3 generation-sensitive semantic evidence with read-only stage receipts. Prove exact pre-Lab RUNNING/STOPPED restoration after normal/error/timeout/cancel on disposable native OPNsense.
+3. **P0 — native Auto→Found [#1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223):** after lifecycle is safe, trace real IPFW capture→original native inbox/debug→minute→Found/managed. Do not treat direct HTTPS TIMEOUT or manually interrupted curl as native event; missing `fail-threshold=1` remains a candidate source delta, not established physical root.
+4. **Acceptance:** actual handler-to-owner RED→GREEN + failure injection, native one `dvtws2`, FD9, IPFW/Voice/Config, protected upgrade, one immutable testing `.pkg` only after proven exact-head, physical owner verification. Keep stable/pfSense out of scope.
 
 ## Historical priorities and development context (superseded where conflicting)
+
 
 
 
