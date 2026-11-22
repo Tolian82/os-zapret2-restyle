@@ -45,11 +45,13 @@ The plugin uses fixed **IPFW rule numbers** (these are **not TCP/UDP ports**):
 
 | Component | IPFW rule numbers |
 |---|---|
-| Normal Zapret2 / Traffic Strategies | `19000–19010` |
+| Normal Zapret2 / Traffic Strategies | **`19000–19099`** |
 | Strategy Lab | `19100–19131` |
 | Strategy Lab — comparative checks (**Future, reserved; not yet implemented**) | `19140–19200` |
 
 The `19140–19200` row is a **future reservation of IPFW rule numbers only**, agreed in [Issue #1167](https://github.com/Tolian82/os-zapret2-restyle/issues/1167). The current package does **not** install or use these comparative-check rules. TCP/UDP source ports and divert socket ports remain separate.
+
+**Rule-number ownership policy:** the only Zapret2-allocated IPFW rule numbers are **19000–19099** (ordinary Strategies/Voice), **19100–19131** (current Lab), and **19140–19200** (reserved exclusively for future comparative Lab; **not created, swept or cleaned by current runtime**). A rule outside these intervals is **not ours** and must never be deleted, replaced or modified by Zapret2, even during `stop`, `restart`, `--force`, failure cleanup, rollback or purge. Rule **number** defines the reserved scope; no additional collision scan, foreign-occupancy detector, ownership database or per-rule identity test is requested. **19132–19139 and everything outside these ranges are not allocated to Zapret2.** Active normal start/stop strictly uses 19000–19099; current Lab strictly uses 19100–19131. This page establishes the **target allocation**. Changes in the installed service are tracked in [product PR #1237](https://github.com/Tolian82/os-zapret2-restyle/pull/1237) and are **not shipped** by the documentation-only revision; no new `.pkg` is implied.
 
 Divert socket ports are separate. Per the owner-approved native integration scope, no new system-wide IPFW collision scanner, shaper-flush listener, dynamic rule allocation or `pfilctl` conversion is planned. The plugin must not globally disable/re-enable PF as part of normal runtime or release operations. [Native OPNsense TЗ v1.5](docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) defines the current technical contract; its [completed implementation plan](docs/history/stages/native-packaging-2026-11/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) is retained as history. [Current priorities](docs/ROADMAP.md).
 

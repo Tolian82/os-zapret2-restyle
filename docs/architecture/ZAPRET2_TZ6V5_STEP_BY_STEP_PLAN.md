@@ -16,6 +16,8 @@
 
 **Новые CLI требования V5-15/V5-16:** `start --force`, `stop --force`, `restart --force` **только для явного оператора и точного подтверждённого собственного зависшего PID/epoch**; bounded graceful stop → re-attest PID+birth/exe/argv → targeted SIGKILL только при необходимости → verified STOPPED/retirement before any Start. Никогда не убивать foreign/reused/unverified PID, не удалять pidfile/journal наугад и не обходить FD9; при неудаче INCOMPLETE, без второго `dvtws2`. Глобальный/командный `--help` read-only, без FD9/состояния, показывает пять команд и опции. `--force` запрещён для reload/status и не добавляется автоматически из Apply/Lab/Boot/pkg. [ТЗ_6v5 §5.5–5.6](TZ_6v5.md).
 
+**Нумерация IPFW — обязательная V5-17:** Normal/Strategies/Voice `19000–19099`, действующий Lab `19100–19131`, **future-only** comparative `19140–19200` (не устанавливать/не чистить), всё остальное, в том числе `19132–19139` — не наше. **Номер правила — единственный критерий диапазона**, никаких новых collision/foreign-rule-expression/ownership scans. Все операции (включая force/rollback/purge) ограничиваются **своим активным диапазоном**. Главный launcher `RULE_BASE=19000; RULE_MAX=19099`; preview/orchestrator/purge совпадают. Системное 65534 не добавлять. [ТЗ_6v5 §5.7](TZ_6v5.md). Существующие original FD9/process/journal гарантии остаются.
+
 **Неприкосновенные инварианты:** один original FD9/Config writer/долговечный журнал, один `dvtws2`, original `shared_apply_operation`, native P1/P2/FD и WAL/ACK, только собственный IPFW; без SIGSTOP/SIGCONT, observer/second daemon, несанкционированных остановок для Auto, PID-journal deletion или угаданного recovery. Подтверждённый manual/Found/managed и исправный операторский Stop важнее неподтверждённых Auto-строк.
 
 ## G0 — документы, исходники и воспроизводимый RED (S00–S03)
@@ -48,6 +50,8 @@
 
 6. **Контракт `--force` и `--help`:** провести read-only трассу existing `launcher_stop`, `supervisor_stop`, PID-файлов child/monitor, original FD9/epoch, identity/birth и protected Common/Legacy status. Отдельно зафиксировать, какие владельцы PID реально аттестуются, кто умеет graceful/timeout, почему `kill -9` по pidfile/`pkill` недопустим. Inventory существующих CLI парсеров и места выдачи help; `--force` не должен входить в GUI Apply и фоновые callback.
 
+7. Inventory **всех активных** IPFW range consumers: `zapret_service.sh` `RULE_BASE/RULE_MAX`, orchestrator fallback, strategy preview, Python voice adapter/transaction, Lab firewall, purge (source+package copy), on-device configd actions, tests. Rule-number-only policy без нового ownership/collision scanner; особое внимание пробелу 19132–19139 и резерву 19140–19200.
+
 **GO:** полная таблица физических writers и их callers, включая обходные paths и наследование FD9. **NO-GO:** проверены только публичные CLI три команды.
 
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
@@ -61,6 +65,8 @@
 5. RED fixture **на наши действия**: old/next effective diff NO_CHANGE/list-only/refs/profile order/DPI/Voice/Target Mode/WAN/divert/mixed/foreign; `reload` сохраняет собственный PID/owned IPFW, доставляет сигнал только verified PID, правильно возвращает REQUESTED (когда подтверждена только доставка), failure не запускает hidden restart; CLI option rc64 и RU/EN lifecycle GUI. **Не писать тесты, исследующие, перечитывает ли движок списки и что делает SIGHUP:** это установлено каноном.
 
 6. **RED CLI:** `start|stop|restart --force` только по явному admin, чужой/reused/stale PID/FD9 BUSY/PREPARED → refusal/no kill; owned hung TERM timeout→re-attest exact PID+birth→targeted SIGKILL→verified shutdown; stuck unkillable→INCOMPLETE/no replacement Start; healthy RUNNING `start --force` не убивает; STOPPED `restart --force` не стартует. `--help` global и per-command rc0 без FD9/IO, пять команд/опции; invalid `reload --force`, `status --force`, duplicate options и unknown rc64. Нет тестов поведения движка, указанного в upstream manual.
+
+7. RED source/fixture на inclusive bounds 19000/19099 и 19100/19131, отвергание 19132/19139 и всех вне диапазонов, отсутствие touch 19140–19200 в текущем runtime, отсутствие `ipfw add 65534` от плагина и корректную числовую фильтрацию purge. Не создавать новые tests на поиск владельца/сигнатуры чужого IPFW-правила.
 
 **GO:** baseline и воспроизводимый RED доступны CI. **NO-GO:** unit mocks или grep объявлены native доказательством.
 
@@ -85,6 +91,8 @@
 5. Расширить diagnostic envelope `action,stage,code,exit_status,runtime_before/after,generation,verification,stderr_excerpt,log_ref` для пяти команд; native engine/supervisor early/delayed errors без raw sensitive args. `status --json` читает последнее событие, не пишет его. `reload --check` read-only, различает RELOAD_SAFE/RESTART_REQUIRED/NOT_RUNNING/REFUSE.
 
 5. Диагностика force-эскалации: отличать FORCE_OWNER_UNVERIFIED, FORCE_TERMINATION_UNCONFIRMED, normal timeout, forced termination verified, rollback failed и original FD9 conflict; `status` показывает только реальные terminal state, журнал force_requested/action/operation_id без раскрытия full args. Глобальный/командный `--help` не вызывает Status/Config/engine/FD9/IO.
+
+6. Read-only Status/GUI показывают только действующие выделенные IPFW-номера, не определяют «наше» по выражению, divert-порту или чужому namespace. Не расширять имеющиеся scope filters на будущий reserve.
 
 **GO:** действительный stage/rc + последняя ошибка показаны в CLI/GUI; no-write/secret tests PASS. **NO-GO:** зелёный Status лишь по PID.
 
@@ -114,6 +122,8 @@
 
 5. Сделать deterministic semantic structural fingerprint и чистый classification planner: content-only linked active HOSTLIST/IPSet refs кандидат RELOAD_SAFE; изменение argv, Source Map, IPFW, selectors, Voice, WAN, engine version или смешанные edits → RESTART_REQUIRED. Данные Found/managed остаются отдельным original mutable P1 path; не обещать runtime reload для неподключённого списка.
 
+6. Compiler/generator/preview должны использовать один active ordinary inclusive bound 19000–19099 и проверять только допустимые значения; разбиение ordinary/Lab/future остаётся явным, без объединения 19000–19200.
+
 **GO:** parity и negative tests GREEN без изменение native first-match. **NO-GO:** новая схема молча меняет DPI args.
 
 ### S09. Root manifest и полная attestation refs
@@ -138,6 +148,8 @@
 
 4. В рамках existing sealed `shared_apply_operation` предусмотреть staged list-only commit и protected rollback, проверку old bytes/revisions/CAS. Если multi-file изменение нельзя сделать семантически согласованным без Stop, classification = RESTART_REQUIRED до мутации; ни второй writer, ни второй журнал.
 
+5. Native firewall candidate install/commit/rollback выполняет изменения только в активных 19000–19099 (ordinary) и 19100–19131 (Lab), **не** в future 19140–19200. Числовой фильтр достаточен для определения нашего диапазона; не создавать новый foreign-rule-identity control.
+
 **GO:** immutable candidate preflight и crash recovery подтверждены; ни одна пользовательская data write не обойдена.
 
 ### S11. Единственный физический Start
@@ -152,6 +164,8 @@
 
 6. `start --force`: при здоровом RUNNING не убивать/не дублировать; при подтверждённо зависшем прежнем своём owner выполнить ровно тот же единственный guarded stop primitive с bounded escalation, после verified STOPPED только обычный Start. Нет manifest/WAN/upstream/FD9 или owner не доказан — отказ; не превращать флаг в unrestricted recovery.
 
+7. Launcher/получатели runtime передают точные `RULE_BASE=19000`, `RULE_MAX=19099`; не вводить скрытую копию старой границы `19010`. При Start не добавлять внешнее IPFW 65534: проверенная системная настройка `default_to_accept=1` либо честный отказ.
+
 **GO:** exact Start state and errors; нет скрытой альтернативной ветки.
 
 ### S12. Единственный физический Stop
@@ -165,6 +179,8 @@
 5. `restart` при RUNNING делает действительно полный graceful Stop→Start по original FD9 и P2/N/epoch retirement, затем terminal readiness + rollback на failure; при intentionally STOPPED не стартует. Ошибка второго Start не выдаёт success.
 
 6. `stop --force` и stop-half `restart --force`: под original FD9 остановить свой monitor/respawn, штатная graceful Stop/TERM, bounded wait, затем re-attest точный PID+birth+exe/argv+epoch **непосредственно перед** адресным SIGKILL. Проверить death/no respawn/complete P2/retirement/IPFW. При unkillable/PID reuse/foreign/incomplete — fail-closed, никаких новых процессов или удаления журнала. Не тестировать силовое завершение на рабочем маршрутизаторе владельца.
+
+7. Stop и `--force` не касаются ни одного правила за активными числовыми диапазонами, не делают глобальный `ipfw flush` и не используют future-reserved 19140–19200 как активную очистку. Проверить выживание посторонних 19132–19139.
 
 **GO:** безопасный операторский Stop и подтверждённая защита чужого состояния.
 
@@ -181,6 +197,8 @@
 
 7. Дополнить strict CLI argument parser только `start|stop|restart --force` и `--help` global/per-action; `reload/status --force` отклонять до lock, GUI/Apply/Lab/Boot/pkg не проставляют force. Проверить один общий guarded process-kill path без второго dispatcher и корректный inheritance original FD9.
 
+8. Перед подключением всех callers проверить, что Apply/Voice/Lab/Boot/pkg/purge используют **одинаковые** границы и не выходят из собственного active диапазона при rollback или interrupted transaction.
+
 **GO:** один physical dispatcher и одна политика, все пути из S02 трассируются. **NO-GO:** альтернативный direct exec/kill/IPFW script.
 
 ### S14. Apply/Restart/Boot/rollback end-to-end
@@ -194,6 +212,8 @@
 5. End-to-end **интеграция плагина**, не тест Zapret2: заменить разрешённый active HOSTLIST/IPSet через existing writer, проверить неизменность собственного PID+birth/argv/supervisor+IPFW, целостность записанных файлов и доставку сигнала только authorized PID. `RELOAD_REQUESTED` означает выполненную доставку/запись, но не объявляет, что следующий пакет уже обработан. **Само автоматическое перечитывание и действие SIGHUP в движке не измерять и не доказывать.** При неудачном commit/signal — protected rollback либо UNCERTAIN без fallback restart; отдельная проверка нашего forced restart для structural/mixed и no-op.
 
 6. End-to-end force path: обычный Stop без KILL; искусственно зависший **свой attested test process** → `stop --force` STOPPED, `restart --force` новый RUNNING ровно один, `start --force` только после устранения своего stale blocker; force-stop failure никогда не разрешает Start. Уникальные receipt/stage/exit, redacted stderr и ограниченное RU/EN lifecycle уведомление если показываем из GUI. Путь help не трогает Config/IPFW.
+
+7. Native tests: Start/Stop/Restart/Reload/Apply и force с границами 19000,19099,19100,19131; произвольные другие значения, включая gap и 19140–19200, не изменены. При `default_to_accept != 1` fail-closed, никаких системных allow 65534.
 
 **GO:** original FD9 tests + equivalent native tests PASS; rc=0 недостаточно без physical witness.
 
@@ -228,11 +248,13 @@
 
 6. На disposable FreeBSD/OPNsense (не на owner) positive/negative force tests: attested hung PID+birth and supervisor, pidfile stale/missing, PID reused/foreign, immutable owner changed while waiting, FD9 BUSY, sealed journal incomplete, process immune to SIGKILL, failed P2/IPFW retirement. Проверить отсутствие foreign kill/no duplicate engine и no-write `--help`. Не испытывать upstream documented capabilities.
 
+7. Disposable OPNsense: только числовые диапазоны 19000–19099 и 19100–19131 для active cleanup; future comparative 19140–19200 не используется; любые чужие IPFW-номера не удаляются. Не делать дополнительный foreign-owner/collision inspector и не испытывать документированные свойства Zapret2 из канона.
+
 **GO:** affected native scenarios on exact code candidate PASS, critical restore FAIL eliminated.
 
 ### S18. Перед тестовой публикацией
 
-1. Сверить ТЗ_6v5 V5-01…V5-16 на уровне source/CI/native; OPEN owner-live строки не подменять.
+1. Сверить ТЗ_6v5 V5-01…V5-17 на уровне source/CI/native; OPEN owner-live строки не подменять.
 2. Обновить facts `PROJECT_STATE`/`ROADMAP`/`START_HERE` и issue statuses только по доказательствам. Проверить exact candidate revision, зависимости/ABI, official Mk package build.
 3. Squash merge **product** PR только после safety checks/native gate; не объявлять stable или pfSense support.
 
@@ -241,6 +263,8 @@
 5. Отдельный gate **V5-13/V5-14**: наше покрытие diff classifier и result codes, запись активного list и адресная доставка сигнала без Stop/PID/IPFW changes, structural/mixed guarded restart только один раз, no-op, OFF, incomplete refusal, no fallback, option allowlist и локализованные реальные lifecycle failures. **Не включать в PASS проверку работы механизма reread/SIGHUP Zapret2**, уже описанного `manual.en.md`. Никакой тестовой .pkg до PASS интеграции плагина.
 
 6. **V5-15/16 release gate:** матрица force graceful→TERM→exact-owner SIGKILL, проверка отсутствия KILL при healthy RUNNING/normal Stop, no SIGKILL для foreign/reused/unverified, правильные `INCOMPLETE`/code при force failure, ни одного второго `dvtws2`, `--help` global/per command no FD9/mutation и parser invalid options rc64. Всё только по собственному коду плагина.
+
+7. V5-17 gate: README, ТЗ, spec, launcher, orchestrator, preview, обе копии purge и source/native IPFW boundaries согласованы; вне диапазонов, 19132–19139 и future reserve никогда не затронуты; старого `RULE_MAX=19010` в активном коде нет, system 65534 не создаётся.
 
 **GO:** конкретный merged main SHA готов к **testing** .pkg, с сохранением owner-live OPEN.
 
@@ -268,7 +292,9 @@
 
 8. `--help`/формат CLI и обычные lifecycle действия можно показать владельцу без риска; **силовое завершение зависших PID испытывать только на disposable native**. На рабочей OPNsense `--force` применяется лишь сознательно оператором при реальной необходимости и после подтверждения владельца процесса. Не превращать отдельную команду в действие кнопки «Применить».
 
-**DONE:** функциональность подтверждена на соответствующих source/native/owner уровнях, включая WAN-first/G05→G08/V5-11, lifecycle RU/EN V5-12, native reload V5-13, пять команд/diagnostics V5-14 и безопасные force/help V5-15/16; любые непроверенные строки остаются OPEN.
+9. На устройстве владельца проверить нативную диагностику/состояние без принудительной порчи или удаления чужих IPFW-правил; доказательства очистки и границ собрать на disposable OPNsense. Реальный установленный пакет продолжает использовать диапазоны его опубликованной версии до отдельно утверждённого обновления.
+
+**DONE:** функциональность подтверждена на соответствующих source/native/owner уровнях, включая WAN-first/G05→G08/V5-11, lifecycle RU/EN V5-12, native reload V5-13, пять команд/diagnostics V5-14 и безопасные force/help V5-15/16 и узкие диапазоны IPFW V5-17; любые непроверенные строки остаются OPEN.
 
 ---
 

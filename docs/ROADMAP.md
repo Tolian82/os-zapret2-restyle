@@ -2,6 +2,10 @@
 
 ## Current priority — ТЗ_6v5 (22 ноября 2026)
 
+**IPFW выделение по номеру — [DEV-071](PROJECT_PRINCIPLES.md), [ТЗ_6v5 `5.7/V5-17](architecture/TZ_6v5.md), 23.11.2026.** Normal/Strategies/Voice = **19000–19099**, действующая Lab = **19100–19131**, comparative future-only = **19140–19200** (не создавать/не чистить текущим движком). Всё за пределами — не Zapret2. Число правила достаточно для определения диапазона, **новый сканер совпадений/чужого владения не разрабатывать**. Launcher `RULE_MAX=19099`, preview/orchestrator/purge и отказ от добавления системного IPFW 65534 — **планируемая продуктовая реализация** в [PR #1237](https://github.com/Tolian82/os-zapret2-restyle/pull/1237), пока не принята в main. Docs-only candidate `v0.6.5_128` без `_128.pkg` и без установки владельцем. [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) включает V5-17 и последующую native проверку **нашей интеграции**, не свойств движка из канона.
+
+
+
 **Новая задача V5-15/V5-16 (23.11.2026, doc candidate `v0.6.5_127`):** единственный launcher поддерживает `start/stop/restart --force` для ручного администратора и только проверенного собственного зависшего процесса под original FD9, с TERM→bounded wait→re-attest PID+birth/argv→targeted KILL→verified full Stop/retirement/IPFW; без foreign kill, второго dvtws2, обхода owner/journal или автоматического использования в Apply/Lab/Boot/pkg. Глобальный/командный `--help` показывает пять команд и options без FD9/IO; `reload/status --force` и unknown args rc64. [ТЗ_6v5 §5.5–5.6](architecture/TZ_6v5.md), [DEV-070](PROJECT_PRINCIPLES.md), [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). Пока **только документация**, owner `_117.pkg` без изменений, новый пакет не создан. Двигатель не испытывать по описанным в [каноне](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) свойствам.
 
 
