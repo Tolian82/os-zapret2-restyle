@@ -2,7 +2,16 @@
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
 
-## 22 November 2026 — published _111 testing package; _112 documentation tail (CURRENT)
+## 22 November 2026 — P0 protected owner recovery, disposable native test only (CURRENT)
+
+**Source candidate identity:** `v0.6.5_113` (`VERSION=0.6.5`, `PLUGIN_REVISION=113`, identity filename `os-zapret2-restyle-0.6.5_113.pkg`): **test/workflow/documentation only**, no `_113.pkg` is authorized or published. Actual latest testing download remains the immutable [v0.6.5_111.pkg](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.5_111), manifest `FreeBSD:15:amd64`, SHA-256 `7257f54d74ef10fedc30d75e5e4a13861253bc8ad64d64ab232c537c2a56fae3`, source `b4c6b19c`.
+
+**P0 real OPNsense router [#1213](https://github.com/Tolian82/os-zapret2-restyle/issues/1213):** still has installed `_109` with `postinstall-attested` protected record from failed `_107→_109`; shared Apply journal `committed`, no engine/PID. Exactly observed `P2 source-only provenance unavailable: native profile exclusion policy is missing or incorrectly ordered`, Boot guard `build-preflight`, not PID protection. `_111` repairs generated global exclusion token order in native learning profiles and passed exact-head FreeBSD qualification. Published package alone is NOT proof of restoring this already-blocked instance. **No repeat pkg-update/finish, no direct pkg add -f, no journal deletion, no Config rewrite on owner device.**
+
+**Specific next gate:** New disposable-only [P0 real guarded recovery test](../scripts/owner-p0-protected-rescue-native.py) and [native workflow](../.github/workflows/owner-p0-protected-rescue.yml) must reproduce immutable genuine `_107`→broken published `_109` with **nonempty native Exclude Domains & IPSet**, strict original `postinstall-attested`, and zero engine. Then test **original installed service/FD9** `pkg-update-finish` using only the three exact published `_111` repaired Python backend modules in a root-private `BACKEND_DIR` overlay, with installed `SCRIPT_DIR` unchanged and original sealed Config/WAN/Voice/IPFW/Found retained; finally attest normal package-owned guarded `_109→_111` upgrade and RUNNING state with no orphan protected record. This is a diagnostic test path, **not an on-router script or user command**. If any gate refuses, do not advise restoration. No extra independent Config owner, PID bypass or SH installer.
+
+**Owner handoff:** after native proof, provide only verifiable, guarded and finite console commands using the previously published `.pkg`, collect status and error codes; leave issue #1213 OPEN until owner confirms actual running `_111`. Read [GH-060/061](GITHUB_PUBLICATION.md), [CHAT-027](CHAT_RULES.md), and the original [TZ6v4 plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md).
+## 22 November 2026 — published _111 testing package; _112 documentation tail (HISTORICAL)
 
 **Exact revision identity:** `v0.6.5_112`, `VERSION=0.6.5`, `PLUGIN_REVISION=112`, and identity name `os-zapret2-restyle-0.6.5_112.pkg` refer to the **source-only documentation revision**. No `_112.pkg` was built or published.
 
