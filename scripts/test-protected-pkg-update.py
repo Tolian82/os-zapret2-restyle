@@ -125,10 +125,15 @@ class ProtectedPkgUpdate(unittest.TestCase):
         self.assertEqual(
             m.restore_finish_evidence(result([], 70, stderr=
                 "pkg-update-finish-failed=boot\n" + private)),
-            "rc:70,stage:boot")
+            "rc:70,stage:boot,guard:unknown")
         self.assertEqual(
             m.restore_finish_evidence(result([], 99, stderr=private)),
-            "rc:other,stage:unknown")
+            "rc:other,stage:unknown,guard:unknown")
+        self.assertEqual(
+            m.restore_finish_evidence(result([], 70, stderr=
+                "pkg-update-finish-failed=boot\n"
+                "shared-apply-guard=epoch-attest\n" + private)),
+            "rc:70,stage:boot,guard:epoch-attest")
         self.assertNotIn(private, m.restore_finish_evidence(
             result([], 70, stderr="pkg-update-finish-failed=boot\n" + private)))
         self.assertIn('pkg-update-finish-failed=boot', SERVICE.read_text())
@@ -139,7 +144,7 @@ class ProtectedPkgUpdate(unittest.TestCase):
         self.assertEqual(error, "RUNTIME_RESTORE_REQUIRES_REVIEW")
         self.assertTrue(staged)
         self.assertEqual(len(calls), 3)
-        self.assertIn("pkg-update-restore-evidence=rc:70,stage:unknown",
+        self.assertIn("pkg-update-restore-evidence=rc:70,stage:unknown,guard:unknown",
                       output.getvalue())
 
     def test_exact_success_dispatches_one_native_pkg(self):

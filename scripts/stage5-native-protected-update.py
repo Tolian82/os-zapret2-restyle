@@ -233,7 +233,7 @@ def native_running_reinstall(archive, target, candidate_sha):
         why = re.search(r"(?m)^pkg-update-refused=([A-Z0-9_]+)$",
                         replaced.stderr)
         finish_evidence = re.search(
-            r"(?m)^pkg-update-restore-evidence=(rc:(?:0|69|70|other),stage:(?:boot|unknown))$",
+            r"(?m)^pkg-update-restore-evidence=(rc:(?:0|69|70|other),stage:(?:boot|unknown),guard:(?:activate|activated-journal|activated-bundle|activated-probe|config-save|epoch-journal|saved-readback|saved-probe|ipfw-commit|committed-probe|epoch-schema|epoch-dispatch|epoch-attest|epoch-receipt|unknown))$",
             replaced.stderr)
         new_schema, new_learning = original_auto_generation(
             new_id, observer_required) if status_after.returncode == 0 else (0, [])

@@ -301,7 +301,13 @@ def restore_finish_evidence(finished: subprocess.CompletedProcess) -> str:
         stage = "boot"
     else:
         stage = "unknown"
-    return f"rc:{rc},stage:{stage}"
+    guard = re.search(
+        r"(?m)^shared-apply-guard=(activate|activated-journal|activated-bundle|"
+        r"activated-probe|config-save|epoch-journal|saved-readback|"
+        r"saved-probe|ipfw-commit|committed-probe|epoch-schema|"
+        r"epoch-dispatch|epoch-attest|epoch-receipt)$",
+        finished.stderr or "")
+    return f"rc:{rc},stage:{stage},guard:{guard.group(1) if guard else 'unknown'}"
 
 
 def replace(path: Path) -> None:

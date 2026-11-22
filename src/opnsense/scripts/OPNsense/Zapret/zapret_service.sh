@@ -1459,6 +1459,7 @@ shared_apply_activate_and_commit_service()
         # because a shell status is zero or APPLY_PHASE was reset.
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=activate' >&2
         return 70
     fi
     if ! shared_apply_record_current_service activated "$_shared_apply_id" "$_shared_apply_page" \
@@ -1470,6 +1471,7 @@ shared_apply_activate_and_commit_service()
         fi
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=activated-journal' >&2
         return 70
     fi
     # Independent proof against a swap between preflight and kernel install.
@@ -1482,6 +1484,7 @@ shared_apply_activate_and_commit_service()
         fi
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=activated-bundle' >&2
         return 70
     fi
     # Independent post-activation proof for both Strategies and Voice Apply.
@@ -1490,6 +1493,7 @@ shared_apply_activate_and_commit_service()
     if ! apply_runtime_attest_activated; then
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=activated-probe' >&2
         return 70
     fi
     if [ "$_shared_found_scope" = ordinary ]; then
@@ -1508,6 +1512,7 @@ shared_apply_activate_and_commit_service()
             fi
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+            printf '%s\n' 'shared-apply-guard=config-save' >&2
             return 70
         fi
     fi
@@ -1521,6 +1526,7 @@ shared_apply_activate_and_commit_service()
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields"; then
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+            printf '%s\n' 'shared-apply-guard=epoch-journal' >&2
             return 70
         fi
     else
@@ -1534,6 +1540,7 @@ shared_apply_activate_and_commit_service()
         "$_shared_apply_id" "$_shared_apply_page") || {
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=saved-readback' >&2
         return 70
     }
     if ! {
@@ -1552,11 +1559,13 @@ shared_apply_activate_and_commit_service()
         # AFTER save cannot be undone by merely restoring the old release.
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=saved-probe' >&2
         return 70
     fi
     if ! apply_runtime_commit; then
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=ipfw-commit' >&2
         return 70
     fi
     # COMMIT discarded the reversible IPFW stage. Only now can the final
@@ -1578,6 +1587,7 @@ shared_apply_activate_and_commit_service()
         # durable transaction and force review instead of false success.
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=committed-probe' >&2
         return 70
     fi
     # Do NOT write terminal committed before the original pretraffic epoch
@@ -1596,6 +1606,7 @@ shared_apply_activate_and_commit_service()
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
             common_error "shared Apply: original epoch schema unavailable"
+            printf '%s\n' 'shared-apply-guard=epoch-schema' >&2
             return 70
         }
         case "$_shared_epoch_schema" in
@@ -1610,6 +1621,7 @@ shared_apply_activate_and_commit_service()
             *)
                 shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                     "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+                printf '%s\n' 'shared-apply-guard=epoch-dispatch' >&2
                 return 70
                 ;;
         esac
@@ -1618,12 +1630,14 @@ shared_apply_activate_and_commit_service()
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
             common_error "shared Apply: original epoch completion refused"
+            printf '%s\n' 'shared-apply-guard=epoch-attest' >&2
             return 70
         }
         if [ "$_shared_epoch_complete" != "$_shared_epoch_expected" ]; then
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
             common_error "shared Apply: original epoch completion unverified"
+            printf '%s\n' 'shared-apply-guard=epoch-receipt' >&2
             return 70
         fi
     fi
