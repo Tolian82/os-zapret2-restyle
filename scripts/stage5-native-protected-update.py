@@ -162,11 +162,12 @@ def verified_old_auto_retirement(old_id: str, schema: int,
             return False
         data = archived.read_bytes()
         st = archived.stat()
-        if ([st.st_dev, st.st_ino, len(data),
-             hashlib.sha256(data).hexdigest()] != row["image"] or
-                (row["name"] != "debug.log" and
-                 ((PRODUCERS / row["name"]).exists() or
-                  (PRODUCERS / row["name"]).is_symlink())):
+        if [st.st_dev, st.st_ino, len(data),
+                hashlib.sha256(data).hexdigest()] != row["image"]:
+            return False
+        old_native = PRODUCERS / row["name"]
+        if (row["name"] != "debug.log" and
+                (old_native.exists() or old_native.is_symlink())):
             return False
     return seen == names | {"debug.log"}
 
