@@ -3088,6 +3088,30 @@ pkg_update_postinstall_service()
     printf 'zapret-pkg-postinstall-attested=1\n'
 }
 
+pkg_update_continue_prepare_service()
+{
+    [ "$#" -eq 5 ] || return 64
+    # Explicit failed-restore continuation only. Never start the old package
+    # or graft source files to make its status agree with a new generation.
+    shared_apply_status_service >/dev/null 2>&1
+    [ "$?" -eq 1 ] || return 69
+    _pkg_continue_owner=$(shared_apply_inspect_service) || return 69
+    case "${_pkg_continue_owner}" in
+        committed\ *) ;;
+        *) return 69 ;;
+    esac
+    # The previous generation must already have completed its original
+    # native retirement. No Stop/ACK/Config writer is introduced here.
+    _pkg_continue_retired=$("${PYTHON_RUNTIME}" \
+        "${BACKEND_DIR}/auto_detect_minute.py" --retired-ready) || return 69
+    case "${_pkg_continue_retired}" in
+        auto-detect-retire=ready) ;;
+        *) return 69 ;;
+    esac
+    "${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py" \
+        continue-record "$2" "$3" "$4" "$5"
+}
+
 pkg_update_finish_service()
 {
     [ "$#" -eq 3 ] || return 64
@@ -3159,6 +3183,9 @@ service_dispatch()
             ;;
         pkg-update-postinstall)
             pkg_update_postinstall_service "$@"
+            ;;
+        pkg-update-continue-prepare)
+            pkg_update_continue_prepare_service "$@"
             ;;
         pkg-update-finish)
             pkg_update_finish_service "$@"
@@ -3427,7 +3454,7 @@ service_with_lifecycle_lock()
         # The original FD9 owns the durable guarded-package state.
         if [ -e "${PKG_UPDATE_RECORD}" ] || [ -L "${PKG_UPDATE_RECORD}" ]; then
             case "${1:-}" in
-                status|stop|pkg-update-finish|pkg-update-postinstall) ;;
+                status|stop|pkg-update-finish|pkg-update-postinstall|pkg-update-continue-prepare) ;;
                 *) echo "ERROR: protected package update requires review" >&2
                    return 69 ;;
             esac
@@ -3445,7 +3472,7 @@ service_with_lifecycle_lock()
         # mutation. Status, Stop and runtime-failure retain native access
         # even when the generic interpreter link is unavailable.
         case "${1:-}" in
-            start|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install|pkg-update-prepare|pkg-update-postinstall|pkg-update-finish)
+            start|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install|pkg-update-prepare|pkg-update-postinstall|pkg-update-finish|pkg-update-continue-prepare)
                 "${PYTHON_RUNTIME}" --check || return 69
                 ;;
         esac
@@ -3634,6 +3661,13 @@ service_with_lifecycle_lock()
 }
 
 case "${1:-}" in
+    pkg-update-continue)
+        # Explicit root recovery; a verified package staging tree is allowed.
+        [ "$#" -eq 3 ] || exit 64
+        "${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py" \
+            continue-postinstall "$2" "$3"
+        exit $?
+        ;;
     pkg-update)
         # Root-only installed updater delegates both mutations to original FD9.
         [ "$#" -eq 2 ] || exit 64
@@ -3668,7 +3702,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|shared-apply-recover-reviewed-native|pkg-update-prepare|pkg-update-postinstall|pkg-update-finish|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|shared-apply-recover-reviewed-native|pkg-update-prepare|pkg-update-postinstall|pkg-update-finish|pkg-update-continue-prepare|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
