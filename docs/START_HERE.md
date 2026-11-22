@@ -2,7 +2,7 @@
 
 ## 22 November 2026 — `_117` owner Apply PASS; Auto and Lab restoration P0 OPEN (CURRENT)
 
-**Identity:** Source-only `v0.6.5_119` (`VERSION=0.6.5`, `PLUGIN_REVISION=119`), **no `0.6.5_119.pkg`**. The owner's exact installed and latest published testing package remains `os-zapret2-restyle-0.6.5_117`. `_118` was only a publication-record source revision. This scope is documentation only: no backend, frontend, service or owner-appliance change.
+**Identity:** Source-only `v0.6.5_119` (`VERSION=0.6.5`, `PLUGIN_REVISION=119`), **no `0.6.5_119.pkg`**. The owner's exact installed and latest published testing package remains `os-zapret2-restyle-0.6.5_117`. `_118` was only a publication-record source revision. This scope is documentation only: no backend, frontend, service or owner-appliance change. **Prospective native artifact name:** `os-zapret2-restyle-0.6.5_119.pkg` (source-only, not built or published).
 
 **Owner-live confirmed:** original protected FD9 `_111→_117` upgrade returned `pkg-update=verified-installed-and-restored`, installed version `_117` and RUNNING. Two real Strategies GUI `Применить` operations — unchanged and after editing `Домены YouTube` — each returned `zapret is running`. Thus the original runtime-preflight GUI symptom is **field-PASS on these two paths**; universal service/lifecycle/Voice compatibility is not proven.
 
