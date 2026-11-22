@@ -137,6 +137,8 @@ class ProtectedPkgUpdate(unittest.TestCase):
         self.assertNotIn(private, m.restore_finish_evidence(
             result([], 70, stderr="pkg-update-finish-failed=boot\n" + private)))
         self.assertIn('pkg-update-finish-failed=boot', SERVICE.read_text())
+        self.assertIn('native-common-boot-guard=execute', SERVICE.read_text())
+        self.assertIn('native-common-boot-guard=receipt', SERVICE.read_text())
 
         output = StringIO()
         with tempfile.TemporaryDirectory() as tmp, redirect_stderr(output):

@@ -221,10 +221,38 @@ def main():
     booted = run([str(service), "start"], timeout=260)
     bootstate = json.loads(journal.read_bytes())
     boot_id = bootstate.get("detail", {}).get("id", "")
-    boot_schema, boot_learning = protected.original_auto_generation(boot_id, True)
+    boot_status = run([str(service), "status"]).returncode
+    boot_schema, boot_learning = 0, []
+    map_consistent = False
+    try:
+        boot_schema, boot_learning = protected.original_auto_generation(boot_id, True)
+        map_consistent = True
+    except protected.Refused:
+        pass
+    guard = re.search(
+        r"(?m)^native-common-boot-guard="
+        r"(saved-candidate|candidate-identity|build-command|build-preflight|"
+        r"execute|receipt|ordinary-activate|ordinary-commit)$",
+        booted.stderr)
+    print("NATIVE_PUBLISHED107_SCHEMA3_POSTBOOT=" + json.dumps({
+        "stop_rc": stopped.returncode,
+        "retired_source_verified": physical,
+        "boot_rc": booted.returncode,
+        "boot_guard": guard.group(1) if guard else "unknown",
+        "boot_status_rc": boot_status,
+        "journal_phase": bootstate.get("phase") if bootstate.get("phase") in (
+            "committed", "prepared", "activating", "activated",
+            "config-saved", "epoch-finalizing", "requires-review",
+            "restored") else "other",
+        "generation_changed": boot_id not in (predecessor, new_id),
+        "generation_map_consistent": map_consistent,
+        "boot_native_schema3": boot_schema == 3,
+        "learning_count": len(boot_learning),
+        "config_unchanged": protected.sha(config) == saved_config,
+        "engine_unchanged": protected.sha(engine) == engine_sha,
+    }, sort_keys=True), flush=True)
     need(stopped.returncode == 0 and physical and
-         booted.returncode == 0 and
-         run([str(service), "status"]).returncode == 0 and
+         booted.returncode == 0 and boot_status == 0 and map_consistent and
          boot_id not in (predecessor, new_id) and boot_schema == 3 and
          len(boot_learning) >= 1 and
          protected.sha(config) == saved_config and

@@ -1178,25 +1178,37 @@ shared_apply_boot_service()
         # exact same user Config and only one original shared engine.
         [ -x /usr/local/bin/php ] || return 69
         _shared_boot_stage=$(/usr/local/bin/php \
-            "$SCRIPT_DIR/shared_apply_request.php" saved-unchanged) || return 69
+            "$SCRIPT_DIR/shared_apply_request.php" saved-unchanged) || {
+            echo "native-common-boot-guard=saved-candidate" >&2
+            return 69
+        }
         case "$_shared_boot_stage" in
             prepared-id=*) _shared_boot_new_id="${_shared_boot_stage#prepared-id=}" ;;
-            *) return 69 ;;
+            *) echo "native-common-boot-guard=candidate-identity" >&2; return 69 ;;
         esac
         case "$_shared_boot_new_id" in ""|*[!a-f0-9]*) return 69 ;; esac
         [ "${#_shared_boot_new_id}" -eq 32 ] &&
         [ "$_shared_boot_new_id" != "$_shared_boot_id" ] || return 69
-        _shared_boot_build=$(shared_apply_prepare_service "$_shared_boot_new_id") || return 69
+        _shared_boot_build=$(shared_apply_prepare_service "$_shared_boot_new_id") || {
+            echo "native-common-boot-guard=build-command" >&2
+            return 69
+        }
         _shared_boot_last=$(printf '%s\n' "$_shared_boot_build" | tail -n 1)
-        case "$_shared_boot_last" in preflight-rejected=*) return 69 ;; esac
+        case "$_shared_boot_last" in
+            preflight-rejected=*) echo "native-common-boot-guard=build-preflight" >&2; return 69 ;;
+        esac
         # Shared Apply intentionally reports preflight-rejected=... with
         # shell exit 0. A cold Boot must NOT translate that non-activation
         # into success or claim a new engine merely from the exit status.
         _shared_boot_apply=$(
             shared_apply_execute_service "$_shared_boot_new_id" strategies
-        ) || return 70
+        ) || {
+            echo "native-common-boot-guard=execute" >&2
+            return 70
+        }
         shared_apply_boot_receipt_verified_service             "$_shared_boot_apply" "$_shared_boot_new_id" || {
             common_error "native common boot: saved-unchanged Config/Apply receipts do not match"
+            echo "native-common-boot-guard=receipt" >&2
             return 70
         }
         return 0
@@ -1217,8 +1229,14 @@ shared_apply_boot_service()
     fi
 
     # A partial failure is never a successful boot.
-    apply_runtime_activate "$_shared_boot_dir/release" "$_shared_boot_mode" || return 70
-    apply_runtime_commit || return 70
+    apply_runtime_activate "$_shared_boot_dir/release" "$_shared_boot_mode" || {
+        echo "native-common-boot-guard=ordinary-activate" >&2
+        return 70
+    }
+    apply_runtime_commit || {
+        echo "native-common-boot-guard=ordinary-commit" >&2
+        return 70
+    }
     # A successful IPFW commit is not a running service receipt. The
     # cold-boot path must meet the same post-COMMIT guarantee as normal
     # Voice/Strategies Apply: the installed profile/traffic.conf/IPSET
