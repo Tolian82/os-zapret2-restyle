@@ -8,6 +8,10 @@
 
 # os-zapret2-restyle — master plan
 
+## 23 November 2026 — S02 source route audit / NEXT S03
+
+On merged source-only `main v0.6.5_130` (`0b001459`), the [pinned S02 all-caller code route map](architecture/ZAPRET2_TZ6V5_S02_ACTUAL_LIFECYCLE_ROUTE_AUDIT.md) records GUI/API/configd/FD9 physical transitions, Run/Stop/Restart/Apply/Voice/Lab/pkg/upstream/boot/callback/Auto, old lifecycle-only RU/EN, IPFW numeric scope and raw PID/SIGKILL low-level helpers. This is **source-level read-only GO**, NOT native implementation/owner approval. Next source-only `v0.6.5_131` (prospective package `os-zapret2-restyle-0.6.5_131.pkg` **not built/published**) carries only documentation and Makefile revision. S03 actual generator RED/parity and V5-01–17 failures next, then S04–S20. Old three-icon screenshot tooltip/handler not owner-verified; #1223/#1224/#1225 remain OPEN. Owner last installed `_117.pkg` untouched. Historical candidate wording below should not be mistaken for current work.
+
 ## Current priority — ТЗ_6v5 (22 ноября 2026)
 
 **Product candidate `v0.6.5_129` (PR #1237, ещё НЕ merged):** после успешного docs-only `main _128` разрабатываются exact активные IPFW-диапазоны: launcher `RULE_BASE=19000/RULE_MAX=19099`, генератор/preview и обе копии purge; прежняя системная вставка IPFW 65534 заменяется fail-closed. Сравнительная Lab 19140–19200 остаётся future-only. Критерий V5-17 требует проверенной интеграции; old-head canary показал известное `OriginalLockRefused/original_config_child_rc69` в restored Apply, не доказано, что оно связано с диапазоном. Текущий source PR добавляет охрану числовых границ для backend/Voice/Lab/rollback, узко разрешённый sealed `19010 ↔ 19099` переход прежнего IPFW-поколения под original FD9 и CI `scripts/test-ipfw-number-scope.py`; canary на следующей ревизии PASS, G01 в одном прогоне блокирован внешним GitHub Releases 403 до purge. Полный exact-head gate обязателен перед merge; `_129.pkg` не выпущен, owner `_117` не менялся.

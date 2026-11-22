@@ -14,6 +14,17 @@
 
 # os-zapret2-restyle — current state v0.6.x
 
+## 23 ноября 2026 — CURRENT: ТЗ_6v5 S02 source-only route map
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=131`, `v0.6.5_131` in new documentation branch `feat/tz6v5-s02-actual-route-audit` from accepted merged `main v0.6.5_130` (`0b001459`). Prospective only `os-zapret2-restyle-0.6.5_131.pkg` **not built/published**; owner last installed `_117.pkg` unchanged. No product/runtime changes.
+
+**S02 read-only code snapshot:** [full handler/configd → physical writer and original FD9 route map](architecture/ZAPRET2_TZ6V5_S02_ACTUAL_LIFECYCLE_ROUTE_AUDIT.md) pinned to `main _130`. Includes old Common/Legacy/Apply/Lab/pkg/setup/callback/Auto/Boot paths, context locks, IPFW V5-17 and lifecycle-only RU/EN producer-consumer. Findings: multiple distinct physical Stop/Start decision trees, old `restart→reconfigure`, direct Apply actuator; current `reload`, guarded `--force`, `status --json`, `--help` not implemented. Read-only **source GO only**; no actual native click/tooltip or runtime acceptance. Old 3-icon screenshot specifics remain unconfirmed.
+
+**Next:** S03 old-generator parity and fail-first RED on real source, no upstream manual behavior experiments. S04–S20 NOT RUN. P0 [Lab #1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224), [Auto #1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223), [routes #1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225) OPEN.
+
+---
+
+
 ## 23 ноября 2026 — CURRENT: product IPFW source candidate _129 (NOT merged)
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=129`, `v0.6.5_129` based on merged `main _128 7f48b3e3`; prospective `os-zapret2-restyle-0.6.5_129.pkg` **не создан**. Owner installed `_117.pkg` unaffected; Lab #1224, Auto #1223 still OPEN.
