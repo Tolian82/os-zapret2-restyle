@@ -283,6 +283,44 @@ strategy_lab_semantic_evidence()
         "${_strategy_lab_semantic_firewall_hash}"
 }
 
+# One inherited-FD9 Common/Legacy transition selector for Lab and pkg.
+# Public operator, Apply and recovery routes remain separate until fully
+# migrated and qualified under global DEV-065.
+original_fd9_lifecycle_transition()
+{
+    [ "$#" -eq 2 ] || return 64
+    case "$1" in start|stop) ;; *) return 64 ;; esac
+    case "$2" in lab|pkg-update) ;; *) return 64 ;; esac
+    # A caller already holds FD9. Never recursively lock the service.
+    ( : >&9 ) 2>/dev/null || return 75
+    if [ "$2" = lab ]; then
+        strategy_lab_lock_owner_valid || return 77
+        if [ "$1" = start ]; then wan_first_service require || return $?; fi
+    fi
+    if shared_apply_has_record_service; then
+        _canonical_lifecycle_owner=$(shared_apply_inspect_service) || return 69
+        case "$_canonical_lifecycle_owner" in
+            committed\ *)
+                if [ "$2" = lab ]; then
+                    preflight_shared_apply_journal strategy-lab-native || return 69
+                fi
+                case "$1" in
+                    start) shared_apply_boot_service "$_canonical_lifecycle_owner" ;;
+                    stop) shared_apply_stop_service "$_canonical_lifecycle_owner" ;;
+                esac
+                return $?
+                ;;
+            none|restored) ;;
+            *) return 69 ;;
+        esac
+    fi
+    if [ "$2" = lab ]; then preflight_shared_apply_journal || return 69; fi
+    case "$1" in
+        start) start_service ;;
+        stop) stop_service ;;
+    esac
+}
+
 strategy_lab_internal_dispatch()
 {
     : "${PKG_UPDATE_RECORD:=/var/db/zapret2/pkg-update/operation.json}"
@@ -311,20 +349,7 @@ strategy_lab_internal_dispatch()
             strategy_lab_semantic_evidence
             ;;
         strategy-lab-stop)
-            if shared_apply_has_record_service; then
-                _lab_owner=$(shared_apply_inspect_service) || return 69
-                case "$_lab_owner" in
-                    committed\ *)
-                        preflight_shared_apply_journal strategy-lab-native || return 69
-                        shared_apply_stop_service "$_lab_owner"
-                        return $?
-                        ;;
-                    none|restored) ;;
-                    *) return 69 ;;
-                esac
-            fi
-            preflight_shared_apply_journal || return 69
-            stop_service
+            original_fd9_lifecycle_transition stop lab
             ;;
         extra-resources-native-recover-prepared)
             [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
@@ -354,24 +379,7 @@ strategy_lab_internal_dispatch()
             extra_resources_native_build_saved_service
             ;;
         strategy-lab-start)
-            # Internal Strategy Lab start inherits FD9. A direct caller must
-            # not bypass the external launcher WAN-first gate before ANY
-            # common/legacy engine or IPFW owner restoration.
-            wan_first_service require || return $?
-            if shared_apply_has_record_service; then
-                _lab_owner=$(shared_apply_inspect_service) || return 69
-                case "$_lab_owner" in
-                    committed\ *)
-                        preflight_shared_apply_journal strategy-lab-native || return 69
-                        shared_apply_boot_service "$_lab_owner"
-                        return $?
-                        ;;
-                    none|restored) ;;
-                    *) return 69 ;;
-                esac
-            fi
-            preflight_shared_apply_journal || return 69
-            start_service
+            original_fd9_lifecycle_transition start lab
             ;;
         *)
             return 64
@@ -3054,17 +3062,7 @@ pkg_update_prepare_service()
     "${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py" record \
         "$2" "$3" "$4" "${_pkg_prev_running}" || return 69
     if [ "${_pkg_prev_running}" = running ]; then
-        # The live original common/Voice generation has its own complete
-        # owner, observer retirement and IPFW proof. Never call legacy Stop.
-        if shared_apply_has_record_service; then
-            _pkg_current_owner=$(shared_apply_inspect_service) || return 69
-            case "${_pkg_current_owner}" in
-                committed\ *) shared_apply_stop_service "${_pkg_current_owner}" || return 70 ;;
-                *) return 69 ;;
-            esac
-        else
-            stop_service || return 70
-        fi
+        original_fd9_lifecycle_transition stop pkg-update || return 70
     fi
     shared_apply_status_service >/dev/null 2>&1
     [ "$?" -eq 1 ] || {
@@ -3129,19 +3127,10 @@ pkg_update_finish_service()
         # Restore uses the same WAN-first rule as ordinary Start.
         wan_first_service require || return 69
         extra_resources_block_pending_start_service || return 69
-        if shared_apply_has_record_service; then
-            _pkg_new_owner=$(shared_apply_inspect_service) || return 69
-            case "${_pkg_new_owner}" in
-                committed\ *) shared_apply_boot_service "${_pkg_new_owner}" || {
-                    # Fixed diagnostic only; never expose saved Config or shell trace.
-                    echo "pkg-update-finish-failed=boot" >&2
-                    return 70
-                } ;;
-                *) return 69 ;;
-            esac
-        else
-            start_service || return 70
-        fi
+        original_fd9_lifecycle_transition start pkg-update || {
+            echo "pkg-update-finish-failed=boot" >&2
+            return 70
+        }
         shared_apply_status_service >/dev/null 2>&1
         [ "$?" -eq 0 ] || {
             echo "ERROR: successor did not reach verified RUNNING" >&2

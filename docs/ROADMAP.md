@@ -1,6 +1,6 @@
 # os-zapret2-restyle — master plan
 
-**CURRENT 22 Nov 2026:** owner confirmed manually restored original `_117` service RUNNING (`status_rc=0`), and demanded **one implementation of Start/Stop, all others delegate**. The global `DEV-065` / [ТЗ_6v4 §6.1](architecture/TZ_6v4.md) is now the highest priority. Source-only `_120` captures the design and audit, no `_120.pkg`; owner still installed `_117`. [Canonical control audit](architecture/ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md) and [owner field matrix](verification/evidence/2026-11-22-owner-live-117-lab-autodetect-controls.md).
+**CURRENT 22 Nov 2026:** owner confirmed manually restored original `_117` service RUNNING (`status_rc=0`), and demanded **one implementation of Start/Stop, all others delegate**. The global `DEV-065` / [ТЗ_6v4 §6.1](architecture/TZ_6v4.md) is now the highest priority. Source candidate `_121` begins source-level Lab/pkg delegation but leaves other service callers OPEN; no `_121.pkg`; owner still installed `_117`. [Canonical control audit](architecture/ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md) and [owner field matrix](verification/evidence/2026-11-22-owner-live-117-lab-autodetect-controls.md).
 
 ## Current priority
 

@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current handoff
 
-## 22 November 2026 — DEV-065 canonical Start/Stop FIRST; `_120` source-only rule/audit (CURRENT)
+## 22 November 2026 — DEV-065 first original FD9 Lab/pkg delegation, source candidate `_121` (CURRENT)
+
+**Source candidate:** `v0.6.5_121`, `VERSION=0.6.5`, `PLUGIN_REVISION=121`; prospective `os-zapret2-restyle-0.6.5_121.pkg` **not built or published**. The owner still runs verified installed `_117`, last manually stopped and started with `status_rc=0`. Strategy Lab stage 90/99 `RESTORE_FAILED` remains an independent P0.
+
+**DEV-065 implementation IN PROGRESS:** one original inherited-FD9 `original_fd9_lifecycle_transition` now chooses authenticated native Common/qualified legacy *for Strategy Lab and protected pkg-update* Start/Stop. Both Lab internal actions and package prepare/finish delegate to it. A portable regression checks the real function's POSIX syntax and refuses pending owners, missing Lab authorization, WAN and journal failures. This **does not** finish DEV-065: operator/system buttons, Restart, Apply candidate switch, auto-restart, upstream installer and callback have remaining direct native transition choices. No new owner service operation is authorized.
+
+**Next exact task:** finish routing all remaining actual engine transitions through the one FD9 implementation while preserving native epoch/P1/ACK, one dvtws2, Voice/WAN/IPFW/Config, rollback and package safety. Then reproduce Lab restoration `RESTORE_FAILED` against schema3 and test real GUI/installer/actions on disposable OPNsense. [Global DEV-065](PROJECT_PRINCIPLES.md), [canonical source route map](architecture/ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md), [plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md).
+## 22 November 2026 — DEV-065 canonical Start/Stop FIRST; `_120` source-only rule/audit (HISTORICAL)
 
 **Source candidate:** `v0.6.5_120`, `VERSION=0.6.5`, `PLUGIN_REVISION=120`; prospective `os-zapret2-restyle-0.6.5_120.pkg` **not built or published**. Owner physical system remains installed test `.pkg` `_117` with RUNNING service verified `status_rc=0` **after owner manually stopped and restarted it**. Prior physical edited/unedited Strategies Apply also remained RUNNING. Lab `job.iDvhRh` stage 90/99 `RESTORE_FAILED` remains a real failure; manual recovery is not a Lab PASS.
 

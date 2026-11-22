@@ -878,6 +878,8 @@ jobs:
         run: sh scripts/test-shared-apply-activated-staged.sh
       - name: Original FD9 shared native stop and restart contract
         run: sh scripts/test-shared-apply-stop.sh
+      - name: Test DEV-065 original FD9 Lab/pkg lifecycle delegation
+        run: sh scripts/test-dev065-lifecycle-routing.sh
       - name: "Common committed native reboot: Config/runtime/IPFW startup"
         run: sh scripts/test-shared-apply-boot.sh
       - name: Shared runtime candidate bundle content seal and crash refusal

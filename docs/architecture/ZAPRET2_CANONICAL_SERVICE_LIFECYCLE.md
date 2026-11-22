@@ -2,6 +2,10 @@
 
 **Owner decision / effective immediately:** 22 November 2026. **Global mandatory rule:** [DEV-065](../PROJECT_PRINCIPLES.md). **Normative project TZ:** [ТЗ_6v4 §6.1](TZ_6v4.md). **Tracking:** [#1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225); Lab [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224); Auto [#1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223).
 
+## Implementation checkpoint: candidate `_121`, partial source consolidation only
+
+`zapret_service.sh::original_fd9_lifecycle_transition(action, origin)` now provides **one inherited-FD9 owner selection for `lab` and `pkg-update` contexts**. Replaced separate native Common/Legacy Start/Stop decisions in the Lab internal dispatcher and protected package prepare/finish; newly added portable POSIX test exercises read-only original owner, invalid/pending owner, WAN/FD9 authorization, journal guard and failure propagation. Manual S0 helper smoke passed against the exact implementation function. This is NOT the completed rule: ordinary system Start/Stop/Restart, Shared Apply candidate activation, upstream engine install, auto-restart and failure callbacks still require canonicalization and genuine native acceptance. No `_121.pkg` or owner appliance mutation.
+
 ## 1. User-visible acceptance and exact current physical facts
 
 Owner is physically running installed `os-zapret2-restyle-0.6.5_117`. Protected update and original Strategies edited/unchanged Apply were accepted on owner system. After a subsequent failed Lab `job.iDvhRh` stages 90/99 (`RESTORE_FAILED`), the owner **manually stopped and started the service**, with subsequent `zapret_service.sh status` → `zapret is running`, `status_rc=0`. Thus **manual Stop→Start is accepted as functional**, while Lab automatic restore remains **FAILED/OPEN**. No claim is made about the screenshot's tooltip/handler identity merely from green Play, circular-arrow and white Stop icons. Source-only `_120` introduces no new package or device change.
