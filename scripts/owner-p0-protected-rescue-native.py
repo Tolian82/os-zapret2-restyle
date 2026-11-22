@@ -321,8 +321,16 @@ def main():
                     "auto-detect-retire-original-guard=",
                     "native-common-stopped=",
                     "zapret-pkg-update-prepared=1")
+    # The native producer itself prints only source-defined, pre-whitelisted
+    # guard IDs; never forward raw child stderr, shell traces or Config data.
+    native_guard_match = re.search(
+        r"(?m)^auto-detect-retire-original-guard=([a-z0-9_]{1,70})$",
+        marker_text)
+    native_guard = (native_guard_match.group(1)
+                    if native_guard_match else "unknown")
     print("P0_NATIVE_DIRECT_ORIGINAL_PREPARE=" + json.dumps({
         "rc": prepare.returncode,
+        "original_lock_guard": native_guard,
         "markers": {key: key in marker_text for key in known_guards},
         "record_phase":
             json.loads(RECORD.read_bytes()).get("phase") if RECORD.is_file()
