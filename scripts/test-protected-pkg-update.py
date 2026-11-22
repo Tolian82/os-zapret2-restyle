@@ -204,9 +204,9 @@ class ProtectedPkgUpdate(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             missing = Path(temp) / "dvtws2.pid"
             self.assertEqual(fixture.read_pid_if_present(missing), "missing")
-            missing.write_text("10101\\n")
+            missing.write_text("10101\n")
             self.assertEqual(fixture.read_pid_if_present(missing), "10101")
-            missing.write_text("bad PID\\n")
+            missing.write_text("bad PID\n")
             self.assertEqual(fixture.read_pid_if_present(missing), "missing")
             missing.unlink()
             missing.symlink_to("/etc/passwd")
