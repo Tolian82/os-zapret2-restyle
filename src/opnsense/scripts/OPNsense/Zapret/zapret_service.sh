@@ -2003,9 +2003,11 @@ shared_apply_prepare_service()
         return 0
     }
     # The original FD9 and native PHP candidate must agree BEFORE seal.
-    # Schema2 is unchanged for users. Schema3's already implemented
-    # full-N producer/epoch route is only trial-enabled on disposable CI
-    # OPNsense until real running Stop/Boot/Recovery acceptance is complete.
+    # Explicit native Target Mode AUTO selects the now-qualified per-profile
+    # schema3 lifecycle, not a hidden global observer. List/All retain the
+    # existing schema2 route for a safe and intentional compatibility boundary.
+    # No environment-only CI flag may change user traffic semantics; the
+    # schema3 eligibility and source map are independently checked below.
     # Neither path owns an extra process, Config writer, or lifecycle lock.
     if [ -f "$_shared_work/release/auto-detect-source-map.json" ]; then
         _shared_auto_page=$(/usr/local/bin/jq -er \
@@ -2034,16 +2036,13 @@ shared_apply_prepare_service()
             esac
         fi
         if [ "$_shared_auto_mode" = 1 ]; then
-            if [ "${ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL:-0}" = 1 ]; then
-                # A production/user shell must never silently enable an
-                # unaccepted schema3 owner merely by setting one variable.
-                # This is CI-only while full installed lifecycle is open.
-                if [ "${GITHUB_ACTIONS:-}" != true ] ||
-                   [ "${ZAPRET2_NATIVE_BUILD_CI:-0}" != 1 ] ||
-                   [ "${ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE:-0}" != 1 ]; then
-                    printf '%s\n' preflight-rejected=runtime-build
-                    return 0
-                fi
+            _shared_target_mode=$(/usr/local/bin/jq -er \
+                '.mode | select(.=="auto" or .=="list" or .=="all")' \
+                "$_shared_work/release/auto-detect-source-map.json") || {
+                printf '%s\n' preflight-rejected=runtime-build
+                return 0
+            }
+            if [ "$_shared_target_mode" = auto ]; then
                 _shared_learning_preflight=$("$PYTHON_RUNTIME" \
                     "$BACKEND_DIR/auto_detect_origin_map.py" preflight-learning \
                     "$_shared_work" "$_shared_auto_digest") || {
@@ -2069,8 +2068,8 @@ shared_apply_prepare_service()
                     return 0
                 fi
             else
-                # Exact unchanged schema2 production route until native
-                # schema3 lifecycle is independently accepted.
+                # List and All retain the original schema2 preview/promotion.
+                # They do not create per-profile learning N-inboxes.
                 if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
                     preview "$_shared_work" "$_shared_auto_digest" >/dev/null ||
                    ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
