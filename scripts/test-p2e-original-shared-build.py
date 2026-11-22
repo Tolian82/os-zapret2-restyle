@@ -273,7 +273,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         canonical_tokens = rows[2]
         start = len(rows[0]) + 1 + len(rows[1]) + 1
         forged_tokens[start:start + len(canonical_tokens)] = learning_row
-        forged_args = ("\\n".join(forged_tokens) + "\\n").encode("utf-8")
+        forged_args = " ".join(forged_tokens).encode("utf-8")
         forged_record = dict(proposal,
                              final_args_sha256=hashlib.sha256(forged_args).hexdigest())
         with self.assertRaises(owner.GenerationRefused):
