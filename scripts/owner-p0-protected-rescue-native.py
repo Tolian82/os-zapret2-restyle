@@ -298,6 +298,29 @@ def main():
     # Normal installed package-owned protected upgrade, no direct pkg add.
     upgrade = run([str(SERVICE), "pkg-update", str(fixed)],
                   env=env, timeout=480)
+    # P0 stage classification is bounded to fixed public reason tokens. The
+    # protected coordinator deliberately hides child stderr/Config from logs.
+    reason_match = re.search(
+        r"(?m)^pkg-update-refused=([A-Z0-9_]{1,96})$",
+        upgrade.stderr + "\n" + upgrade.stdout)
+    upgrade_reason = reason_match.group(1) if reason_match else "unclassified"
+    interim_record = json.loads(RECORD.read_bytes()) if RECORD.is_file() else {}
+    interim_status = run([str(SERVICE), "status"], env=env, timeout=45).returncode
+    interim_census = run(["ps", "-axo", "comm="], timeout=30)
+    interim_process = (interim_census.returncode == 0 and
+                       any(x.strip().rsplit("/", 1)[-1] == "dvtws2"
+                           for x in interim_census.stdout.splitlines()))
+    print("P0_NATIVE_NEXT_PKG_PHASE=" + json.dumps({
+        "code": upgrade.returncode, "reason": upgrade_reason,
+        "operation_phase": interim_record.get("phase", "absent"),
+        "installed_version": installed(),
+        "staged_native_status_rc": interim_status,
+        "real_dvtws2_process": interim_process,
+        "pid_file_present": PIDFILE.is_file(),
+        "replacement_marker_present": MARKER.is_file(),
+        "original_config_sha_unchanged": digest(CONFIG) == config_sha,
+        "original_engine_sha_unchanged": digest(engine) == engine_sha,
+    }, sort_keys=True), flush=True)
     updated_state = state()
     id_ = updated_state.get("detail", {}).get("id", "")
     schema3, profiles = (0, [])
