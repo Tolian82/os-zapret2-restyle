@@ -75,7 +75,8 @@ def pin_archive(version_sha):
          and digest(pkg) == sha, "PUBLISHED_PKG_SHA_MISMATCH")
     data = manifest(pkg)
     need(data.get("version") == ver and data.get("name") == NAME and
-         data.get("abi") == "FreeBSD:15:amd64", "PUBLISHED_PKG_ABI_MISMATCH")
+         data.get("abi") == run(["pkg", "config", "ABI"]).stdout.strip(),
+         "PUBLISHED_PKG_ABI_MISMATCH")
     return pkg, data
 
 
@@ -100,7 +101,7 @@ def gate():
          os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
          os.uname().machine == "amd64" and
          run(["pkg", "info", "-e", NAME]).returncode == 1 and
-         run(["pkg", "config", "ABI"]).stdout.strip() == "FreeBSD:15:amd64" and
+         run(["pkg", "config", "ABI"]).returncode == 0 and
          run(["opnsense-version", "-a"]).stdout.strip().startswith("26.7") and
          not RECORD.exists() and not MARKER.exists() and not STAGE.exists(),
          "REQUIRES_PRISTINE_DISPOSABLE_OPNSENSE_267")
