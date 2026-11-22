@@ -202,7 +202,7 @@ class OriginalLockHandoffTests(unittest.TestCase):
         generation = "a" * 32
         pending = self.queue.pending / generation
         with self.queue.exclusive():
-            with patch("voice_ipfw_adapter.require_lifecycle_lock"), \\
+            with patch("voice_ipfw_adapter.require_lifecycle_lock"), \
                  patch("auto_detect_original_lock_handoff.subprocess.run",
                        side_effect=subprocess.TimeoutExpired(["php"], 25)):
                 with self.assertRaisesRegex(OriginalLockRefused,
@@ -210,7 +210,7 @@ class OriginalLockHandoffTests(unittest.TestCase):
                     _original_completion_locked(
                         self.queue, pending, php_bin="php", php_script=PHP_FIXTURE,
                         timeout=25, learning=True, stopped_learning=True)
-            with patch("voice_ipfw_adapter.require_lifecycle_lock"), \\
+            with patch("voice_ipfw_adapter.require_lifecycle_lock"), \
                  patch("auto_detect_original_lock_handoff.subprocess.run",
                        return_value=subprocess.CompletedProcess(["php"], 69, b"", b"")):
                 with self.assertRaisesRegex(OriginalLockRefused,
