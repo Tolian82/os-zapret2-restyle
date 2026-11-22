@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 22 ноября 2026 — CURRENT: локализация ошибок старого Start/Stop/Restart (scope-only)
+## 22 ноября 2026 — CURRENT: пять команд службы, guarded reload, Apply planner (docs-only)
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=125`, `v0.6.5_125` docs-only PR candidate поверх **merged `main _124 d429aff7`** ([PR #1233](https://github.com/Tolian82/os-zapret2-restyle/pull/1233)). Prospective `os-zapret2-restyle-0.6.5_125.pkg` **не существует**. Owner installed `_117.pkg`, manual Stop→Start RUNNING и два Strategies Apply PASS; Lab #1224 RESTORE_FAILED и Auto #1223 missing Found OPEN. Новые пять команд/reload planner ещё не реализованы и native PASS не получали.
+
+**Нормативное решение:** [ТЗ_6v5 `5.1–5.4, V5-13/14](architecture/TZ_6v5.md), [DEV-068](PROJECT_PRINCIPLES.md), [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). Public `start|stop|restart|reload|status`, полный Restart=original-FD9 Stop→Start; Reload лишь для подтверждённых изменений контента уже подключённых HOSTLIST/IPSet без изменения PID/IPFW/argv. GUI Apply выбирает действие по effective diff до мутаций. Ошибки dvtws2/supervisor транслируются в защищённый receipt и ограниченные RU/EN lifecycle-сообщения. WAN-first/G05→G08 и native P1/CAS/ACK сохраняются. Только документы/ревизия, не runtime и не package.
+
+
+## 22 ноября 2026 — локализация ошибок старого Start/Stop/Restart (предыдущая документационная веха)
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=124`, `v0.6.5_124` — docs-only PR candidate поверх merged `main _123` (`b0dbbbfd`); prospective `os-zapret2-restyle-0.6.5_124.pkg` не построен и не опубликован. Owner installed `_117.pkg`, manual Stop→Start RUNNING и два Strategies Apply PASS; Lab #1224 RESTORE_FAILED и Auto #1223 OPEN.
 
