@@ -1,6 +1,15 @@
 # os-zapret2-restyle — current handoff
 
-## 22 ноября 2026 — CURRENT: ТЗ_6v5, единый запуск и маршрут S00–S20 (docs-only)
+## 22 ноября 2026 — CURRENT: WAN-first/G05→G08 regression для ТЗ_6v5 (docs-only)
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=123`, `v0.6.5_123` — docs-only PR candidate на базе merged `main v0.6.5_122` (SHA `2844573a`). Prospective `os-zapret2-restyle-0.6.5_123.pkg` **не строился и не публиковался**. У владельца по-прежнему установлен `_117.pkg`; его работающая служба не затронута.
+
+**Подтверждённая ранее обязательная регрессия:** [ТЗ_6v5 `6.1](architecture/TZ_6v5.md), [G05](verification/G05_WAN_ONLY_NATIVE.md) и [G08](verification/G08_PRESTART_LAB_NATIVE.md). Можно сохранить **только WAN** при выключенной службе и без upstream/ordinary manifest/Traffic Strategy; после штатной установки upstream Standard/Extended Lab работает **до первого ordinary Start**, самостоятельно использует сохранённый WAN и проверенно оставляет ordinary STOPPED. `wan-required` раньше `engine-not-installed`; отказ не создаёт Job/IPFW. Не менять original WAN resolver, Config writer, FD9 или общий runtime Start policy. Гейт V5-11 включён в действующий [S00–S20 план](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) на S03/S06/S09/S13/S15/S17/S20.
+
+**Доказательство vs новая работа:** на disposable native OPNsense 26.7 прежний G08 (09.11) PASS в сценарии user-empty/Stopped/две реальных Lab задачи; это **исторический** PASS, не приёмка будущего launcher. Действующие незакрытые #1224 Lab RESTORE_FAILED, #1223 no Found, #1225 routes по установленной `_117` остаются OPEN. Draft #1228 остаётся rework, следующий продуктовый этап S01. Ни runtime, ни пакет, ни owner router этот docs-PR не меняет.
+
+
+## 22 ноября 2026 — ТЗ_6v5, единый запуск и маршрут S00–S20 (HISTORICAL docs checkpoint)
 
 **Source boundary:** `VERSION=0.6.5`, `PLUGIN_REVISION=122`, source candidate `v0.6.5_122`; prospective `os-zapret2-restyle-0.6.5_122.pkg` **не построен и не опубликован** — документационный кандидат `v0.6.5_122` основан на текущем `main _121` (`62b64e82`); до merge это **не** новая версия main, **не** собранный `_122.pkg`. На устройстве владельца установлен `_117.pkg`; ручной Stop→Start RUNNING, два Strategies Apply PASS, но Lab #1224 RESTORE_FAILED и Auto #1223 no Found остаются OPEN. Draft #1228 нельзя объединять как готовый код.
 

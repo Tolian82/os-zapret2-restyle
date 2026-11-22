@@ -6,6 +6,8 @@
 
 **Метод:** выполнять **S00 → S01 → … → S20**; для каждого шага: (1) действие, (2) RED→GREEN/нативное свидетельство, (3) переход только при GO. При FAIL устранять конкретную причину **в том же шаге**, сохраняя контекст stage/rc/SHA; не компенсировать missing evidence масштабным новым защитным механизмом. Source tests, disposable OPNsense и owner-live — **разные уровни приёмки**.
 
+**Наследуемый обязательный регрессионный сценарий WAN-first / Prestart Lab:** [LC-06/11/12](OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md), [G05](../verification/G05_WAN_ONLY_NATIVE.md), [G08](../verification/G08_PRESTART_LAB_NATIVE.md), [ТЗ_6v5 `6.1](TZ_6v5.md). **Сохранить** Save только WAN при Enabled=OFF, без upstream, обычного runtime/active manifest или непустой пользовательской стратегии. После **явной** установки upstream Standard/Extended Laboratory обязаны запускаться **без первого обычного Start**, проверять STOPPED→STOPPED и отсутствие остаточных Lab IPFW; старый native G08 PASS не переносится автоматически на новое поколение. Отсутствие WAN → `wan-required` раньше отсутствия двигателя; сохранённый WAN + отсутствующий двигатель → `engine-not-installed` без Job. G05→G08 — обязательный source/native RED→GREEN до и после переделки launcher.
+
 **Неприкосновенные инварианты:** один original FD9/Config writer/долговечный журнал, один `dvtws2`, original `shared_apply_operation`, native P1/P2/FD и WAL/ACK, только собственный IPFW; без SIGSTOP/SIGCONT, observer/second daemon, несанкционированных остановок для Auto, PID-journal deletion или угаданного recovery. Подтверждённый manual/Found/managed и исправный операторский Stop важнее неподтверждённых Auto-строк.
 
 ## G0 — документы, исходники и воспроизводимый RED (S00–S03)
@@ -37,7 +39,7 @@
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
 
 1. Сохранить deterministic old baseline: итоговые `dvtws.args`, actual native profile order/source-map/IPFW/Voice для `all/list/auto`, explicit selectors, User vs YouTube first-match, empty/nonempty/large/invalid lists.
-2. Написать RED на no-engine, no-Config, no-manifest, иностранные PID/IPFW, stale map, invalid refs и Stage/rc diagnostics; на status no side effects и one physical transition dispatcher.
+2. Написать RED на no-engine, no-Config, no-manifest, иностранные PID/IPFW, stale map, invalid refs и Stage/rc diagnostics; на status no side effects и one physical transition dispatcher. Добавить регрессию G05/G08: WAN-only Save при пустых user Strategy/hostlists и Enabled=OFF без upstream/manifest; WAN-first error precedence до Lab Job; реальный Standard/Extended Lab после установки engine до обычного Start.
 3. Проверить, что тесты действительно вызывают производственный генератор/templates и **падают на доказуемом дефекте**; Lab stage90 RED и Auto learning RED добавлять по объективной физической трассе, не фальсифицируя событие.
 
 **GO:** baseline и воспроизводимый RED доступны CI. **NO-GO:** unit mocks или grep объявлены native доказательством.
@@ -65,14 +67,15 @@
 1. На пустой fixture GUI/status доступны без engine/сохранённого профиля/manifest; ни скрытого install upstream, ни Start.
 2. Единожды, **только при доказанном first-install**, штатным existing Config writer установить безопасный service OFF и утверждённые YouTube Domains + TCP/QUIC baseline. Разрешить впоследствии пустую Strategy.
 3. Reinstall с сохранёнными пользовательскими YouTube/User/Found/IPSet/Exclude/Voice/WAN/Strategy обязан сохранить их без изменений; ordinary uninstall сохраняет, purge требует отдельного явного действия.
+4. **WAN-first:** через прежний нижний GUI/API Apply сохранить только WAN (при пустых пользовательских Strategy/списках, Enabled=OFF и отсутствующем upstream), под original FD9 и SharedConfigCommit::persist(), без dvtws.args/manifest/engine/IPFW. Проверить нативный Config readback/F5, отсутствие normal PID/IPFW и сохранность пустых полей после reinstall. Для STOPPED со старым sealed owner требуется соответствующая полноценная транзакция, не слепой shortcut.
 
-**GO:** empty→seed once→reinstall PASS, no engine is safe. **NO-GO:** повторная установка перезаписывает пользовательский текст.
+**GO:** empty→seed once→reinstall **и G05 WAN-only Save** PASS, no engine is safe. **NO-GO:** повторная установка перезаписывает текст или WAN требует обычного Start/манифеста.
 
 ### S07. XML OPNsense adapter → neutral model
 
 1. Из текущей модели `OPNsense/Zapret` получить read-only валидный typed projection, без второго Config writer и shell execution.
 2. Отделить platform XML/WAN/configd/pkg adapters от общего компилятора, для будущей pfSense оставить **интерфейс**, не добавлять неподтверждённый порт.
-3. Проверить enum, отсутствующие поля/невалидные значения, WAN interface по наличию IP (включая разрешённые TUN/OPT), зарегистрированные logical list IDs и существующие лимиты.
+3. Проверить enum, отсутствующие поля/невалидные значения, прежний native WAN resolver (`wan_preflight`/`config_resolve_interface()` с допустимыми назначенными TUN/OPT, в том числе без IPv4), registered list IDs и лимиты. Не использовать stale `zapret.conf` для Lab WAN device.
 
 **GO:** neutral model корректен и deterministic; Config ни разу не изменён.
 
@@ -91,6 +94,7 @@
 2. Immutable generated artifacts: owner/mode/size/SHA/seal, отсутствие symlink/traversal/foreign files/циклов, exact `dvtws.args` + source-map generation. Re-attest при activation.
 3. Live Found/managed content **не** фиксировать вечным SHA immutable JSON; разрешить только исходные P1/CAS/ACK hot-updates. В редакторе данные могут измениться до Apply, но active поколение не меняется преждевременно.
 4. Test missing/stale/modified/oversize/invalid/foreign refs, race, old generation.
+5. Active immutable JSON и `dvtws.args` — требования **ordinary** Start/Apply, не защищённого Lab Job со своей временной конфигурацией при сохранённом WAN и установленном engine.
 
 **GO:** valid candidate + tamper refusals, без второго user-editable config.
 
@@ -125,6 +129,7 @@
 1. Следуя S02, заменить физические ветки в Strategies/Voice toolbar, OPNsense service configd, Common/Voice Apply + `backend/apply_runtime.sh`, Lab, `pkg-update prepare/finish`, setup/upstream Install Version, Boot/recovery, auto-restart, runtime-failure callback.
 2. Context (Lab/pkg/Apply) сохраняет свои validation/rollback/receipts, но не выбирает собственный Common vs legacy и не держит второй physical process/IPFW writer. При inherited FD9 **нет nested lock/CLI reentry**.
 3. `restart/reconfigure` — guarded Stop→Start под непрерывным FD9; confirmed user STOPPED не запускается из-за scheduler. Проверить все handler/CLI paths автоматически и фактически на GUI.
+4. Лаборатория не должна требовать ordinary sealed manifest/непустую пользовательскую Strategy или прежний release для работы с исходно STOPPED. Job-owned temporary runtime остаётся отделённым от обычного Start; при наличии ordinary owner Lab использует ту же original FD9 безопасность.
 
 **GO:** один physical dispatcher и одна политика, все пути из S02 трассируются. **NO-GO:** альтернативный direct exec/kill/IPFW script.
 
@@ -143,6 +148,7 @@
 1. Read-only изучить `job.iDvhRh`, stage20/90/99 telemetry и genuine owner snapshot; на disposable OPNsense воспроизвести до-Lab RUNNING и STOPPED.
 2. Исследовать original `runtime_args_hash` при валидной schema3 rotation и 10s Stop timeout **как гипотезы**, только с фактическим stage/rc. Не менять таймауты/guards наугад.
 3. Исправить исключительно доказанный маршрут через canonical S13; проверить RUNNING→RUNNING, STOPPED→STOPPED на success/timeout/failure/cancel/interrupted restore.
+4. **G08 before first Start:** после S06 WAN-only Save и штатной установки upstream (но ни одного ordinary Start), user Strategy и YouTube Domains намеренно пусты, Enabled=OFF, нет active ordinary manifest. Запустить настоящие `/api/zapret/strategy_lab/start/status/result` Standard RU и Extended EN. Подтвердить отдельные Jobs, Stage 90 `restoration.verified=true`, STOPPED→STOPPED, отсутствие обычного PID и owned IPFW 19000–19131, неизменность Config. Stage40 TARGET_ACCESSIBLE допустим и не доказывает DPI bypass.
 
 **GO:** native semantic restoration + truthful Stage 90/99. **NO-GO:** manual Stop→Start считается Lab PASS.
 
@@ -156,7 +162,7 @@
 
 ### S17. Exact-head genuine native OPNsense gate
 
-1. На одном одноразовом OPNsense 26.7/FreeBSD ABI подтвердить clean engine-absent status/GUI, compiler/ref tamper, Start/Stop/Status/Boot/Apply, Voice, WAN, Lab, Auto hot-reload/epoch.
+1. На одном одноразовом OPNsense 26.7/FreeBSD ABI подтвердить clean engine-absent status/GUI, compiler/ref tamper, Start/Stop/Status/Boot/Apply, Voice, WAN, Lab, Auto hot-reload/epoch. **Сначала G05→engine-second→G08:** WAN-only до upstream/manifest/Start; без WAN → `wan-required`, с WAN без движка → `engine-not-installed` и ноль Job; затем работа Standard/Extended при STOPPED и установленном engine.
 2. Подтвердить защищённое STOPPED/RUNNING package-update, torn extraction, interrupted restore, no foreign IPFW cleanup, exactly one `dvtws2` и сохранность Config.
 3. Собирать точные SHA/run IDs/log stage/rc. Failed attempt нельзя объявить PASS лишь потому, что rerun стал зелёным; исправлять причинный FAIL.
 
@@ -182,13 +188,13 @@
 
 ### S20. Владелец проверяет пользовательский результат
 
-1. Зафиксировать before/after package version, engine/config/manifest/runtime, WAN/IPFW/Voice, Strategies + Voice toolbar Start/Restart/Stop/Status, unchanged/edited Apply, one `dvtws2`, сохранение ручных и Found списков.
+1. Зафиксировать before/after package version, engine/config/manifest/runtime, WAN/IPFW/Voice, Strategies + Voice toolbar Start/Restart/Stop/Status, unchanged/edited Apply, one `dvtws2`, сохранение ручных и Found списков. На **отдельной чистой тестовой установке** проверить WAN-only до upstream и Standard/Extended до первого ordinary Start, не очищая живые настройки владельца ради регрессии.
 2. Strategy Lab: автоматическое восстановление RUNNING→RUNNING/STOPPED→STOPPED и failure handling; никаких команд manual restart вместо PASS.
 3. Auto: после **подтверждённого** реального native YouTube/User события проверить соответствующие Found→managed, тот же PID/отсутствие фонового restart; если ISP native event не возник, указывать NOT VERIFIED, не выдавать TIMEOUT за доказательство.
 4. Обычное удаление→повторная установка сохраняет настройки; отдельный deliberate purge проходит на тестовом устройстве. Проверить ошибки GUI и no-engine pathways.
 5. Только после фактических свидетельств закрыть #1223/#1224/#1225/#1052; stable и pfSense — отдельные решения, не часть ТЗ_6v5 shipping.
 
-**DONE:** функциональность подтверждена на соответствующих source/native/owner уровнях; любые непроверенные строки остаются OPEN.
+**DONE:** функциональность подтверждена на соответствующих source/native/owner уровнях, включая WAN-first/G05→G08/V5-11; любые непроверенные строки остаются OPEN.
 
 ---
 

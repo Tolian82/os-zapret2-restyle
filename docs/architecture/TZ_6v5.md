@@ -89,6 +89,32 @@
 
 **Reinstall/upgrade:** сохранившиеся Config/manual/Found/Exclude/Voice/WAN и статус service OFF не перезаписываются дефолтами; normal uninstall сохраняет пользовательские данные, отдельный explicit purge следует принятому контракту. Слабый/отсутствующий runtime manifest не авторизует новый Start и не уничтожает неизвестный процесс. Ни один «пустой конфиг» не означает команду Stop чужого процесса.
 
+### 6.1. Обязательный WAN-first / Laboratory-before-first-Start (LC-06, LC-11, LC-12, G05/G08)
+
+**Это сохранение уже принятого и реализованного поведения, а не новая возможность.** Нормативные источники: [LC-06/06A–C и LC-11/12](OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md), [G05 — WAN-only native](../verification/G05_WAN_ONLY_NATIVE.md), [G08 — настоящая лаборатория до первого ordinary Start](../verification/G08_PRESTART_LAB_NATIVE.md). Историческая installed-native проверка G08 на одноразовой OPNsense 26.7 (09.11.2026) прошла для Standard и Extended при сохранённом WAN, пустых пользовательских Traffic Strategy/YouTube Domains, Enabled=OFF, ранее **никогда не запускавшемся обычном** dvtws2. Достигнутые Stage 40 TARGET_ACCESSIBLE и Stage 90 STOPPED подтверждают нормальный Lab workflow и восстановление, **но не** подбор DPI на заблокированном домене.
+
+**Обязательная последовательность «WAN первым»:**
+
+1. После чистой установки пользователь **может сохранить только** `general.waninterface` через обычный нижний Strategies Apply при `general.enabled=0`, отсутствующем upstream engine, пустых/непустых первоначальных defaults либо намеренно очищенных Traffic Strategy/списках. Под original FD9 и единственным `SharedConfigCommit::persist()` сохраняется ровно разрешённое изменение WAN в штатном `config.xml`; readback и F5 подтверждают результат. Никакого полного runtime-build, запуска dvtws2, новых IPFW-правил или требования существующего sealed active manifest. Пустые редактируемые поля и выбранный WAN сохраняются при reinstall. Для STOPPED с ранее sealed Common owner действуют прежние полные transaction gates; WAN-only fast path нельзя применять слепо к старому журналу.
+2. **Перед** любым engine/model/strategy/manifest preflight и созданием `job.*`, включая direct configd и Standard/Extended/Circular Lab, проверить **сохранённый** WAN. WAN отсутствует → `wan-required`, RU «Укажите WAN интерфейс», EN “Select a WAN interface”; WAN выбран, но штатно не разрешается в подтверждённый назначенный physical interface → `wan-invalid`. Использовать действующий original `wan_preflight`/`config_resolve_interface()` для разрешённых WAN/OPT/TUN (включая документированные случаи без IPv4), не читать из stale `zapret.conf` и не считать несохранённый dropdown истиной. Для нормального Start также WAN-first; отсутствующий WAN запрещает активацию, **но не** пассивный Save, Stop, setup/install или read-only Status.
+3. Только **после WAN** проверять установленность и исправность upstream Zapret2. WAN есть, но engine отсутствует → типизированный `engine-not-installed` (либо эквивалентная согласованная форма `ENGINE_NOT_INSTALLED` в unified status) **без создания Lab Job, PID, IPFW или изменения Config**. Наличие одного только WAN не делает отсутствующий движок работоспособным.
+4. При валидном сохранённом WAN и **установленном** engine Standard и Extended Laboratory должны запускаться из обычного `STOPPED`/`Enabled=OFF` даже если нет пользовательской стратегии, обычных HOSTLIST/IPSet, ранее сгенерированных `dvtws.args`, active sealed runtime manifest, рабочего ordinary generation/PID и первого Start. Lab использует свою **временную** конфигурацию и проверенные ограниченные Lab IPFW/engine resources под original FD9 и сохранённым WAN; не компилирует/не активирует обычную службу и не подставляет искусственно непустой Traffic Strategy.
+5. По normal/completion/cancel/error/timeout Lab сохраняет доэкспериментальное состояние: для этого сценария **STOPPED→STOPPED**, без обычного dvtws2, без остаточных лабораторных PID/IPFW (диапазон 19100–19131), без нового обычного sealed release и Config writer. Для изначального RUNNING продолжает действовать RUNNING→RUNNING. Чужие процессы/IPFW и неопределённые original FD9/journal запрещают опасное вмешательство; восстановление подтверждать реальным terminal receipt Stage 90, не одним HTTP успехом.
+
+**Разделить readiness:** `WAN_SAVED` и `LAB_READY` не означают `ORDINARY_RUNTIME_READY`. Компилятор основного immutable JSON и его требование active sealed manifest относятся к ordinary Start/Apply; они **не являются предпосылкой Lab**, работающей со своей доверенной кратковременной job-конфигурацией. Не допускать обратной зависимости «для запуска лаборатории сначала надо создать рабочую стратегию и запустить обычную службу».
+
+**Таблица обязательных отрицательных и положительных результатов:**
+
+| Сохранённый WAN | Upstream engine | User strategy / обычный runtime | Результат |
+| --- | --- | --- | --- |
+| Не выбран | Нет либо есть | Любые | `wan-required` до engine и до Lab Job |
+| Выбран, но не разрешается штатно | Есть | Любые | `wan-invalid` без Job/Config/IPFW мутации |
+| Выбран и разрешён | Нет | Пустые / STOPPED | `engine-not-installed`, Job не создаётся |
+| Выбран и разрешён | Есть | Пустые / STOPPED / нет active ordinary manifest | Standard и Extended Lab работают, Stage 90 проверяет STOPPED→STOPPED |
+| Выбран и разрешён | Есть | RUNNING/сохранённый ordinary owner | Lab сохраняет исходный RUNNING→RUNNING и прежние FD9/Config/IPFW гарантии |
+
+**Гейт приёмки V5-11:** использовать реальные [G05](../verification/G05_WAN_ONLY_NATIVE.md) → native upstream setup (без ordinary Start) → [G08](../verification/G08_PRESTART_LAB_NATIVE.md) на одном одноразовом OPNsense: cookie/CSRF нижний WAN-only Apply → F5 → физический `/conf/config.xml` → двигатель установлен → реальные `/api/zapret/strategy_lab/start/status/result` Standard RU + Extended EN → Stage 90 verified STOPPED и отсутствие временных ресурсов. Это обязательная regression строка **до** единого launcher cutover, повторяется **после** интеграции нового manifest/Status и на итоговом exact-head native тесте. Не выдавать старый G08 PASS за доказательство нового кода.
+
 ## 7. Единый контракт диагностики
 
 Нормализованное ограниченное событие `schema`, `timestamp`, `stage` (`install/config/manifest/wan/ipfw/engine-start/engine-stop/voice/auto-minute/apply/lab-restore/pkg-update`), `code`, `operation_id`, `generation`, `exit_status` (nullable), `runtime_state`, `message`, bounded `stderr_excerpt`, проверенный `log_ref`. Источник: реальные ошибки native `dvtws2`, supervisor, setup, configd, renderer, IPFW, P1/P2 и Lab; **сохранять их причинный контекст**, а не всё заменять текстом «не удалось».
@@ -120,6 +146,7 @@
 | V5-07 | Native Lab RUNNING→RUNNING, STOPPED→STOPPED и ошибка/timeout/cancel/прерванное восстановление дают правдивые receipts |
 | V5-08 | Native Auto подтверждённым событием попадает в нужные persistent Found и hot managed на том же `dvtws2`, без Apply/Restart |
 | V5-09 | Native OPNsense и защищённые upgrade/rollback, Voice/Strategies Apply, WAN и пакетные сценарии проходят на **точном** исходнике |
-| V5-10 | Только после V5-01…09 — один testing `.pkg` с SHA/ABI/source identity; отдельно owner-live проверка на физическом устройстве; main/stable/pfSense не объявлять по одному CI |
+| V5-10 | Только после source/native приёмки, включая V5-11, — один testing `.pkg` с SHA/ABI/source identity; отдельно owner-live проверка на физическом устройстве; stable/pfSense не объявлять по одному CI |
+| V5-11 | WAN-only Save при `Enabled=OFF`, отсутствии upstream и отсутствии user strategy сохраняет WAN; после явной установки engine Standard/Extended Lab работают до первого ordinary Start без active runtime manifest, завершают Stage90 STOPPED→STOPPED и не оставляют ресурсов. Отсутствие WAN первее отсутствия движка, и ни один отказ не создаёт Job/IPFW |
 
 **Граница фактов на 22.11.2026:** merged documentation-only `main v0.6.5_121`, установленная у владельца тестовая `_117`, ручной Stop→Start RUNNING и два Strategies Apply PASS. ТЗ_6v5 — **критерий будущей реализации**, а не сообщение о завершённой работе. Исполнение идёт строго по [шагам и блокирующим гейтам](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
