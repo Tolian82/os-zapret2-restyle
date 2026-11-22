@@ -1,3 +1,11 @@
+## 23 November 2026 — CURRENT post-#1237 / TZ6v5 S01
+
+**Prospective testing package name ONLY (NOT BUILT / NOT PUBLISHED):** `os-zapret2-restyle-0.6.5_130.pkg`. This is a source identity token required by CI, not a release asset. Existing owner install `_117` remains untouched.
+
+**Source identity for this checkpoint:** `VERSION=0.6.5`, `PLUGIN_REVISION=130`, `v0.6.5_130` is source-only in PR #1239 (base merged `main v0.6.5_129`); neither `_129.pkg` nor `_130.pkg` published. No owner appliance activity.
+
+[PR #1237](https://github.com/Tolian82/os-zapret2-restyle/pull/1237) **MERGED** to `main c7167b0c`, source-only `v0.6.5_129`; no new `.pkg` and owner last installed `_117`. Earlier paragraphs describing #1237 as an open candidate are historical snapshots. [S01 12-file disposition of superseded #1228](architecture/ZAPRET2_TZ6V5_S01_PR1228_DISPOSITION.md) records KEEP/REWORK/DROP with no code cherry-pick. Next source-only branch `feat/tz6v5-s01-s02-lifecycle-audit` revision `_130` starts S02 after S01 documentation gate. **Only active sequence S00–S20**, next S02 route map → S03 RED → S04–S09 compiler → S10–S14 canonical lifecycle → S15–S20; Lab/Auto/GUI P0 are open. No owner device action.
+
 # os-zapret2-restyle — master plan
 
 ## Current priority — ТЗ_6v5 (22 ноября 2026)

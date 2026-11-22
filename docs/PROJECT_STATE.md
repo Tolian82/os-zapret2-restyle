@@ -1,3 +1,17 @@
+## 23 ноября 2026 — S01 PR #1228 disposition на main _129 (НОВЫЙ CURRENT handoff)
+
+**Prospective testing package name ONLY (NOT BUILT / NOT PUBLISHED):** `os-zapret2-restyle-0.6.5_130.pkg`. This is a source identity token required by CI, not a release asset. Existing owner install `_117` remains untouched.
+
+**Source identity for this checkpoint:** `VERSION=0.6.5`, `PLUGIN_REVISION=130`, `v0.6.5_130` is source-only in PR #1239 (base merged `main v0.6.5_129`); neither `_129.pkg` nor `_130.pkg` published. No owner appliance activity.
+
+**Текущая подтверждённая исходная база:** [PR #1237](https://github.com/Tolian82/os-zapret2-restyle/pull/1237) **MERGED** в `main c7167b0c`, source-only `v0.6.5_129`. Пакет `_129.pkg` не публиковался; последнее подтверждённое установленное у владельца — `_117.pkg`. Существовавшие в нижеследующих исторических записях заявления «#1237 open» устарели; они оставлены как датированные факты прежнего этапа.
+
+**S01 reviewed:** [матрикс 12/12 файлов #1228 с решениями KEEP/REWORK/DROP](architecture/ZAPRET2_TZ6V5_S01_PR1228_DISPOSITION.md) фиксирует окончательное **не переносить старую pre-manifest Lab/pkg helper реализацию**. Старый PR #1228 закрыт без merge; source old-head `3a634d8e` содержал негативные WAN-first/Schema3 Apply/pkg-update свидетельства, не приписываемые новому main. **Один новый следующий source branch:** `feat/tz6v5-s01-s02-lifecycle-audit`, source-only `v0.6.5_130` (здесь документация и Makefile revision, никаких новых Start/Stop/JSON/Reload). До закрытия exact-head документационного/PR gate — кодовая реализация S02–S20 не считается сделанной.
+
+**Следующий шаг:** S02 полная read-only route trace всех GUI/configd/Apply/Lab/Boot/pkg/installer/callback под original FD9, затем S03 реальные RED. S04–S20 NOT RUN; P0 Lab [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224), Auto [#1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223), lifecycle [#1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225) OPEN. No new `.pkg`; no owner router mutation.
+
+---
+
 # os-zapret2-restyle — current state v0.6.x
 
 ## 23 ноября 2026 — CURRENT: product IPFW source candidate _129 (NOT merged)
