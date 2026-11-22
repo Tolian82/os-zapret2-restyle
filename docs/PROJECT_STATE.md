@@ -1,6 +1,16 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 22 November 2026 — published recovery package; owner restore is next (CURRENT)
+## 22 November 2026 — owner-live recovery accepted, TZ6v4 functional acceptance next (CURRENT)
+
+**Exact source identity:** `v0.6.5_116` / `PLUGIN_REVISION=116` is a documentation-only source revision; **no `_116.pkg` was built or published**. On the owner's actual OPNsense the installed plugin is **`os-zapret2-restyle-0.6.5_111`**, after the verified native continuation carried by the published immutable `_114.pkg` and installing the immutable `_111.pkg`.
+
+**Owner-live result, [#1213](https://github.com/Tolian82/os-zapret2-restyle/issues/1213) CLOSED:** the user supplied the actual root-console output `pkg-recovery=verified-installed-and-restored`, `recovery_rc=0`, `os-zapret2-restyle-0.6.5_111`, `zapret is running`, `status_rc=0`. This confirms the specific held `_107→_109` `postinstall-attested` STOPPED incident was restored on the physical owner device. The initial handoff used an invalid bare `python_runtime.sh -` invocation and refused before entering Python; the owner then used the same package-contained transaction with the installed runtime's valid `-c` argument, not a journal reset, installed-module graft, unguarded direct pkg replacement or manual PID manipulation. [Evidence and corrected one-time historical command](verification/evidence/2026-11-22-postinstall-package-continuation.md).
+
+**Limits:** owner-live WAN/Voice state, saved Config byte identity, real-ISP YouTube/User source-profile attribution → Found → managed, GUI Strategies/Voice/Strategy Lab, subsequent reboot/normal lifecycle and reinstall/removal/purge are **not** established by this console output; stable release and pfSense port remain blocked. Previous rare Stop/retirement refusal remains an independently recorded risk, not fixed by successful recovery.
+
+**One next action:** proceed with low-risk **owner-live functional acceptance of the already running `_111`**, beginning with GUI Strategies/Voice/Strategy Lab and WAN/service state, without changing packages or deleting any protected records; then test genuine ISP YouTube/User native Auto-detect → Found → managed, exactly as specified in [ТЗ_6v4](architecture/TZ_6v4.md) and [plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). Keep [#1052](https://github.com/Tolian82/os-zapret2-restyle/issues/1052) OPEN until those results are documented.
+
+## 22 November 2026 — published recovery package; owner restore was pending (HISTORICAL)
 
 **Source identity:** `v0.6.5_115` (`VERSION=0.6.5`, `PLUGIN_REVISION=115`, identity `os-zapret2-restyle-0.6.5_115.pkg`) is this documentation-only publication record; **no `_115.pkg` exists**. Recovery code [PR #1217](https://github.com/Tolian82/os-zapret2-restyle/pull/1217) merged as `_114`, source `5a9b771757717b6c800e418cfdc6f199af3cd95c`. Its [published `_114.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_114/os-zapret2-restyle-0.6.5_114.pkg), ABI `FreeBSD:15:amd64`, SHA-256 `e1015197e33b326ff5debe474caa0f3a13ee0b7c73c952c74899b7acac08101b`, supplies package-contained recovery code. The qualified whole-package successor is the unchanged immutable `_111.pkg`, SHA-256 `7257f54d74ef10fedc30d75e5e4a13861253bc8ad64d64ab232c537c2a56fae3`. [Publication receipt](verification/evidence/testing-publications/v0.6.5_114.md).
 

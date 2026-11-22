@@ -1,6 +1,22 @@
 # Original FD9 whole-package continuation of a failed POST_INSTALL restore
 
-Scope: P0 #1213, recovery code `v0.6.5_114`, 22 November 2026. The recovery implementation is merged and its package is published; this documentation-only `_115` record adds the qualified handoff below. Owner recovery and physical power-loss testing remain unconfirmed.
+Scope: P0 #1213, recovery code `v0.6.5_114`, 22 November 2026. The package-contained continuation was qualified on disposable native OPNsense and subsequently **confirmed on the real owner's device**. Physical power-loss testing and separate functional TZ6v4 owner acceptance remain unconfirmed.
+
+## Actual owner-live recovery — 22 November 2026
+
+The user downloaded the released `_114.pkg` (code carrier) and `_111.pkg` (installed target). The first command shown in the prior documentation invoked `python_runtime.sh - <<'PY'` without the additional argument required by the installed `python_runtime.sh` for `-`; it exited with `ERROR: qualified Python runtime: missing Python -c/-m argument` **before executing the inline Python**, and did not run the package transaction.
+
+The user then successfully executed the **same SHA/initial-record-guarded package bootstrap** using `python_runtime.sh -c 'import sys; exec(compile(sys.stdin.read(), "<stdin>", "exec"))' <<'PY'`. Observed physical owner-console output:
+
+```text
+pkg-recovery=verified-installed-and-restored
+recovery_rc=0
+os-zapret2-restyle-0.6.5_111
+zapret is running
+status_rc=0
+```
+
+[#1213](https://github.com/Tolian82/os-zapret2-restyle/issues/1213) is closed for the **restoration** blocker. The user did not separately provide WAN/Config byte hashes, real ISP discovery, GUI or subsequent lifecycle acceptance; they remain open under [#1052](https://github.com/Tolian82/os-zapret2-restyle/issues/1052). Do **not** re-run the one-time recovery on an already recovered installation. The command below is preserved for documenting the original, now-completed incident and requires its exact original journal state to be valid.
 
 ## Observable scenario and source boundary
 
@@ -41,7 +57,7 @@ An owner command block may be supplied only after the exact native gate and publ
 
 The existing `owner-p0-protected-rescue.yml` is the required native acceptance. One genuine disposable OPNsense 26.7 builds a native candidate and verifies package-contained bootstrap source, installs the exact immutable `_107`, populates both exclusions via the native Model, and reproduces the exact `_109` P2 refusal. A test-only subprocess adapter exits **without finally** after the actual FD9 handoff and then after actual `_111` POST_INSTALL. Installed sources remain original `_109` until native pkg replaces the full payload. Normal package-contained bootstrap must resume to fully installed `_111`, native status RUNNING, schema3, unchanged Config/dvtws binary, retained old archive and absent update guard/marker. Test fault adapters never modify installed source or shipped code.
 
-Required merge checks also cover the changed original shell/coordinator and native package inclusion through the existing scope router. Existing unrelated ISP/GUI/Voice-media evidence is not repeated or upgraded by these tests. Results belong to the exact source PR's workflow runs; failure, skip or infrastructure outage is not PASS. Issue #1213 remains OPEN until the actual owner confirms restored service.
+Required merge checks also cover the changed original shell/coordinator and native package inclusion through the existing scope router. Existing unrelated ISP/GUI/Voice-media evidence is not repeated or upgraded by these tests. Results belong to the exact source PR's workflow runs; failure, skip or infrastructure outage is not PASS. Issue #1213 was closed after the owner's actual restored-service confirmation; that closure is limited to the restoration blocker.
 
 ## Executed native evidence and published code identity
 
@@ -68,7 +84,7 @@ The first `sh` enters POSIX shell from the default root csh; the final `exit` re
 sh
 fetch -o /root/os-zapret2-restyle-0.6.5_114.pkg https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_114/os-zapret2-restyle-0.6.5_114.pkg
 fetch -o /root/os-zapret2-restyle-0.6.5_111.pkg https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_111/os-zapret2-restyle-0.6.5_111.pkg
-/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh - <<'PY'
+/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh -c 'import sys; exec(compile(sys.stdin.read(), "<stdin>", "exec"))' <<'PY'
 import hashlib, json, os, subprocess, tempfile
 from pathlib import Path
 
@@ -109,4 +125,4 @@ PY
 exit
 ```
 
-Required success evidence: `pkg-recovery=verified-installed-and-restored`, `recovery_rc=0`, installed `os-zapret2-restyle-0.6.5_111`, native `RUNNING` and `status_rc=0`. These results must come from the owner's device before #1213 can be resolved. Subsequent provider attribution, GUI and longer lifecycle acceptance retain their separate open status.
+Required success evidence (now actually observed on the owner's device): `pkg-recovery=verified-installed-and-restored`, `recovery_rc=0`, installed `os-zapret2-restyle-0.6.5_111`, native `RUNNING` and `status_rc=0`. Subsequent provider attribution, GUI and longer lifecycle acceptance retain their separate open status.
