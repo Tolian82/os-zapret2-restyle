@@ -1169,6 +1169,9 @@ jobs:
       - name: Test stopped committed owner with cold IPFW kernel
         run: python3.13 scripts/test-common-cold-ipfw-kernel.py
 
+      - name: Verify strictly allocated IPFW numeric ranges (not foreign ownership)
+        run: python3.13 scripts/test-ipfw-number-scope.py -v
+
       - name: Test Strategy Lab Python candidate and family screening
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-candidate-family.sh
 

@@ -192,7 +192,7 @@ def check_registered():
 def assert_no_capture():
     if command(["/sbin/kldstat", "-q", "-m", "ipfw"], allowed=(0, 1)).returncode == 0:
         rules = command(["/sbin/ipfw", "-q", "list"]).stdout
-        need(not any(re.match(r"^\s*(?:1900[0-9]|19010|191(?:0[0-9]|[12][0-9]|3[01]))\s+", row)
+        need(not any(re.match(r"^\s*(?:190[0-9]{2}|191(?:0[0-9]|[12][0-9]|3[01]))\s+", row)
                      for row in rules.splitlines()), "OWNED_IPFW_PRESENT_BEFORE_START")
 
 def enable_loopback_only_for_running_purge():

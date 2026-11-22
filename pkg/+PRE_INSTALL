@@ -17,6 +17,7 @@ KLDSTAT_BIN="${KLDSTAT_BIN:-/sbin/kldstat}"
 IPFW_BIN="${IPFW_BIN:-/sbin/ipfw}"
 PYTHON_BIN="${PYTHON_BIN:-/usr/local/bin/python3}"
 COLD_INSPECT_BIN="${COLD_INSPECT_BIN:-/usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py}"
+PROTECTED_UPDATE_RECORD="${PROTECTED_UPDATE_RECORD:-/var/db/zapret2/pkg-update/operation.json}"
 
 # A test package can arrive while the INSTALLED (older) service has a
 # committed, stopped common journal and NO ipfw/ipdivert kernel modules.
@@ -89,6 +90,44 @@ read_service_status()
 }
 
 
+# Read-only compatibility check BEFORE stopping the installed service.
+# The successor requires default_to_accept=1 when IPFW is already loaded.
+# An old 65534 allow (or OPNsense's own 65534 deny) is NOT Zapret2-owned;
+# never inspect its expression or delete/replace rules 65533..65535.
+# When IPFW is genuinely cold, the existing verified cold-loader owns policy.
+preinstall_ipfw_policy_compatible()
+{
+    _policy_sysctl="${IPFW_SYSCTL_BIN:-/sbin/sysctl}"
+    [ -x "${_policy_sysctl}" ] || {
+        echo "ERROR: IPFW policy cannot be checked before package replacement" >&2
+        return 1
+    }
+    _policy_value=$("${_policy_sysctl}" -n net.inet.ip.fw.default_to_accept 2>/dev/null)
+    _policy_rc=$?
+    if [ "${_policy_rc}" -eq 0 ]; then
+        if [ "${_policy_value}" = "1" ]; then
+            return 0
+        fi
+        echo "ERROR: IPFW default_to_accept != 1; cannot safely replace a running legacy Zapret2. No firewall rules were changed" >&2
+        return 1
+    fi
+    # An unavailable sysctl is acceptable ONLY for the exact unloaded
+    # IPFW kernel signature, never as an excuse to ignore an active firewall.
+    [ -x "${KLDSTAT_BIN}" ] && [ -x "${IPFW_BIN}" ] || return 1
+    "${KLDSTAT_BIN}" -q -m ipfw >/dev/null 2>&1
+    [ "$?" -eq 1 ] || {
+        echo "ERROR: active or unverified IPFW policy before package replacement" >&2
+        return 1
+    }
+    _policy_ipfw_out=$(LC_ALL=C "${IPFW_BIN}" -q list 2>&1)
+    _policy_ipfw_rc=$?
+    [ "${_policy_ipfw_rc}" -eq 71 ] || return 1
+    case "${_policy_ipfw_out}" in
+        *"retrieving config failed: Protocol not available"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # A fixed-field receipt proves that genuine pkg entered the ORIGINAL hook
 # before any runtime observation. No Config/argv/process data are printed.
 printf 'zapret-pkg-preinstall-entered=1\n'
@@ -100,18 +139,31 @@ if [ ! -x "${SERVICE_SCRIPT}" ]; then
     exit 0
 fi
 
+# Read the OLD service status before checking startup policy: a deliberately
+# STOPPED service does not require default-accept for a package-only update.
 read_service_status
 service_status=$?
 printf 'zapret-pkg-preinstall-status=%s\n' "${service_status}"
 
 case "${service_status}" in
     0)
+        # This is a RUNNING-to-RUNNING package replacement: refuse before
+        # restart-marker publication or Stop if the successor cannot start.
+        # Never infer ownership of or mutate the old rule 65534.
+        preinstall_ipfw_policy_compatible || exit 1
         mkdir -p "${UPGRADE_STATE_DIR}" || exit 1
         : > "${REPLACEMENT_RESTART_MARKER}" || exit 1
         ;;
     1)
-        # Preserve an existing replacement marker when retrying an interrupted
-        # package transaction whose earlier pre-install already stopped service.
+        # STOPPED alone does not prove a STOPPED-to-STOPPED replacement:
+        # an older protected updater may have already stopped RUNNING and
+        # retained its restart marker / prepared operation for postinstall.
+        # Require compatible IPFW policy when restoration may be requested.
+        if [ -e "${REPLACEMENT_RESTART_MARKER}" ] || [ -L "${REPLACEMENT_RESTART_MARKER}" ] ||
+           [ -e "${UPGRADE_RESTART_MARKER}" ] || [ -L "${UPGRADE_RESTART_MARKER}" ] ||
+           [ -e "${PROTECTED_UPDATE_RECORD}" ] || [ -L "${PROTECTED_UPDATE_RECORD}" ]; then
+            preinstall_ipfw_policy_compatible || exit 1
+        fi
         ;;
     2)
         # Never stop unverified runtime via legacy lifecycle.

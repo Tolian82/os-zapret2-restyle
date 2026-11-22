@@ -49,7 +49,9 @@ STAGE_FILE="/var/run/zapret2-execution.status"
 DVTWS_LOG="/var/log/zapret2/dvtws2.log"
 SUPERVISOR_LOG="/var/log/zapret2/supervisor.log"
 RULE_BASE=19000
-RULE_MAX=$((RULE_BASE + 10))
+# Owner-allocated ordinary IPFW rules: 19000..19099 (inclusive).
+# Current Lab uses 19100..19131; 19140..19200 is FUTURE-only, never swept here.
+RULE_MAX=19099
 LIFECYCLE_LOCK_FILE="${LIFECYCLE_LOCK_FILE:-/var/run/zapret2-lifecycle.lock}"
 LIFECYCLE_LOCK_TIMEOUT=30
 STRATEGY_LAB_LOCK_TIMEOUT=3
@@ -3051,6 +3053,23 @@ pkg_update_prepare_service()
         *) echo "ERROR: protected package update refuses incomplete owner" >&2
            return 69 ;;
     esac
+    if [ "${_pkg_prev_running}" = running ]; then
+        # The protected updater stops the old service BEFORE pkg invokes the
+        # incoming PRE_INSTALL hook. Guard the same IPFW policy here too, while
+        # original FD9 is held, before creating a prepared record or stopping.
+        # Never classify/delete a rule 65534 (or touch 65535) by its expression.
+        _pkg_ipfw_policy=$(/sbin/sysctl -n net.inet.ip.fw.default_to_accept 2>/dev/null)
+        _pkg_ipfw_policy_rc=$?
+        if [ "${_pkg_ipfw_policy_rc}" -eq 0 ]; then
+            if [ "${_pkg_ipfw_policy}" != "1" ]; then
+                echo "ERROR: protected pkg update refuses IPFW default_to_accept != 1 before Stop; firewall unchanged" >&2
+                return 69
+            fi
+        elif ! shared_apply_ipfw_kernel_absent_service; then
+            echo "ERROR: protected pkg update cannot attest compatible IPFW policy before Stop" >&2
+            return 69
+        fi
+    fi
     "${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py" record \
         "$2" "$3" "$4" "${_pkg_prev_running}" || return 69
     if [ "${_pkg_prev_running}" = running ]; then

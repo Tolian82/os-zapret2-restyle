@@ -292,14 +292,27 @@ class PurgeFastTest(unittest.TestCase):
                 with self.assertRaises(module["Refusal"]):
                     module["verified_engine_daemon_parent"](4038)
 
-    def test_foreign_rule_in_our_numbers_is_refused(self):
+    def test_allocated_rule_numbers_are_the_only_scope(self):
+        # Allocated number is sufficient; no divert/expression ownership check.
+        # Future comparative reserve 19140..19200 is not active cleanup yet.
         def fake(argv, **kwargs):
             if argv[0].endswith("kldstat"):
                 return types.SimpleNamespace(returncode=0, stdout="")
             return types.SimpleNamespace(returncode=0, stdout=(
-                "19000 allow ip from any to any\n65535 allow ip from any to any\n"))
-        with self.fake_run(fake), self.assertRaises(module["Refusal"]):
-            module["owned_rules"]()
+                "18999 allow ip from any to any\n"
+                "19000 allow ip from any to any\n"
+                "19099 count ip from any to any\n"
+                "19100 divert 9989 udp from any to any 443 out\n"
+                "19131 allow ip from any to any\n"
+                "19132 allow ip from any to any\n"
+                "19139 allow ip from any to any\n"
+                "19140 allow ip from any to any\n"
+                "19200 allow ip from any to any\n"
+                "19201 allow ip from any to any\n"
+                "65535 allow ip from any to any\n"))
+        with self.fake_run(fake):
+            self.assertEqual([19000, 19099, 19100, 19131],
+                             module["owned_rules"]())
 
     def test_actual_shared_and_lab_divert_ports(self):
         def fake(argv, **kwargs):
@@ -312,14 +325,14 @@ class PurgeFastTest(unittest.TestCase):
         with self.fake_run(fake):
             self.assertEqual([19000, 19100], module["owned_rules"]())
 
-    def test_wrong_lab_divert_refused(self):
+    def test_lab_number_is_authoritative_without_divert_check(self):
         def fake(argv, **kwargs):
             if argv[0].endswith("kldstat"):
                 return types.SimpleNamespace(returncode=0, stdout="")
             return types.SimpleNamespace(returncode=0, stdout=(
                 "19100 divert 989 udp from any to any 443 out not diverted not sockarg xmit vtnet1\n"))
-        with self.fake_run(fake), self.assertRaises(module["Refusal"]):
-            module["owned_rules"]()
+        with self.fake_run(fake):
+            self.assertEqual([19100], module["owned_rules"]())
 
     def test_no_kernel_module_load(self):
         def fake(argv, **kwargs):

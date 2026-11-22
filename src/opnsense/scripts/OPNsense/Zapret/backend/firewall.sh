@@ -17,8 +17,23 @@ firewall_shared_runtime()
         "${BACKEND_DIR}/voice_ipfw_adapter.py" shared "$1" "$2" "$3"
 }
 
+# This is a numeric BOUNDARY guard on the arguments of our own IPFW
+# mutations, not a scan or inspection of another service's firewall rules.
+# The current ordinary/Voice allocation is inclusive 19000..19099.
+firewall_normal_rule_range_valid()
+{
+    [ "$#" -eq 2 ] || return 1
+    case "$1" in ''|*[!0-9]*) return 1 ;; esac
+    case "$2" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$1" -ge 19000 ] 2>/dev/null &&
+        [ "$1" -le "$2" ] 2>/dev/null &&
+        [ "$2" -le 19099 ] 2>/dev/null
+}
+
 firewall_remove_rules()
 {
+    [ "$#" -eq 2 ] || return 64
+    firewall_normal_rule_range_valid "$1" "$2" || return 64
     _firewall_remove_rule="$1"
     _firewall_remove_max="$2"
 
@@ -41,11 +56,15 @@ firewall_install_runtime_rules()
 
 firewall_ensure_default_accept()
 {
+    # Do not create a catch-all rule outside Zapret2's allocated IPFW numbers.
+    # The platform/cold kenv path must already provide default_to_accept=1.
     _firewall_default=$(/sbin/sysctl -n \
-        net.inet.ip.fw.default_to_accept 2>/dev/null)
-
-    [ "${_firewall_default}" = "1" ] ||
-        "${IPFW_BIN}" -q add 65534 allow ip from any to any 2>/dev/null || true
+        net.inet.ip.fw.default_to_accept 2>/dev/null) || return 1
+    if [ "${_firewall_default}" != "1" ]; then
+        common_error "IPFW default_to_accept is not 1; refusing to create system rule 65534"
+        return 1
+    fi
+    return 0
 }
 
 firewall_configure_reinject()
@@ -136,6 +155,9 @@ firewall_install_port_rules()
     _firewall_ports_rule_base="$5"
     _firewall_ports_rule_max="$6"
 
+    firewall_normal_rule_range_valid \
+        "${_firewall_ports_rule_base}" "${_firewall_ports_rule_max}" || return 64
+
     common_require_file \
         "${_firewall_ports_tcp_file}" "TCP port artifact" || return 1
     common_require_file \
@@ -180,6 +202,8 @@ firewall_install_rules()
     _firewall_compat_divert="$3"
     _firewall_compat_rule_base="$4"
     _firewall_compat_rule_max="$5"
+    firewall_normal_rule_range_valid \
+        "${_firewall_compat_rule_base}" "${_firewall_compat_rule_max}" || return 64
     _firewall_compat_work=$(mktemp -d /tmp/zapret-firewall.XXXXXX) ||
         return 1
 
@@ -209,6 +233,8 @@ firewall_rules_present()
 {
     _firewall_present_rule="$1"
     _firewall_present_max="$2"
+    firewall_normal_rule_range_valid \
+        "${_firewall_present_rule}" "${_firewall_present_max}" || return 64
 
     while [ "${_firewall_present_rule}" -le "${_firewall_present_max}" ]; do
         if "${IPFW_BIN}" list "${_firewall_present_rule}" 2>/dev/null |
@@ -228,6 +254,8 @@ firewall_snapshot_rules()
     _firewall_snapshot_base="$1"
     _firewall_snapshot_max="$2"
     _firewall_snapshot_file="$3"
+    firewall_normal_rule_range_valid \
+        "${_firewall_snapshot_base}" "${_firewall_snapshot_max}" || return 64
     _firewall_snapshot_tmp="${_firewall_snapshot_file}.tmp.$$"
 
     : > "${_firewall_snapshot_tmp}" || return 1
@@ -246,11 +274,25 @@ firewall_restore_rules()
     _firewall_restore_snapshot="$1"
     _firewall_restore_base="$2"
     _firewall_restore_max="$3"
+    firewall_normal_rule_range_valid \
+        "${_firewall_restore_base}" "${_firewall_restore_max}" || return 64
 
     common_require_file \
         "${_firewall_restore_snapshot}" "firewall rule snapshot" || return 1
+
+    # Validate the saved NUMBERS before deleting the old rules. Even a bad
+    # rollback snapshot may never cause creation of an out-of-scope rule.
+    LC_ALL=C awk -v first="${_firewall_restore_base}" \
+        -v last="${_firewall_restore_max}" '
+        NF == 0 { next }
+        $1 !~ /^[0-9]+$/ || ($1 + 0) < first || ($1 + 0) > last {
+            invalid=1
+            exit
+        }
+        END { exit invalid ? 1 : 0 }
+    ' "${_firewall_restore_snapshot}" || return 1
     firewall_remove_rules \
-        "${_firewall_restore_base}" "${_firewall_restore_max}"
+        "${_firewall_restore_base}" "${_firewall_restore_max}" || return 1
 
     (
         set -f
@@ -260,6 +302,9 @@ firewall_restore_rules()
             set -- ${_firewall_restore_line}
             _firewall_restore_number="$1"
             shift
+            # Recheck at the point of mutation (including file race/drift).
+            firewall_normal_rule_range_valid \
+                "${_firewall_restore_number}" "${_firewall_restore_number}" || exit 1
             "${IPFW_BIN}" -q add "${_firewall_restore_number}" "$@" || exit 1
         done < "${_firewall_restore_snapshot}"
     )
