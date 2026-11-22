@@ -4,6 +4,8 @@
 
 **Точка старта, 22.11.2026:** `main 62b64e82` = source-only `0.6.5_121`, никакого `_121.pkg`; у владельца опубликованный/установленный `_117.pkg`, последняя ручная Stop→Start = RUNNING, два Strategies Apply PASS. [Lab #1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224) stage90/99 RESTORE_FAILED, [Auto #1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223) native YouTube no Found и [UI routes #1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225) OPEN. [Draft PR #1228](https://github.com/Tolian82/os-zapret2-restyle/pull/1228) — частичная pre-manifest реализация Lab/pkg на старой базе; не merge, не публиковать. После документационного merge источник и следующий номер revision определить заново, а не заимствовать `_121` из старого PR.
 
+**ОБЯЗАТЕЛЬНОЕ ПРАВИЛО ПЕРЕД S01–S20 — DEV-069:** канон Zapret2: [официальный `manual.en.md`](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md). **Запрещено тестировать, правда ли ведёт себя движок так, как в нём прямо написано.** Для HOSTLIST/IPSet документированы автоматическое перечитывание файлов при изменении без restart и SIGHUP-принудительное перечитывание при следующем пакете; мы **безусловно принимаем** эти свойства. Гейты этого плана проверяют **только наш код и внешние неописанные руководством механизмы**: diff/refs, запись, owner/PID, FD9, IPFW, адресную доставку сигнала, no restart, rollback/GUI и прочую платформенную интеграцию. Никаких engine reread/probe/benchmark tests, native confirmations documented engine features или сравнений с upstream исходниками. [Правило применения](ZAPRET2_UPSTREAM_MANUAL_CANON.md).
+
 **Метод:** выполнять **S00 → S01 → … → S20**; для каждого шага: (1) действие, (2) RED→GREEN/нативное свидетельство, (3) переход только при GO. При FAIL устранять конкретную причину **в том же шаге**, сохраняя контекст stage/rc/SHA; не компенсировать missing evidence масштабным новым защитным механизмом. Source tests, disposable OPNsense и owner-live — **разные уровни приёмки**.
 
 **Наследуемый обязательный регрессионный сценарий WAN-first / Prestart Lab:** [LC-06/11/12](OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md), [G05](../verification/G05_WAN_ONLY_NATIVE.md), [G08](../verification/G08_PRESTART_LAB_NATIVE.md), [ТЗ_6v5 `6.1](TZ_6v5.md). **Сохранить** Save только WAN при Enabled=OFF, без upstream, обычного runtime/active manifest или непустой пользовательской стратегии. После **явной** установки upstream Standard/Extended Laboratory обязаны запускаться **без первого обычного Start**, проверять STOPPED→STOPPED и отсутствие остаточных Lab IPFW; старый native G08 PASS не переносится автоматически на новое поколение. Отсутствие WAN → `wan-required` раньше отсутствия двигателя; сохранённый WAN + отсутствующий двигатель → `engine-not-installed` без Job. G05→G08 — обязательный source/native RED→GREEN до и после переделки launcher.
@@ -52,7 +54,7 @@
 
 4. RED-тесты старых переводов Start/Stop/Restart: показать реальные sources, доходимость до обоих языков; отдельно фикстуры исчезнувших source stages, чтобы stale lifecycle errors не пережили refactor. Сохранённые Lab/operation receipts не считать «мёртвыми» без проверки.
 
-5. RED fixture на old/next effective semantic diff: NO_CHANGE, HOSTLIST/IPSet bytes only, изменение source ref, reorder profiles, DPI/Voice/Target Mode/WAN/divert, mixed diff, stopped/incomplete/foreign. Доказуемо падают и тесты «reload не меняет PID/owned IPFW», lazy reread→REQUESTED, failure→no hidden restart, CLI unknown option rc64, old/new lifecycle GUI RU/EN.
+5. RED fixture **на наши действия**: old/next effective diff NO_CHANGE/list-only/refs/profile order/DPI/Voice/Target Mode/WAN/divert/mixed/foreign; `reload` сохраняет собственный PID/owned IPFW, доставляет сигнал только verified PID, правильно возвращает REQUESTED (когда подтверждена только доставка), failure не запускает hidden restart; CLI option rc64 и RU/EN lifecycle GUI. **Не писать тесты, исследующие, перечитывает ли движок списки и что делает SIGHUP:** это установлено каноном.
 
 **GO:** baseline и воспроизводимый RED доступны CI. **NO-GO:** unit mocks или grep объявлены native доказательством.
 
@@ -175,7 +177,7 @@
 
 4. Инъекции отказов при Stop→Start/restart, failed Start after Stop и rollback: сверить фактическую причину/стадию с RU/EN уведомлением именно о service transition, исключить ложный «Restart successful».
 
-5. End-to-end native reload: изменить только активный checked HOSTLIST/IPSet при RUNNING, подтвердить точный old/new PID+birth/argv/supervisor+IPFW и реальное reread без SIGSTOP; SIGHUP только verified owner. На lazy reread вернуть REQUESTED, пока не подтверждено, а failure/injected crash — rollback или UNCERTAIN без fallback restart. Сравнить с forced full restart для structural/mixed change и no-op.
+5. End-to-end **интеграция плагина**, не тест Zapret2: заменить разрешённый active HOSTLIST/IPSet через existing writer, проверить неизменность собственного PID+birth/argv/supervisor+IPFW, целостность записанных файлов и доставку сигнала только authorized PID. `RELOAD_REQUESTED` означает выполненную доставку/запись, но не объявляет, что следующий пакет уже обработан. **Само автоматическое перечитывание и действие SIGHUP в движке не измерять и не доказывать.** При неудачном commit/signal — protected rollback либо UNCERTAIN без fallback restart; отдельная проверка нашего forced restart для structural/mixed и no-op.
 
 **GO:** original FD9 tests + equivalent native tests PASS; rc=0 недостаточно без physical witness.
 
@@ -193,10 +195,10 @@
 ### S16. Auto #1223 — native ingress до Found
 
 1. Проверить реальный mode=auto/source-map, final profile N, unique native `--hostlist-auto` inbox, debug, IPFW counters, P2 minute, current owned generation.
-2. Сопоставить прежний `--hostlist-auto-fail-threshold=1` с новыми клонами/default 3 как **неподтверждённую причину**; TIMEOUT/curl без native append не считается learning event.
-3. Controlled native event → exact profile/inbox N → original P2/PSL/IDNA/Exclude → correct `youtube_found` / `user_found` → active managed → same PID hot reload → safe native cleanup; проверить User known priority, unknown shared, concurrent append, !/^, invalid owner, WAL/ACK.
+2. Проверить **только параметры, которые наш генератор передаёт движку**, и правильность источника/фильтров/профиля по canonical `manual.en.md`; например, задан ли ожидаемый `--hostlist-auto-fail-threshold`, а не «действительно ли Zapret2 обнаруживает сбои по этому порогу». **Не испытывать** документированный upstream алгоритм Autohostlist failure detector, искусственно создавая блокировку, TIMEOUT или перехватывая трафик ради подтверждения его работы.
+3. Использовать **зафиксированную ранее реальную запись или соответствующую документированному формату контролируемую fixture** как *готовый вход* для нашего P2. Проверять **только свою цепочку**: native inbox/profile N → source-map → P2/PSL/IDNA/Exclude → соответствующий `youtube_found`/`user_found` → сохранение managed → protected cleanup/WAL/ACK. Проверить порядок User, unknown shared, concurrent append, !/^ и invalid owner. Не проводить эксперимент для доказательства upstream Autohostlist detector или reread.
 
-**GO:** on disposable native **реальное подтверждённое** positive event и correct destination без Apply/restart. Owner ISP остаётся OPEN до S20.
+**GO:** на одноразовой OPNsense при заданном **достоверном событии-входе** доказано, что **плагин** доставляет его в нужный Found/managed, не перезапуская службу, с правильными source map/FD9/ACK. Сам upstream детектор и его критерии **не тестируются**. Фактическая owner ISP-проверка собственной конфигурации и атрибуции остаётся OPEN до S20.
 
 ### S17. Exact-head genuine native OPNsense gate
 
@@ -206,7 +208,7 @@
 
 4. На disposable native OPNsense проверить RU/EN GUI отображение фактических отказов Start/Stop/Restart, в том числе вызванных через Apply/Lab/pkg; для опасных сценариев использовать контролируемые negative fixtures, а не устройство владельца.
 
-5. На exact-head disposable OPNsense v1.0.7/FreeBSD проверить supported dvtws2 SIGHUP/list auto-reread (последующий пакет может быть необходим), hot mutable refs, semantic diff decisions, сохранность PID/IPFW и отсутствие другого writer. Проверить реальные stderr/rc причины Start/Stop/Restart/Reload, unsafe signal refusal, options parser и RU/EN lifecycle GUI. Старый upstream manpage сам по себе native PASS не даёт.
+5. На exact-head disposable OPNsense/FreeBSD **не проверять поведение движка, уже описанное каноном** (automatic HOSTLIST/IPSet reread, SIGHUP и next packet): это не критерий PASS/FAIL. Вместо этого проверить *свой* `reload` route и `status`: точные list ref/path, commit/CAS, verified destination PID, корректный системный вызов отправки сигнала, сохранение процесса/FD9/IPFW, semantic diff action, отказ для чужого owner, контролируемые ошибки собственного сервиса и RU/EN lifecycle GUI. Исходный [manual.en.md](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) — **не hypothesis и не объект теста**, а нормативная аксиома.
 
 **GO:** affected native scenarios on exact code candidate PASS, critical restore FAIL eliminated.
 
@@ -218,7 +220,7 @@
 
 4. V5-12 проверять **только** по old/new Start/Stop/Restart-related UI errors: нет orphan keys от удалённого lifecycle, все существенные действующие отказные ветки имеют RU/EN, сохранённые старые записи читаются; общий аудит иных переводов не требуется.
 
-5. Отдельный gate **V5-13/V5-14**: перечень классифицированных полей и доказанные result codes, native списочный reload без Stop, structural restart, mixed restart только один раз, no-op, stop/off, incomplete refusal, no hidden auto fallback, action option allowlist, engine errors/локализованные lifecycle failures. Никакой тестовой .pkg до PASS.
+5. Отдельный gate **V5-13/V5-14**: наше покрытие diff classifier и result codes, запись активного list и адресная доставка сигнала без Stop/PID/IPFW changes, structural/mixed guarded restart только один раз, no-op, OFF, incomplete refusal, no fallback, option allowlist и локализованные реальные lifecycle failures. **Не включать в PASS проверку работы механизма reread/SIGHUP Zapret2**, уже описанного `manual.en.md`. Никакой тестовой .pkg до PASS интеграции плагина.
 
 **GO:** конкретный merged main SHA готов к **testing** .pkg, с сохранением owner-live OPEN.
 
@@ -236,13 +238,13 @@
 
 1. Зафиксировать before/after package version, engine/config/manifest/runtime, WAN/IPFW/Voice, Strategies + Voice toolbar Start/Restart/Stop/Status, unchanged/edited Apply, one `dvtws2`, сохранение ручных и Found списков. На **отдельной чистой тестовой установке** проверить WAN-only до upstream и Standard/Extended до первого ordinary Start, не очищая живые настройки владельца ради регрессии.
 2. Strategy Lab: автоматическое восстановление RUNNING→RUNNING/STOPPED→STOPPED и failure handling; никаких команд manual restart вместо PASS.
-3. Auto: после **подтверждённого** реального native YouTube/User события проверить соответствующие Found→managed, тот же PID/отсутствие фонового restart; если ISP native event не возник, указывать NOT VERIFIED, не выдавать TIMEOUT за доказательство.
+3. Auto: если при обычной эксплуатации уже существует квалифицированная native запись, проверить **только наш маршрут** YouTube/User source-map → Found→managed, тот же PID и отсутствие фонового restart; если события нет, использовать подтверждённую сохранённую fixture для плагинового теста и не требовать от владельца экспериментально вызывать upstream detector. Документированная upstream логика обнаружения не является объектом проверки, отсутствие внешнего события не опровергает канон.
 4. Обычное удаление→повторная установка сохраняет настройки; отдельный deliberate purge проходит на тестовом устройстве. Проверить ошибки GUI и no-engine pathways.
 5. Только после фактических свидетельств закрыть #1223/#1224/#1225/#1052; stable и pfSense — отдельные решения, не часть ТЗ_6v5 shipping.
 
 6. Подтвердить RU/EN обратную связь **только по Start/Stop/Restart** и неудачным переходам службы в Apply/Lab; другие GUI переводы остаются вне V5-12.
 
-7. Приёмка на owner OPNsense **после disposable native PASS**: при изменении только содержимого активного HOSTLIST/IPSet у «Применить» PID/IPFW не меняется; при изменении стратегии/порядка проверяется полноценный restart. Показать result `RELOAD_REQUESTED` отдельно от verified, а при ошибке — точную безопасную RU/EN причину. Не выполнять опасные failure injection на реальном роутере.
+7. Приёмка на owner OPNsense **после disposable native PASS нашей интеграции**: при изменении только содержимого активного HOSTLIST/IPSet «Применить» корректно сохраняет файл/направляет сигнал при необходимости и не меняет PID/IPFW; при изменении стратегии/порядка выбирает полноценный restart. Показать `RELOAD_REQUESTED` (плагин выполнил свой запрос) без необоснованного утверждения про уже обработанный пакет; ошибки — безопасный RU/EN code. **Не проверять** engine auto-reread/SIGHUP на устройстве и не выполнять опасные failure injection.
 
 **DONE:** функциональность подтверждена на соответствующих source/native/owner уровнях, включая WAN-first/G05→G08/V5-11, lifecycle RU/EN V5-12, native reload V5-13 и пять команд/diagnostics V5-14; любые непроверенные строки остаются OPEN.
 

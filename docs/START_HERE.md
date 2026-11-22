@@ -1,6 +1,15 @@
 # os-zapret2-restyle — current handoff
 
-## 22 ноября 2026 — CURRENT: Start/Stop/Restart/Reload/Status и безопасное Apply (docs-only)
+## 23 ноября 2026 — CURRENT: manual.en.md — безусловный канон движка (docs-only)
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=126`, `v0.6.5_126` — docs-only PR candidate поверх merged `main _125 e60bc1d2`. Prospective `os-zapret2-restyle-0.6.5_126.pkg` **не построен и не опубликован**; у владельца по-прежнему `_117.pkg`.
+
+**Абсолютное правило [DEV-069](PROJECT_PRINCIPLES.md):** единственный канон поведения upstream Zapret2 — [bol-van/zapret2/docs/manual.en.md](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md); описанное в нём **не проверять никакими экспериментами, исходниками, native тестами или сравнением версий**. В частности, автоматическое reread HOSTLIST/IPSet без restart и SIGHUP reload при следующем пакете — нормативные факты. Проверять только [внешнюю интеграцию плагина](architecture/ZAPRET2_UPSTREAM_MANUAL_CANON.md): planner, staging/writer, FD9, IPFW/владение, правильный PID сигнала, сохранение процесса, status/GUI и rollback; то, чего руководство не описывает. Устаревшие требования проверки самого механизма reread исключены из [ТЗ_6v5](architecture/TZ_6v5.md) и [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+
+**Работы:** S01–S20 реализация пока не начата; [PR #1228](https://github.com/Tolian82/os-zapret2-restyle/pull/1228) **CLOSED without merge**, useful checks сохранены в #1225. Lab #1224 и Auto #1223 OPEN. Изменения только документационные; основной runtime не тронут.
+
+
+## 22 ноября 2026 — Start/Stop/Restart/Reload/Status и безопасное Apply (историческая документационная веха)
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=125`, `v0.6.5_125` — docs-only candidate поверх **merged `main v0.6.5_124`** (`d429aff7`, [PR #1233](https://github.com/Tolian82/os-zapret2-restyle/pull/1233)). Prospective `os-zapret2-restyle-0.6.5_125.pkg` **не собран и не опубликован**. У владельца остаётся `_117.pkg`.
 
