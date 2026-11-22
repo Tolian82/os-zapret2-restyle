@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 22 November 2026 — `_117` owner Apply PASS; Auto and Lab restoration P0 OPEN (CURRENT)
+## 22 November 2026 — DEV-065 one original FD9 Start/Stop owner; lifecycle first (CURRENT)
+
+**Current identity:** source-only `v0.6.5_120`, `VERSION=0.6.5`, `PLUGIN_REVISION=120`; prospective `os-zapret2-restyle-0.6.5_120.pkg` **not built/published**. Physical installed and latest immutable testing `.pkg` is `_117` (not `_118`/`_119`/`_120`). The owner manually stopped and started after Lab and verified `zapret is running`, `status_rc=0`. Independent owner Strategies unchanged+edited Apply checks PASS. Lab stage 90/99 `RESTORE_FAILED` remains OPEN.
+
+**Binding architecture change (owner):** [DEV-065](PROJECT_PRINCIPLES.md) makes original FD9 service one canonical privileged implementation of physical Stop/Start; GUI Strategies/Voice, System Services restart, both Apply, Lab, upstream engine installer, protected package updater, recovery and callbacks delegate, with no duplicate owner selector and no second engine/Config writer. Current source has multiple decisions in Lab and pkg paths; implementation and native equivalence remain OPEN. [Detailed actual handler inventory and enforced design](architecture/ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md), [TZ](architecture/TZ_6v4.md), [plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md).
+
+**Open blockers:** [#1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225) unify routing, [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224) original Lab RESTORE_FAILED (raw args hash generation-rotation mismatch is a candidate mechanism only), [#1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223) real native YouTube Auto no-F শ; do not assert positive native events based on timeout. No product-code change or new owner traffic action at this rule checkpoint.
+## 22 November 2026 — `_117` owner Apply PASS; Auto and Lab restoration P0 OPEN (HISTORICAL)
 
 **Current source:** `v0.6.5_119` (`VERSION=0.6.5`, `PLUGIN_REVISION=119`) **documentation-only, no `_119.pkg`**. Owner physically installed and last published testing package `_117` following protected `_111→_117` with matching digest. Original Strategies no-change and edited `Домены YouTube` Apply each confirmed `zapret is running` — **PASS only for those two user actions**. **Prospective native artifact name:** `os-zapret2-restyle-0.6.5_119.pkg` (source-only, not built or published).
 

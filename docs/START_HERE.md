@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current handoff
 
-## 22 November 2026 — `_117` owner Apply PASS; Auto and Lab restoration P0 OPEN (CURRENT)
+## 22 November 2026 — DEV-065 canonical Start/Stop FIRST; `_120` source-only rule/audit (CURRENT)
+
+**Source candidate:** `v0.6.5_120`, `VERSION=0.6.5`, `PLUGIN_REVISION=120`; prospective `os-zapret2-restyle-0.6.5_120.pkg` **not built or published**. Owner physical system remains installed test `.pkg` `_117` with RUNNING service verified `status_rc=0` **after owner manually stopped and restarted it**. Prior physical edited/unedited Strategies Apply also remained RUNNING. Lab `job.iDvhRh` stage 90/99 `RESTORE_FAILED` remains a real failure; manual recovery is not a Lab PASS.
+
+**Binding owner directive:** service Start and Stop must each be **written once**, in original `zapret_service.sh` under its authoritative FD9; every GUI button, System Services Play/Restart/Stop, Voice, both Apply, Strategy Lab, upstream `Установить версию` and protected pkg updater must **refer to the same implementation** for physical transitions. Global [DEV-065](PROJECT_PRINCIPLES.md) and normative [ТЗ_6v4 §6.1](architecture/TZ_6v4.md) now govern. [Actual source route audit/implementation contract](architecture/ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md) identifies the existing duplicated branch selection that must be removed.
+
+**Exact next engineering action:** complete real handler/source audit first, then replace duplicate lifecycle dispatch paths with one original FD9 state machine and shared Start/Stop primitives, without nested locks or weakening Common/Voice/legacy ownership, WAN, Config, IPFW, N/debug/P1/ACK, original rollback. Reproduce Lab `RESTORE_FAILED` and correct its restoration semantics only with native evidence, then return to YouTube native Auto regression. [Active ordered plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md), issues [#1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225), [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224), [#1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223).
+## 22 November 2026 — `_117` owner Apply PASS; Auto and Lab restoration P0 OPEN (HISTORICAL)
 
 **Identity:** Source-only `v0.6.5_119` (`VERSION=0.6.5`, `PLUGIN_REVISION=119`), **no `0.6.5_119.pkg`**. The owner's exact installed and latest published testing package remains `os-zapret2-restyle-0.6.5_117`. `_118` was only a publication-record source revision. This scope is documentation only: no backend, frontend, service or owner-appliance change. **Prospective native artifact name:** `os-zapret2-restyle-0.6.5_119.pkg` (source-only, not built or published).
 
