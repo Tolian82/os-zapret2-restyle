@@ -1,6 +1,6 @@
 # Original FD9 whole-package continuation of a failed POST_INSTALL restore
 
-Scope: P0 #1213, source candidate `v0.6.5_114`, 22 November 2026. This document describes the implemented transition and its qualification criteria. It does not claim owner recovery, physical power-loss testing or publication of a new package.
+Scope: P0 #1213, recovery code `v0.6.5_114`, 22 November 2026. The recovery implementation is merged and its package is published; this documentation-only `_115` record adds the qualified handoff below. Owner recovery and physical power-loss testing remain unconfirmed.
 
 ## Observable scenario and source boundary
 
@@ -42,3 +42,71 @@ An owner command block may be supplied only after the exact native gate and publ
 The existing `owner-p0-protected-rescue.yml` is the required native acceptance. One genuine disposable OPNsense 26.7 builds a native candidate and verifies package-contained bootstrap source, installs the exact immutable `_107`, populates both exclusions via the native Model, and reproduces the exact `_109` P2 refusal. A test-only subprocess adapter exits **without finally** after the actual FD9 handoff and then after actual `_111` POST_INSTALL. Installed sources remain original `_109` until native pkg replaces the full payload. Normal package-contained bootstrap must resume to fully installed `_111`, native status RUNNING, schema3, unchanged Config/dvtws binary, retained old archive and absent update guard/marker. Test fault adapters never modify installed source or shipped code.
 
 Required merge checks also cover the changed original shell/coordinator and native package inclusion through the existing scope router. Existing unrelated ISP/GUI/Voice-media evidence is not repeated or upgraded by these tests. Results belong to the exact source PR's workflow runs; failure, skip or infrastructure outage is not PASS. Issue #1213 remains OPEN until the actual owner confirms restored service.
+
+## Executed native evidence and published code identity
+
+[P0 native run 45020690225](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45020690225), [actual guest job 137202727061](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45020690225/job/137202727061), exact source `c5a0317a4aedf3be9f35cf7afb6439c6585b1204`: **PASS** on disposable OPNsense 26.7. Its recorded results are:
+
+| Evidence | Observed result |
+| --- | --- |
+| `P0_OWNER_NATIVE_109_P2_BOOT_REFUSAL` | Genuine published `_109`, original finish rc70, exact global-exclusion P2 refusal, retained `postinstall-attested`. |
+| `P0_NATIVE_CONTINUATION_PREPARED_CRASH` | Abrupt coordinator exit 91 after real FD9 journal publication; installed `_109` sources unchanged, original record bytes retained. |
+| `P0_NATIVE_CONTINUATION_POSTINSTALL_CRASH` | Abrupt exit 92 after real native `_111` POST_INSTALL; fully installed `_111` remains STOPPED, original record retained. |
+| `P0_OWNER_NATIVE_111_RECONCILED` | Normal package-contained bootstrap rc0; installed `_111` RUNNING, schema3, 14 learning profiles, Config and dvtws binary unchanged, original archive preserved, guard/marker absent. |
+
+[PR #1217](https://github.com/Tolian82/os-zapret2-restyle/pull/1217) merged as `5a9b771757717b6c800e418cfdc6f199af3cd95c`; its tree matches the tested PR head. [Post-merge CI 45021737676](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45021737676) passed. A separate ordinary protected-update run [45020690208](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45020690208) initially refused during a later Stop/retirement setup; its single unchanged-source retry passed. That intermittent refusal remains an unresolved risk, not a demonstrated fix.
+
+The [publication receipt](testing-publications/v0.6.5_114.md) pins the actual public `_114.pkg` SHA-256, ABI and source/tag. Independent inspection of those downloaded bytes verifies all 317 service/API files against the merged source. Native P0 used a different CI carrier archive, SHA-256 `9d8db10a8aa000aa30672410ae9633bb32d688504bda124e6de64ba29369d7ab`; the published rebuild has SHA-256 `e1015197e33b326ff5debe474caa0f3a13ee0b7c73c952c74899b7acac08101b`. Code-byte equivalence qualifies the interpreted recovery code; the public rebuild is not claimed to have been installed in that native run. The installed recovery target is the exact unchanged published `_111.pkg` tested there.
+
+## Owner command block for the preserved initial _109 incident
+
+Use this block once from the OPNsense root console for the last reported state: installed `_109`, original `_107→_109` record `postinstall-attested`, `was_running=true`, committed shared Apply and no engine. It first downloads the two native packages and verifies their exact SHA-256 and the expected initial record. The only extracted executable is the coordinator already delivered inside `_114.pkg`; it stages its own manifested package code, continues the same operation under original FD9 and installs the whole `_111.pkg` before restoring service. No separate installer is downloaded or created.
+
+The first `sh` enters POSIX shell from the default root csh; the final `exit` returns to csh. A failed download cannot bypass the following SHA checks. Any refusal requires inspection of the reported result; do not repeat the block or change the journal. Interrupted continuation has a separate protected resume contract above; this initial-state block deliberately does not guess that state.
+
+```sh
+sh
+fetch -o /root/os-zapret2-restyle-0.6.5_114.pkg https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_114/os-zapret2-restyle-0.6.5_114.pkg
+fetch -o /root/os-zapret2-restyle-0.6.5_111.pkg https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_111/os-zapret2-restyle-0.6.5_111.pkg
+/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh - <<'PY'
+import hashlib, json, os, subprocess, tempfile
+from pathlib import Path
+
+service = Path('/usr/local/opnsense/scripts/OPNsense/Zapret')
+carrier = Path('/root/os-zapret2-restyle-0.6.5_114.pkg')
+target = Path('/root/os-zapret2-restyle-0.6.5_111.pkg')
+carrier_sha = 'e1015197e33b326ff5debe474caa0f3a13ee0b7c73c952c74899b7acac08101b'
+target_sha = '7257f54d74ef10fedc30d75e5e4a13861253bc8ad64d64ab232c537c2a56fae3'
+for archive, expected in ((carrier, carrier_sha), (target, target_sha)):
+    if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
+        raise SystemExit('recovery-refused=PACKAGE_SHA_MISMATCH')
+original = Path('/var/db/zapret2/pkg-update/operation.json').read_bytes()
+record = json.loads(original)
+if (record.get('schema') != 1 or record.get('phase') != 'postinstall-attested'
+        or record.get('from_version') != '0.6.5_107'
+        or record.get('to_version') != '0.6.5_109'
+        or record.get('was_running') is not True or 'continuation' in record):
+    raise SystemExit('recovery-refused=INITIAL_RECORD_CHANGED')
+original_sha = hashlib.sha256(original).hexdigest()
+member = '/usr/local/opnsense/scripts/OPNsense/Zapret/protected_pkg_update.py'
+payload = subprocess.check_output(['/usr/bin/tar', '-xOf', str(carrier), member])
+if hashlib.sha256(payload).hexdigest() != 'a65845f0fdcb6bdc6e3937c2b129d07116a5c4dbcd2f452c0e0eb2de7cd1f4e4':
+    raise SystemExit('recovery-refused=COORDINATOR_SHA_MISMATCH')
+bootstrap = Path(tempfile.mkdtemp(prefix='zapret-recovery-', dir='/root')) / 'protected_pkg_update.py'
+with bootstrap.open('xb') as output:
+    os.fchmod(output.fileno(), 0o600)
+    output.write(payload)
+    output.flush()
+    os.fsync(output.fileno())
+result = subprocess.run([str(service / 'python_runtime.sh'), str(bootstrap),
+    'bootstrap-continuation', str(carrier), carrier_sha, str(target), original_sha])
+print('recovery_rc=' + str(result.returncode), flush=True)
+subprocess.run(['/usr/sbin/pkg', 'info', '-x', 'os-zapret2-restyle'])
+status = subprocess.run([str(service / 'zapret_service.sh'), 'status'])
+print('status_rc=' + str(status.returncode), flush=True)
+raise SystemExit(result.returncode or status.returncode)
+PY
+exit
+```
+
+Required success evidence: `pkg-recovery=verified-installed-and-restored`, `recovery_rc=0`, installed `os-zapret2-restyle-0.6.5_111`, native `RUNNING` and `status_rc=0`. These results must come from the owner's device before #1213 can be resolved. Subsequent provider attribution, GUI and longer lifecycle acceptance retain their separate open status.
