@@ -17,15 +17,9 @@ import sys
 from auto_detect_storage import RAW_PATH, DEBUG_PATH
 
 import profile_policy
-from global_exclusions import ARGS_LIMIT, BASE, ExclusionError, is_stun, segments, templates_and_imports, visible
-
-# Same generated Stage-3 references as _original_global_policy_paths():
-# user-authored excludes and ordinary working profiles must stay untouched.
-GLOBAL_POLICY_REFERENCE = Path("/usr/local/etc/zapret2/runtime-v2")
-GLOBAL_POLICY_TRAILING = frozenset((
-    "--hostlist-exclude=" + str(GLOBAL_POLICY_REFERENCE / "managed/hostlist-exclude.txt"),
-    "--ipset-exclude=" + str(GLOBAL_POLICY_REFERENCE / "managed/ipset-exclude.txt"),
-))
+from global_exclusions import (ARGS_LIMIT, BASE, ExclusionError,
+                               GLOBAL_POLICY_REFERENCE, GLOBAL_POLICY_TRAILING,
+                               is_stun, segments, templates_and_imports, visible)
 
 
 class AttributionError(ValueError):

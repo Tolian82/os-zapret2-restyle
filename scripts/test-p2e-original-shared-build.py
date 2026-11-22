@@ -264,6 +264,23 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
             len(owner._valid_learning_proposal(
                 encoded, {"id": self.work.name, "candidate": "d" * 64},
                 original, projected)), 2)
+        # A proposal with a noncanonical learned suffix remains refused even
+        # when the forged map digest is adjusted to match the altered argv.
+        forged_rows = segments(projected.decode("utf-8"))
+        learning_row = forged_rows[2]
+        learning_row[-2:] = list(reversed(learning_row[-2:]))
+        forged_tokens = projected.decode("utf-8").split()
+        canonical_tokens = rows[2]
+        start = len(rows[0]) + 1 + len(rows[1]) + 1
+        forged_tokens[start:start + len(canonical_tokens)] = learning_row
+        forged_args = ("\\n".join(forged_tokens) + "\\n").encode("utf-8")
+        forged_record = dict(proposal,
+                             final_args_sha256=hashlib.sha256(forged_args).hexdigest())
+        with self.assertRaises(owner.GenerationRefused):
+            owner._valid_learning_proposal(
+                json.dumps(forged_record).encode(),
+                {"id": self.work.name, "candidate": "d" * 64},
+                original, forged_args)
 
     def test_tz6v4_learning_map_has_independent_native_proof(self):
         mapped, args = self.build(
