@@ -295,9 +295,56 @@ def main():
           json.dumps({"verified": recovered, "checks": measured},
                      sort_keys=True), flush=True)
     need(recovered, "ORIGINAL_FD9_GUARDED_109_RECOVERY_REFUSED")
-    # Normal installed package-owned protected upgrade, no direct pkg add.
-    upgrade = run([str(SERVICE), "pkg-update", str(fixed)],
-                  env=env, timeout=480)
+    # Disposable diagnosis: the protected coordinator suppresses stdout and
+    # stderr from its ORIGINAL FD9 pkg-update-prepare child. Invoke that SAME
+    # original native prepare exactly once with a root-only SHA-qualified
+    # incoming archive so source-specific guard categories can be classified.
+    # This test does NOT bypass FD9 or issue any owner appliance command.
+    import uuid
+    incoming = RECORD.parent / ("incoming-p0diag-" + uuid.uuid4().hex + ".pkg")
+    fd = os.open(incoming, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                 getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "wb") as output:
+        with fixed.open("rb") as source:
+            for block in iter(lambda: source.read(1024 * 1024), b""):
+                output.write(block)
+        output.flush()
+        os.fsync(output.fileno())
+    need(digest(incoming) == FIXED[1], "NATIVE_111_PRIVATE_INCOMING_SHA_MISMATCH")
+    prepare = run([str(SERVICE), "pkg-update-prepare",
+                   str(incoming), FIXED[1], FIXED[0]], env=env, timeout=250)
+    marker_text = prepare.stderr + "\n" + prepare.stdout
+    known_guards = ("auto-detect-retire-refused=MinuteRefused",
+                    "auto-detect-retire-refused=OriginalLockRefused",
+                    "auto-detect-retire-refused=LearningRetirementRefused",
+                    "auto-detect-retire-guard=",
+                    "auto-detect-retire-original-guard=",
+                    "native-common-stopped=",
+                    "zapret-pkg-update-prepared=1")
+    print("P0_NATIVE_DIRECT_ORIGINAL_PREPARE=" + json.dumps({
+        "rc": prepare.returncode,
+        "markers": {key: key in marker_text for key in known_guards},
+        "record_phase":
+            json.loads(RECORD.read_bytes()).get("phase") if RECORD.is_file()
+            else "absent",
+        "engine_present": PIDFILE.is_file(),
+        "marked_restart": MARKER.is_file(),
+        "config_sha_unchanged": digest(CONFIG) == config_sha,
+        "dvtws2_sha_unchanged": digest(engine) == engine_sha,
+    }, sort_keys=True), flush=True)
+    need(prepare.returncode == 0 and
+         "zapret-pkg-update-prepared=1" in prepare.stdout,
+         "DIRECT_ORIGINAL_FD9_111_PREPARE_REFUSED")
+    # A successful original prepare continues with exact package-owned
+    # POST_INSTALL + original successor FD9 finish, as the coordinator would.
+    upgrade_pkg = run(["/usr/sbin/pkg", "-o", "REPO_AUTOUPDATE=false",
+                       "add", "-f", str(incoming)], env=env, timeout=270)
+    need(upgrade_pkg.returncode == 0 and
+         "zapret-pkg-postinstall-guarded=1" in
+         (upgrade_pkg.stdout + upgrade_pkg.stderr) and
+         installed() == FIXED[0], "DISPOSABLE_POSTINSTALL_111_NOT_CONFIRMED")
+    upgrade = run([str(SERVICE), "pkg-update-finish", FIXED[1], FIXED[0]],
+                  env=env, timeout=330)
     # P0 stage classification is bounded to fixed public reason tokens. The
     # protected coordinator deliberately hides child stderr/Config from logs.
     reason_match = re.search(
