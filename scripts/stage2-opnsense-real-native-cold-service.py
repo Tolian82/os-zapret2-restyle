@@ -103,7 +103,7 @@ def owned_ipfw_rules():
     numbers = []
     for line in result.stdout.splitlines():
         match = re.match(r'^\s*(\d{5})\s', line)
-        if match and 19000 <= int(match.group(1)) <= 19010:
+        if match and 19000 <= int(match.group(1)) <= 19099:
             numbers.append(line)
     return {'available': True, 'rules': numbers}
 

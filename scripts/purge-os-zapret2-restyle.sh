@@ -333,13 +333,10 @@ def owned_rules():
         if match is None:
             raise Refusal("unparseable native IPFW rule list")
         number, expression = int(match[1]), match[2]
-        if 19000 <= number <= 19010 or 19100 <= number <= 19131:
-            # Actual native ports: Strategies/Voice 989, Laboratory 9989.
-            port = 989 if 19000 <= number <= 19010 else 9989
-            if not re.search(r"\bdivert\s+" + str(port) + r"\b", expression) or (
-                "not diverted not sockarg" not in expression
-            ) or " xmit " not in " " + expression + " ":
-                raise Refusal("unverified IPFW rule in Zapret2 number range: " + str(number))
+        # Rule NUMBER alone defines the owner-allocated cleanup scope.
+        # No extra matching on divert ports, expressions, or another service.
+        # Comparative 19140..19200 is reserved for future code and untouched.
+        if 19000 <= number <= 19099 or 19100 <= number <= 19131:
             found.append(number)
     return found
 

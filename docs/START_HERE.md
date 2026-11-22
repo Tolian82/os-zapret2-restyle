@@ -1,6 +1,17 @@
 # os-zapret2-restyle — current handoff
 
-## 23 ноября 2026 — CURRENT: IPFW numeric allocation 19000–19099 (docs-only)
+## 23 ноября 2026 — CURRENT: IPFW source implementation 19000–19099 (product PR)
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=129`, `v0.6.5_129` — **продуктовый кандидат** на базе merged `main _128 7f48b3e3` ([документационный PR #1238](https://github.com/Tolian82/os-zapret2-restyle/pull/1238)). `os-zapret2-restyle-0.6.5_129.pkg` **не создан и не опубликован**. У владельца установлен `_117.pkg`, его рабочая OPNsense не тронута.
+
+**Код на review:** [PR #1237](https://github.com/Tolian82/os-zapret2-restyle/pull/1237) меняет `zapret_service.sh RULE_BASE=19000/RULE_MAX=19099`, orchestrator/preview, обе копии numeric-only purge, отказ от создания чужого IPFW 65534 и ограничение числовых аргументов backend/Voice/Lab. При rollback snapshot проверяется по номеру **до** мутации. Действующие native tests и постоянный CI gate `scripts/test-ipfw-number-scope.py` предотвращают возврат к 19010; это **не** foreign-rule ownership scan. Действующие Normal/Voice 19000–19099, Lab 19100–19131; comparative reserve 19140–19200 пока **не используется и не очищается**. [Нормативные правила DEV-071](PROJECT_PRINCIPLES.md), [ТЗ_6v5 §5.7/V5-17](architecture/TZ_6v5.md), [план S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) уже merged.
+
+**Преемственность настроек:** старое защищённое IPFW-поколение может сохранять `rule_max=19010`; новый runtime с `rule_max=19099` без специального перехода получал бы `previous rule ownership range differs`. PR #1237 допускает **только** sealed переход `19010 ↔ 19099`, сравнивая уже существующий полный transactional manifest под FD9, и охватывает более широкий диапазон при предыдущем/новом Apply, Restart и rollback. Если в расширении есть неожиданное правило, сохраняется прежний отказ; числовое владение не проверяется дополнительным сканером. Регрессии — `scripts/test-voice-firewall-transaction.py` и `scripts/test-ipfw-number-scope.py`. Это ещё не native PASS.
+
+**Приёмка продолжается:** ранняя ревизия имела native canary `OriginalLockRefused / original_config_child_rc69`, но на следующей ревизии canary прошёл. Также G11/P2e/P5c/P0/Protected pkg-update PASS; G01 с отдельным внешним сбоем скачивания upstream GitHub Releases `403 Forbidden` — **не результат проверки очистки IPFW**. После новых правок границ требуются повторные exact-head CI/native. Main пока исключительно документационная _128. `65534 allow ip from any to any` был старым системным fallback перед default rule `65535`, **не связан** с VoiceLab Docker на TNAS. Наш код больше не должен его создавать; **уже существующие чужие правила не удаляются**.
+
+
+## 23 ноября 2026 — IPFW numeric allocation 19000–19099 (merged docs-only checkpoint)
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=128`, `v0.6.5_128` — **только документационная** кандидатная ревизия поверх merged `main _127 0615ab30`. Prospective `os-zapret2-restyle-0.6.5_128.pkg` **не собран и не опубликован**; на owner OPNsense по-прежнему установлен `_117.pkg`.
 

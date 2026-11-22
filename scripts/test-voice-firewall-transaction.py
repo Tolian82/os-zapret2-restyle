@@ -61,7 +61,8 @@ class FakeIPFW:
             raise OSError("rule number collision")
         self.rules[number] = deepcopy(argv)
 
-def fixture(*services, tcp="443", udp="596-599", auto_rst=False):
+def fixture(*services, tcp="443", udp="596-599", auto_rst=False,
+            maximum=19010):
     data = {
         "strategy_wan":"WAN", "voice_wan":"",
         "services":{s:{"enabled":False,"args":"","ips":""} for s in compiler.SERVICES}
@@ -69,11 +70,75 @@ def fixture(*services, tcp="443", udp="596-599", auto_rst=False):
     for name, ips in services:
         data["services"][name] = {"enabled":True,"args":ARGS,"ips":ips}
     _, profile = compiler.compile_candidate(data, MANAGED)
-    plan = capture.compile_capture_plan(profile, 19000, 19010, 989, physical_wan="vtnet1")
+    plan = capture.compile_capture_plan(profile, 19000, maximum, 989, physical_wan="vtnet1")
     return transaction.prepare_desired(
         plan, tcp, udp, auto_rst_tcp=tcp if auto_rst else None)
 
 class VoiceFirewallTransactionTests(unittest.TestCase):
+    def test_sealed_19010_to_19099_upgrade_and_rollback_no_foreign_sweep(self):
+        # Only the explicitly approved old/new range pair is eligible.
+        # The preflight reads the WHOLE new allocation, rejecting unexpected
+        # occupied numbers before any IPFW mutation, without a new owner scan.
+        old = fixture(tcp="443", udp="", maximum=19010)
+        new = fixture(tcp="443", udp="", maximum=19099)
+        live = FakeIPFW(old["rules"], old["tables"])
+        shared_firewall_action(live, "install", old, new)
+        shared_firewall_action(live, "verify-staged", old, new)
+        shared_firewall_action(live, "commit", old, new)
+        shared_firewall_action(live, "verify", new, new)
+        self.assertEqual(live.rules, new["rules"])
+
+        # Reverse transition (explicit rollback/downgrade) must be accounted.
+        shared_firewall_action(live, "install", new, old)
+        shared_firewall_action(live, "commit", new, old)
+        shared_firewall_action(live, "verify", old, old)
+        self.assertEqual(live.rules, old["rules"])
+
+        interrupted = FakeIPFW(old["rules"], old["tables"])
+        shared_firewall_action(interrupted, "install", old, new)
+        shared_firewall_action(interrupted, "rollback", old, new)
+        self.assertEqual(interrupted.rules, old["rules"])
+
+        stray = FakeIPFW({**old["rules"], 19050: ["deny", "ip",
+                            "from", "any", "to", "any"]}, old["tables"])
+        with self.assertRaisesRegex(AdapterFirewallError,
+                                     "foreign or modified rules"):
+            shared_firewall_action(stray, "install", old, new)
+        self.assertEqual(stray.ops, [])
+
+        illegal = fixture(tcp="443", udp="", maximum=19098)
+        with self.assertRaisesRegex(AdapterFirewallError,
+                                     "unapproved IPFW number range"):
+            shared_firewall_action(FakeIPFW(old["rules"], old["tables"]),
+                                   "install", old, illegal)
+
+    def test_legacy_and_opnsense_tail_rules_survive_upgrade_and_stop(self):
+        # IPFW 65534 may be the old Zapret2 allow fallback OR the native
+        # OPNsense deny rule. Equal number/expression is not ownership proof.
+        old = fixture(tcp="443", udp="", maximum=19010)
+        new = fixture(tcp="443", udp="", maximum=19099)
+        empty = fixture(tcp="", udp="", maximum=19099)
+        for tail in (
+            {65534: ["allow", "ip", "from", "any", "to", "any"],
+             65535: ["deny", "ip", "from", "any", "to", "any"]},
+            {65533: ["pass", "ip", "from", "any", "to", "any"],
+             65534: ["deny", "all", "from", "any", "to", "any"],
+             65535: ["allow", "ip", "from", "any", "to", "any"]},
+        ):
+            with self.subTest(tail=tail):
+                live = FakeIPFW({**old["rules"], **tail}, old["tables"])
+                shared_firewall_action(live, "install", old, new)
+                shared_firewall_action(live, "verify-staged", old, new)
+                shared_firewall_action(live, "commit", old, new)
+                shared_firewall_action(live, "verify", new, new)
+                for number, expected in tail.items():
+                    self.assertEqual(live.rules[number], expected)
+                shared_firewall_action(live, "install", new, empty)
+                shared_firewall_action(live, "verify-staged", new, empty)
+                shared_firewall_action(live, "commit", new, empty)
+                shared_firewall_action(live, "verify", empty, empty)
+                self.assertEqual(live.rules, tail)
+
     def test_only_native_auto_adds_owned_inbound_rst_without_touching_ordinary(self):
         prior = fixture()
         active = fixture(auto_rst=True)

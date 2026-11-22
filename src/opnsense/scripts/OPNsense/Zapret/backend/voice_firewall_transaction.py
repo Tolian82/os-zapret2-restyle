@@ -163,15 +163,41 @@ def prepare_desired(capture_plan: dict, tcp: str, udp: str, *,
     return {"rule_base": first, "rule_max": last, "rules": rules, "tables": tables}
 
 
+def checked_transition_range(adapter, previous: dict, desired: dict) -> tuple[int, int]:
+    """The one approved legacy ordinary-IPFW range expansion/contraction.
+
+    Sealed release manifests are still the only ownership records. We widen
+    the EXISTING exact-rule verification to include the whole 19000..19099
+    interval, without sweeping or claiming ownership of unlisted rules.
+    """
+    former_first, former_last = previous.get("rule_base"), previous.get("rule_max")
+    next_first, next_last = desired.get("rule_base"), desired.get("rule_max")
+    if (type(former_first) is not int or type(former_last) is not int or
+            type(next_first) is not int or type(next_last) is not int or
+            former_first != next_first):
+        raise VoiceFirewallError("previous rule ownership range differs")
+    if former_last != next_last and not (
+        former_first == 19000 and {former_last, next_last} == {19010, 19099}
+    ):
+        raise VoiceFirewallError("unapproved IPFW number range transition")
+    first, last = former_first, max(former_last, next_last)
+    # Real adapter must see the full union. A rollback into the old release
+    # still uses the enlarged adapter so a leftover 19011..19099 fails verify.
+    if hasattr(adapter, "rule_base") and hasattr(adapter, "rule_max"):
+        if (adapter.rule_base != first or adapter.rule_max < last or
+                adapter.rule_max > 19099):
+            raise VoiceFirewallError("IPFW adapter does not cover allocated transition")
+        last = adapter.rule_max
+    return first, last
+
+
 def verify_prior_state(adapter, previous: dict, desired: dict) -> None:
     """Fail closed if unowned/modified live rules or tables are found."""
     if not isinstance(previous, dict) or not isinstance(previous.get("rules"), dict) or \
        not isinstance(previous.get("tables"), dict):
         raise VoiceFirewallError("missing trusted previous ownership manifest")
-    if previous.get("rule_base") != desired["rule_base"] or \
-       previous.get("rule_max") != desired["rule_max"]:
-        raise VoiceFirewallError("previous rule ownership range differs")
-    current = adapter.list_rules(desired["rule_base"], desired["rule_max"])
+    rule_first, rule_last = checked_transition_range(adapter, previous, desired)
+    current = adapter.list_rules(rule_first, rule_last)
     if current != previous["rules"]:
         raise VoiceFirewallError("foreign or modified rules in plugin-owned range")
     expected_table_names = set(previous["tables"]) | set(desired["tables"])
@@ -291,10 +317,8 @@ def plan_postcommit_cleanup(adapter, previous: dict, desired: dict) -> list[tupl
     Failed/partial cleanup can be retried, but only with the caller-held
     lifecycle lock. An unknown table or orphan stage fails closed.
     """
-    if previous["rule_base"] != desired["rule_base"] or \
-       previous["rule_max"] != desired["rule_max"]:
-        raise VoiceFirewallError("cleanup ownership range changed")
-    if adapter.list_rules(desired["rule_base"], desired["rule_max"]) != desired["rules"]:
+    rule_first, rule_last = checked_transition_range(adapter, previous, desired)
+    if adapter.list_rules(rule_first, rule_last) != desired["rules"]:
         raise VoiceFirewallError("cannot clean Voice tables: live rules differ from commit")
     prior_tables, desired_tables = previous["tables"], desired["tables"]
     if any(name not in (TABLE_PREFIX + n for n in SERVICES)
@@ -341,7 +365,8 @@ def rollback_uncommitted(adapter, previous: dict, desired: dict) -> None:
     # the former contents of all swapped stages and any retired tables.
     # No mutation occurs if the live state does not match the journal.
     plan_postcommit_cleanup(adapter, previous, desired)
-    if adapter.list_rules(desired["rule_base"], desired["rule_max"]) != desired["rules"]:
+    rule_first, rule_last = checked_transition_range(adapter, previous, desired)
+    if adapter.list_rules(rule_first, rule_last) != desired["rules"]:
         raise VoiceFirewallError("installed Voice cutover rules changed before rollback")
     for name in desired["tables"]:
         stage = name + "_stage"

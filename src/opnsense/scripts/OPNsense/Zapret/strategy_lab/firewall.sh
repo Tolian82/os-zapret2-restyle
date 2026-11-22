@@ -51,7 +51,11 @@ strategy_lab_firewall_contract_valid()
 {
     strategy_lab_firewall_rule_number_valid "${STRATEGY_LAB_RULE_BASE}" || return 1
     strategy_lab_firewall_rule_number_valid "${STRATEGY_LAB_RULE_MAX}" || return 1
+    # Only the current Strategy Lab allocation is active: 19100..19131.
+    # Future comparative 19140..19200 must not be touched by this worker.
+    [ "${STRATEGY_LAB_RULE_BASE}" -ge 19100 ] || return 1
     [ "${STRATEGY_LAB_RULE_BASE}" -le "${STRATEGY_LAB_RULE_MAX}" ] || return 1
+    [ "${STRATEGY_LAB_RULE_MAX}" -le 19131 ] || return 1
     case "${STRATEGY_LAB_DIVERT_PORT}" in
         ''|*[!0-9]*) return 1 ;;
     esac
@@ -72,6 +76,7 @@ strategy_lab_firewall_require_ready()
 
 strategy_lab_firewall_remove_rules()
 {
+    strategy_lab_firewall_contract_valid || return 1
     _strategy_lab_rule="${STRATEGY_LAB_RULE_BASE}"
     while [ "${_strategy_lab_rule}" -le "${STRATEGY_LAB_RULE_MAX}" ]
     do
@@ -82,6 +87,7 @@ strategy_lab_firewall_remove_rules()
 
 strategy_lab_firewall_range_empty()
 {
+    strategy_lab_firewall_contract_valid || return 1
     _strategy_lab_rule="${STRATEGY_LAB_RULE_BASE}"
     while [ "${_strategy_lab_rule}" -le "${STRATEGY_LAB_RULE_MAX}" ]
     do

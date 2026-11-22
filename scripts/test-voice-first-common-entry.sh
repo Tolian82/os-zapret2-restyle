@@ -22,7 +22,7 @@ mkdir -p "$ACTIVE_DIR" "$ROOT/new"
 for file in dvtws.args tcp-ports.txt udp-ports.txt; do : > "$ACTIVE_DIR/$file"; done
 CHILD_PIDFILE="$ROOT/engine.pid"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/monitor.pid"
-RULE_BASE=19000 RULE_MAX=19010
+RULE_BASE=19000 RULE_MAX=19099
 LOG="$ROOT/actions"
 validator_validate_runtime_modes() { return 0; }
 validator_validate_engine_mapped() { return 0; }

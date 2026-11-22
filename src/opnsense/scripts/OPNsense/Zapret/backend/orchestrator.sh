@@ -470,7 +470,7 @@ orchestrator_build_release()
             "${_orchestrator_build_active_dir}" \
             "${WAN_IF}" \
             "${RULE_BASE:-19000}" \
-            "${RULE_MAX:-19010}" \
+            "${RULE_MAX:-19099}" \
             "${DIVERT_PORT}" \
             "${_orchestrator_build_user_traffic}" \
             "${_orchestrator_build_voice_native}" "${_orchestrator_build_voice_layout}" \

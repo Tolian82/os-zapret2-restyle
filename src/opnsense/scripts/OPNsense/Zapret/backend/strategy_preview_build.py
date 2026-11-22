@@ -50,7 +50,7 @@ WORK="$4"
 PYTHON_RUNTIME="$SCRIPT_DIR/python_runtime.sh"
 STAGE_FILE="$WORK/build-stage.status"
 RULE_BASE=19000
-RULE_MAX=19010
+RULE_MAX=19099
 DIVERT_PORT=989
 for module in common config parser registry storage targets target_mode profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic stage launcher supervisor orchestrator apply_runtime
 do

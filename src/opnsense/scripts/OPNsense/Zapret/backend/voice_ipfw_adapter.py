@@ -29,7 +29,7 @@ from ipset_policy import IPSetError, parse_ipset
 from voice_firewall_transaction import (
     SERVICES, TABLE_PREFIX, VoiceFirewallError,
     prepare_desired, apply_transaction, rollback_uncommitted,
-    cleanup_committed, verify_prior_state,
+    cleanup_committed, verify_prior_state, checked_transition_range,
 )
 
 MAX_IPFW_OUTPUT = 2 * 1024 * 1024
@@ -175,6 +175,10 @@ class FreeBSDIPFWAdapter:
             raise IPFWAdapterError("invalid Voice owned rule interval")
         if ipfw_binary != "/sbin/ipfw":
             raise IPFWAdapterError("unsupported IPFW executable path")
+        # Only current ordinary/Voice rules may be changed by this adapter.
+        # No rule-expression/collision scan; this is a numeric argument guard.
+        if allow_mutations and not (19000 <= rule_base <= rule_max <= 19099):
+            raise IPFWAdapterError("IPFW mutation outside allocated 19000..19099")
         self.rule_base, self.rule_max = rule_base, rule_max
         self.binary = ipfw_binary
         self.allow_mutations = allow_mutations
@@ -788,7 +792,11 @@ def main(argv: list[str]) -> int:
                  "rules": {}, "tables": {}}
         previous = empty if previous is None else previous
         desired = empty if desired is None else desired
-        adapter = FreeBSDIPFWAdapter(reference["rule_base"], reference["rule_max"],
+        # Old committed releases may seal 19000..19010, while the new
+        # release seals 19000..19099. Attest the exact union before touching
+        # IPFW, even for a downgrade/rollback into the older sealed owner.
+        first, last = checked_transition_range(None, previous, desired)
+        adapter = FreeBSDIPFWAdapter(first, last,
                                      allow_mutations=argv[2] in {"install", "rollback", "commit"})
         if argv[2] == "verify-legacy":
             # `_14` used undefined `legacy` here, unconditionally failing

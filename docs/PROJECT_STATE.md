@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 23 ноября 2026 — CURRENT: IPFW numeric allocation documented (NOT product accepted)
+## 23 ноября 2026 — CURRENT: product IPFW source candidate _129 (NOT merged)
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=129`, `v0.6.5_129` based on merged `main _128 7f48b3e3`; prospective `os-zapret2-restyle-0.6.5_129.pkg` **не создан**. Owner installed `_117.pkg` unaffected; Lab #1224, Auto #1223 still OPEN.
+
+**Product PR #1237** now changes only canonical launcher rule numbers `19000–19099`, orchestrator/preview range, numeric-only active 19000–19099/19100–19131 purge, removal of outside-range 65534 insertion, and corresponding test; future comparative 19140–19200 remains untouched. [DEV-071](PROJECT_PRINCIPLES.md), [TZ6v5 V5-17](architecture/TZ_6v5.md), [README](../README.md) are already in main docs _128. Initial native schema3 canary was RED `OriginalLockRefused: original_config_child_rc69` after restored Apply, but a subsequent exact native canary was PASS; current newest source still needs full CI qualification. G01 on a later run was blocked by GitHub Releases `403 Forbidden` before purge; that is not an IPFW cleanup failure. Added numeric mutation guards for backend/Voice/Lab, prevalidated rollback snapshot, ongoing native fixtures to `19099`, and `scripts/test-ipfw-number-scope.py` CI gate. Old sealed `rule_max=19010` is supported only by the explicit `19010 ↔ 19099` transactional upgrade/rollback under original FD9; full union verified by existing manifest comparison. No permissive dynamic allocation or extra IPFW owner scan. `65534` was the former default-accept catchall fallback, **not** TNAS Docker/VoiceLab. Current product never creates it, and does not remove pre-existing non-owned rules.
+
+
+## 23 ноября 2026 — IPFW numeric allocation documented in main _128
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=128`, `v0.6.5_128` docs-only candidate поверх merged `main _127 0615ab30`; `os-zapret2-restyle-0.6.5_128.pkg` **не создан**, владелец на `_117.pkg`. Рабочая OPNsense не затрагивалась.
 

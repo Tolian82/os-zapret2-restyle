@@ -53,7 +53,7 @@ SUPERVISOR_MONITOR_PIDFILE="$ROOT/monitor.pid"
 SUPERVISOR_DAEMON_PIDFILE="$ROOT/daemon.pid"
 SUPERVISOR_LOOP=/usr/local/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh
 ACTIVE_DIR="$ROOT/runtime"
-RULE_BASE=19000 RULE_MAX=19010
+RULE_BASE=19000 RULE_MAX=19099
 export COMMON_PS_BIN SHARED_APPLY_KLDSTAT_BIN SHARED_APPLY_IPFW_BIN
 fail() { echo "FAIL G05: $*" >&2; exit 1; }
 preflight_shared_apply_journal() { [ "$JOURNAL_OK" = 1 ]; }
