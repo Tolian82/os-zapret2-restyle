@@ -42,6 +42,9 @@
 
 ### S02. Read-only audit реального маршрута запуска
 
+**Read-only source inventory checkpoint 23.11.2026 (candidate `_131`):** [полная pinned route/physical writers/FD9/Config/IPFW/PID/error RU/EN карта](ZAPRET2_TZ6V5_S02_ACTUAL_LIFECYCLE_ROUTE_AUDIT.md) на `main _130 0b001459`. Source-level audit — GO, **но не native PASS** и не физическая эквивалентность кнопок. Три старых GUI-иконки остаются неподтверждёнными без реального tooltip/handler; входы в карту занесены, S03 должна сделать RED на реальных producer/consumer и old generator parity. Продуктовый код/пакеты/owner не изменены.
+
+
 1. Зафиксировать frontend→API→configd→script для Strategies/Voice Play/Restart/Stop, System Services, двух Apply, Boot/recovery, Lab, protected pkg prepare/finish, Auto Restart, runtime-failure callback и upstream «Установить версию».
 2. Для каждого зафиксировать где FD9, выбор Common/Voice/legacy owner, реальные `exec/kill/IPFW/Config` side effects, rollback/terminal receipts. Скриншотные иконки без проверки tooltip/handler **не** считать доказательством.
 3. Снять карту current `zapret.conf` inline, XML `Zapret.xml`, `registry/storage`, `target_mode`, `profile_pipeline`, `auto_detect_origin_map`, Voice producers, `shared_apply_operation` и exact active source map.
@@ -304,10 +307,10 @@
 
 | Гейт | Этапы | На 22.11.2026 | Документ завершения |
 | --- | --- | --- | --- |
-| G0 | S00–S03 | S00 — merged; S01 — 12/12 disposition на одной ветке `_130` (документационный checkpoint, PR/CI отдельно); S02/S03 — NOT RUN | [S01 matrix](ZAPRET2_TZ6V5_S01_PR1228_DISPOSITION.md), затем exact S02 audit и S03 RED |
+| G0 | S00–S03 | S00/S01 merged; S02 source route audit complete on `_130` base (source-level, pending `_131` doc PR gate); S03 RED NOT RUN | [S01 matrix](ZAPRET2_TZ6V5_S01_PR1228_DISPOSITION.md) + [S02 source map](ZAPRET2_TZ6V5_S02_ACTUAL_LIFECYCLE_ROUTE_AUDIT.md), next real generator RED |
 | G1 | S04–S09 | NOT RUN | empty-install/status/compiler parity + secure refs |
 | G2 | S10–S14 | NOT RUN; #1228 только partial | five commands + safe Reload/Restart + FD9 rollback |
 | G3 | S15–S18 | OPEN: Lab #1224, Auto #1223 | actual native restoration + Found |
 | G4 | S19–S20 | NOT RUN для нового пакета | immutable published .pkg + owner evidence |
 
-**Актуальная очередь после документального S01 checkpoint — S02 read-only route map, затем S03 fail-first RED.** Нет переноса старого #1228 и нет разрешения запускать S04 без доказательств S02/S03. Ни один этап не требует прямо сейчас менять работающий owner `_117`, повторять опасный Lab или вручную вмешиваться в PID, IPFW, native inbox или журнал.
+**Актуальная очередь после S02 source inventory checkpoint — S03 fail-first RED на настоящем генераторе, далее S04–S20.** Нет переноса старого #1228 и нет разрешения запускать S04 без доказательств S02/S03. Ни один этап не требует прямо сейчас менять работающий owner `_117`, повторять опасный Lab или вручную вмешиваться в PID, IPFW, native inbox или журнал.

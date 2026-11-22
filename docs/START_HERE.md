@@ -12,6 +12,17 @@
 
 # os-zapret2-restyle — current handoff
 
+## 23 ноября 2026 — CURRENT: ТЗ_6v5 S02 audit source checkpoint; next S03
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=131`, `v0.6.5_131` — documentation/source-only candidate on merged `main v0.6.5_130` (`0b001459`), branch `feat/tz6v5-s02-actual-route-audit`. **Prospective artifact filename ONLY:** `os-zapret2-restyle-0.6.5_131.pkg` — **NOT BUILT / NOT PUBLISHED**; owner last-confirmed installed `_117.pkg` unchanged.
+
+**S02 source read-only map:** [full actual handlers and FD9/physical writers inventory](architecture/ZAPRET2_TZ6V5_S02_ACTUAL_LIFECYCLE_ROUTE_AUDIT.md). Traced Strategies/Voice UI Start/Stop and Apply, System Services/reconfigure, Boot/stop, Lab regular/circular, protected pkg hooks/updater, upstream setup, Additional Resources, callbacks, Auto Restart/minute, native status/errors/locale, IPFW numeric scopes and low-level PID/SIGKILL. The old screenshot's 3 tooltip identities are not native-confirmed. The map is a **source-only GO, not runtime PASS**. Existing different physical selectors/actuators remain; do not cherry-pick #1228 or refactor prematurely.
+
+**Next exact task:** S03 genuine fail-first RED on the actual `main _130` generator/runtime plus source parity and diagnostics. S04–S20 NOT RUN, Lab #1224 / Auto #1223 / route #1225 OPEN. No device changes, no new `.pkg`.
+
+---
+
+
 ## 23 ноября 2026 — CURRENT: IPFW source implementation 19000–19099 (product PR)
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=129`, `v0.6.5_129` — **продуктовый кандидат** на базе merged `main _128 7f48b3e3` ([документационный PR #1238](https://github.com/Tolian82/os-zapret2-restyle/pull/1238)). `os-zapret2-restyle-0.6.5_129.pkg` **не создан и не опубликован**. У владельца установлен `_117.pkg`, его рабочая OPNsense не тронута.
