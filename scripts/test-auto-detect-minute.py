@@ -155,6 +155,7 @@ class MinuteIngressContract(unittest.TestCase):
                  patch.object(minute, 'inspect_inert_release',
                               side_effect=MinuteRefused(
                                   'native_observer_worker_ack_not_authorized')), \
+                 patch.object(minute, '_secure_bytes', return_value=b'{"schema":2}'), \
                  patch.object(minute, 'attest_running_generation',
                               side_effect=owner if isinstance(owner, Exception) else None,
                               return_value=None if isinstance(owner, Exception) else owner), \
@@ -177,6 +178,108 @@ class MinuteIngressContract(unittest.TestCase):
         self.assertEqual((rc, out, called), (69, '', 0))
         self.assertIn('auto-detect-minute-refused=MinuteRefused', err)
 
+    def test_learning_minute_reuses_original_config_owner_with_fd9(self):
+        from auto_detect_owner import LearningGenerationProof
+        generation = 'a' * 32
+        proof = LearningGenerationProof(
+            OwnerToken(4242, 'Sun Nov 15 08:00:00 2026', '/tmp/dvtws2'),
+            generation, generation, 'b' * 64, 'c' * 64, 'd' * 64,
+            ((3, 'youtube', str(minute.QUEUE_ROOT / ('learning-' + generation + '-3.txt'))),))
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock'), \
+             patch.object(minute, 'inspect_inert_release', side_effect=MinuteRefused(
+                 'native_observer_worker_ack_not_authorized')), \
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":3}'), \
+             patch.object(minute, 'attest_running_generation') as legacy, \
+             patch.object(minute, 'attest_learning_running_generation', return_value=proof), \
+             patch.object(minute, 'run_native_original_v2_cycle_once', return_value=True) as original, \
+             redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(minute.native_minute_once([]), 0)
+        original.assert_called_once_with(learning=True)
+        legacy.assert_not_called()
+        self.assertEqual(output.getvalue(), 'auto-detect-minute=processed\n')
+
+    def test_learning_pre_stop_uses_only_original_fd9_epoch_and_cannot_authorize_old_retirement(self):
+        from types import SimpleNamespace
+        from auto_detect_owner import LearningGenerationProof
+        from shared_apply_seal import WORK
+        generation = 'a' * 32
+        proof = LearningGenerationProof(
+            OwnerToken(4242, 'Sun Nov 15 08:00:00 2026', '/tmp/dvtws2'),
+            generation, generation, 'b' * 64, 'c' * 64, 'd' * 64,
+            ((3, 'youtube', str(minute.QUEUE_ROOT /
+                                ('learning-' + generation + '-3.txt'))),))
+        from auto_detect_cursor_chain import CursorChain
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock') as fd9, \
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":3}'), \
+             patch('pwd.getpwnam', return_value=SimpleNamespace(pw_gid=65534)), \
+             patch.object(minute, 'attest_running_generation') as legacy, \
+             patch.object(minute, 'attest_learning_running_generation',
+                          return_value=proof) as running, \
+             patch.object(minute, 'DurableInbox') as queue_type, \
+             patch.object(minute, 'EpochReceipts') as receipts_type, \
+             patch('auto_detect_cursor_chain.CursorChain') as chain_type:
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                self.assertEqual(minute.native_retire_preflight(), 0)
+            self.assertEqual(out.getvalue(),
+                             'auto-detect-retire=original-learning-running-attested\n')
+            self.assertEqual(err.getvalue(), '')
+            fd9.assert_called_once_with()
+            legacy.assert_not_called()
+            self.assertEqual(running.call_count, 2)
+            queue_type.assert_called_once_with(minute.QUEUE_ROOT,
+                                               owner_uid=0, writer_gid=65534)
+            receipts_type.assert_called_once_with(owner_uid=0, writer_gid=65534)
+            chain_type.assert_called_once_with(receipts_type.return_value,
+                                               queue_type.return_value)
+            chain_type.return_value.learning_epoch.assert_called_once_with(
+                proof, WORK / generation)
+            queue_type.return_value.rotate.assert_not_called()
+            queue_type.return_value.acknowledge.assert_not_called()
+
+            # A missing/mismatched original epoch must refuse before any
+            # schema2 P1/physical retirement, not downgrade to old raw.
+            chain_type.return_value.learning_epoch.side_effect = RuntimeError('bad epoch')
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                self.assertEqual(minute.native_retire_preflight(), 69)
+            self.assertEqual(out.getvalue(), '')
+            self.assertIn('auto-detect-retire-refused=RuntimeError', err.getvalue())
+            legacy.assert_not_called()
+
+    def test_original_schema2_pre_stop_keeps_existing_owner_and_drift_path(self):
+        from types import SimpleNamespace
+        proof = GenerationProof(
+            OwnerToken(4242, 'Sun Nov 15 08:00:00 2026', '/tmp/dvtws2'),
+            'a' * 32, 'a' * 32, 'b' * 64,
+            str(RAW_PATH), str(DEBUG_PATH), 1,
+            ((0, 'unknown-native-default', None), (1, 'observer', None)),
+        )
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock'), \
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":2}'), \
+             patch('pwd.getpwnam', return_value=SimpleNamespace(pw_gid=65534)), \
+             patch.object(minute, 'attest_running_generation', return_value=proof) as legacy, \
+             patch.object(minute, 'attest_learning_running_generation') as learning, \
+             patch.object(minute, 'qualified_current_source'), \
+             patch.object(minute, 'DurableInbox') as queue_type, \
+             patch.object(minute, 'EpochReceipts') as receipts_type:
+            receipts_type.return_value.verify_stop_only_epoch.return_value = False
+            out = io.StringIO()
+            with redirect_stdout(out):
+                self.assertEqual(minute.native_retire_preflight(), 0)
+            self.assertEqual(out.getvalue(),
+                             'auto-detect-retire=original-running-attested\n')
+            self.assertEqual(legacy.call_count, 2)
+            learning.assert_not_called()
+            receipts_type.return_value.verify_stop_only_epoch.assert_called_once()
+            queue_type.return_value.acknowledge.assert_not_called()
+
     def test_native_tick_denied_without_inherited_fd9_before_source_read(self):
         with patch.object(minute.sys, 'platform', 'freebsd15'), \
              patch.object(minute.os, 'geteuid', return_value=0), \
@@ -190,6 +293,71 @@ class MinuteIngressContract(unittest.TestCase):
         inspect.assert_not_called()
         attest.assert_not_called()
         compose.assert_not_called()
+
+    def test_original_stopped_config_bridge_refusal_uses_static_marker_only(self):
+        from auto_detect_original_lock_handoff import OriginalLockRefused
+        known = OriginalLockRefused('original_config_child_deadline')
+        self.assertEqual(minute.original_lock_guard(known),
+                         'original_config_child_deadline')
+        secret = 'youtube.example.test /conf/config.xml 9:foo'
+        self.assertEqual(minute.original_lock_guard(OriginalLockRefused(secret)),
+                         'unknown')
+        self.assertIsNone(minute.original_lock_guard(RuntimeError(secret)))
+
+        from types import SimpleNamespace
+        from auto_detect_owner import LearningGenerationProof
+        generation = 'a' * 32
+        proof = LearningGenerationProof(
+            OwnerToken(4242, 'Sun Nov 15 08:00:00 2026', '/tmp/dvtws2'),
+            generation, generation, 'b' * 64, 'c' * 64, 'd' * 64,
+            ((3, 'youtube', str(minute.QUEUE_ROOT /
+                    ('learning-' + generation + '-3.txt'))),))
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock'), \
+             patch.object(minute, '_entry_present', return_value=True), \
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":3}'), \
+             patch('pwd.getpwnam', return_value=SimpleNamespace(pw_gid=65534)), \
+             patch('auto_detect_owner.attest_learning_stopped_generation',
+                   return_value=proof), \
+             patch.object(minute, 'DurableInbox') as queue, \
+             patch.object(minute, 'EpochReceipts') as receipts, \
+             patch.object(minute, 'run_native_original_v2_cycle_once',
+                          side_effect=known), \
+             redirect_stderr(io.StringIO()) as output:
+            receipts.return_value._generation.return_value = Path('/tmp')
+            self.assertEqual(minute.native_retire_once(), 69)
+        self.assertIn('auto-detect-retire-original-guard=original_config_child_deadline',
+                      output.getvalue())
+        self.assertNotIn(secret, output.getvalue())
+
+    def test_schema3_retirement_reports_only_qualified_static_guard(self):
+        from auto_detect_learning_retirement import LearningRetirementRefused
+        qualified = LearningRetirementRefused("stopped_learning_source_fd_busy")
+        self.assertEqual(
+            minute.learning_retirement_guard(qualified),
+            "stopped_learning_source_fd_busy")
+        private = "private config.example.org /conf/config.xml"
+        self.assertEqual(
+            minute.learning_retirement_guard(LearningRetirementRefused(private)),
+            "unknown")
+        self.assertIsNone(minute.learning_retirement_guard(RuntimeError(private)))
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock'), \
+             patch.object(minute, '_entry_present', return_value=True), \
+             patch.object(minute, '_secure_bytes', return_value=b'{"schema":3}'), \
+             patch('auto_detect_owner.attest_learning_stopped_generation',
+                   side_effect=qualified), \
+             redirect_stderr(io.StringIO()) as output:
+            self.assertEqual(minute.native_retire_once(), 69)
+        self.assertIn(
+            'auto-detect-retire-guard=stopped_learning_source_fd_busy',
+            output.getvalue())
+        self.assertIn(
+            'auto-detect-retire-refused=LearningRetirementRefused',
+            output.getvalue())
+        self.assertNotIn(private, output.getvalue())
 
     def test_native_entry_refuses_foreign_platform_and_cli_args(self):
         self.assertEqual(native_minute_once(['arbitrary']), 64)

@@ -533,6 +533,54 @@ def legacy_strategies_manifest(release: Path, target: dict, *, owner: int = 0) -
     return prepare_desired(capture, tcp, udp)
 
 
+
+def _verified_learning_rst_scope(learning, raw_args: bytes, tcp: str) -> str | None:
+    """RST port feedback from an ALREADY-qualified original schema3 N map.
+
+    Caller must first attest the original sealed FD9 learning map, full
+    original argv and each (native_number, hostlist, inbox) via
+    _valid_learning_active(). This helper only proves the TCP capture scope;
+    it is not an independent authorization source or new IPFW rule type.
+    The existing native RST manifest admits EXACTLY captured ordinary TCP
+    ports. Partial coverage therefore refuses rather than broadening it.
+    """
+    from global_exclusions import segments
+    from voice_profile_compiler import parse_ports
+    if (not isinstance(learning, tuple) or not learning or
+            not isinstance(raw_args, bytes) or not isinstance(tcp, str)):
+        raise IPFWAdapterError("original_learning_RST_owner_required")
+    try:
+        profiles = segments(raw_args.decode("utf-8"))
+        captured = set()
+        for low, high in parse_ports(tcp, "ordinary TCP") if tcp else []:
+            captured.update(range(low, high + 1))
+        native_tcp = set()
+        seen = set()
+        for row in learning:
+            if (not isinstance(row, tuple) or len(row) != 3 or
+                    type(row[0]) is not int or row[0] in seen or
+                    not 1 <= row[0] <= len(profiles) or
+                    not isinstance(row[1], str) or
+                    not isinstance(row[2], str)):
+                raise IPFWAdapterError("unqualified native learning RST profile")
+            seen.add(row[0])
+            actual = profiles[row[0] - 1]
+            selectors = [t.partition("=")[2] for t in actual
+                         if t.startswith("--filter-tcp=")]
+            if len(selectors) > 1:
+                raise IPFWAdapterError("duplicate native learning TCP selector")
+            if selectors:
+                for low, high in parse_ports(selectors[0], "learning TCP"):
+                    native_tcp.update(range(low, high + 1))
+        if not native_tcp:
+            return None  # UDP-only learning never authorizes an inbound RST rule.
+        if native_tcp != captured:
+            raise IPFWAdapterError("unqualified schema3 Auto RST TCP coverage")
+        return tcp
+    except (ValueError, UnicodeError, TypeError, IndexError) as exc:
+        raise IPFWAdapterError("unqualified schema3 Auto RST TCP scope") from exc
+
+
 def shared_release_manifest(release: Path) -> dict:
     """Derive ownership from one trusted common release, without a second ledger.
 
@@ -564,7 +612,9 @@ def shared_release_manifest(release: Path) -> dict:
     # Never derive feedback capture from a GUI toggle or a bare native
     # option. The exact sealed generation map must attest the original
     # trailing no-action observer and SAME immutable engine argv.
-    from auto_detect_owner import _valid_map, MAP_NAME, GenerationRefused
+    from auto_detect_owner import (
+        _valid_map, _valid_learning_active, MAP_NAME, GenerationRefused,
+    )
     raw_args = read("dvtws.args")
     generation_file = release / MAP_NAME
     observer_tcp = None
@@ -572,20 +622,37 @@ def shared_release_manifest(release: Path) -> dict:
         raw_map = read(MAP_NAME)
         try:
             metadata = json.loads(raw_map)
-            if not isinstance(metadata, dict):
+            if (not isinstance(metadata, dict) or
+                    type(metadata.get("schema")) is not int):
                 raise GenerationRefused("invalid_autodetect_map_for_firewall")
             owner = {"id": metadata.get("generation"),
                      "candidate": metadata.get("owner_candidate_sha256")}
-            _valid_map(raw_map, owner, raw_args)
-            from global_exclusions import segments
-            observer = segments(raw_args.decode("utf-8"))[-1]
-            selectors = [item.partition("=")[2] for item in observer
-                         if item.startswith("--filter-tcp=")]
-            if selectors != [tcp] or "--filter-l7=http,tls" not in observer or not tcp:
-                raise GenerationRefused("auto_TCP_scope_not_sealed_in_manifest")
-            observer_tcp = tcp
-        except (GenerationRefused, ValueError, TypeError, UnicodeError,
-                IndexError) as error:
+            if metadata["schema"] == 2:
+                # Unchanged original schema2 single trailing observer.
+                _valid_map(raw_map, owner, raw_args)
+                from global_exclusions import segments
+                observer = segments(raw_args.decode("utf-8"))[-1]
+                selectors = [item.partition("=")[2] for item in observer
+                             if item.startswith("--filter-tcp=")]
+                if selectors != [tcp] or "--filter-l7=http,tls" not in observer or not tcp:
+                    raise GenerationRefused("auto_TCP_scope_not_sealed_in_manifest")
+                observer_tcp = tcp
+            elif metadata["schema"] == 3:
+                # Two-tier original schema3 contains per-profile native-N
+                # sources, NOT the schema2 trailing TCP observer. Bind the
+                # complete original/final argv and origin map before deriving
+                # *any* RST rule from its authenticated TCP learning clones.
+                from auto_detect_origin_map import ORIGIN_FILE
+                original = read("dvtws.original.args")
+                source = json.loads(read(ORIGIN_FILE))
+                learning = _valid_learning_active(
+                    raw_map, owner, source, original, raw_args)
+                observer_tcp = _verified_learning_rst_scope(
+                    learning, raw_args, tcp)
+            else:
+                raise GenerationRefused("unknown_native_auto_firewall_schema")
+        except (GenerationRefused, IPFWAdapterError, RuntimeError,
+                ValueError, TypeError, UnicodeError, IndexError) as error:
             raise IPFWAdapterError("unqualified native Auto RST firewall scope") from error
     elif any(token.startswith("--hostlist-auto=")
              for token in raw_args.decode("utf-8").split()):

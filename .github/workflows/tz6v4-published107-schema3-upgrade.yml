@@ -1,0 +1,93 @@
+name: TZ6v4 published _107 Auto schema2 to native schema3 pkg upgrade
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+      - src/opnsense/scripts/OPNsense/Zapret/protected_pkg_update.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/**
+      - src/opnsense/scripts/OPNsense/Zapret/shared_apply_request.php
+      - pkg/+PRE_INSTALL
+      - pkg/+POST_INSTALL
+      - scripts/stage5-native-published107-schema3-upgrade.py
+      - scripts/stage5-native-protected-update.py
+      - scripts/test-own70-native-package-handoff.py
+      - scripts/p5b2b-native-witness.py
+      - .github/workflows/tz6v4-published107-schema3-upgrade.yml
+  workflow_dispatch:
+
+concurrency:
+  group: tz6v4-published107-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    name: Exact published _107 pin, no unguarded native fallback
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Compile native acceptance and refuse non-FreeBSD execution
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/stage5-native-published107-schema3-upgrade.py
+          python3.13 -m py_compile scripts/stage5-native-protected-update.py
+          if python3.13 scripts/stage5-native-published107-schema3-upgrade.py > /dev/null 2>&1; then
+            echo "::error::Published_107 acceptance executed outside disposable FreeBSD"
+            exit 1
+          fi
+          grep -Fqx 'OLD_SHA256 = "85d8e6a1d00cc81d22e13aec6d3b8d1a59e65de6d223c5e4947c0e62e93ad8d7"' \
+            scripts/stage5-native-published107-schema3-upgrade.py
+
+  native:
+    needs: source
+    name: Published _107 running schema2 Auto through original protected FD9 pkg to schema3
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bounded native runner infrastructure
+        run: |
+          set -eu
+          if ! command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo "::error::Native published_107 test not run: QEMU/DNS unavailable"
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99zapret-published107-network >/dev/null
+      - name: Verify genuine published archive and native protected cross-version upgrade
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: false
+          cache-after-prepare: true
+          cpu: 3
+          mem: 4096
+          prepare: |
+            set -eu
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+          run: |
+            set -eu
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_PROTECTED_PKG_NATIVE_TEST=1
+            export ZAPRET2_PUBLISHED107_SCHEMA3_DISPOSABLE=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            sh scripts/build-pkg.sh
+            /usr/local/bin/python3 scripts/stage5-native-published107-schema3-upgrade.py

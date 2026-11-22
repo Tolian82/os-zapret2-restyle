@@ -202,6 +202,627 @@ def exclusive_destination_lock(gui_lock: Path, owner_uid: int):
         os.close(fd)
 
 
+def _original_third_source_plan_fields(
+        folder: Path, intent: dict, uid: int) -> dict:
+    """Bind the third N-window to the SAME committed original cursor/WAL.
+
+    This is a *read-only* source-plan verifier, not a new writer or a
+    destination commit. The previous destination's exact checkpoint and
+    cursor progress MUST be durable before the third intent can qualify.
+    No physical native cleanup, pending ACK or generation retirement.
+    """
+    if (folder.name != "00000002" or
+            folder.parent.name != "cursor-chain-v2" or
+            folder.parent.parent.name != intent.get("generation") or
+            intent.get("schema") != 3 or
+            intent.get("sequence") != 2 or
+            intent.get("kind") != "original-learning-third-slot-prepared" or
+            intent.get("cursor_advanced") is not False or
+            intent.get("commit_authorized") is not False or
+            intent.get("ack_authorized") is not False):
+        raise DestinationRefused("original_third_source_wrong_chain")
+    _directory(folder, uid)
+    source_raw = _read(folder / "intent.json", uid)
+    if (source_raw != _canonical(intent) or
+            not isinstance(intent.get("observations"), list) or
+            not isinstance(intent.get("native_observations"), list)):
+        raise DestinationRefused("original_third_source_intent_not_durable")
+
+    second_slot = folder.parent / "00000001"
+    _directory(second_slot, uid)
+    second_raw = _read(second_slot / "intent.json", uid)
+    try:
+        second = json.loads(second_raw)
+    except (ValueError, UnicodeError, TypeError) as exc:
+        raise DestinationRefused("original_third_source_second_invalid") from exc
+    if (second_raw != _canonical(second) or
+            second.get("schema") != 3 or
+            second.get("kind") !=
+            "original-learning-forward-second-slot-prepared" or
+            second.get("sequence") != 1 or
+            second.get("generation") != intent["generation"] or
+            _sha(second_raw) != intent.get("previous_source_intent_sha256")):
+        raise DestinationRefused("original_third_source_second_unbound")
+    # This recursion follows only the fixed second->first direction.
+    # It independently checks the first original destination checkpoint,
+    # physical-rebind receipt SHA and ALL second-slot native receipts.
+    second_plan, second_plan_raw = qualified_destination_plan(
+        second_slot, second, uid)
+    second_cp_raw = _read(
+        second_slot / "destination" / "checkpoint.json", uid)
+    second_checkpoint = json.loads(second_cp_raw)
+    if (second_cp_raw != _canonical(second_checkpoint) or
+            second_checkpoint != {
+                "schema": 1,
+                "kind": "destination-and-cursor-committed",
+                "generation": intent["generation"],
+                "pending_name": "learning-00000001",
+                "plan_sha256": _sha(second_plan_raw),
+                "evidence": "learning-native-debug",
+                "committed_cursor_offset": second["debug"]["end"],
+                "committed_cursor_sha256": second["debug"]["end_sha256"],
+                "ack_authorized": False} or
+            second_plan.get("schema") != 3 or
+            "live" not in second_plan):
+        raise DestinationRefused("original_third_source_second_uncommitted")
+    second_progress_raw = _read(
+        second_slot / "cursor-progress.json", uid)
+    second_progress = json.loads(second_progress_raw)
+    expected_progress = {
+        "schema": 3,
+        "kind": "original-learning-forward-cursor-progress",
+        "generation": second["generation"],
+        "sequence": 1,
+        "owner_pid": second["owner_pid"],
+        "owner_start": second["owner_start"],
+        "operation_id": second["operation_id"],
+        "native_map_sha256": second["native_map_sha256"],
+        "first_slot_sha256": second["first_slot_sha256"],
+        "native_rebind_manifest_sha256":
+            second["native_rebind_manifest_sha256"],
+        "source_intent_sha256": _sha(second_raw),
+        "destination_plan_sha256": _sha(second_plan_raw),
+        "destination_checkpoint_sha256": _sha(second_cp_raw),
+        "profiles_count": second["profiles_count"],
+        "native_cursor_receipts_sha256": second["profiles_sha256"],
+        "debug": second["debug"],
+        "cursor_advanced": True,
+        "native_pending_ack_authorized": False,
+        "native_cleanup_authorized": False,
+        "generation_retired": False,
+    }
+    if (second_progress != expected_progress or
+            second_progress_raw != _canonical(second_progress) or
+            _sha(second_progress_raw) !=
+            intent.get("previous_cursor_progress_sha256")):
+        raise DestinationRefused("original_third_source_second_progress_changed")
+
+    # Attestation of sequence identity before any per-N physical cursor.
+    owner_fields = ("owner_pid", "owner_start", "operation_id",
+                    "owner_candidate_sha256", "final_args_sha256",
+                    "native_map_sha256", "first_slot_sha256",
+                    "native_rebind_manifest_sha256")
+    if (any(intent.get(k) != second.get(k) for k in owner_fields) or
+            type(intent.get("profiles_count")) is not int or
+            intent["profiles_count"] != second["profiles_count"] or
+            not 0 < intent["profiles_count"] <= 255):
+        raise DestinationRefused("original_third_source_foreign_owner_or_n")
+
+    second_debug = second["debug"]
+    debug = intent.get("debug")
+    if (type(debug) is not dict or
+            set(debug) != set(second_debug) or
+            any(debug[k] != second_debug[k]
+                for k in ("device", "inode", "start", "start_sha256")) or
+            type(debug.get("end")) is not int or
+            debug["end"] < second_debug["end"] or
+            type(debug.get("end_sha256")) is not str or
+            not SHA256.fullmatch(debug["end_sha256"])):
+        raise DestinationRefused("original_third_source_debug_cursor_changed")
+
+    native_folder = folder / "native"
+    second_native = second_slot / "native"
+    _directory(native_folder, uid)
+    _directory(second_native, uid)
+    first = json.loads(_read(
+        folder.parent / "00000000" / "intent.json", uid))
+    if (len(first.get("native", [])) != intent["profiles_count"] or
+            first.get("generation") != intent["generation"]):
+        raise DestinationRefused("original_third_source_first_map_invalid")
+    native_digests = []
+    valid_profiles = set()
+    expected_names = set()
+    saw_unread = False
+    for root in first["native"]:
+        number, hostlist = root["native_number"], root["hostlist"]
+        name = f"{number:03d}.json"
+        expected_names.add(name)
+        valid_profiles.add((number, hostlist))
+        previous_raw = _read(second_native / name, uid)
+        prior = json.loads(previous_raw)
+        # This was already verified by qualified_destination_plan(second).
+        if (prior.get("kind") != "original-learning-forward-native-cut" or
+                prior.get("native_number") != number or
+                prior.get("hostlist") != hostlist):
+            raise DestinationRefused("original_third_source_previous_N_changed")
+        child_raw = _read(native_folder / name, uid)
+        child = json.loads(child_raw)
+        if (child_raw != _canonical(child) or
+                type(child) is not dict or
+                set(child) != {
+                    "schema", "kind", "generation", "sequence",
+                    "previous_source_intent_sha256",
+                    "previous_cursor_progress_sha256",
+                    "native_number", "hostlist", "cursor",
+                    "cursor_advanced", "ack_authorized"} or
+                child["schema"] != 3 or
+                child["kind"] != "original-learning-third-native-cut" or
+                child["generation"] != intent["generation"] or
+                child["sequence"] != 2 or
+                child["native_number"] != number or
+                child["hostlist"] != hostlist or
+                child["previous_source_intent_sha256"] != _sha(second_raw) or
+                child["previous_cursor_progress_sha256"] !=
+                _sha(second_progress_raw) or
+                child["cursor_advanced"] is not False or
+                child["ack_authorized"] is not False):
+            raise DestinationRefused("original_third_source_N_unbound")
+        original = prior["cursor"]
+        current = child["cursor"]
+        if (type(current) is not dict or
+                set(current) != set(original) or
+                any(current.get(k) != value for k, value in original.items()
+                    if k not in ("old_end", "old_end_sha256",
+                                 "new_end", "new_end_sha256"))):
+            raise DestinationRefused("original_third_source_N_identity_changed")
+        for side in ("old", "new"):
+            old_end = original[f"{side}_end"]
+            new_end = current[f"{side}_end"]
+            old_sha = original[f"{side}_end_sha256"]
+            new_sha = current[f"{side}_end_sha256"]
+            if old_end is None:
+                if (new_end is not None or new_sha is not None or
+                        old_sha is not None):
+                    raise DestinationRefused("original_third_source_partial_new_inode")
+                continue
+            if (type(old_end) is not int or
+                    type(new_end) is not int or
+                    new_end < old_end or
+                    type(old_sha) is not str or
+                    type(new_sha) is not str or
+                    not SHA256.fullmatch(old_sha) or
+                    not SHA256.fullmatch(new_sha)):
+                raise DestinationRefused("original_third_source_cursor_regressed")
+            saw_unread |= new_end > old_end
+        native_digests.append(hashlib.sha256(child_raw).digest())
+    if (set(os.listdir(native_folder)) != expected_names or
+            set(os.listdir(second_native)) != expected_names or
+            not saw_unread or
+            type(intent.get("profiles_sha256")) is not str or
+            _sha(b"".join(native_digests)) != intent["profiles_sha256"]):
+        raise DestinationRefused("original_third_source_N_receipts_incomplete")
+
+    observations = intent["observations"]
+    native_observations = intent["native_observations"]
+    if (not 0 < len(observations) <= 4096 or
+            len(observations) != intent.get("observations_count") or
+            len(native_observations) != len(observations) or
+            any(type(row) is not dict or
+                set(row) != {"native_number", "hostlist", "hostname"} or
+                type(row["native_number"]) is not int or
+                type(row["hostlist"]) is not str or
+                type(row["hostname"]) is not str or
+                (row["native_number"], row["hostlist"]) not in
+                valid_profiles or
+                not HOST.fullmatch(row["hostname"]) or
+                ".." in row["hostname"]
+                for row in native_observations)):
+        raise DestinationRefused("original_third_source_attribution_invalid")
+    ordered = [(x["native_number"], x["hostlist"], x["hostname"])
+               for x in native_observations]
+    if (ordered != sorted(set(ordered)) or
+            observations != [{"hostname": host, "hostlist": label}
+                             for _, label, host in ordered] or
+            _sha(json.dumps(
+                observations, sort_keys=True,
+                separators=(",", ":")).encode()) !=
+            intent.get("observations_sha256") or
+            _sha(json.dumps(
+                native_observations, sort_keys=True,
+                separators=(",", ":")).encode()) !=
+            intent.get("native_observations_sha256")):
+        raise DestinationRefused("original_third_source_observations_not_bound")
+
+    return {
+        "schema": 3, "kind": "durable-destination-plan",
+        "generation": intent["generation"],
+        "pending_name": "learning-00000002",
+        "pending_sha256": _sha(
+            _canonical({"observations": observations})),
+        "evidence": "learning-native-debug",
+        "debug_end_offset": debug["end"],
+        "debug_end_sha256": debug["end_sha256"],
+        "source_intent_sha256": _sha(source_raw),
+        "previous_cursor_progress_sha256": _sha(second_progress_raw),
+    }
+
+
+def _original_running_late_source_plan_fields(folder: Path, intent: dict,
+                                             uid: int) -> dict:
+    """Continue the original WAL from the sealed third native cursor.
+
+    This validates source provenance only. Physical prefix/FD/owner proof
+    remains the original consumer's responsibility on every invocation.
+    """
+    from auto_detect_cursor_chain import MAX_STEPS
+    sequence = intent.get("sequence")
+    if (type(sequence) is not int or not 3 <= sequence < MAX_STEPS or
+            folder.name != f"{sequence:08d}" or
+            folder.parent.name != "cursor-chain-v2" or
+            folder.parent.parent.name != intent.get("generation") or
+            intent.get("schema") != 3 or
+            intent.get("kind") != ("original-learning-running-fourth-source-prepared"
+                                    if sequence == 3 else "original-learning-running-source-prepared") or
+            intent.get("source_only") is not True or
+            intent.get("destination_commit_authorized") is not False or
+            intent.get("native_pending_ack_authorized") is not False or
+            intent.get("generation_retired") is not False):
+        raise DestinationRefused("running_late_source_wrong_original_chain")
+    _directory(folder, uid)
+    source_raw = _read(folder / "intent.json", uid)
+    if source_raw != _canonical(intent):
+        raise DestinationRefused("running_late_source_not_durable")
+    third_folder = folder.parent / "00000002"
+    third_raw = _read(third_folder / "intent.json", uid)
+    third = json.loads(third_raw)
+    plan, plan_raw = qualified_destination_plan(third_folder, third, uid)
+    cp_raw = _read(third_folder / "destination" / "checkpoint.json", uid)
+    cp = json.loads(cp_raw)
+    expected_cp = {
+        "schema": 1, "kind": "destination-and-cursor-committed",
+        "generation": intent["generation"], "pending_name": "learning-00000002",
+        "plan_sha256": _sha(plan_raw), "evidence": "learning-native-debug",
+        "committed_cursor_offset": third["debug"]["end"],
+        "committed_cursor_sha256": third["debug"]["end_sha256"],
+        "ack_authorized": False,
+    }
+    progress_raw = _read(third_folder / "cursor-progress.json", uid)
+    progress = json.loads(progress_raw)
+    # Import lazily: the original model itself consumes this plan codec.
+    from auto_detect_original_v2_model import _original_learning_third_progress_record
+    if (third_raw != _canonical(third) or cp_raw != _canonical(expected_cp) or
+            cp != expected_cp or plan.get("schema") != 3 or "live" not in plan or
+            progress_raw != _canonical(_original_learning_third_progress_record(
+                third, third_raw, cp_raw, cp, progress["destination_postimages"])) or
+            intent.get("third_source_intent_sha256") != _sha(third_raw) or
+            intent.get("third_cursor_progress_sha256") != _sha(progress_raw) or
+            any(intent.get(k) != third.get(k) for k in (
+                "generation", "owner_pid", "owner_start", "operation_id",
+                "native_map_sha256"))):
+        raise DestinationRefused("running_late_third_checkpoint_or_owner_changed")
+    post_raw = _read(third_folder / "pending-ack-archive" / "history" /
+                     "postimages.json", uid)
+    post = json.loads(post_raw)
+    if (post_raw != _canonical(post) or
+            _sha(post_raw) != intent.get("original_third_postimages_sha256") or
+            post.get("generation") != intent["generation"] or
+            post.get("third_cursor_progress_sha256") != _sha(progress_raw)):
+        raise DestinationRefused("running_late_original_postimages_changed")
+    previous, previous_progress_raw = third, progress_raw
+    if sequence > 3:
+        previous_folder = folder.parent / f"{sequence - 1:08d}"
+        previous_raw = _read(previous_folder / "intent.json", uid)
+        previous = json.loads(previous_raw)
+        previous_plan, previous_plan_raw = qualified_destination_plan(
+            previous_folder, previous, uid)
+        previous_cp_raw = _read(previous_folder / "destination" / "checkpoint.json", uid)
+        # qualified_destination_plan() already verified that predecessor's
+        # complete source lineage. Reuse its bound fields; recursing a
+        # second time here makes a minute grow exponentially with history.
+        previous_source = previous_plan
+        previous_cp = {
+            "schema": 1, "kind": "destination-and-cursor-committed",
+            "generation": intent["generation"],
+            "pending_name": previous_source["pending_name"],
+            "plan_sha256": _sha(previous_plan_raw), "evidence": "learning-native-debug",
+            "committed_cursor_offset": previous_source["debug_end_offset"],
+            "committed_cursor_sha256": previous_source["debug_end_sha256"],
+            "ack_authorized": False,
+        }
+        previous_progress_raw = _read(previous_folder / "cursor-progress.json", uid)
+        previous_progress = json.loads(previous_progress_raw)
+        from auto_detect_original_history_running_late import _running_progress_record
+        if (previous_raw != _canonical(previous) or
+                previous.get("sequence") != sequence - 1 or
+                any(intent.get(k) != previous.get(k) for k in (
+                    "generation", "owner_pid", "owner_start", "operation_id",
+                    "native_map_sha256", "third_source_intent_sha256",
+                    "third_cursor_progress_sha256", "original_third_postimages_sha256")) or
+                intent.get("previous_source_intent_sha256") != _sha(previous_raw) or
+                intent.get("previous_cursor_progress_sha256") != _sha(previous_progress_raw) or
+                previous_cp_raw != _canonical(previous_cp) or "live" not in previous_plan or
+                previous_progress_raw != _canonical(_running_progress_record(
+                    previous, previous_raw, previous_plan_raw, previous_cp_raw,
+                    previous_progress["destination_postimages"]))):
+            raise DestinationRefused("running_late_previous_WAL_unqualified")
+    native = intent.get("native")
+    if (type(native) is not list or
+            len(native) != third.get("profiles_count") or not 0 < len(native) <= 255):
+        raise DestinationRefused("running_late_source_N_count_changed")
+    valid = set()
+    ordered_numbers = []
+    for row in native:
+        if type(row) is not dict or type(row.get("native_number")) is not int:
+            raise DestinationRefused("running_late_source_N_invalid")
+        n = row["native_number"]
+        if sequence == 3:
+            prior_raw = _read(third_folder / "native" / f"{n:03d}.json", uid)
+            prior = json.loads(prior_raw)
+            if prior_raw != _canonical(prior):
+                raise DestinationRefused("running_late_prior_N_noncanonical")
+            cut = prior["cursor"]
+        else:
+            prior = next((r for r in previous["native"] if r["native_number"] == n), None)
+            if prior is None:
+                raise DestinationRefused("running_late_source_foreign_N")
+            cut = {"new_path": prior["path"], "new_device": prior["device"],
+                   "new_inode": prior["inode"], "new_end": prior["frozen_end"],
+                   "new_end_sha256": prior["frozen_sha256"]}
+        if (row.get("hostlist") != prior.get("hostlist") or
+                any(row.get(k) != cut.get(v) for k, v in (
+                    ("path", "new_path"), ("device", "new_device"),
+                    ("inode", "new_inode"), ("previous_end", "new_end"),
+                    ("previous_sha256", "new_end_sha256"))) or
+                type(row.get("frozen_end")) is not int or
+                row["frozen_end"] < row["previous_end"] or
+                type(row.get("frozen_sha256")) is not str or
+                not SHA256.fullmatch(row["frozen_sha256"])):
+            raise DestinationRefused("running_late_source_N_cursor_unbound")
+        ordered_numbers.append(n)
+        valid.add((n, row["hostlist"]))
+    if (ordered_numbers != sorted(set(ordered_numbers)) or
+            not any(r["frozen_end"] > r["previous_end"] for r in native)):
+        raise DestinationRefused("running_late_source_N_repeated_or_empty")
+    debug = intent.get("debug")
+    previous_debug = previous["debug"]
+    if sequence > 3:
+        previous_debug = {**previous_debug, "end": previous_debug["frozen_end"],
+                          "end_sha256": previous_debug["frozen_sha256"]}
+    if (type(debug) is not dict or
+            any(debug.get(k) != previous_debug.get(v) for k, v in (
+                ("device", "device"), ("inode", "inode"),
+                ("previous_end", "end"), ("previous_sha256", "end_sha256"))) or
+            type(debug.get("frozen_end")) is not int or
+            debug["frozen_end"] < debug["previous_end"] or
+            type(debug.get("frozen_sha256")) is not str or
+            not SHA256.fullmatch(debug["frozen_sha256"])):
+        raise DestinationRefused("running_late_source_debug_unbound")
+    observations = intent.get("native_positive_observations")
+    if (type(observations) is not list or not 0 < len(observations) <= 4096 or
+            any(type(r) is not dict or
+                set(r) != {"native_number", "hostlist", "hostname"} or
+                type(r["native_number"]) is not int or
+                (r["native_number"], r["hostlist"]) not in valid or
+                type(r["hostname"]) is not str or
+                not HOST.fullmatch(r["hostname"]) or ".." in r["hostname"]
+                for r in observations)):
+        raise DestinationRefused("running_late_source_attribution_invalid")
+    ordered = [(r["native_number"], r["hostlist"], r["hostname"])
+               for r in observations]
+    if (ordered != sorted(set(ordered)) or intent.get("observations") != [
+            {"hostname": h, "hostlist": label} for _, label, h in ordered]):
+        raise DestinationRefused("running_late_source_observations_changed")
+    preimages = intent.get("destination_preimages")
+    fields = {"target", "path", "sha256", "device", "inode", "ctime_ns",
+              "mtime_ns", "size", "last_writer_sequence"}
+    expected_targets = {"writes:auto", "writes:youtube", "writes:user",
+                        "live:youtube", "live:user"}
+    if (type(preimages) is not list or len(preimages) != len(expected_targets) or
+            any(type(r) is not dict or set(r) != fields or
+                type(r["target"]) is not str or r["target"] not in expected_targets or
+                type(r["path"]) is not str or not Path(r["path"]).is_absolute() or
+                type(r["sha256"]) is not str or not SHA256.fullmatch(r["sha256"]) or
+                any(type(r[k]) is not int or r[k] < 0 for k in (
+                    "device", "inode", "ctime_ns", "mtime_ns", "size")) or
+                r["inode"] == 0 or r["size"] > MAX_TARGET or
+                type(r["last_writer_sequence"]) is not int or
+                not -1 <= r["last_writer_sequence"] < sequence
+                for r in preimages) or
+            [r["target"] for r in preimages] != sorted(expected_targets)):
+        raise DestinationRefused("running_late_source_destinations_unpinned")
+    return {
+        "schema": 3, "kind": "durable-destination-plan",
+        "generation": intent["generation"], "pending_name": f"learning-{sequence:08d}",
+        "pending_sha256": _sha(_canonical({"observations": intent["observations"]})),
+        "evidence": "learning-native-debug",
+        "debug_end_offset": debug["frozen_end"],
+        "debug_end_sha256": debug["frozen_sha256"],
+        "source_intent_sha256": _sha(source_raw),
+        "previous_cursor_progress_sha256": _sha(previous_progress_raw),
+    }
+
+
+def _original_source_plan_fields(folder: Path, intent: dict,
+                                 uid: int) -> dict:
+    """Bind ONE destination WAL to its original immutable source intent.
+
+    Schema2 is the detached original P2a pending inode. Schema3's FIRST
+    physical N-inbox epoch is a virtual source slot, not a detached pending
+    inode; its exact protected original cursor intent SHA is part of the
+    very same plan and prevents the two provenance kinds being confused.
+    Neither mode grants a native-source cleanup or ACK capability.
+    """
+    if not isinstance(intent, dict):
+        raise DestinationRefused("invalid_original_source_intent")
+    if intent.get("schema") != 3:
+        return {
+            "schema": 2, "kind": "durable-destination-plan",
+            "generation": intent["generation"],
+            "pending_name": intent["pending_name"],
+            "pending_sha256": intent["pending_sha256"],
+            "evidence": intent["evidence"],
+            "debug_end_offset": intent["debug_end_offset"],
+            "debug_end_sha256": intent["debug_end_sha256"],
+        }
+    if intent.get("kind") == "original-learning-cycle-prepared":
+        from auto_detect_cursor_chain import learning_cycle_source_fields
+        return learning_cycle_source_fields(folder, intent, uid)
+    if intent.get("kind") in ("original-learning-running-fourth-source-prepared",
+                              "original-learning-running-source-prepared"):
+        return _original_running_late_source_plan_fields(folder, intent, uid)
+    # The third source remains a virtual original cursor slot. Rebind it
+    # only to a complete original second Found->managed checkpoint and the
+    # same durable logical N cursor progress; NEVER a second writer.
+    if intent.get("kind") == "original-learning-third-slot-prepared":
+        return _original_third_source_plan_fields(folder, intent, uid)
+    # The SECOND original same-generation schema-3 source is a virtual
+    # cursor slot, NOT a new P2 destination writer or real pending file.
+    # Reuse this exact source-bound original plan/CAS/checkpoint path.
+    if intent.get("kind") == "original-learning-forward-second-slot-prepared":
+        if (folder.name != "00000001" or
+                folder.parent.name != "cursor-chain-v2" or
+                folder.parent.parent.name != intent.get("generation") or
+                intent.get("schema") != 3 or intent.get("sequence") != 1 or
+                intent.get("ack_authorized") is not False or
+                intent.get("cursor_advanced") is not False or
+                intent.get("commit_authorized") is not False):
+            raise DestinationRefused("learning_forward_wal_not_original_second_slot")
+        raw = _read(folder / "intent.json", uid)
+        try:
+            saved = json.loads(raw)
+        except (ValueError, UnicodeError, TypeError) as exc:
+            raise DestinationRefused("learning_forward_wal_source_unreadable") from exc
+        if saved != intent or not isinstance(intent.get("observations"), list):
+            raise DestinationRefused("learning_forward_wal_intent_changed")
+        observations = intent["observations"]
+        if (not 0 < len(observations) <= 4096 or
+                len(observations) != intent.get("observations_count") or
+                any(type(row) is not dict or
+                    set(row) != {"hostname", "hostlist"} or
+                    type(row["hostname"]) is not str or
+                    row["hostlist"] not in {"youtube", "user"}
+                    for row in observations) or
+                _sha(json.dumps(
+                    observations, sort_keys=True,
+                    separators=(",", ":")).encode()) !=
+                intent.get("observations_sha256")):
+            raise DestinationRefused("learning_forward_wal_observations_not_sealed")
+        first_slot = folder.parent / "00000000"
+        _directory(first_slot, uid)
+        first_raw = _read(first_slot / "intent.json", uid)
+        if _sha(first_raw) != intent.get("first_slot_sha256"):
+            raise DestinationRefused("learning_forward_wal_first_slot_changed")
+        try:
+            original = json.loads(first_raw)
+        except (UnicodeError, ValueError, TypeError) as exc:
+            raise DestinationRefused("learning_forward_wal_first_intent_invalid") from exc
+        if (not isinstance(original, dict) or original.get("schema") != 3 or
+                original.get("sequence") != 0 or
+                original.get("generation") != intent["generation"]):
+            raise DestinationRefused("learning_forward_wal_first_intent_foreign")
+        # The original permanent Found+active managed destination MUST
+        # already have its write-once checkpoint before a second slot
+        # can legally source another P1 transaction.
+        first_plan, first_plan_raw = qualified_destination_plan(
+            first_slot, original, uid)
+        first_cp = json.loads(_read(
+            first_slot / "destination" / "checkpoint.json", uid))
+        if first_cp != {
+                "schema": 1,
+                "kind": "destination-and-cursor-committed",
+                "generation": intent["generation"],
+                "pending_name": "learning-00000000",
+                "plan_sha256": _sha(first_plan_raw),
+                "evidence": "learning-native-debug",
+                "committed_cursor_offset": original["debug_end_offset"],
+                "committed_cursor_sha256": original["debug_end_sha256"],
+                "ack_authorized": False}:
+            raise DestinationRefused("learning_forward_wal_first_checkpoint_uncommitted")
+        rebind = first_slot / "native-rebind"
+        _directory(rebind, uid)
+        if (_sha(_read(rebind / "manifest.json", uid)) !=
+                intent.get("native_rebind_manifest_sha256")):
+            raise DestinationRefused("learning_forward_wal_native_manifest_changed")
+        native_dir = folder / "native"
+        _directory(native_dir, uid)
+        if (type(intent.get("profiles_count")) is not int or
+                intent["profiles_count"] != len(original["native"]) or
+                len(original["native"]) < 1 or
+                type(intent.get("debug")) is not dict or
+                intent["debug"].get("start") != original["debug_end_offset"] or
+                intent["debug"].get("start_sha256") !=
+                original["debug_end_sha256"] or
+                intent["debug"].get("end") is None or
+                type(intent["debug"]["end"]) is not int or
+                intent["debug"]["end"] < intent["debug"]["start"] or
+                type(intent.get("profiles_sha256")) is not str or
+                not SHA256.fullmatch(intent["profiles_sha256"])):
+            raise DestinationRefused("learning_forward_wal_unqualified_debug_or_n")
+        profile_bytes = []
+        exact_names = set()
+        for first in original["native"]:
+            number = first["native_number"]
+            name = f"{number:03d}.json"
+            exact_names.add(name)
+            child_raw = _read(native_dir / name, uid)
+            child = json.loads(child_raw)
+            if (not isinstance(child, dict) or
+                    child_raw != _canonical(child) or
+                    child.get("schema") != 3 or
+                    child.get("kind") != "original-learning-forward-native-cut" or
+                    child.get("generation") != intent["generation"] or
+                    child.get("sequence") != 1 or
+                    child.get("first_slot_sha256") != _sha(first_raw) or
+                    child.get("manifest_sha256") !=
+                    intent["native_rebind_manifest_sha256"] or
+                    (child.get("native_number"), child.get("hostlist")) !=
+                    (number, first["hostlist"]) or
+                    child.get("cursor_advanced") is not False or
+                    child.get("ack_authorized") is not False):
+                raise DestinationRefused("learning_forward_wal_foreign_native_cut")
+            profile_bytes.append(hashlib.sha256(child_raw).digest())
+        if (set(os.listdir(native_dir)) != exact_names or
+                _sha(b"".join(profile_bytes)) != intent["profiles_sha256"]):
+            raise DestinationRefused("learning_forward_wal_native_cuts_changed")
+        return {
+            "schema": 3, "kind": "durable-destination-plan",
+            "generation": intent["generation"],
+            "pending_name": "learning-00000001",
+            "pending_sha256": _sha(
+                _canonical({"observations": observations})),
+            "evidence": "learning-native-debug",
+            "debug_end_offset": intent["debug"]["end"],
+            "debug_end_sha256": intent["debug"]["end_sha256"],
+            "source_intent_sha256": _sha(raw),
+        }
+    if (folder.name != "00000000" or
+            folder.parent.name != "cursor-chain-v2" or
+            folder.parent.parent.name != intent.get("generation") or
+            intent.get("schema") != 3 or
+            intent.get("kind") != "original-learning-cursor-prepared" or
+            intent.get("sequence") != 0 or
+            intent.get("ack_authorized") is not False):
+        raise DestinationRefused("learning_wal_not_original_first_slot")
+    raw = _read(folder / "intent.json", uid)
+    try:
+        saved = json.loads(raw)
+    except (ValueError, UnicodeError, TypeError) as exc:
+        raise DestinationRefused("learning_wal_source_invalid") from exc
+    if saved != intent:
+        raise DestinationRefused("learning_wal_source_intent_changed")
+    return {
+        "schema": 3, "kind": "durable-destination-plan",
+        "generation": intent["generation"],
+        # This is an original cursor slot name, NOT a real pending inode.
+        "pending_name": "learning-00000000",
+        "pending_sha256": _sha(_canonical({"observations": intent["observations"]})),
+        "evidence": "learning-native-debug",
+        "debug_end_offset": intent["debug_end_offset"],
+        "debug_end_sha256": intent["debug_end_sha256"],
+        "source_intent_sha256": _sha(raw),
+    }
+
+
 def qualified_destination_plan(folder: Path, intent: dict, uid: int,
                                targets: dict[str, Path] | None = None
                                ) -> tuple[dict, bytes]:
@@ -222,15 +843,7 @@ def qualified_destination_plan(folder: Path, intent: dict, uid: int,
         plan = json.loads(plan_raw)
     except (ValueError, UnicodeError) as exc:
         raise DestinationRefused("corrupt_destination_plan") from exc
-    expected = {
-        "schema": 2, "kind": "durable-destination-plan",
-        "generation": intent["generation"],
-        "pending_name": intent["pending_name"],
-        "pending_sha256": intent["pending_sha256"],
-        "evidence": intent["evidence"],
-        "debug_end_offset": intent["debug_end_offset"],
-        "debug_end_sha256": intent["debug_end_sha256"],
-    }
+    expected = _original_source_plan_fields(folder, intent, uid)
     if (not isinstance(plan, dict) or
             set(plan) not in (set(expected) | {"writes"},
                              set(expected) | {"writes", "live"}) or
@@ -290,6 +903,17 @@ def qualified_destination_plan(folder: Path, intent: dict, uid: int,
                 row["before_inode"] == 0 or
                 row["before_size"] > MAX_TARGET):
             raise DestinationRefused("invalid_live_managed_preimage")
+    if intent.get("kind") in ("original-learning-running-fourth-source-prepared",
+                              "original-learning-running-source-prepared"):
+        preimages = {row["target"]: row for row in intent["destination_preimages"]}
+        for kind, entries in (("writes", plan["writes"]), ("live", live)):
+            for name, row in entries.items():
+                before = preimages.get(f"{kind}:{name}")
+                if (before is None or row["path"] != before["path"] or
+                        row["before"] != before["sha256"] or
+                        any(row["before_" + key] != before[key] for key in (
+                            "device", "inode", "ctime_ns", "mtime_ns", "size"))):
+                    raise DestinationRefused("running_late_plan_preimage_not_original_source")
     return plan, plan_raw
 
 
@@ -331,6 +955,14 @@ class DestinationCommit:
                        effects: dict, *, live: dict | None = None) -> dict:
         if not getattr(self, "_gui_held", False):
             raise DestinationRefused("gui_lock_required")
+        source = _original_source_plan_fields(folder, intent, self.receipts.uid)
+        if source["schema"] == 3:
+            # Schema3 MUST provide an exact live-managed preimage plan even
+            # for a zero-change P1 batch. A source-only known Found write
+            # without the active same-PID counterpart cannot be accepted.
+            if live is None or raw != _canonical(
+                    {"observations": intent["observations"]}):
+                raise DestinationRefused("learning_wal_requires_live_and_source")
         # Callers may supply canonical after-BYTES, never a callback or a
         # stale file path alone. The original Config/P2 owner must derive
         # these bytes from its currently locked native manual/owned sources.
@@ -389,14 +1021,7 @@ class DestinationCommit:
                     "before_mtime_ns": active_st.st_mtime_ns,
                     "before_size": active_st.st_size,
                 }
-            plan = {"schema": 2, "kind": "durable-destination-plan",
-                    "generation": intent["generation"],
-                    "pending_name": intent["pending_name"],
-                    "pending_sha256": intent["pending_sha256"],
-                    "evidence": intent["evidence"],
-                    "debug_end_offset": intent["debug_end_offset"],
-                    "debug_end_sha256": intent["debug_end_sha256"],
-                    "writes": writes}
+            plan = {**source, "writes": writes}
             if live is not None:
                 plan["live"] = live_rows
             _write_once(journal, "plan.json", _canonical(plan), self.receipts.uid)
@@ -422,9 +1047,9 @@ class DestinationCommit:
         if checkpoint_path.exists() or checkpoint_path.is_symlink():
             checkpoint = json.loads(_read(checkpoint_path, self.receipts.uid))
             if (checkpoint.get("plan_sha256") != _sha(plan_raw) or
-                    checkpoint.get("evidence") != intent["evidence"] or
-                    checkpoint.get("committed_cursor_offset") != intent["debug_end_offset"] or
-                    checkpoint.get("committed_cursor_sha256") != intent["debug_end_sha256"]):
+                    checkpoint.get("evidence") != source["evidence"] or
+                    checkpoint.get("committed_cursor_offset") != source["debug_end_offset"] or
+                    checkpoint.get("committed_cursor_sha256") != source["debug_end_sha256"]):
                 raise DestinationRefused("checkpoint_differs_from_plan")
             return checkpoint  # never undo later GUI deletion on acknowledged replay
         # All-target preflight BEFORE any physical CAS replacement. A GUI
@@ -478,11 +1103,11 @@ class DestinationCommit:
             if _sha(current) != row["after"]:
                 raise DestinationRefused("live_managed_postimage_not_installed")
         checkpoint = {"schema": 1, "kind": "destination-and-cursor-committed",
-                      "generation": intent["generation"], "pending_name": intent["pending_name"],
+                      "generation": source["generation"], "pending_name": source["pending_name"],
                       "plan_sha256": _sha(plan_raw),
-                      "evidence": intent["evidence"],
-                      "committed_cursor_offset": intent["debug_end_offset"],
-                      "committed_cursor_sha256": intent["debug_end_sha256"],
+                      "evidence": source["evidence"],
+                      "committed_cursor_offset": source["debug_end_offset"],
+                      "committed_cursor_sha256": source["debug_end_sha256"],
                       "ack_authorized": False}
         _write_once(journal, "checkpoint.json", _canonical(checkpoint), self.receipts.uid)
         return checkpoint

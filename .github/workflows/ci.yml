@@ -625,6 +625,12 @@ jobs:
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py scripts/test-auto-detect-original-lock-handoff.py
           php -l scripts/test-auto-detect-original-lock-handoff.php
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-original-lock-handoff.py
+      - name: Test original schema3 stopped native-N/debug terminal retirement and power-loss replay
+        if: ${{ needs.changes.outputs.owner_flow == 'true' }}
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_learning_retirement.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_learning_gc.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_epoch_receipts.py scripts/test-auto-detect-learning-retirement.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-learning-retirement.py
       - name: Test P2k5/P2k8 native root Auto Hostlist read and known-owned sources
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: |

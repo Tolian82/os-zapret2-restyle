@@ -199,12 +199,29 @@ def main():
     # Original _79 FD9 Stop, not a package hook and not a new writer.
     stopped = run([str(SERVICE), "stop"], timeout=150)
     stopped_rc = run([str(SERVICE), "status"]).returncode
+    stop_evidence = {
+        "old_original_stop_rc": stopped.returncode,
+        "old_original_status_rc": stopped_rc,
+        "retired_receipt_exists": (EPOCHS / old_id / "retired.json").is_file(),
+        "config_digest_unchanged": hash_file(CONFIG) == saved_xml,
+        "old_pkg_version_unchanged": version() == "0.6.5_79",
+        "protected_guard_absent": not GUARD.exists(),
+        "new_marker_absent": not MARKER.exists(),
+        "legacy_marker_absent": not LEGACY_MARKER.exists(),
+    }
+    if not (stopped.returncode == 0 and stopped_rc == 1 and
+            all(value is True for key, value in stop_evidence.items()
+                if key not in ("old_original_stop_rc", "old_original_status_rc"))):
+        # A previous native VM attempt refused while the earlier exact-head
+        # native runs passed. Keep the strict fail-closed gate, but expose
+        # ONLY bounded status booleans/exit codes, never stdout/stderr,
+        # Config, argv, hostname, URL, or any private credential content.
+        print("NATIVE_79_STOP_GATE=" + json.dumps(
+            stop_evidence, sort_keys=True, separators=(",", ":")),
+            flush=True)
     need(stopped.returncode == 0 and stopped_rc == 1 and
-         (EPOCHS / old_id / "retired.json").is_file() and
-         hash_file(CONFIG) == saved_xml and
-         version() == "0.6.5_79" and
-         not GUARD.exists() and not MARKER.exists() and
-         not LEGACY_MARKER.exists(),
+         all(value is True for key, value in stop_evidence.items()
+             if key not in ("old_original_stop_rc", "old_original_status_rc")),
          "OLD79_ORIGINAL_FD9_STOP_NOT_QUALIFIED")
     print("NATIVE_79_PRETRANSACTION_STOP=PASS_RETIRED_EPOCH", flush=True)
 

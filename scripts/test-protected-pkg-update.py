@@ -117,6 +117,38 @@ class ProtectedPkgUpdate(unittest.TestCase):
             self.assertEqual(error, "RUNTIME_RESTORE_REQUIRES_REVIEW")
             self.assertTrue(exists)
 
+    def test_restore_failure_marker_redacted_and_not_authorizing(self):
+        from contextlib import redirect_stderr
+        from io import StringIO
+
+        private = "private /conf/config.xml <HOSTLIST:user> secret.example"
+        self.assertEqual(
+            m.restore_finish_evidence(result([], 70, stderr=
+                "pkg-update-finish-failed=boot\n" + private)),
+            "rc:70,stage:boot,guard:unknown")
+        self.assertEqual(
+            m.restore_finish_evidence(result([], 99, stderr=private)),
+            "rc:other,stage:unknown,guard:unknown")
+        self.assertEqual(
+            m.restore_finish_evidence(result([], 70, stderr=
+                "pkg-update-finish-failed=boot\n"
+                "shared-apply-guard=epoch-attest\n" + private)),
+            "rc:70,stage:boot,guard:epoch-attest")
+        self.assertNotIn(private, m.restore_finish_evidence(
+            result([], 70, stderr="pkg-update-finish-failed=boot\n" + private)))
+        self.assertIn('pkg-update-finish-failed=boot', SERVICE.read_text())
+        self.assertIn('native-common-boot-guard=execute', SERVICE.read_text())
+        self.assertIn('native-common-boot-guard=receipt', SERVICE.read_text())
+
+        output = StringIO()
+        with tempfile.TemporaryDirectory() as tmp, redirect_stderr(output):
+            calls, error, staged = self.trial(tmp, finish=False)
+        self.assertEqual(error, "RUNTIME_RESTORE_REQUIRES_REVIEW")
+        self.assertTrue(staged)
+        self.assertEqual(len(calls), 3)
+        self.assertIn("pkg-update-restore-evidence=rc:70,stage:unknown,guard:unknown",
+                      output.getvalue())
+
     def test_exact_success_dispatches_one_native_pkg(self):
         with tempfile.TemporaryDirectory() as tmp:
             calls, error, exists = self.trial(tmp)
@@ -164,6 +196,81 @@ class ProtectedPkgUpdate(unittest.TestCase):
                 self.assertEqual(record.stat().st_mode & 0o777, 0o600)
                 with self.assertRaisesRegex(m.Refused, "POSTINSTALL_PHASE_REFUSED"):
                     m.postinstall_attest()
+
+    def test_midextract_missing_service_module_is_strictly_pre_dispatch(self):
+        fixture_path = ROOT / "scripts" / "stage5-native-protected-update.py"
+        spec = importlib.util.spec_from_file_location(
+            "protected_midextract_refusal_fixture", fixture_path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        with tempfile.TemporaryDirectory() as tmp:
+            service = Path(tmp) / "zapret_service.sh"
+            backend = Path(tmp) / "backend"
+            backend.mkdir()
+            module = backend / "launcher.sh"
+            verified = result([], 1, stderr=(
+                "ERROR: required backend module is missing: " +
+                str(module) + "\n"))
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(
+                    verified, service),
+                "missing-required-module-before-dispatch")
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(result([], 69), service),
+                "guard-69")
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(result([], 1), service),
+                "unqualified")
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(
+                    result([], 1, stderr="ERROR: other refusal\n"), service),
+                "unqualified")
+            module.write_text("#!/bin/sh\n")
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(
+                    verified, service), "unqualified")
+            module.unlink()
+            module.symlink_to("/etc/passwd")
+            self.assertEqual(
+                fixture.classify_native_interrupted_refusal(
+                    verified, service), "unqualified")
+
+    def test_published107_postboot_mismatch_is_reported_not_masked(self):
+        fixture_path = ROOT / "scripts" / "stage5-native-published107-schema3-upgrade.py"
+        spec = importlib.util.spec_from_file_location(
+            "published107_postboot_fixture", fixture_path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        from types import SimpleNamespace
+        bad = SimpleNamespace(original_auto_generation=mock.Mock(
+            side_effect=RuntimeError("AUTO_NATIVE_GENERATION_OWNER_MISMATCH")))
+        self.assertEqual(
+            fixture.qualified_postboot_generation(bad, "a" * 32),
+            (0, [], False))
+        bad.original_auto_generation.assert_called_once_with("a" * 32, True)
+        records = [{"native_number": 3, "role": "learning"}]
+        good = SimpleNamespace(original_auto_generation=mock.Mock(
+            return_value=(3, records)))
+        self.assertEqual(
+            fixture.qualified_postboot_generation(good, "b" * 32),
+            (3, records, True))
+
+    def test_native_interrupted_finish_missing_pid_reports_failure_not_exception(self):
+        fixture_path = ROOT / "scripts" / "stage5-native-protected-update.py"
+        spec = importlib.util.spec_from_file_location(
+            "protected_native_missing_pid_fixture", fixture_path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        with tempfile.TemporaryDirectory() as temp:
+            missing = Path(temp) / "dvtws2.pid"
+            self.assertEqual(fixture.read_pid_if_present(missing), "missing")
+            missing.write_text("10101\n")
+            self.assertEqual(fixture.read_pid_if_present(missing), "10101")
+            missing.write_text("bad PID\n")
+            self.assertEqual(fixture.read_pid_if_present(missing), "missing")
+            missing.unlink()
+            missing.symlink_to("/etc/passwd")
+            self.assertEqual(fixture.read_pid_if_present(missing), "missing")
 
     def test_native_runtime_release_cache_is_disposable_only(self):
         fixture_path = ROOT / "scripts" / "stage5-native-protected-update.py"

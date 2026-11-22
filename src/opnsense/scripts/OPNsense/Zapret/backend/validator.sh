@@ -599,6 +599,7 @@ validator_validate_engine_mapped()
         "${_validator_engine_args}" "${_validator_engine_reference}" \
         "${_validator_engine_source}" <<'PY'
 from pathlib import Path
+import json
 import os
 import re
 import stat
@@ -643,12 +644,56 @@ try:
         # Apply preflight, so the validator must never create/touch them.
         # Mirror only these two source-qualified absolute native options in
         # the existing disposable public tempdir, just like managed lists.
-        auto_files = {
-            "--hostlist-auto": (
-                "/var/db/zapret2-auto-detect/inbox.txt", "native-auto-inbox.txt"),
-            "--hostlist-auto-debug": (
-                "/var/db/zapret2-auto-detect/debug.log", "native-auto-debug.log"),
-        }
+        producer_root = Path("/var/db/zapret2-auto-detect")
+        legacy_inbox = str(producer_root / "inbox.txt")
+        debug_path = str(producer_root / "debug.log")
+        # The previous schema2 observer uses one fixed inbox. Schema3
+        # producers have generation- and native-profile-qualified names.
+        # NEVER generalize to an arbitrary absolute --hostlist-auto path:
+        # validate every N against the same published learning map, the
+        # original workspace ID, unique native number and exact producer root.
+        schema3_sources = {}
+        schema3_mode = False
+        if any(token.startswith("--hostlist-auto=") for token in tokens):
+            map_path = source_root / "auto-detect-generation.json"
+            if map_path.exists() or map_path.is_symlink():
+                info = map_path.lstat()
+                if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or
+                        info.st_size <= 0 or info.st_size > 262144):
+                    raise ValueError("unsafe native auto generation map")
+                with map_path.open("rb") as handle:
+                    mapping = json.load(handle)
+                if not isinstance(mapping, dict):
+                    raise ValueError("invalid native auto generation map")
+                schema3_mode = mapping.get("schema") == 3
+                if schema3_mode:
+                    generation = mapping.get("generation")
+                    profiles = mapping.get("profiles")
+                    if (not isinstance(generation, str) or
+                            re.fullmatch(r"[0-9a-f]{32}", generation) is None or
+                            source_root.name != "release" or
+                            source_root.parent.name != generation or
+                            not isinstance(profiles, list) or
+                            len(profiles) > 257):
+                        raise ValueError("unqualified native learning generation")
+                    numbers = set()
+                    for profile in profiles:
+                        if not isinstance(profile, dict):
+                            raise ValueError("invalid native learning profile")
+                        if profile.get("role") != "learning":
+                            continue
+                        n = profile.get("native_number")
+                        value = profile.get("auto_inbox")
+                        if (type(n) is not int or not 1 <= n <= 255 or
+                                n in numbers or not isinstance(value, str) or
+                                profile.get("debug_identity") != debug_path or
+                                value != str(producer_root /
+                                    f"learning-{generation}-{n}.txt")):
+                            raise ValueError("unqualified native learning source")
+                        schema3_sources[value] = n
+                        numbers.add(n)
+                    if not schema3_sources:
+                        raise ValueError("missing original learning sources")
 
         def remap(value):
             if not value.startswith(prefix):
@@ -668,6 +713,8 @@ try:
             return str(destination)
 
         mapped = []
+        observed_learning = set()
+        observed_debug = 0
         for token in tokens:
             option, sep, value = token.partition("=")
             if sep and option in ("--ipset", "--ipset-exclude", "--hostlist", "--hostlist-exclude"):
@@ -677,10 +724,22 @@ try:
             elif sep and option == "--blob" and ":@" in value:
                 kind, path = value.split(":@", 1)
                 token = option + "=" + kind + ":@" + remap(path)
-            elif sep and option in auto_files:
-                expected, name = auto_files[option]
-                if value != expected:
-                    raise ValueError("unqualified native auto source path")
+            elif sep and option in ("--hostlist-auto", "--hostlist-auto-debug"):
+                if option == "--hostlist-auto-debug":
+                    if value != debug_path or observed_debug:
+                        raise ValueError("unqualified native auto debug path")
+                    observed_debug += 1
+                    name = "native-auto-debug.log"
+                elif schema3_mode:
+                    native_number = schema3_sources.get(value)
+                    if native_number is None or value in observed_learning:
+                        raise ValueError("unqualified native learning source path")
+                    observed_learning.add(value)
+                    name = f"native-auto-{native_number:03d}.txt"
+                else:
+                    if value != legacy_inbox:
+                        raise ValueError("unqualified native auto source path")
+                    name = "native-auto-inbox.txt"
                 temporary = public_root / name
                 if not temporary.exists():
                     with temporary.open("xb") as writer:
@@ -689,6 +748,9 @@ try:
                     os.chmod(temporary, 0o644)
                 token = option + "=" + str(temporary)
             mapped.append(token)
+        if schema3_mode and (
+                observed_learning != set(schema3_sources) or observed_debug != 1):
+            raise ValueError("incomplete original learning dry-run sources")
         result = subprocess.run([binary, *mapped, "--dry-run"], capture_output=True, timeout=15)
 except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
     print("ERROR: installed engine validation failed: " + str(exc), file=sys.stderr)

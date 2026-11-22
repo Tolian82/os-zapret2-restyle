@@ -160,6 +160,65 @@ class OriginalLockHandoffTests(unittest.TestCase):
         self.assertFalse(result['ack_authorized'])
         self.assertTrue(self.segment.exists())
 
+    def test_stopped_learning_reuses_same_fd9_config_bridge_only(self):
+        from unittest.mock import patch
+        generation = "a" * 32
+        pending = self.queue.pending / generation
+        accepted = {
+            "kind": "original-learning-minute-completed",
+            "processed": True, "generation": generation,
+            "ack_authorized": False,
+        }
+        with self.queue.exclusive():
+            with patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                 patch("auto_detect_original_lock_handoff.subprocess.run",
+                       return_value=subprocess.CompletedProcess(
+                           ["php"], 0, json.dumps(accepted).encode(), b"")) as run:
+                result = _original_completion_locked(
+                    self.queue, pending, php_bin="php",
+                    php_script=PHP_FIXTURE, timeout=15,
+                    learning=True, stopped_learning=True)
+            self.assertEqual(result, accepted)
+            kwargs = run.call_args.kwargs
+            self.assertEqual(
+                run.call_args.args[0][2], "commit-stopped-learning-with-fds")
+            self.assertIn(self.queue.locked_fd, kwargs["pass_fds"])
+            self.assertIn(9, kwargs["pass_fds"])
+            with self.assertRaisesRegex(
+                    OriginalLockRefused, "invalid_original_pending_cycle"):
+                _original_completion_locked(
+                    self.queue, pending, php_bin="php",
+                    php_script=PHP_FIXTURE, timeout=15,
+                    stopped_learning=True)
+            with self.assertRaisesRegex(
+                    OriginalLockRefused, "invalid_original_pending_cycle"):
+                _original_completion_locked(
+                    self.queue, pending, php_bin="php",
+                    php_script=PHP_FIXTURE, timeout=15,
+                    retired=True, learning=True, stopped_learning=True)
+
+    def test_stopped_learning_config_child_timeout_and_return_code_are_bounded(self):
+        from unittest.mock import patch
+        generation = "a" * 32
+        pending = self.queue.pending / generation
+        with self.queue.exclusive():
+            with patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                 patch("auto_detect_original_lock_handoff.subprocess.run",
+                       side_effect=subprocess.TimeoutExpired(["php"], 25)):
+                with self.assertRaisesRegex(OriginalLockRefused,
+                                            "original_config_child_deadline"):
+                    _original_completion_locked(
+                        self.queue, pending, php_bin="php", php_script=PHP_FIXTURE,
+                        timeout=25, learning=True, stopped_learning=True)
+            with patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                 patch("auto_detect_original_lock_handoff.subprocess.run",
+                       return_value=subprocess.CompletedProcess(["php"], 69, b"", b"")):
+                with self.assertRaisesRegex(OriginalLockRefused,
+                                            "original_config_child_rc69"):
+                    _original_completion_locked(
+                        self.queue, pending, php_bin="php", php_script=PHP_FIXTURE,
+                        timeout=25, learning=True, stopped_learning=True)
+
     def test_unlocked_or_foreign_queue_fd_refuses(self):
         fd = os.open(self.queue.lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:

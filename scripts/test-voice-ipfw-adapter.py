@@ -72,6 +72,28 @@ class SimulateFreeBSD:
 
 
 class IPFWAdapterTests(unittest.TestCase):
+    def test_schema3_native_RST_matches_only_fully_attested_TCP_capture(self):
+        from voice_ipfw_adapter import _verified_learning_rst_scope
+        args = ("--port=989\n"
+                "--filter-tcp=80\n"
+                "--new\n"
+                "--filter-tcp=443\n"
+                "--new\n"
+                "--filter-udp=443\n").encode("ascii")
+        learning = ((1, "youtube", "/var/db/zapret2-auto-detect/learning-a-1.txt"),
+                    (2, "user", "/var/db/zapret2-auto-detect/learning-a-2.txt"),
+                    (3, "youtube", "/var/db/zapret2-auto-detect/learning-a-3.txt"))
+        self.assertEqual("80,443", _verified_learning_rst_scope(learning, args, "80,443"))
+        self.assertIsNone(_verified_learning_rst_scope((learning[2],), args, "80,443"))
+        with self.assertRaises(IPFWAdapterError):
+            _verified_learning_rst_scope((learning[0],), args, "80,443")
+        with self.assertRaises(IPFWAdapterError):
+            _verified_learning_rst_scope(learning, args, "443")
+        with self.assertRaises(IPFWAdapterError):
+            _verified_learning_rst_scope((learning[0], learning[0]), args, "80,443")
+        with self.assertRaises(IPFWAdapterError):
+            _verified_learning_rst_scope(((4, "foreign", "/tmp/foreign"),), args, "80,443")
+
     def test_native_auto_inbound_rst_is_exact_and_no_broad_feedback(self):
         self.assertEqual(checked_rule_argv(AUTO_RST), AUTO_RST)
         for slot, value in (

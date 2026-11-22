@@ -10,6 +10,7 @@ No second start route, collector, Config writer, ACK or daemon.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -25,6 +26,7 @@ from auto_detect_queue import DurableInbox, QueueSafetyError
 from auto_detect_storage import (
     ROOT, RAW_PATH, DEBUG_PATH, ENGINE_USER,
     ROOT_MODE, FILE_MODE, PENDING_MODE, _parent,
+    _learning_names, StorageRefused,
 )
 
 class PostDropRefused(RuntimeError):
@@ -39,10 +41,18 @@ class OriginalProducer:
     engine_uid: int
     engine_gid: int
     # One ordered identity per actual original producer file, never raw data.
-    identities: tuple[tuple[int, int, int], tuple[int, int, int]]
+    identities: tuple[tuple[int, int, int], ...]
+    # Additional learning files are structural-only until original FD9
+    # runtime seal, multiple-inbox receipts, and ACK are connected.
+    learning_names: tuple[str, ...] = ()
 
 
-def _check_layout(root: Path, root_uid: int, root_gid: int, engine_gid: int) -> None:
+def _check_layout(root: Path, root_uid: int, root_gid: int, engine_gid: int,
+                  learning_names: tuple[str, ...] = ()) -> None:
+    try:
+        names = _learning_names(learning_names)
+    except StorageRefused as exc:
+        raise PostDropRefused("unsafe_original_learning_source_names") from exc
     try:
         info = root.lstat()
         pending = (root / "pending").lstat()
@@ -52,7 +62,8 @@ def _check_layout(root: Path, root_uid: int, root_gid: int, engine_gid: int) -> 
                 not stat.S_ISDIR(pending.st_mode) or pending.st_uid != root_uid or
                 pending.st_gid != root_gid or
                 stat.S_IMODE(pending.st_mode) != PENDING_MODE or
-                set(os.listdir(root)) - {"pending", "inbox.txt", "debug.log", "worker.lock"}):
+                set(os.listdir(root)) -
+                ({"pending", "inbox.txt", "debug.log", "worker.lock"} | set(names))):
             raise PostDropRefused("unsafe_original_producer_layout")
         lock = root / "worker.lock"
         if lock.exists() or lock.is_symlink():
@@ -81,7 +92,7 @@ def _identity(path: Path, *, uid: tuple[int, ...], gid: int,
 
 
 def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
-             engine_gid: int) -> OriginalProducer:
+             engine_gid: int, learning_names: tuple[str, ...] = ()) -> OriginalProducer:
     """Testable scoped precursor. Does not change either producer file."""
     if (not isinstance(root, Path) or not root.is_absolute() or
             type(root_uid) is not int or root_uid < 0 or
@@ -96,14 +107,14 @@ def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
     # Neither a nonempty prior native debug history nor foreign-generation
     # pending may be inherited by a new original shared-FD9 observer.
     try:
-        _check_layout(root, root_uid, root_gid, engine_gid)
+        _check_layout(root, root_uid, root_gid, engine_gid, learning_names)
         queue = DurableInbox(root, owner_uid=root_uid, writer_gid=engine_gid)
         with queue.exclusive():
-            _check_layout(root, root_uid, root_gid, engine_gid)
+            _check_layout(root, root_uid, root_gid, engine_gid, learning_names)
             if queue.segments():
                 raise PostDropRefused("unprocessed_original_pending_prelaunch")
             identities = []
-            for name in ("inbox.txt", "debug.log"):
+            for name in ("inbox.txt", "debug.log", *learning_names):
                 path = root / name
                 stat_before, bytes_before = _read_exact(
                     path, owner_uid=root_uid, writer_gid=engine_gid)
@@ -114,9 +125,12 @@ def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
                 identities.append(identity)
             if identities[0][:2] == identities[1][:2]:
                 raise PostDropRefused("aliased_original_raw_and_debug")
-            _check_layout(root, root_uid, root_gid, engine_gid)
+            if len({ident[:2] for ident in identities}) != len(identities):
+                raise PostDropRefused("aliased_original_producer_inode")
+            _check_layout(root, root_uid, root_gid, engine_gid, learning_names)
             return OriginalProducer(root, root_uid, root_gid,
-                                    engine_uid, engine_gid, tuple(identities))
+                                    engine_uid, engine_gid, tuple(identities),
+                                    learning_names)
     except (QueueSafetyError, DebugWindowRefused, OSError) as exc:
         raise PostDropRefused("original_pretraffic_queue_or_inode_unavailable") from exc
 
@@ -131,8 +145,15 @@ def _reattest(witness: OriginalProducer, owner_alive: Callable[[], bool]) -> tup
     if not isinstance(witness, OriginalProducer) or not callable(owner_alive):
         raise PostDropRefused("missing_original_fd9_witness")
     root = witness.root
-    _check_layout(root, witness.root_uid, witness.root_gid, witness.engine_gid)
-    paths = (root / "inbox.txt", root / "debug.log")
+    try:
+        names = _learning_names(witness.learning_names)
+    except StorageRefused as exc:
+        raise PostDropRefused("untrusted_original_learning_witness") from exc
+    if len(witness.identities) != 2 + len(names):
+        raise PostDropRefused("incomplete_original_producer_witness")
+    _check_layout(root, witness.root_uid, witness.root_gid,
+                  witness.engine_gid, names)
+    paths = tuple(root / name for name in ("inbox.txt", "debug.log", *names))
     for path, prior in zip(paths, witness.identities):
         _identity(path, uid=(witness.root_uid, witness.engine_uid),
                   gid=witness.engine_gid, expected=prior)
@@ -171,7 +192,8 @@ def _reattest(witness: OriginalProducer, owner_alive: Callable[[], bool]) -> tup
             os.close(fd)
         _identity(path, uid=(witness.root_uid,), gid=witness.engine_gid,
                   expected=prior)
-    _check_layout(root, witness.root_uid, witness.root_gid, witness.engine_gid)
+    _check_layout(root, witness.root_uid, witness.root_gid,
+                  witness.engine_gid, names)
     for path, prior in zip(paths, witness.identities):
         _identity(path, uid=(witness.root_uid,), gid=witness.engine_gid,
                   expected=prior)
@@ -284,7 +306,7 @@ def native_prepare_original_producer() -> None:
 # Route the sole original FD9 through the existing immutable
 # pretraffic -> committed process epoch. Release authorization is read-only
 # and never by itself permits launch, receipt ACK or native file deletion.
-def _original_epoch_queue():
+def _original_epoch_queue(learning_names: tuple[str, ...] = ()):
     from auto_detect_epoch_receipts import EpochReceipts
     if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
         raise PostDropRefused("native_root_fd9_epoch_only")
@@ -292,7 +314,7 @@ def _original_epoch_queue():
     native_user = pwd.getpwnam(ENGINE_USER)
     if native_user.pw_uid <= 0 or native_user.pw_gid <= 0:
         raise PostDropRefused("unqualified_original_epoch_engine")
-    _check_layout(ROOT, 0, 0, native_user.pw_gid)
+    _check_layout(ROOT, 0, 0, native_user.pw_gid, learning_names)
     return (DurableInbox(ROOT, owner_uid=0, writer_gid=native_user.pw_gid),
             EpochReceipts(writer_gid=native_user.pw_gid))
 
@@ -329,6 +351,171 @@ def native_finish_original_epoch(generation: str, *, reviewed: bool = False) -> 
             proof, queue, attest=lambda: attester(generation))
 
 
+
+
+# TZ6v4: the SAME original FD9 owner now has a schema3-native command
+# surface. Nothing invokes these verbs from common Apply/launcher yet.
+# The writer and minute/ACK paths remain deliberately schema2-only until
+# multi-inbox P2 proves managed-before-native transfer and retirement.
+def _learning_release_sources(
+    release: Path,
+) -> tuple[Path, str, tuple[tuple[int, str, str], ...]]:
+    """Attest the exact sealed original candidate and optional active copy.
+
+    Root-only FreeBSD/FD9 is enforced by original_fd9_command, *not* by a
+    supplied release pathname. A fresh generation must be root-sealed,
+    match the original source/argv and have a reproducible approved N-map.
+    """
+    from auto_detect_owner import (
+        _secure_bytes, _valid_learning_active, MAP_NAME, MAX_ARGS, MAX_MAP,
+    )
+    from auto_detect_origin_map import ORIGIN_FILE, verify_learning_promotion
+    from shared_apply_seal import WORK, verify_seal
+    from voice_live_inspect import COMMON_ACTIVE
+    import json
+
+    uid = os.geteuid()
+    if (not isinstance(release, Path) or not release.is_absolute() or
+            release.is_symlink() or not release.is_dir() or
+            release.stat().st_uid != uid or release.stat().st_mode & 0o022):
+        raise PostDropRefused("learning_untrusted_release_directory")
+    raw_map = _secure_bytes(release / MAP_NAME, MAX_MAP, uid)
+    try:
+        mapping = json.loads(raw_map)
+        generation = mapping["generation"]
+        candidate = mapping["owner_candidate_sha256"]
+    except (ValueError, TypeError, KeyError, UnicodeError) as exc:
+        raise PostDropRefused("learning_untrusted_generation_map") from exc
+    if (not isinstance(generation, str) or
+            not re.fullmatch(r"[0-9a-f]{32}", generation) or
+            not isinstance(candidate, str) or
+            not re.fullmatch(r"[0-9a-f]{64}", candidate)):
+        raise PostDropRefused("learning_unqualified_operation")
+    workspace = WORK / generation
+    sealed = workspace / "release"
+    if release not in (sealed, COMMON_ACTIVE):
+        raise PostDropRefused("learning_release_outside_original_owner")
+    verify_seal(workspace, owner=uid)
+    expected = verify_learning_promotion(workspace, candidate)
+    if json.loads(raw_map) != expected:
+        raise PostDropRefused("learning_active_map_not_same_sealed_candidate")
+    for name, limit in (
+        (MAP_NAME, MAX_MAP),
+        ("dvtws.args", MAX_ARGS),
+        ("dvtws.original.args", MAX_ARGS),
+        (ORIGIN_FILE, MAX_MAP),
+        ("dvtws.args.global-policy.json", 16384),
+    ):
+        if name == "dvtws.args.global-policy.json":
+            has_active = (release / name).exists() or (release / name).is_symlink()
+            has_sealed = (sealed / name).exists() or (sealed / name).is_symlink()
+            if has_active != has_sealed:
+                raise PostDropRefused("learning_active_exclusion_policy_drift")
+            if not has_active:
+                continue
+        if _secure_bytes(release / name, limit, uid) != _secure_bytes(
+                sealed / name, limit, uid):
+            raise PostDropRefused("learning_active_release_not_same_sealed_candidate")
+    source = json.loads(_secure_bytes(release / ORIGIN_FILE, MAX_MAP, uid))
+    approved = _valid_learning_active(
+        raw_map, {"id": generation, "candidate": candidate}, source,
+        _secure_bytes(release / "dvtws.original.args", MAX_ARGS, uid),
+        _secure_bytes(release / "dvtws.args", MAX_ARGS, uid))
+    native_generation, _ = _qualified_learning_sources(approved, ROOT)
+    if native_generation != generation:
+        raise PostDropRefused("learning_source_foreign_generation")
+    return workspace, candidate, approved
+
+
+def native_prepare_learning_producer(release: Path) -> None:
+    """Prepare exact qualified N-inboxes; refuse stale old ROOT contents."""
+    from auto_detect_storage import prepare_native_learning
+    _, _, sources = _learning_release_sources(release)
+    _, names = _qualified_learning_sources(sources, ROOT)
+    prepare_native_learning(names)
+
+
+def native_capture_learning_before_launch(release: Path) -> str:
+    """Exact original P2a zero-cut witness for every learning native file."""
+    _, _, sources = _learning_release_sources(release)
+    _, names = _qualified_learning_sources(sources, ROOT)
+    _parent(ROOT, 0)
+    identity = pwd.getpwnam(ENGINE_USER)
+    if identity.pw_uid <= 0 or identity.pw_gid <= 0:
+        raise PostDropRefused("learning_engine_identity_missing")
+    witness = _capture(
+        ROOT, root_uid=0, root_gid=0,
+        engine_uid=identity.pw_uid, engine_gid=identity.pw_gid,
+        learning_names=names)
+    return _witness_line_learning(witness, sources)
+
+
+def native_seal_learning_epoch(
+    generation: str, candidate: str, wire: str,
+) -> None:
+    from auto_detect_epoch_receipts import HEX32, HEX64
+    from voice_live_inspect import COMMON_ACTIVE
+    if (not isinstance(generation, str) or not HEX32.fullmatch(generation) or
+            not isinstance(candidate, str) or not HEX64.fullmatch(candidate) or
+            not isinstance(wire, str)):
+        raise PostDropRefused("learning_invalid_pretraffic_request")
+    workspace, observed_candidate, sources = _learning_release_sources(
+        COMMON_ACTIVE)
+    if (workspace.name != generation or observed_candidate != candidate):
+        raise PostDropRefused("learning_epoch_candidate_not_original")
+    _, names = _qualified_learning_sources(sources, ROOT)
+    queue, receipts = _original_epoch_queue(names)
+    identity = pwd.getpwnam(ENGINE_USER)
+    def same_owner() -> bool:
+        return _learning_release_sources(COMMON_ACTIVE) == (
+            workspace, candidate, sources)
+    with queue.exclusive():
+        receipts.seal_learning_pretraffic(
+            queue, workspace=workspace, candidate_sha256=candidate,
+            wire=wire, root_gid=0, engine_uid=identity.pw_uid,
+            attest=same_owner)
+
+
+def native_restore_learning_before_ipfw(
+    wire: str, pid_text: str, executable: str,
+    generation: str, candidate: str,
+) -> None:
+    from voice_live_inspect import COMMON_ACTIVE
+    workspace, observed_candidate, sources = _learning_release_sources(
+        COMMON_ACTIVE)
+    if (workspace.name != generation or observed_candidate != candidate):
+        raise PostDropRefused("learning_postdrop_not_same_candidate")
+    witness = _witness_read_learning(wire, sources)
+    owner = _original_owner_from_pid(pid_text, executable)
+    native_restore_before_ipfw(witness, owner)
+    if _learning_release_sources(COMMON_ACTIVE) != (
+            workspace, candidate, sources):
+        raise PostDropRefused("learning_postdrop_owner_changed")
+
+
+def native_finish_learning_epoch(generation: str) -> None:
+    """Finish original schema3 receipt only after real shared Apply PID gate."""
+    from auto_detect_epoch_receipts import HEX32
+    from auto_detect_owner import attest_learning_epoch_finalizing_generation
+    from voice_live_inspect import COMMON_ACTIVE
+    if not isinstance(generation, str) or not HEX32.fullmatch(generation):
+        raise PostDropRefused("learning_invalid_running_generation")
+    attester = attest_learning_epoch_finalizing_generation
+    proof = attester(generation)
+    workspace, candidate, sources = _learning_release_sources(COMMON_ACTIVE)
+    if (proof.operation_id != generation or
+            workspace.name != generation or
+            proof.owner_candidate_sha256 != candidate or
+            proof.learning != sources):
+        raise PostDropRefused("learning_running_owner_not_same_generation")
+    _, names = _qualified_learning_sources(sources, ROOT)
+    queue, receipts = _original_epoch_queue(names)
+    with queue.exclusive():
+        receipts.finish_learning_running(
+            proof, queue, workspace=workspace,
+            attest=lambda: attester(generation))
+
+
 # P2k8i: the two half-calls are a *single* original-FD9 shell operation.
 # No new lock, Config parser, queue owner or on-disk witness is introduced.
 # The compact witness crosses launcher_start_once as an exact positional
@@ -337,6 +524,9 @@ _WITNESS = re.compile(r"^p2k8i:([0-9]+):([0-9]+):([0-9]+):([0-9]+):([0-9]+):([0-
 
 
 def _witness_line(witness: OriginalProducer) -> str:
+    if (not isinstance(witness, OriginalProducer) or
+            witness.learning_names or len(witness.identities) != 2):
+        raise PostDropRefused("legacy_fd9_witness_cannot_encode_learning_inboxes")
     a, b = witness.identities
     return "p2k8i:" + ":".join(str(v) for v in (*a, *b))
 
@@ -362,6 +552,147 @@ def _witness_read(line: str) -> OriginalProducer:
         ROOT, 0, 0, native_user.pw_uid, native_user.pw_gid,
         (values[:3], values[3:]),
     )
+
+
+
+# TZ6v4: versioned, complete post-drop evidence across the same original
+# launch argument. The existing six-u64 p2k8i wire stays LEGACY-ONLY and
+# cannot silently truncate N learning inodes. These codecs are NOT new CLI
+# operations: the actual FD9 entrypoint must first verify a sealed schema3
+# map, resolve the expected tuples, and seal a matching original epoch.
+_LEARNING_WITNESS = re.compile(
+    r"^p2k8i3:([0-9a-f]{32}):([1-9][0-9]{0,2}):([0-9a-f]{64}):([0-9:]+)$")
+_MAX_LEARNING_WITNESS = 16384
+_U64_MAX = (1 << 64) - 1
+
+
+def _qualified_learning_sources(
+    sources: tuple[tuple[int, str, str], ...], root: Path,
+) -> tuple[str, tuple[str, ...]]:
+    """Only an independently attested native-number/hostlist/path map fits.
+
+    The caller must obtain these tuples from _valid_learning_proposal (and
+    later the sealed active schema3 owner), not by trusting debug or argv
+    guesses. The codec checks exact paths and numbering but cannot by
+    itself authorize that caller or a new runtime.
+    """
+    if (type(sources) is not tuple or not 1 <= len(sources) <= 255 or
+            not isinstance(root, Path) or not root.is_absolute()):
+        raise PostDropRefused("unqualified_learning_fd9_source_set")
+    names = []
+    for row in sources:
+        if (type(row) is not tuple or len(row) != 3 or
+                type(row[0]) is not int or not 1 <= row[0] <= 255 or
+                type(row[1]) is not str or not
+                re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", row[1]) or
+                type(row[2]) is not str):
+            raise PostDropRefused("unqualified_learning_fd9_profile")
+        path = Path(row[2])
+        if (not path.is_absolute() or path.parent != root or
+                path.name != f"learning-{path.name[9:41]}-{row[0]}.txt"):
+            raise PostDropRefused("unqualified_learning_fd9_path")
+        names.append(path.name)
+    try:
+        _learning_names(tuple(names))
+    except StorageRefused as exc:
+        raise PostDropRefused("unqualified_learning_fd9_names") from exc
+    generation = names[0][9:41]
+    if any(name[9:41] != generation for name in names):
+        raise PostDropRefused("mixed_learning_fd9_generations")
+    return generation, tuple(names)
+
+
+def _learning_source_digest(sources: tuple[tuple[int, str, str], ...]) -> str:
+    # Pin attribution as well as native paths; changing hostlist while
+    # keeping the same inode names must invalidate the FD9 witness.
+    canonical = "\x00".join(
+        f"{number}: {hostlist}: {path}" for number, hostlist, path in sources)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _learning_identity_values(identities: tuple[tuple[int, int, int], ...],
+                              count: int) -> tuple[int, ...]:
+    if (type(identities) is not tuple or len(identities) != count + 2 or
+            len(identities) > 257):
+        raise PostDropRefused("incomplete_learning_fd9_inode_set")
+    values = []
+    seen = set()
+    for item in identities:
+        if (type(item) is not tuple or len(item) != 3 or
+                any(type(n) is not int or n < 0 or n > _U64_MAX for n in item) or
+                item[1] == 0 or item[2] != 1 or item[:2] in seen):
+            raise PostDropRefused("unqualified_learning_fd9_inode")
+        seen.add(item[:2])
+        values.extend(item)
+    return tuple(values)
+
+
+def _witness_line_learning(
+    witness: OriginalProducer, sources: tuple[tuple[int, str, str], ...],
+) -> str:
+    """Encode the FULL original producer inode set; never drop N identities."""
+    if not isinstance(witness, OriginalProducer):
+        raise PostDropRefused("missing_learning_fd9_capture")
+    generation, names = _qualified_learning_sources(sources, witness.root)
+    if witness.learning_names != names:
+        raise PostDropRefused("learning_fd9_capture_not_source_bound")
+    values = _learning_identity_values(witness.identities, len(names))
+    digest = _learning_source_digest(sources)
+    line = f"p2k8i3:{generation}:{len(names)}:{digest}:" + ":".join(map(str, values))
+    if len(line) > _MAX_LEARNING_WITNESS:
+        raise PostDropRefused("learning_fd9_wire_exceeds_limit")
+    return line
+
+
+def _witness_decode_learning(
+    line: str, sources: tuple[tuple[int, str, str], ...], *,
+    root: Path, root_uid: int, root_gid: int,
+    engine_uid: int, engine_gid: int,
+) -> OriginalProducer:
+    """Refuse missing, extra, reordered or cross-generation prelaunch inodes.
+
+    The names are obtained separately from the sealed native profile map.
+    This primitive performs NO file repair; _reattest reopens every path
+    and verifies each inode under the original process/FD9 authority.
+    """
+    generation, names = _qualified_learning_sources(sources, root)
+    if (type(line) is not str or len(line) > _MAX_LEARNING_WITNESS):
+        raise PostDropRefused("invalid_learning_fd9_witness")
+    found = _LEARNING_WITNESS.fullmatch(line)
+    if (found is None or found[1] != generation or
+            int(found[2]) != len(names) or str(int(found[2])) != found[2] or
+            found[3] != _learning_source_digest(sources)):
+        raise PostDropRefused("learning_fd9_witness_generation_or_count")
+    tokens = found[4].split(":")
+    if len(tokens) != 3 * (len(names) + 2) or any(
+            not token or len(token) > 20 or
+            str(int(token)) != token for token in tokens):
+        raise PostDropRefused("learning_fd9_witness_inode_count")
+    values = tuple(int(token) for token in tokens)
+    identities = tuple(tuple(values[i:i + 3])
+                       for i in range(0, len(values), 3))
+    _learning_identity_values(identities, len(names))
+    if (type(root_uid) is not int or type(root_gid) is not int or
+            type(engine_uid) is not int or type(engine_gid) is not int or
+            root_uid < 0 or root_gid < 0 or engine_uid <= 0 or
+            engine_gid <= 0 or root_uid == engine_uid):
+        raise PostDropRefused("invalid_learning_fd9_engine_identity")
+    return OriginalProducer(root, root_uid, root_gid, engine_uid, engine_gid,
+                            identities, names)
+
+
+def _witness_read_learning(
+    line: str, sources: tuple[tuple[int, str, str], ...],
+) -> OriginalProducer:
+    """Native FD9-only companion to the sealed, schema3 qualified map."""
+    _parent(ROOT, 0)
+    native_user = pwd.getpwnam(ENGINE_USER)
+    if native_user.pw_uid <= 0 or native_user.pw_gid <= 0:
+        raise PostDropRefused("unqualified_original_engine_user")
+    return _witness_decode_learning(
+        line, sources, root=ROOT, root_uid=0, root_gid=0,
+        engine_uid=native_user.pw_uid, engine_gid=native_user.pw_gid)
+
 
 
 def _original_owner_from_pid(pid_text: str, executable: str) -> OwnerToken:
@@ -402,7 +733,10 @@ def original_fd9_command(args: list[str]) -> int:
     """
     shapes = {"authorize": 2, "prepare": 1, "capture": 1,
               "restore": 4, "seal-epoch": 3, "finish-epoch": 2,
-              "finish-reviewed-epoch": 2}
+              "finish-reviewed-epoch": 2,
+              "authorize-learning": 2, "prepare-learning": 2,
+              "capture-learning": 2, "seal-learning-epoch": 4,
+              "restore-learning": 6, "finish-learning-epoch": 2}
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not args or len(args) != shapes.get(args[0], -1)):
         return 64
@@ -430,6 +764,24 @@ def original_fd9_command(args: list[str]) -> int:
         elif args[0] == "finish-reviewed-epoch":
             native_finish_original_epoch(args[1], reviewed=True)
             print("original-fd9-reviewed-epoch=attested")
+        elif args[0] == "authorize-learning":
+            _learning_release_sources(Path(args[1]))
+            print("original-fd9-learning-release=authorized")
+        elif args[0] == "prepare-learning":
+            native_prepare_learning_producer(Path(args[1]))
+            print("original-fd9-learning-producer=prepared")
+        elif args[0] == "capture-learning":
+            print(native_capture_learning_before_launch(Path(args[1])))
+        elif args[0] == "seal-learning-epoch":
+            native_seal_learning_epoch(args[1], args[2], args[3])
+            print("original-fd9-learning-pretraffic=sealed")
+        elif args[0] == "restore-learning":
+            native_restore_learning_before_ipfw(
+                args[1], args[2], args[3], args[4], args[5])
+            print("original-fd9-learning-postdrop=attested")
+        elif args[0] == "finish-learning-epoch":
+            native_finish_learning_epoch(args[1])
+            print("original-fd9-learning-running-epoch=attested")
         else:
             native_finish_original_epoch(args[1])
             print("original-fd9-running-epoch=attested")

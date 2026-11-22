@@ -24,6 +24,8 @@ ACTIVE = Path("/var/db/zapret2/pkg-update/operation.json")
 MARKER = Path("/var/run/zapret2-restyle/pkg-replacement.restart")
 JOURNAL = Path("/var/db/zapret2/shared-apply/operation.json")
 EPOCHS = Path("/var/db/zapret2/auto-detect-epochs")
+RUNTIME = Path("/usr/local/etc/zapret2/runtime-v2")
+PRODUCERS = Path("/var/db/zapret2-auto-detect")
 CONFIG = Path("/conf/config.xml")
 
 
@@ -89,11 +91,93 @@ def seed_qualified_stable_tag_for_disposable_guest(g03):
           flush=True)
 
 
+def original_auto_generation(old_id: str, required: bool) -> tuple[int, list[dict]]:
+    """Read installed original owner map, not GUI mode or test flags."""
+    path = RUNTIME / "auto-detect-generation.json"
+    if not required:
+        need(not path.exists() and not path.is_symlink(),
+             "LIST_HAS_UNEXPECTED_ACTIVE_AUTO_GENERATION")
+        return 0, []
+    need(path.is_file() and not path.is_symlink() and
+         path.lstat().st_uid == 0 and path.lstat().st_nlink == 1,
+         "AUTO_NATIVE_GENERATION_MAP_UNTRUSTED")
+    mapping = json.loads(path.read_bytes())
+    schema = mapping.get("schema")
+    need(type(schema) is int and schema in (2, 3) and
+         mapping.get("generation") == old_id,
+         "AUTO_NATIVE_GENERATION_OWNER_MISMATCH")
+    learning = []
+    if schema == 3:
+        learning = [row for row in mapping.get("profiles", [])
+                    if isinstance(row, dict) and row.get("role") == "learning"]
+        need(len(learning) >= 1 and
+             all(type(row.get("native_number")) is int and
+                 row.get("auto_inbox") == str(
+                     PRODUCERS / ("learning-" + old_id + "-" +
+                                  str(row["native_number"]) + ".txt"))
+                 for row in learning),
+             "AUTO_SCHEMA3_NATIVE_N_SCOPE_UNQUALIFIED")
+    return schema, learning
+
+
+def verified_old_auto_retirement(old_id: str, schema: int,
+                                 learning: list[dict]) -> bool:
+    """Exact schema-specific stopped archive proof; never fake retired.json."""
+    root = EPOCHS / old_id
+    if schema == 2:
+        return (root / "retired.json").is_file()
+    if schema != 3 or not learning:
+        return False
+    folder = root / "learning-retirement"
+    intent = folder / "intent.json"
+    ready = folder / "ready.json"
+    if (not intent.is_file() or intent.is_symlink() or
+            not ready.is_file() or ready.is_symlink()):
+        return False
+    raw = intent.read_bytes()
+    try:
+        plan, receipt = json.loads(raw), json.loads(ready.read_bytes())
+    except (ValueError, UnicodeError):
+        return False
+    if (plan.get("schema") != 3 or
+            plan.get("generation") != old_id or
+            receipt.get("schema") != 3 or
+            receipt.get("generation") != old_id or
+            receipt.get("intent_sha256") != hashlib.sha256(raw).hexdigest() or
+            not isinstance(plan.get("sources"), list) or
+            len(plan["sources"]) != len(learning) + 1):
+        return False
+    names = {Path(row["auto_inbox"]).name for row in learning}
+    seen = set()
+    for row in plan["sources"]:
+        if (not isinstance(row, dict) or
+                row.get("name") not in names | {"debug.log"} or
+                row["name"] in seen or
+                not isinstance(row.get("image"), list) or
+                len(row["image"]) != 4):
+            return False
+        seen.add(row["name"])
+        archived = folder / ("old-" + row["name"])
+        if not archived.is_file() or archived.is_symlink():
+            return False
+        data = archived.read_bytes()
+        st = archived.stat()
+        if [st.st_dev, st.st_ino, len(data),
+                hashlib.sha256(data).hexdigest()] != row["image"]:
+            return False
+        old_native = PRODUCERS / row["name"]
+        if (row["name"] != "debug.log" and
+                (old_native.exists() or old_native.is_symlink())):
+            return False
+    return seen == names | {"debug.log"}
+
+
 def native_running_reinstall(archive, target, candidate_sha):
     """Both LIST and AUTO on one genuinely installed native OPNsense guest.
 
-    LIST has no obligation to create a P2 auto-detect epoch. Only AUTO
-    requires the observer epoch/retirement receipts.
+    LIST has no auto epoch. AUTO must prove either the original schema2
+    retirement receipt or the fully physical original schema3 N/debug terminal
+    intent+ready, not merely an EXIT_CODE or a changed generation ID.
     """
     witness = original_fixture("p5b2b-native-witness.py", "protected_native_witness")
     old_bridge = original_fixture("test-own70-native-package-handoff.py",
@@ -130,10 +214,14 @@ def native_running_reinstall(archive, target, candidate_sha):
              run([str(SERVICE), "status"]).returncode == 0,
              "REAL_PREDECESSOR_NOT_RUNNING_" + label)
         old_epoch_present = (EPOCHS / old_id / "epoch.json").is_file()
+        old_schema, old_learning = original_auto_generation(
+            old_id, observer_required)
         if observer_required:
-            need(old_epoch_present, "AUTO_PREDECESSOR_EPOCH_MISSING")
+            need(old_epoch_present and old_schema in (2, 3),
+                 "AUTO_PREDECESSOR_EPOCH_MISSING")
         else:
-            need(not old_epoch_present, "LIST_UNEXPECTED_OBSERVER_EPOCH")
+            need(not old_epoch_present and old_schema == 0,
+                 "LIST_UNEXPECTED_OBSERVER_EPOCH")
         config_before = sha(CONFIG)
         replaced = run([str(SERVICE), "pkg-update", str(archive)], timeout=320)
         status_after = run([str(SERVICE), "status"], timeout=30)
@@ -144,16 +232,33 @@ def native_running_reinstall(archive, target, candidate_sha):
                    else "missing")
         why = re.search(r"(?m)^pkg-update-refused=([A-Z0-9_]+)$",
                         replaced.stderr)
+        finish_evidence = re.search(
+            r"(?m)^pkg-update-restore-evidence=(rc:(?:0|69|70|other),stage:(?:boot|unknown),guard:(?:activate|activated-journal|activated-bundle|activated-probe|config-save|epoch-journal|saved-readback|saved-probe|ipfw-commit|committed-probe|epoch-schema|epoch-dispatch|epoch-attest|epoch-receipt|unknown))$",
+            replaced.stderr)
+        new_schema, new_learning = original_auto_generation(
+            new_id, observer_required) if status_after.returncode == 0 else (0, [])
+        retired_verified = verified_old_auto_retirement(
+            old_id, old_schema, old_learning) if observer_required else False
         evidence = {
             "schema": 1, "scope": label, "observer_required": observer_required,
             "predecessor_epoch_exists": old_epoch_present,
+            "predecessor_native_schema": old_schema,
+            "successor_native_schema": new_schema,
+            "native_learning_profiles_before": len(old_learning),
+            "native_learning_profiles_after": len(new_learning),
             "protected_running_replacement_rc": replaced.returncode,
             "refusal": why.group(1) if why else "none",
+            "restore_finish_evidence": (finish_evidence.group(1)
+                                        if finish_evidence else "none"),
+            "shared_journal_phase": (successor.get("phase")
+                                     if successor.get("phase") in (
+                                         "committed", "prepared", "activating",
+                                         "requires-review", "restored") else "other"),
             "verified_receipt":
                 "pkg-update=verified-installed-and-restored" in replaced.stdout,
             "after_status_rc": status_after.returncode,
-            "old_epoch_retired":
-                (EPOCHS / old_id / "retired.json").is_file(),
+            "old_epoch_retired": retired_verified,
+            "original_terminal_receipt_schema": old_schema,
             "journal_committed": successor.get("phase") == "committed",
             "generation_changed": new_id != old_id,
             # Ordinary common boot reuses the committed ID. Only a stopped
@@ -185,7 +290,10 @@ def native_running_reinstall(archive, target, candidate_sha):
             evidence["no_restart_marker"])
         if observer_required:
             checks = (checks and evidence["old_epoch_retired"] and
-                      evidence["successor_epoch_exists"])
+                      evidence["successor_epoch_exists"] and
+                      old_schema == new_schema and
+                      (len(old_learning) >= 1 and len(new_learning) >= 1
+                       if old_schema == 3 else True))
         else:
             # LIST has no observer and therefore cannot fabricate an epoch.
             checks = checks and not evidence["successor_epoch_exists"]
@@ -195,23 +303,27 @@ def native_running_reinstall(archive, target, candidate_sha):
 
     check_running_replacement("LIST", observer_required=False)
 
-    # Native user action explicitly turns on AUTO. Unlike LIST, AUTO must
-    # produce a committed P2 observer epoch before pkg replacement.
+    # Native user action explicitly turns on AUTO. Unlike LIST, AUTO now
+    # must create a per-profile schema3 epoch, not the old global observer.
     auto_apply = run(["/usr/local/sbin/configctl", "zapret", "shared_apply",
                       "strategies", old_bridge.request("auto")], timeout=240)
     auto_state = json.loads(JOURNAL.read_text())
     auto_id = auto_state.get("detail", {}).get("id", "")
     auto_epoch = (EPOCHS / auto_id / "epoch.json").is_file()
+    auto_schema, auto_learning = original_auto_generation(auto_id, True)
     print("NATIVE_PROTECTED_AUTO_PREFLIGHT=" + json.dumps({
         "configctl_rc": auto_apply.returncode,
         "native_applied_receipt": "applied-id=" in auto_apply.stdout,
         "journal_committed": auto_state.get("phase") == "committed",
         "native_service_running": run([str(SERVICE), "status"]).returncode == 0,
         "observer_epoch_present": auto_epoch,
+        "native_schema": auto_schema,
+        "learning_profiles": len(auto_learning),
     }, sort_keys=True), flush=True)
     need(auto_apply.returncode == 0 and
          "applied-id=" in auto_apply.stdout and
          auto_state.get("phase") == "committed" and auto_epoch and
+         auto_schema == 3 and len(auto_learning) >= 1 and
          run([str(SERVICE), "status"]).returncode == 0,
          "NATIVE_AUTO_SHARED_APPLY_NOT_COMMITTED")
     check_running_replacement("AUTO", observer_required=True)
@@ -248,10 +360,30 @@ def interrupted_prepare_diagnostic(prepare, old_id, config_before):
         "active_record_exists": ACTIVE.is_file() and not ACTIVE.is_symlink(),
         "restart_marker_exists": MARKER.is_file(),
         "status_rc": status,
-        "retired_epoch_exists": (EPOCHS / old_id / "retired.json").is_file(),
+        "retired_epoch_exists": (
+            (EPOCHS / old_id / "retired.json").is_file() or
+            (EPOCHS / old_id / "learning-retirement" / "ready.json").is_file()
+        ),
         "old_config_unchanged": CONFIG.is_file() and sha(CONFIG) == config_before,
         "owner_appliance_modified": False,
     }
+
+
+def read_pid_if_present(path: Path) -> str:
+    """Read one PID without following symlinks; a missing file is evidence."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return "missing"
+    try:
+        with os.fdopen(fd, "rb") as source:
+            info = os.fstat(source.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > 64:
+                return "missing"
+            value = source.read(65).decode("ascii").strip().split()
+        return value[0] if len(value) == 1 and value[0].isdecimal() else "missing"
+    except (OSError, UnicodeError):
+        return "missing"
 
 
 def native_interrupted_handoff(archive, version, digest):
@@ -274,6 +406,8 @@ def native_interrupted_handoff(archive, version, digest):
          (EPOCHS / old_id / "epoch.json").is_file() and
          run([str(SERVICE), "status"]).returncode == 0,
          "INTERRUPT_PREDECESSOR_AUTO_NOT_RUNNING")
+    old_schema, old_learning = original_auto_generation(old_id, True)
+    need(old_schema == 3, "INTERRUPT_PREDECESSOR_NOT_NATIVE_SCHEMA3")
     before_config = sha(CONFIG)
     old_pid = Path("/var/run/dvtws2.pid").read_text().strip().split()[0]
     need(old_pid.isdecimal(), "INTERRUPT_PREDECESSOR_PID_INVALID")
@@ -349,13 +483,31 @@ def native_interrupted_handoff(archive, version, digest):
                  timeout=150)
     now = json.loads(JOURNAL.read_text())
     new_id = now.get("detail", {}).get("id", "")
-    pid = Path("/var/run/dvtws2.pid").read_text().strip().split()[0]
+    # A refused/uncertain finish may leave no PID file. Capture its original
+    # refusal BEFORE the mandatory fail-closed assertion, not a FileNotFound
+    # exception that masks the actual protected-restore failure.
+    pid = read_pid_if_present(Path("/var/run/dvtws2.pid"))
+    finish_guard = re.search(
+        r"(?m)^shared-apply-guard=(activate|activated-journal|activated-bundle|"
+        r"activated-probe|config-save|epoch-journal|saved-readback|saved-probe|"
+        r"ipfw-commit|committed-probe|epoch-schema|epoch-dispatch|"
+        r"epoch-attest|epoch-receipt)$", finish.stderr)
+    phase = now.get("phase")
     result = {
         "schema": 1,
         "exact_native_pkg": replace.returncode == 0,
+        "finish_guard": finish_guard.group(1) if finish_guard else "unknown",
+        "finish_boot_refused": "pkg-update-finish-failed=boot" in finish.stderr,
+        "pidfile_state": "present" if pid.isdecimal() else "missing",
+        "shared_journal_phase": phase if phase in (
+            "committed", "prepared", "activating", "activated",
+            "config-saved", "epoch-finalizing", "requires-review",
+            "restored") else "other",
         "finish_rc": finish.returncode,
         "final_receipt": "zapret-pkg-update-committed=1" in finish.stdout,
-        "original_epoch_retired": (EPOCHS / old_id / "retired.json").is_file(),
+        "original_epoch_retired": verified_old_auto_retirement(
+            old_id, old_schema, old_learning),
+        "original_epoch_schema": old_schema,
         "successor_epoch_committed":
             now.get("phase") == "committed" and new_id != old_id and
             (EPOCHS / new_id / "epoch.json").is_file(),
@@ -401,6 +553,8 @@ def native_interrupt_during_postinstall(archive, version, digest):
          (EPOCHS / old_id / "epoch.json").is_file() and
          run([str(SERVICE), "status"]).returncode == 0,
          "ABORT_PREDECESSOR_NOT_VERIFIED_RUNNING_AUTO")
+    old_schema, old_learning = original_auto_generation(old_id, True)
+    need(old_schema == 3, "ABORT_PREDECESSOR_NOT_NATIVE_SCHEMA3")
     previous_config = sha(CONFIG)
     stage, stage_sha, stage_version = product.stage_archive(archive)
     need(stage_sha == digest and stage_version == version,
@@ -409,7 +563,7 @@ def native_interrupt_during_postinstall(archive, version, digest):
                     str(stage), stage_sha, stage_version], timeout=150)
     need(prepared.returncode == 0 and
          "zapret-pkg-update-prepared=1" in prepared.stdout and
-         (EPOCHS / old_id / "retired.json").is_file() and
+         verified_old_auto_retirement(old_id, old_schema, old_learning) and
          run([str(SERVICE), "status"]).returncode == 1 and
          MARKER.is_file() and ACTIVE.is_file(),
          "ABORT_REAL_PREPARE_NOT_COMMITTED_STOPPED")
@@ -471,7 +625,7 @@ def native_interrupt_during_postinstall(archive, version, digest):
     need(all(rc == 69 for rc in denied.values()) and
          run([str(SERVICE), "status"]).returncode == 1 and
          sha(ACTIVE) == before_record and
-         (EPOCHS / old_id / "retired.json").is_file() and
+         verified_old_auto_retirement(old_id, old_schema, old_learning) and
          sha(CONFIG) == previous_config,
          "ABORT_UNAUTHORISED_START_OR_FINISH")
     print("NATIVE_PROTECTED_KILLED_IN_POSTINSTALL=" + json.dumps({
@@ -490,6 +644,55 @@ def native_interrupt_during_postinstall(archive, version, digest):
 
 
 
+# Native pkg may be SIGKILLed after unlinking one *required* .sh module.
+# The original installed service then exits 1 before dispatch (fail-closed),
+# not 69 from its intact lifecycle gate. Admit only a physically absent,
+# exact built-in module with the original fixed pre-dispatch stderr.
+_ORIGINAL_SERVICE_MODULES = frozenset((
+    "common",
+    "config",
+    "parser",
+    "registry",
+    "storage",
+    "targets",
+    "target_mode",
+    "profile_normalizer",
+    "profile_pipeline",
+    "exclude",
+    "blobs",
+    "ports",
+    "firewall",
+    "generator",
+    "validator",
+    "atomic",
+    "stage",
+    "launcher",
+    "supervisor",
+    "orchestrator",
+    "apply_runtime",
+))
+
+
+def classify_native_interrupted_refusal(result, service=SERVICE):
+    if result.returncode == 69:
+        return "guard-69"
+    if result.returncode != 1 or result.stdout:
+        return "unqualified"
+    prefix = "ERROR: required backend module is missing: "
+    if (not result.stderr.startswith(prefix) or
+            not result.stderr.endswith("\n") or
+            result.stderr.count("\n") != 1):
+        return "unqualified"
+    path = Path(result.stderr[len(prefix):-1])
+    module = path.name
+    if (not module.endswith(".sh") or
+            module[:-3] not in _ORIGINAL_SERVICE_MODULES or
+            path != service.parent / "backend" / module or
+            path.exists() or path.is_symlink()):
+        return "unqualified"
+    return "missing-required-module-before-dispatch"
+
+
 def native_partial_payload_interruption(archive, target, digest):
     """Genuine partial file extraction (test guest only), never a restore path."""
     fixture = original_fixture("stage5-native-pkg-midextract.py", "real_pkg_extraction")
@@ -503,17 +706,58 @@ def native_partial_payload_interruption(archive, target, digest):
          (EPOCHS / old_id / "epoch.json").is_file() and
          run([str(SERVICE), "status"]).returncode == 0,
          "MIDEXTRACT_REQUIRES_REAL_RUNNING_AUTO")
+    old_schema, old_learning = original_auto_generation(old_id, True)
+    need(old_schema == 3, "MIDEXTRACT_PREDECESSOR_NOT_NATIVE_SCHEMA3")
     saved_config = sha(CONFIG)
     stage, stage_sha, stage_ver = product.stage_archive(archive)
     need(stage_sha == digest and stage_ver == target,
          "MIDEXTRACT_STAGED_ARCHIVE_DRIFT")
     prepared = run([str(SERVICE), "pkg-update-prepare", str(stage),
                     stage_sha, stage_ver], timeout=150)
-    need(prepared.returncode == 0 and
-         "zapret-pkg-update-prepared=1" in prepared.stdout and
-         ACTIVE.is_file() and MARKER.is_file() and
-         (EPOCHS / old_id / "retired.json").is_file() and
-         run([str(SERVICE), "status"]).returncode == 1,
+    prepared_receipt = "zapret-pkg-update-prepared=1" in prepared.stdout
+    prepared_state = None
+    if ACTIVE.is_file() and not ACTIVE.is_symlink():
+        try:
+            prepared_state = json.loads(ACTIVE.read_bytes()).get("phase")
+        except (OSError, ValueError, TypeError):
+            prepared_state = "unreadable"
+    prepared_status_rc = run([str(SERVICE), "status"]).returncode
+    prepared_retired = verified_old_auto_retirement(
+        old_id, old_schema, old_learning)
+    retire_reason = re.search(
+        r"auto-detect-retire-refused=([A-Za-z][A-Za-z0-9_]*)",
+        prepared.stderr)
+    terminal = EPOCHS / old_id / "learning-retirement"
+    archived_names = [Path(row["auto_inbox"]).name for row in old_learning]
+    archived_names.append("debug.log")
+    print("NATIVE_PROTECTED_MIDEXTRACT_PREPARE_EVIDENCE=" + json.dumps({
+        "prepare_rc": prepared.returncode,
+        "prepare_receipt": prepared_receipt,
+        "record_phase": prepared_state,
+        "restart_marker_exists": MARKER.is_file(),
+        "old_schema": old_schema,
+        "old_learning_N_count": len(old_learning),
+        "old_terminal_retired": prepared_retired,
+        "retire_refusal_type": retire_reason.group(1) if retire_reason else "none",
+        "intent_exists": (terminal / "intent.json").is_file(),
+        "ready_exists": (terminal / "ready.json").is_file(),
+        "archived_source_count": sum(
+            (terminal / ("old-" + name)).is_file()
+            for name in archived_names),
+        "remaining_native_N_count": sum(
+            (PRODUCERS / name).is_file()
+            for name in archived_names[:-1]),
+        "debug_present": (PRODUCERS / "debug.log").is_file(),
+        "service_status_rc": prepared_status_rc,
+        "config_unchanged": sha(CONFIG) == saved_config,
+        "old_pid_present": Path("/var/run/dvtws2.pid").exists(),
+        "prepare_stderr_class": (
+            "error" if "ERROR:" in prepared.stderr else
+            "refused" if "REFUSED" in prepared.stderr else "none"),
+    }, sort_keys=True), flush=True)
+    need(prepared.returncode == 0 and prepared_receipt and
+         ACTIVE.is_file() and MARKER.is_file() and prepared_retired and
+         prepared_status_rc == 1,
          "MIDEXTRACT_PREPARE_DID_NOT_STOP_OWNER")
     record_before = sha(ACTIVE)
     need(json.loads(ACTIVE.read_text()).get("phase") == "prepared",
@@ -525,7 +769,7 @@ def native_partial_payload_interruption(archive, target, digest):
     need(restored > 0 and still_marked + missing > 0 and foreign == 0 and
          ACTIVE.is_file() and sha(ACTIVE) == record_before and
          MARKER.is_file() and sha(CONFIG) == saved_config and
-         (EPOCHS / old_id / "retired.json").is_file() and
+         verified_old_auto_retirement(old_id, old_schema, old_learning) and
          sha(stage) == digest,
          "MIDEXTRACT_GUARD_OR_PRESERVATION_LOST")
     # Before executing an installed command, independently require its source
@@ -534,15 +778,38 @@ def native_partial_payload_interruption(archive, target, digest):
          sha(SERVICE) == sha(ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"),
          "MIDEXTRACT_INSTALLED_SERVICE_UNTRUSTED")
     status = run([str(SERVICE), "status"], timeout=45)
-    denied = {
-        "start": run([str(SERVICE), "start"], timeout=45).returncode,
-        "apply": run([str(SERVICE), "shared-apply-run"], timeout=45).returncode,
-        "repeat": run([str(SERVICE), "pkg-update", str(archive)], timeout=45).returncode,
+    denied_processes = {
+        "start": run([str(SERVICE), "start"], timeout=45),
+        "apply": run([str(SERVICE), "shared-apply-run"], timeout=45),
+        "repeat": run([str(SERVICE), "pkg-update", str(archive)], timeout=45),
         "finish": run([str(SERVICE), "pkg-update-finish",
-                       stage_sha, stage_ver], timeout=45).returncode,
+                       stage_sha, stage_ver], timeout=45),
     }
-    need(status.returncode == 1 and all(x == 69 for x in denied.values()) and
-         sha(ACTIVE) == record_before and sha(CONFIG) == saved_config,
+    denied = {key: value.returncode for key, value in denied_processes.items()}
+    classes = {key: classify_native_interrupted_refusal(value)
+               for key, value in denied_processes.items()}
+    # Exact failure taxonomy is required before changing the protected
+    # post-extract guard. Never dump Config, private files, or service stdout.
+    print("NATIVE_PROTECTED_MIDEXTRACT_REFUSAL_EVIDENCE=" + json.dumps({
+        "status_rc": status.returncode,
+        "denied_rc": denied,
+        "denied_class": classes,
+        "record_unchanged": ACTIVE.is_file() and sha(ACTIVE) == record_before,
+        "record_phase": (json.loads(ACTIVE.read_text()).get("phase")
+                         if ACTIVE.is_file() else "missing"),
+        "config_unchanged": sha(CONFIG) == saved_config,
+        "pkgdb_version": installed_version() if run(
+            ["pkg", "query", "%v", NAME]).returncode == 0 else "unavailable",
+        "service_bytes_qualified": sha(SERVICE) == sha(
+            ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"),
+    }, sort_keys=True), flush=True)
+    need(status.returncode == 1 and
+         all(kind in ("guard-69", "missing-required-module-before-dispatch")
+             for kind in classes.values()) and
+         sha(ACTIVE) == record_before and sha(CONFIG) == saved_config and
+         ACTIVE.is_file() and MARKER.is_file() and
+         verified_old_auto_retirement(old_id, old_schema, old_learning) and
+         not Path("/var/run/dvtws2.pid").exists(),
          "MIDEXTRACT_UNAUTHORIZED_LIFECYCLE_AFTER_KILL")
     print("NATIVE_PROTECTED_MIDEXTRACT=" + json.dumps({
         "schema": 1, "actual_pkg_killed": True,

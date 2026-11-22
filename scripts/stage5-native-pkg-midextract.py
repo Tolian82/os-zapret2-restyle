@@ -85,6 +85,46 @@ def qualified_postkill_partial(before, after):
             any(row != "before" for row in after))
 
 
+def native_pkg_group_states(pgid):
+    """Bounded FreeBSD kernel process-group state, never process argv/logs.
+
+    Truss forks the real pkg child. Waiting only for the truss parent or
+    for two stable filesystem snapshots cannot prove the *child* stopped:
+    the latter may still unlink a marked file after the captured snapshot.
+    """
+    result = subprocess.run(
+        ["/bin/ps", "-ax", "-o", "pid=", "-o", "pgid=", "-o", "stat="],
+        capture_output=True, text=True, timeout=5, check=False)
+    if result.returncode != 0 or len(result.stdout) > 256 * 1024:
+        return None
+    states = []
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) != 3:
+            return None
+        try:
+            group = int(fields[1])
+        except ValueError:
+            return None
+        if group == pgid:
+            states.append(fields[2])
+    return tuple(states)
+
+
+def native_pkg_group_frozen(pgid):
+    states = native_pkg_group_states(pgid)
+    return bool(states) and all(state.startswith(("T", "Z"))
+                                for state in states)
+
+
+def native_pkg_group_exited(pgid):
+    # Zombies have already lost their file descriptors and cannot unlink
+    # anything. A failed or truncated ps snapshot is NOT proof of exit.
+    states = native_pkg_group_states(pgid)
+    return states is not None and all(state.startswith("Z")
+                                      for state in states)
+
+
 def select_native_witnesses(root, stage, run, need):
     probe = run(["/usr/bin/tar", "-xOf", str(stage), "+MANIFEST"], timeout=30)
     need(probe.returncode == 0 and len(probe.stdout) < 512 * 1024,
@@ -186,12 +226,18 @@ def interrupt_real_native_pkg_midextract(stage, witnesses, need):
                         # to remain unchanged across consecutive observations.
                         stable = None
                         captured_labels = None
-                        for _ in range(8):
+                        for _ in range(40):
                             time.sleep(0.03)
+                            # Both traced pkg AND its truss parent must
+                            # actually report stopped kernel state before
+                            # the pre-kill file image may be sealed.
+                            if not native_pkg_group_frozen(proc.pid):
+                                continue
                             before_labels = witness_labels(witnesses)
                             time.sleep(0.03)
                             after_labels = witness_labels(witnesses)
-                            if (before_labels == after_labels and
+                            if (native_pkg_group_frozen(proc.pid) and
+                                    before_labels == after_labels and
                                     "foreign" not in after_labels and
                                     "unknown" not in after_labels):
                                 captured_labels = after_labels
@@ -214,6 +260,15 @@ def interrupt_real_native_pkg_midextract(stage, witnesses, need):
                 proc.wait(timeout=20)
             need(proc.returncode == -signal.SIGKILL,
                  "MIDEXTRACT_PKG_PROCESS_NOT_KILLED")
+            # The traced child can outlive its parent. Do not call a file
+            # state a post-SIGKILL result until no live original pkg-group
+            # process can still extract/unlink a witness.
+            for _ in range(100):
+                if native_pkg_group_exited(proc.pid):
+                    break
+                time.sleep(0.05)
+            need(native_pkg_group_exited(proc.pid),
+                 "MIDEXTRACT_ORIGINAL_PKG_CHILD_SURVIVED_KILL")
             after_kill = witness_state(witnesses)
             after_labels = witness_labels(witnesses)
             if postinstall.exists() or after_kill != captured or after_labels != captured_labels:

@@ -39,6 +39,18 @@ PENDING = re.compile(r"[0-9a-f]{32}-[0-9a-f]{32}\.txt\Z")
 STEP = re.compile(r"[0-9]{8}\Z")
 
 
+# Per-ACK original schema3 debug cut. No ad-hoc generation or worker:
+# intent is durable before link/replace; old inode retires only after P2b.
+DEBUG_CUT_INTENT = "debug-cut-intent.json"
+DEBUG_CUT_COMPLETE = "debug-cut-complete.json"
+DEBUG_CUT_RETIRE = "debug-cut-retire.json"
+DEBUG_CUT_ABORT = "debug-cut-abort.json"
+DEBUG_CUT_ROLLBACK = "debug-cut-rollback.json"
+DEBUG_CUT_ROLLBACK_NEW = "debug-cut-rollback-new.log"
+DEBUG_CUT_FRESH = "debug-cut-fresh.log"
+DEBUG_CUT_OLD = "debug-cut-retained.log"
+
+
 class CursorChainRefused(RuntimeError):
     """An ambiguous historical cursor or pending is never auto-consumed."""
 
@@ -291,6 +303,9 @@ class CursorChain:
                 _load(slot, self.receipts.uid)
                 slot.unlink()
                 continue
+            if slot.name == "anchor-native":
+                self._erase_learning_records(slot)
+                continue
             if not STEP.fullmatch(slot.name):
                 raise CursorChainRefused("foreign_old_cursor_entry")
             _directory(slot, self.receipts.uid)
@@ -303,7 +318,15 @@ class CursorChain:
                         self._check_old_file(child)
                         child.unlink()
                     entry.rmdir()
-                elif entry.name in {"intent.json", "ack.json", "recovery.json"}:
+                elif entry.name in {"intent.json", "ack.json", "recovery.json",
+                                       DEBUG_CUT_INTENT, DEBUG_CUT_COMPLETE,
+                                       DEBUG_CUT_RETIRE, DEBUG_CUT_ABORT,
+                                       DEBUG_CUT_ROLLBACK}:
+                    self._check_old_file(entry)
+                    entry.unlink()
+                elif entry.name in {"native", "progress"}:
+                    self._erase_learning_records(entry)
+                elif re.fullmatch(r"(?:rebind|delete)-[0-9]{3}\.json", entry.name):
                     self._check_old_file(entry)
                     entry.unlink()
                 else:
@@ -312,6 +335,15 @@ class CursorChain:
         _sync(path)
         path.rmdir()
         _sync(path.parent)
+
+    def _erase_learning_records(self, path):
+        _directory(path, self.receipts.uid)
+        for child in path.iterdir():
+            if not re.fullmatch(r"[0-9]{3}\.json", child.name):
+                raise CursorChainRefused("foreign_old_learning_record")
+            self._check_old_file(child)
+            child.unlink()
+        path.rmdir()
 
     def _check_old_file(self, path: Path) -> None:
         item = path.lstat()
@@ -356,7 +388,8 @@ class CursorChain:
         _sync(prepared)
 
     def ensure_capacity(self, proof: GenerationProof, *,
-                        attest: Callable = attest_running_generation) -> None:
+                        attest: Callable = attest_running_generation,
+                        workspace: Path | None = None) -> None:
         """Crash-recover the same owner chain, then bound 512 fully ACKed slots.
 
         Original queue FD and running generation stay unchanged. First
@@ -364,6 +397,9 @@ class CursorChain:
         the old tree away, rename the successor into place, and only then
         unlink old ACKed receipts. Each interrupted rename is recoverable.
         """
+        from auto_detect_owner import LearningGenerationProof
+        if isinstance(proof, LearningGenerationProof):
+            return self._ensure_learning_capacity(proof, workspace, attest=attest)
         if (not self.queue._held or not callable(attest) or attest() != proof):
             raise CursorChainRefused("original_rollover_queue_owner_required")
         root, epoch, epoch_raw = self._root(proof, create=False)
@@ -901,3 +937,1571 @@ class CursorChain:
                 DestinationRefused, GenerationRefused, OSError, ValueError,
                 TypeError, KeyError, AttributeError) as exc:
             raise CursorChainRefused("original_cursor_ack_evidence_unavailable") from exc
+
+    def prepare_learning_first_slot(
+            self, proof, workspace: Path, *,
+            attest, inspect=probe_pending_fd,
+    ) -> dict:
+        """Source-only original schema3 WAL seed: one immutable N-file slot.
+
+        Store the FIRST authenticated N-native/debug input in the original
+        generation's cursor-chain-v2/00000000, under the same existing P2a
+        FD and original FD9 owner. It is deliberately NOT an ACK, a second
+        queue or a destination writer. An interrupted or different source
+        cannot overwrite the first durable intent. Subsequent cursor slots
+        and destination commits require a separate qualified continuation.
+        """
+        from auto_detect_owner import LearningGenerationProof
+        from auto_detect_original_v2_source import (
+            attest_original_learning_drained_candidate_locked,
+        )
+        from auto_detect_epoch_receipts import _read
+        if (not isinstance(proof, LearningGenerationProof) or
+                not isinstance(workspace, Path) or not workspace.is_absolute() or
+                workspace.name != proof.generation or not self.queue._held or
+                not callable(attest) or not callable(inspect) or
+                attest() != proof):
+            raise CursorChainRefused("learning_first_slot_original_owner_required")
+        try:
+            self.queue._verify()
+            if self.queue.segments():
+                raise CursorChainRefused("learning_first_slot_existing_pending")
+            # A prior WRITE-ONCE intent wins even if dvtws2 has added
+            # more rows in the meantime. Original FD9/P2b must prove
+            # the exact stored native+debug PREFIX, never recreate intent
+            # from a newly grown producer tail. Future rows stay live and
+            # retained for the next cursor slot, not this transaction.
+            existing_root = (self.receipts.root / proof.generation / CHAIN)
+            if existing_root.exists() or existing_root.is_symlink():
+                _directory(existing_root, self.receipts.uid)
+                if set(os.listdir(existing_root)) != {"00000000"}:
+                    raise CursorChainRefused("learning_first_slot_foreign_chain_state")
+                existing_slot = existing_root / "00000000"
+                _directory(existing_slot, self.receipts.uid)
+                entries = set(os.listdir(existing_slot))
+                if "intent.json" in entries:
+                    if not entries.issubset(
+                            {"intent.json", "destination", "native-rebind"}):
+                        # The separate native-rebind subfolder is part of
+                        # this SAME original first-slot cursor journal, not
+                        # a new queue or independent writer. Its manifest
+                        # is validated by the original Config/FD9 model.
+                        raise CursorChainRefused("learning_first_slot_foreign_artifacts")
+                    # Once ANY post-rename physical inode seed exists,
+                    # the original first-slot epoch cannot be replayed
+                    # even if its old live filename later reappears.
+                    # Only a future original FORWARD cursor / retained
+                    # P2b+ACK transition may consume those suffixes.
+                    # An empty interrupted observed/ directory also
+                    # refuses: no implicit downgrade to first-slot replay.
+                    if "native-rebind" in entries:
+                        rebind = existing_slot / "native-rebind"
+                        _directory(rebind, self.receipts.uid)
+                        observed = rebind / "observed"
+                        if observed.exists() or observed.is_symlink():
+                            _directory(observed, self.receipts.uid)
+                            raise CursorChainRefused(
+                                "learning_first_slot_post_inode_seed_requires_forward_cursor")
+                    source_raw = _read(existing_slot / "intent.json",
+                                       self.receipts.uid)
+                    source = json.loads(source_raw)
+                    from auto_detect_original_v2_source import (
+                        attest_original_learning_sealed_prefix_locked,
+                    )
+                    prefix = attest_original_learning_sealed_prefix_locked(
+                        self.queue, self.receipts, proof, workspace, source,
+                        attest=attest, inspect=inspect)
+                    if (prefix["source_intent_sha256"] != _digest(source_raw)
+                            or not prefix["p2b_drained"] or
+                            prefix["commit_authorized"] is not False or
+                            prefix["ack_authorized"] is not False):
+                        raise CursorChainRefused("learning_first_slot_prefix_not_original")
+                    return {
+                        "slot": existing_slot,
+                        "intent_sha256": _digest(source_raw),
+                        "generation": proof.generation, "sequence": 0,
+                        "commit_authorized": False,
+                        "cleanup_authorized": False,
+                        "ack_authorized": False,
+                    }
+                if entries:
+                    raise CursorChainRefused("learning_first_slot_incomplete_prior")
+                # Empty slot is a recoverable interrupted original mkdir.
+                # It still requires the FULL new P2b/source cut below.
+            candidate = attest_original_learning_drained_candidate_locked(
+                self.queue, self.receipts, proof, workspace,
+                attest=attest, inspect=inspect)
+            folder, seed, _ = self.receipts._learning_pretraffic(
+                proof, self.queue, workspace)
+            epoch_raw = _read(folder / "epoch.json", self.receipts.uid)
+            epoch = json.loads(epoch_raw)
+            if (epoch.get("schema") != 3 or
+                    epoch.get("generation") != proof.generation or
+                    epoch.get("owner_pid") != proof.owner.pid or
+                    epoch.get("owner_start") != proof.owner.started or
+                    epoch.get("learning") != seed["learning"] or
+                    not candidate["p2b_drained"] or
+                    candidate["commit_authorized"] is not False or
+                    candidate["ack_authorized"] is not False):
+                raise CursorChainRefused("learning_first_slot_epoch_not_original")
+            native = []
+            for number, hostlist, path in proof.learning:
+                after = candidate["native_cursors"][path]
+                seeded = next(
+                    (r for r in seed["learning"] if r["path"] == path),
+                    None)
+                if (seeded is None or
+                        (seeded["native_number"], seeded["hostlist"]) !=
+                        (number, hostlist) or
+                        after.generation != proof.generation or
+                        after.native_number != number or
+                        after.hostlist != hostlist or after.path != path or
+                        (after.device, after.inode) !=
+                        (seeded["device"], seeded["inode"]) or
+                        seeded["offset"] != 0 or
+                        seeded["prefix_sha256"] != EMPTY_HASH or
+                        after.offset < 0 or
+                        not HEX64.fullmatch(after.prefix_sha256)):
+                    raise CursorChainRefused("learning_first_slot_native_cursor_not_zero")
+                native.append({
+                    "native_number": number, "hostlist": hostlist,
+                    "path": path, "device": after.device, "inode": after.inode,
+                    "start_offset": 0, "start_sha256": EMPTY_HASH,
+                    "end_offset": after.offset,
+                    "end_sha256": after.prefix_sha256,
+                })
+            observations = candidate["observations"]
+            if (not isinstance(observations, list) or not observations or
+                    len(observations) > 128 or
+                    any(not isinstance(row, dict) or
+                        set(row) != {"hostname", "hostlist"} or
+                        row["hostlist"] not in {name for _, name, _ in proof.learning}
+                        for row in observations)):
+                raise CursorChainRefused("learning_first_slot_unbounded_observations")
+            record = {
+                "schema": 3, "kind": "original-learning-cursor-prepared",
+                "generation": proof.generation, "sequence": 0,
+                "operation_id": proof.operation_id,
+                "owner_candidate_sha256": proof.owner_candidate_sha256,
+                "owner_pid": proof.owner.pid,
+                "owner_start": proof.owner.started,
+                "final_args_sha256": proof.final_args_sha256,
+                "native_map_sha256": proof.native_map_sha256,
+                "epoch_sha256": _digest(epoch_raw),
+                "previous_ack_sha256": _digest(epoch_raw),
+                "debug_device": seed["files"][1]["device"],
+                "debug_inode": seed["files"][1]["inode"],
+                "debug_start_offset": 0,
+                "debug_start_sha256": EMPTY_HASH,
+                "debug_end_offset": candidate["debug_end_offset"],
+                "debug_end_sha256": candidate["debug_end_sha256"],
+                "native": native, "observations": observations,
+                "ack_authorized": False,
+            }
+            encoded = _canonical(record)  # bounded original receipt writer
+            # Recheck the entire N-source window BEFORE creating even an
+            # empty durable slot. A native append racing this cut must
+            # never strand a new root-private uncommitted intent directory.
+            second = attest_original_learning_drained_candidate_locked(
+                self.queue, self.receipts, proof, workspace,
+                attest=attest, inspect=inspect)
+            if second != candidate or attest() != proof:
+                raise CursorChainRefused("learning_first_slot_changed_during_prepare")
+            root = folder / CHAIN
+            if root.exists() or root.is_symlink():
+                _directory(root, self.receipts.uid)
+                if set(os.listdir(root)) != {"00000000"}:
+                    raise CursorChainRefused("learning_first_slot_foreign_chain_state")
+                slot = root / "00000000"
+                _directory(slot, self.receipts.uid)
+                names = set(os.listdir(slot))
+                if names not in (set(), {"intent.json"},
+                                 {"intent.json", "destination"}):
+                    raise CursorChainRefused("learning_first_slot_foreign_artifacts")
+                if "intent.json" in names and (
+                        _read(slot / "intent.json", self.receipts.uid) != encoded):
+                    raise CursorChainRefused("learning_first_slot_prior_source_conflict")
+                if "destination" in names:
+                    journal = slot / "destination"
+                    _directory(journal, self.receipts.uid)
+                    files = set(os.listdir(journal))
+                    if (not files.issubset({"plan.json", "checkpoint.json"}) or
+                            "checkpoint.json" in files and
+                            "plan.json" not in files):
+                        raise CursorChainRefused("learning_first_slot_foreign_plan")
+                    # The original Config/P1 owner, not the source reader,
+                    # validates the full existing plan and checkpoint.
+            else:
+                # This is the ORIGINAL generation cursor-chain location,
+                # not an independent WAL, SQLite or second queue.
+                if attest() != proof:
+                    raise CursorChainRefused("learning_first_slot_owner_changed_before_seed")
+                root.mkdir(mode=0o700)
+                _sync(folder)
+                slot = root / "00000000"
+                slot.mkdir(mode=0o700)
+                _sync(root)
+            # A crash after mkdir but before hardlinking the intent leaves
+            # an exact *empty* slot; no previous durable source exists.
+            # It may seal this same fully re-attested first candidate.
+            _write_once(slot, "intent.json", encoded, self.receipts.uid)
+            if _read(slot / "intent.json", self.receipts.uid) != encoded:
+                raise CursorChainRefused("learning_first_slot_not_durable")
+            return {
+                "slot": slot, "intent_sha256": _digest(encoded),
+                "generation": proof.generation, "sequence": 0,
+                "commit_authorized": False, "cleanup_authorized": False,
+                "ack_authorized": False,
+            }
+        except CursorChainRefused:
+            raise
+        except (ReceiptRefused, QueueSafetyError, DebugWindowRefused,
+                DestinationRefused, GenerationRefused, OSError, ValueError,
+                TypeError, KeyError, AttributeError, RuntimeError) as exc:
+            raise CursorChainRefused("original_learning_first_slot_refused") from exc
+
+    # Schema3 uses these same source/destination/ACK folders from the very
+    # first physical event. The historic three-slot fixtures are not a
+    # prerequisite for an ordinary, independent N-inbox minute.
+    def learning_epoch(self, proof, workspace):
+        from auto_detect_owner import LearningGenerationProof
+        if (not isinstance(proof, LearningGenerationProof) or not self.queue._held):
+            raise CursorChainRefused("learning_cycle_original_queue_required")
+        folder, seed, seed_raw = self.receipts._learning_pretraffic(
+            proof, self.queue, workspace)
+        epoch, encoded = _load(folder / "epoch.json", self.receipts.uid)
+        if (encoded != _canonical(epoch) or epoch.get("schema") != 3 or
+                epoch.get("kind") != "original-native-learning-epoch" or
+                epoch.get("generation") != proof.generation or
+                epoch.get("operation_id") != proof.operation_id or
+                epoch.get("owner_pid") != proof.owner.pid or
+                epoch.get("owner_start") != proof.owner.started or
+                epoch.get("owner_candidate_sha256") != proof.owner_candidate_sha256 or
+                epoch.get("native_map_sha256") != proof.native_map_sha256 or
+                epoch.get("final_args_sha256") != proof.final_args_sha256 or
+                epoch.get("pretraffic_sha256") != _digest(seed_raw) or
+                epoch.get("learning") != seed["learning"] or
+                epoch.get("files") != seed["files"] or
+                epoch.get("ack_authorized") is not False):
+            raise CursorChainRefused("learning_cycle_original_epoch_changed")
+        return folder, seed, encoded
+
+    def learning_tip(self, proof, workspace, *, allow_unfinished_debug_cut=False):
+        folder, seed, epoch_raw = self.learning_epoch(proof, workspace)
+        root = folder / CHAIN
+        state = {}
+        for n, label, path in proof.learning:
+            zero = next(row for row in seed["learning"] if row["native_number"] == n)
+            state[n] = dict(native_number=n, hostlist=label, path=path, streams=[dict(
+                path=path, device=zero["device"], inode=zero["inode"],
+                offset=0, prefix_sha256=EMPTY_HASH)])
+        debug = dict(path=str(self.queue.root / "debug.log"),
+                     device=seed["files"][1]["device"],
+                     inode=seed["files"][1]["inode"], offset=0,
+                     prefix_sha256=EMPTY_HASH)
+        result = dict(root=root, sequence=0, cycle=0, state=state, debug=debug,
+                      previous_ack_sha256=_digest(epoch_raw), slot=None,
+                      intent=None, epoch_sha256=_digest(epoch_raw))
+        if not root.exists() and not root.is_symlink():
+            return result
+        _directory(root, self.receipts.uid)
+        entries = set(os.listdir(root))
+        if ANCHOR in entries:
+            anchor, state = _learning_checked_anchor(root, proof, epoch_raw, self.receipts.uid)
+            result.update(cycle=anchor["cycle"], state=state, debug=anchor["debug"],
+                          previous_ack_sha256=anchor["previous_ack_sha256"])
+            entries -= {ANCHOR, "anchor-native"}
+        if entries - {name for name in entries if STEP.fullmatch(name)}:
+            raise CursorChainRefused("learning_cycle_foreign_chain_entry")
+        for sequence, name in enumerate(sorted(entries)):
+            if name != f"{sequence:08d}" or sequence >= MAX_STEPS:
+                raise CursorChainRefused("learning_cycle_noncontiguous_chain")
+            slot = root / name
+            _directory(slot, self.receipts.uid)
+            if not (slot / "intent.json").exists():
+                if set(os.listdir(slot)) not in (set(), {"native"}):
+                    raise CursorChainRefused("learning_cycle_unsealed_source_has_effects")
+                # Before the aggregate intent exists no destination/native
+                # mutation is permitted. Reclaim only that incomplete
+                # private metadata, then freeze a new physical snapshot.
+                staged = slot / "native"
+                if staged.exists():
+                    _directory(staged, self.receipts.uid)
+                    for child in staged.iterdir():
+                        if not re.fullmatch(r"[0-9]{3}\.json", child.name):
+                            raise CursorChainRefused("learning_cycle_foreign_unsealed_N")
+                        _read(child, self.receipts.uid)
+                        child.unlink()
+                    staged.rmdir()
+                    _sync(slot)
+                result.update(sequence=sequence, slot=slot)
+                if name != max(entries):
+                    raise CursorChainRefused("learning_cycle_gap_before_successor")
+                return result
+            intent, raw = _load(slot / "intent.json", self.receipts.uid)
+            source = learning_cycle_source_fields(slot, intent, self.receipts.uid)
+            native = _learning_native_records(slot / "native", intent,
+                                               self.receipts.uid)
+            if (intent["sequence"] != sequence or intent["cycle"] != result["cycle"] or
+                    intent["epoch_sha256"] != result["epoch_sha256"] or
+                    intent["previous_ack_sha256"] != result["previous_ack_sha256"] or
+                    intent["debug"]["start"] != result["debug"] or
+                    {n: _learning_start(row) for n, row in native.items()} != result["state"]):
+                raise CursorChainRefused("learning_cycle_cursor_predecessor_changed")
+            ack_file = slot / "ack.json"
+            if not ack_file.exists() and not ack_file.is_symlink():
+                if name != max(entries):
+                    raise CursorChainRefused("learning_cycle_successor_before_ack")
+                result.update(sequence=sequence, slot=slot, intent=intent)
+                return result
+            ack, ack_raw = _load(ack_file, self.receipts.uid)
+            cp, cp_raw = learning_cycle_checkpoint(slot, intent, self.receipts.uid)
+            progress = _learning_native_records(slot / "progress", intent,
+                                                 self.receipts.uid, progress=True)
+            expected = dict(schema=3, kind="original-learning-cursor-acked",
+                            generation=proof.generation, sequence=sequence,
+                            cycle=result["cycle"], source_intent_sha256=_digest(raw),
+                            checkpoint_sha256=_digest(cp_raw),
+                            previous_ack_sha256=result["previous_ack_sha256"],
+                            native_sha256=_learning_records_digest(progress),
+                            debug=intent["debug"]["end"], ack_authorized=False)
+            if ack != expected or ack_raw != _canonical(ack):
+                raise CursorChainRefused("learning_cycle_ack_not_original_checkpoint")
+            result.update(sequence=sequence + 1, state=progress,
+                          debug=ack["debug"], previous_ack_sha256=_digest(ack_raw),
+                          slot=None, intent=None)
+            cut = _learning_debug_cut_receipts(
+                slot, proof, result, self.receipts.uid,
+                allow_unsealed=allow_unfinished_debug_cut)
+            if cut is None:
+                if _entry(slot / DEBUG_CUT_INTENT):
+                    if not allow_unfinished_debug_cut or name != max(entries):
+                        raise CursorChainRefused("learning_debug_cut_incomplete_owner_epoch")
+                    result["debug_cut_pending"] = slot
+                    return result
+            elif cut is not False:
+                result["debug"] = cut
+        return result
+
+    def learning_debug_highwater_candidate(self, proof, workspace, *,
+                                           attest, inspect=probe_pending_fd):
+        """Read-only original FD9/P2a proof before a future schema3 debug cut.
+
+        This does NOT replace, truncate, retire, or authorize replacing the
+        debug inode. A physical cut must durably journal its *separate* old
+        and new cursors before os.replace; reusing the schema2 raw-first
+        path would lose native profile attribution. No extra worker exists.
+        """
+        from auto_detect_original_v2_model import _native_rebind_stable_snapshot
+        from auto_detect_owner import LearningGenerationProof
+        import sys
+        if sys.platform.startswith("freebsd"):
+            from voice_ipfw_adapter import require_lifecycle_lock
+            require_lifecycle_lock()  # Same original FD9; no independent worker.
+        if (not isinstance(proof, LearningGenerationProof) or
+                not self.queue._held or not callable(attest) or
+                not callable(inspect) or attest() != proof):
+            raise CursorChainRefused("learning_debug_cut_original_owner_required")
+        self.queue._verify()
+        tip = self.learning_tip(proof, workspace)
+        if tip["slot"] is not None or tip["intent"] is not None:
+            # An unfinished original destination WAL always takes priority.
+            return None
+        if tip["sequence"] == 0:
+            # A zero-cut epoch alone is not proof of a durable postlaunch
+            # source ACK; require an immutable completed original slot.
+            return None
+        expected_pending = {Path(cursor["path"])
+                            for row in tip["state"].values()
+                            for cursor in row["streams"]
+                            if Path(cursor["path"]).parent == self.queue.pending}
+        if set(self.queue.segments()) != expected_pending:
+            raise CursorChainRefused("learning_debug_cut_foreign_pending")
+        debug_cursor = tip["debug"]
+        debug_path = Path(debug_cursor["path"])
+        if debug_path != self.queue.root / "debug.log":
+            raise CursorChainRefused("learning_debug_cut_foreign_debug_path")
+        # The 2-MiB high-water gate is a safe read-only negative shortcut.
+        # Avoid two full all-N filesystem/P2b censuses on every ordinary
+        # idle minute below threshold. Any *actual* cut still performs both
+        # complete independent snapshots and FD/owner proof passes.
+        from auto_detect_queue import _stat_regular
+        highwater = _stat_regular(
+            debug_path, self.receipts.uid, max_size=MAX_DEBUG,
+            writer_gid=self.queue.writer_gid)
+        if highwater.st_size < MAX_DEBUG // 2:
+            return None
+        snapshots = {}
+        # Native appenders ignore the original P2a flock. Independently
+        # verify the exact same full images twice, including P2b all-PID
+        # FD drainage and running original owner before AND after.
+        for _ in range(2):
+            current = {}
+            cursors = [debug_cursor]
+            cursors.extend(cursor for row in tip["state"].values()
+                           for cursor in row["streams"])
+            for cursor in cursors:
+                path = Path(cursor["path"])
+                st, data, identity = _native_rebind_stable_snapshot(
+                    path, self.receipts.uid, self.queue.writer_gid,
+                    allowed_links=(1,))
+                _learning_prefix(cursor, st, data)
+                if cursor["offset"] != len(data):
+                    # A partial debug line or unmatched native append can
+                    # never be suppressed merely to bound diagnostic size.
+                    return None
+                if inspect(path, st.st_dev, st.st_ino, owner=proof.owner,
+                           writer_gid=self.queue.writer_gid) is not FDState.DRAINED:
+                    raise CursorChainRefused("learning_debug_cut_native_fd_busy")
+                current[str(path)] = (identity, _digest(data), len(data))
+            if snapshots and snapshots != current:
+                raise CursorChainRefused("learning_debug_cut_snapshot_raced")
+            snapshots = current
+            if attest() != proof:
+                raise CursorChainRefused("learning_debug_cut_owner_raced")
+        if snapshots[str(debug_path)][2] < MAX_DEBUG // 2:
+            return None
+        if self.learning_tip(proof, workspace) != tip or attest() != proof:
+            raise CursorChainRefused("learning_debug_cut_anchor_changed")
+        return {
+            "schema": 3,
+            "kind": "original-learning-debug-highwater-candidate",
+            "generation": proof.generation,
+            "native_map_sha256": proof.native_map_sha256,
+            "final_args_sha256": proof.final_args_sha256,
+            "cycle": tip["cycle"],
+            "next_sequence": tip["sequence"],
+            "previous_ack_sha256": tip["previous_ack_sha256"],
+            "debug": debug_cursor,
+            "debug_image_sha256": snapshots[str(debug_path)][1],
+            "native_sha256": _learning_records_digest(tip["state"]),
+            "source_fully_acked": True,
+            "p2b_drained": True,
+            "cut_authorized": False,
+            "ack_authorized": False,
+        }
+
+    def rotate_learning_debug_once(self, proof, workspace, *,
+                                   attest, inspect=probe_pending_fd):
+        """One original-FD9/P2a/Config-locked 2-MiB debug inode cut.
+
+        Only fully ACKed diagnostic bytes may be cut; neither dvtws2 nor
+        IPFW is signaled. Before the atomic name replacement, a write-once
+        intent seals the old ACK cursor and already-fsynced new zero inode.
+        After replacement, a second all-PID old-FD scan and immutable
+        retirement receipt must precede physical archive unlink. Recovery
+        reuses this exact intent; a late old-inode append fails CLOSED with
+        the old archive intact rather than dropping native attribution.
+        """
+        from auto_detect_original_v2_model import _native_rebind_stable_snapshot
+        from auto_detect_owner import LearningGenerationProof
+        from auto_detect_queue import _stat_regular
+        import sys
+        if sys.platform.startswith("freebsd"):
+            from voice_ipfw_adapter import require_lifecycle_lock
+            require_lifecycle_lock()
+        if (not isinstance(proof, LearningGenerationProof) or
+                not self.queue._held or self.queue.writer_gid is None or
+                not callable(attest) or not callable(inspect) or
+                attest() != proof):
+            raise CursorChainRefused("learning_debug_cut_original_fd9_required")
+        self.queue._verify()
+        _recover_learning_debug_cut_staged(self.receipts, proof)
+        tip = self.learning_tip(
+            proof, workspace, allow_unfinished_debug_cut=True)
+        if tip["sequence"] == 0 or tip["intent"] is not None:
+            return False
+        last = tip["root"] / f'{tip["sequence"] - 1:08d}'
+        _directory(last, self.receipts.uid)
+        live = self.queue.root / "debug.log"
+        fresh = last / DEBUG_CUT_FRESH
+        archive = last / DEBUG_CUT_OLD
+        intent_file = last / DEBUG_CUT_INTENT
+        complete_file = last / DEBUG_CUT_COMPLETE
+        retire_file = last / DEBUG_CUT_RETIRE
+        abort_file = last / DEBUG_CUT_ABORT
+        uid, gid = self.receipts.uid, self.queue.writer_gid
+
+        def snapshot(path, *, links=(1,)):
+            return _native_rebind_stable_snapshot(
+                path, uid, gid, allowed_links=links)
+
+        def same_old(st, data, intent):
+            return ((st.st_dev, st.st_ino) ==
+                        (intent["old"]["device"], intent["old"]["inode"]) and
+                    len(data) == intent["old_size"] and
+                    _digest(data) == intent["old_sha256"])
+
+        def drained(path, st):
+            return (inspect(path, st.st_dev, st.st_ino, owner=proof.owner,
+                            writer_gid=gid) is FDState.DRAINED and
+                    attest() == proof)
+
+        def rollback_late_positive(intent, old_stat=None, old_data=None):
+            """Recover native-positive OLD bytes using the ORIGINAL P1 minute.
+
+            Never forge a discovery or create a second destination writer.
+            If the replacement debug inode is still truly EMPTY and drained,
+            return the complete OLD inode to the same live name, aborting the
+            cut durably. The next ordinary cursor/Config/P1 WAL reads the
+            real positive debug line and its native-N append in source order.
+
+            A guarded hardlink pins the empty NEW inode across os.replace;
+            any late NEW write refuses and preserves that inode physically.
+            Every transition is recoverable under the SAME original FD9.
+            """
+            from auto_detect_debug_window import ADD, _hostname
+            rollback_path = last / DEBUG_CUT_ROLLBACK
+            backup = last / DEBUG_CUT_ROLLBACK_NEW
+            if _entry(complete_file) or _entry(retire_file):
+                raise CursorChainRefused("learning_debug_cut_positive_after_retirement")
+            if not _entry(rollback_path):
+                if old_stat is None or old_data is None or not _entry(archive):
+                    raise CursorChainRefused("learning_debug_cut_missing_positive_old")
+                if ((old_stat.st_dev, old_stat.st_ino) !=
+                        (intent["old"]["device"], intent["old"]["inode"]) or
+                        len(old_data) <= intent["old_size"] or
+                        len(old_data) > MAX_DEBUG or
+                        _digest(old_data[:intent["old_size"]]) != intent["old_sha256"] or
+                        not drained(archive, old_stat)):
+                    raise CursorChainRefused("learning_debug_cut_positive_old_changed")
+                tail = old_data[intent["old_size"]:]
+                if len(tail) > 256 * 1024 or not tail.endswith(b"\n"):
+                    raise CursorChainRefused("learning_debug_cut_positive_tail_unbounded")
+                rows = {(n, path) for n, _, path in proof.learning}
+                events = 0
+                for line in tail.splitlines(keepends=True):
+                    if not line.endswith(b"\n"):
+                        raise CursorChainRefused("learning_debug_cut_positive_partial_line")
+                    try:
+                        decoded = line[:-1].decode("ascii")
+                    except UnicodeDecodeError as exc:
+                        raise CursorChainRefused("learning_debug_cut_positive_nonascii") from exc
+                    if "\x00" in decoded or "\r" in decoded:
+                        raise CursorChainRefused("learning_debug_cut_positive_control_byte")
+                    if " : adding to " not in decoded:
+                        continue
+                    event = ADD.fullmatch(decoded)
+                    if (event is None or
+                            (int(event["profile"]), event["path"]) not in rows or
+                            not _hostname(event["host"])):
+                        raise CursorChainRefused("learning_debug_cut_positive_foreign_N")
+                    events += 1
+                    if events > 32:
+                        raise CursorChainRefused("learning_debug_cut_positive_events_limit")
+                if not events:
+                    raise CursorChainRefused("learning_debug_cut_positive_missing_event")
+                active_new, new_data, _ = snapshot(live)
+                if ((active_new.st_dev, active_new.st_ino) !=
+                        (intent["new"]["device"], intent["new"]["inode"]) or
+                        new_data or not drained(live, active_new) or
+                        attest() != proof):
+                    raise CursorChainRefused("learning_debug_cut_positive_new_not_empty")
+                record = dict(
+                    schema=3, kind="original-learning-debug-cut-rollback",
+                    generation=proof.generation,
+                    intent_sha256=_digest(_canonical(intent)),
+                    old_retained_size=len(old_data),
+                    old_retained_sha256=_digest(old_data),
+                    positive_events=events, ack_authorized=False)
+                _write_once(last, DEBUG_CUT_ROLLBACK, _canonical(record), uid)
+            record, raw = _load(rollback_path, uid)
+            # The canonical, original ACK-bound rollback receipt is checked
+            # by learning_tip on the same source epoch before any mutation.
+            check_tip = self.learning_tip(
+                proof, workspace, allow_unfinished_debug_cut=True)
+            if (check_tip.get("debug_cut_pending") != last or
+                    check_tip["previous_ack_sha256"] != intent["previous_ack_sha256"] or
+                    check_tip["debug"] != intent["old"] or
+                    attest() != proof):
+                raise CursorChainRefused("learning_debug_cut_rollback_not_original")
+            live_stat = _stat_regular(live, uid, max_size=MAX_DEBUG,
+                                      writer_gid=gid)
+            old_id = (intent["old"]["device"], intent["old"]["inode"])
+            new_id = (intent["new"]["device"], intent["new"]["inode"])
+            if (live_stat.st_dev, live_stat.st_ino) == new_id:
+                # Crash before rename may leave the new guard already linked.
+                new_st, new_data, _ = snapshot(
+                    live, links=(1, 2) if _entry(backup) else (1,))
+                if new_data or not drained(live, new_st):
+                    raise CursorChainRefused("learning_debug_cut_rollback_new_changed")
+                if not _entry(backup):
+                    os.link(live, backup, follow_symlinks=False)
+                    _sync(last)
+                pinned, payload, _ = snapshot(backup, links=(2,))
+                if ((pinned.st_dev, pinned.st_ino) != new_id or payload or
+                        not drained(backup, pinned)):
+                    raise CursorChainRefused("learning_debug_cut_rollback_guard_changed")
+                old_st, old_payload, _ = snapshot(archive)
+                if ((old_st.st_dev, old_st.st_ino) != old_id or
+                        len(old_payload) != record["old_retained_size"] or
+                        _digest(old_payload) != record["old_retained_sha256"] or
+                        not drained(archive, old_st) or attest() != proof):
+                    raise CursorChainRefused("learning_debug_cut_rollback_old_changed")
+                os.replace(archive, live)
+                _sync(self.queue.root)
+                _sync(last)
+            elif (live_stat.st_dev, live_stat.st_ino) == old_id:
+                # Crash after os.replace: NEW backup must still be pinned;
+                # otherwise refuse rather than infer it had no late write.
+                if _entry(archive) or (not _entry(backup) and not _entry(abort_file)):
+                    raise CursorChainRefused("learning_debug_cut_rollback_missing_guard")
+            else:
+                raise CursorChainRefused("learning_debug_cut_rollback_foreign_live")
+            restored, restored_data, _ = snapshot(live)
+            if ((restored.st_dev, restored.st_ino) != old_id or
+                    len(restored_data) < record["old_retained_size"] or
+                    _digest(restored_data[:record["old_retained_size"]]) !=
+                        record["old_retained_sha256"] or
+                    not drained(live, restored) or attest() != proof):
+                raise CursorChainRefused("learning_debug_cut_rollback_restored_changed")
+            # A durable ABORT precedes physical NEW-guard removal. On crash
+            # during cleanup, the ordinary source WAL remains blocked until
+            # this exact original owner repeats the empty/inode/FD proof.
+            aborted = dict(
+                schema=3, kind="original-learning-debug-cut-aborted",
+                generation=proof.generation,
+                intent_sha256=_digest(_canonical(intent)),
+                ack_authorized=False)
+            _write_once(last, DEBUG_CUT_ABORT, _canonical(aborted), uid)
+            if _entry(backup):
+                guard_st, guard_data, _ = snapshot(backup)
+                if ((guard_st.st_dev, guard_st.st_ino) != new_id or
+                        guard_data or not drained(backup, guard_st) or
+                        attest() != proof):
+                    raise CursorChainRefused("learning_debug_cut_rollback_new_guard_busy")
+                backup.unlink()
+                _sync(last)
+            if (_entry(archive) or _entry(backup) or
+                    self.learning_tip(proof, workspace)["debug"] != intent["old"]):
+                raise CursorChainRefused("learning_debug_cut_rollback_not_sealed")
+            return False
+
+        def abort_without_cut(intent):
+            # An old-debug append won before os.replace. Preserve the
+            # unchanged live *name* and all newly appended bytes; remove
+            # only a private alias/empty candidate, then write a durable
+            # abort receipt. The next original WAL can consume that tail.
+            named = _stat_regular(live, uid, max_size=MAX_DEBUG, writer_gid=gid)
+            if (named.st_dev, named.st_ino) != (
+                    intent["old"]["device"], intent["old"]["inode"]):
+                raise CursorChainRefused("learning_debug_cut_abort_after_replace")
+            if _entry(archive):
+                alias = _stat_regular(
+                    archive, uid, max_size=MAX_DEBUG, writer_gid=gid)
+                if ((alias.st_dev, alias.st_ino) !=
+                        (named.st_dev, named.st_ino) or
+                        alias.st_nlink != 2 or named.st_nlink != 2):
+                    raise CursorChainRefused("learning_debug_cut_foreign_abort_alias")
+                archive.unlink()
+                _sync(last)
+            if _entry(fresh):
+                prepared, data, _ = snapshot(fresh)
+                if (data or (prepared.st_dev, prepared.st_ino) !=
+                        (intent["new"]["device"], intent["new"]["inode"])):
+                    raise CursorChainRefused("learning_debug_cut_foreign_abort_fresh")
+                fresh.unlink()
+                _sync(last)
+            abort = dict(
+                schema=3, kind="original-learning-debug-cut-aborted",
+                generation=proof.generation,
+                intent_sha256=_digest(_canonical(intent)),
+                ack_authorized=False)
+            _write_once(last, DEBUG_CUT_ABORT, _canonical(abort), uid)
+            return False
+
+        # The original _write_once record is authoritative. A crashed
+        # unsealed fresh inode has NEVER been published as debug.log:
+        # recheck it against the live inode, remove only that empty temp.
+        if not _entry(intent_file):
+            if _entry(fresh):
+                staged, data, _ = snapshot(fresh)
+                current = _stat_regular(
+                    live, uid, max_size=MAX_DEBUG, writer_gid=gid)
+                if (data or (staged.st_dev, staged.st_ino) ==
+                        (current.st_dev, current.st_ino) or
+                        not drained(fresh, staged)):
+                    raise CursorChainRefused("learning_debug_cut_unsealed_temp_busy")
+                fresh.unlink()
+                _sync(last)
+            candidate = self.learning_debug_highwater_candidate(
+                proof, workspace, attest=attest, inspect=inspect)
+            if candidate is None:
+                return False
+            # Last ACK is the same immutable original cursor after the
+            # read-only high-water proof. No source side effects have run.
+            tip = self.learning_tip(proof, workspace)
+            if (tip["previous_ack_sha256"] != candidate["previous_ack_sha256"] or
+                    tip["debug"] != candidate["debug"]):
+                raise CursorChainRefused("learning_debug_cut_ack_moved_before_intent")
+            fd = os.open(fresh, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                         os.O_NOFOLLOW, 0o660)
+            try:
+                current = os.fstat(fd)
+                if current.st_uid != uid or current.st_gid != gid:
+                    os.fchown(fd, uid, gid)
+                os.fchmod(fd, 0o660)
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            _sync(last)
+            new_st, data, _ = snapshot(fresh)
+            if data:
+                raise CursorChainRefused("learning_debug_cut_new_not_empty")
+            new = dict(path=str(live), device=new_st.st_dev,
+                       inode=new_st.st_ino, offset=0,
+                       prefix_sha256=EMPTY_HASH)
+            intent = dict(
+                schema=3, kind="original-learning-debug-cut-intent",
+                generation=proof.generation,
+                sequence=tip["sequence"] - 1, cycle=tip["cycle"],
+                previous_ack_sha256=tip["previous_ack_sha256"],
+                native_map_sha256=proof.native_map_sha256,
+                final_args_sha256=proof.final_args_sha256,
+                old=tip["debug"], new=new,
+                old_size=candidate["debug"]["offset"],
+                old_sha256=candidate["debug"]["prefix_sha256"],
+                native_sha256=candidate["native_sha256"],
+                cut_authorized=False, ack_authorized=False)
+            _write_once(last, DEBUG_CUT_INTENT, _canonical(intent), uid)
+        else:
+            intent, raw = _load(intent_file, uid)
+            if raw != _canonical(intent):
+                raise CursorChainRefused("learning_debug_cut_intent_not_canonical")
+            if "debug_cut_pending" not in tip:
+                # This exact immutable ACK already contains either a fully
+                # retired cut or an original abort. Do not report a second
+                # successful rotation on every idle one-minute callback.
+                return False
+            if _entry(last / DEBUG_CUT_ROLLBACK):
+                # A previous minute crashed before/after the guarded
+                # rollback's atomic replacement. Finish its SAME sealed
+                # intent before any new debug source WAL can be prepared.
+                return rollback_late_positive(intent)
+            if _entry(abort_file):
+                # The immutable abort permits only normal source replay;
+                # never re-use its prepared inode or ACK slot.
+                self.learning_tip(proof, workspace)
+                return False
+
+        if _entry(abort_file):
+            self.learning_tip(proof, workspace)
+            return False
+        if not _entry(complete_file) or not _entry(retire_file):
+            # Revalidate the exact immutable original ACK and owner without
+            # trusting the potentially replaced live debug name.
+            if (tip["previous_ack_sha256"] != intent["previous_ack_sha256"] or
+                    tip["debug"] != intent["old"] or attest() != proof):
+                raise CursorChainRefused("learning_debug_cut_original_ack_changed")
+        active = _stat_regular(live, uid, max_size=MAX_DEBUG, writer_gid=gid)
+        if (active.st_dev, active.st_ino) == (
+                intent["old"]["device"], intent["old"]["inode"]):
+            # Before the physical cut, old/source/new must remain exactly
+            # stable. Native append wins by aborting this cut, not by
+            # suppressing a line or reattributing it to a new log.
+            old_stat, old_data, _ = snapshot(live, links=(1, 2))
+            if not same_old(old_stat, old_data, intent):
+                return abort_without_cut(intent)
+            if not _entry(archive):
+                if not drained(live, old_stat):
+                    raise CursorChainRefused("learning_debug_cut_old_fd_busy")
+                staged, data, _ = snapshot(fresh)
+                if (data or (staged.st_dev, staged.st_ino) != (
+                        intent["new"]["device"], intent["new"]["inode"])):
+                    raise CursorChainRefused("learning_debug_cut_new_candidate_changed")
+                os.link(live, archive, follow_symlinks=False)
+                _sync(last)
+            alias = _stat_regular(
+                archive, uid, max_size=MAX_DEBUG, writer_gid=gid)
+            if (alias.st_dev, alias.st_ino) != (
+                    old_stat.st_dev, old_stat.st_ino) or alias.st_nlink != 2:
+                raise CursorChainRefused("learning_debug_cut_pre_replace_alias_changed")
+            old_stat, old_data, _ = snapshot(live, links=(2,))
+            if not same_old(old_stat, old_data, intent):
+                return abort_without_cut(intent)
+            if attest() != proof:
+                raise CursorChainRefused("learning_debug_cut_owner_changed_before_replace")
+            os.replace(fresh, live)
+            _sync(self.queue.root)
+            _sync(last)
+        else:
+            if (active.st_dev, active.st_ino) != (
+                    intent["new"]["device"], intent["new"]["inode"]):
+                raise CursorChainRefused("learning_debug_cut_foreign_live_inode")
+            if _entry(fresh):
+                raise CursorChainRefused("learning_debug_cut_orphan_fresh_after_replace")
+
+        # Physical replace happened. Keep the original old inode under
+        # a private name until all-PID FD drain proves no late writer.
+        active = _stat_regular(live, uid, max_size=MAX_DEBUG, writer_gid=gid)
+        if ((active.st_dev, active.st_ino) !=
+                (intent["new"]["device"], intent["new"]["inode"]) or
+                active.st_nlink != 1 or attest() != proof):
+            raise CursorChainRefused("learning_debug_cut_new_live_not_original")
+        if _entry(archive):
+            old_stat, old_data, _ = snapshot(archive)
+            old_size = intent["old_size"]
+            if ((old_stat.st_dev, old_stat.st_ino) !=
+                    (intent["old"]["device"], intent["old"]["inode"]) or
+                    len(old_data) < old_size or
+                    _digest(old_data[:old_size]) != intent["old_sha256"]):
+                raise CursorChainRefused("learning_debug_cut_old_prefix_changed")
+            if not drained(archive, old_stat):
+                raise CursorChainRefused("learning_debug_cut_old_fd_not_drained")
+            late = old_data[old_size:]
+            # A genuine late-positive OLD event may be replayed by the
+            # original P1/Config path: with a truly empty/drained NEW inode,
+            # durably abort the cut and restore the old live inode. Never
+            # synthesize a source event or write to managed HOSTLIST here.
+            if b" : adding to " in late:
+                return rollback_late_positive(intent, old_stat, old_data)
+            # Native v1.0.7 may have opened the old inode between the
+            # last global FD census and rename. A fully written, strictly
+            # non-positive diagnostic suffix cannot name a discovered
+            # domain. Record its exact physical digest before retiring.
+            # Any positive, incomplete or non-ASCII suffix remains on
+            # disk with NO cursor advancement or invented attribution.
+            if late:
+                if (not late.endswith(b"\n") or b"\x00" in late or
+                        b" : adding to " in late):
+                    raise CursorChainRefused("learning_debug_cut_late_old_append")
+                try:
+                    late.decode("ascii")
+                except UnicodeDecodeError as exc:
+                    raise CursorChainRefused("learning_debug_cut_late_old_nonascii") from exc
+            retired_size = len(old_data)
+            retired_sha256 = _digest(old_data)
+        elif not _entry(retire_file):
+            raise CursorChainRefused("learning_debug_cut_missing_pre_retire_old")
+        else:
+            # Recover an already retired and unlinked old inode using
+            # the unchanged original write-once receipt below.
+            retired_record, _ = _load(retire_file, uid)
+            retired_size = retired_record.get("retained_size")
+            retired_sha256 = retired_record.get("retained_sha256")
+        complete = dict(
+            schema=3, kind="original-learning-debug-cut-complete",
+            generation=proof.generation,
+            intent_sha256=_digest(_canonical(intent)),
+            new=intent["new"], ack_authorized=False)
+        _write_once(last, DEBUG_CUT_COMPLETE, _canonical(complete), uid)
+        retired = dict(
+            schema=3, kind="original-learning-debug-cut-retired",
+            generation=proof.generation,
+            complete_sha256=_digest(_canonical(complete)),
+            old_size=intent["old_size"], old_sha256=intent["old_sha256"],
+            retained_size=retired_size, retained_sha256=retired_sha256,
+            late_diagnostic_bytes=retired_size - intent["old_size"],
+            ack_authorized=False)
+        _write_once(last, DEBUG_CUT_RETIRE, _canonical(retired), uid)
+        if _entry(archive):
+            old_stat, old_data, _ = snapshot(archive)
+            if ((old_stat.st_dev, old_stat.st_ino) !=
+                    (intent["old"]["device"], intent["old"]["inode"]) or
+                    len(old_data) != retired_size or
+                    _digest(old_data) != retired_sha256 or
+                    not drained(archive, old_stat)):
+                raise CursorChainRefused("learning_debug_cut_old_changed_before_unlink")
+            archive.unlink()
+            _sync(last)
+        final_tip = self.learning_tip(proof, workspace)
+        if (final_tip["debug"] != intent["new"] or
+                final_tip["previous_ack_sha256"] != tip["previous_ack_sha256"] or
+                attest() != proof):
+            raise CursorChainRefused("learning_debug_cut_final_cursor_not_durable")
+        return True
+
+    def _ensure_learning_capacity(self, proof, workspace, *, attest):
+        """The original .next/.old anchor swap, carrying ALL N cursors.
+
+        No pending inode, unread tail, destination or producer is removed.
+        Only fully ACKed receipt history is reclaimed after the successor
+        state has been fsynced and installed atomically.
+        """
+        from auto_detect_original_v2_model import _native_rebind_stable_snapshot
+        if not self.queue._held or not callable(attest) or attest() != proof:
+            raise CursorChainRefused("learning_rollover_original_owner_required")
+        folder, seed, epoch_raw = self.learning_epoch(proof, workspace)
+        root, prepared, retired = folder / CHAIN, folder / NEXT, folder / OLD
+        if retired.exists() or retired.is_symlink():
+            _directory(retired, self.receipts.uid)
+            if not root.exists() and not root.is_symlink():
+                retired.rename(root)
+                _sync(folder)
+            elif prepared.exists() or prepared.is_symlink():
+                raise CursorChainRefused("learning_rollover_ambiguous_paths")
+            else:
+                _learning_checked_anchor(root, proof, epoch_raw, self.receipts.uid)
+                self._erase_old_tree(retired)
+        tip = self.learning_tip(proof, workspace)
+        if tip["sequence"] < MAX_STEPS:
+            if prepared.exists() or prepared.is_symlink():
+                raise CursorChainRefused("learning_rollover_without_terminal_chain")
+            return
+        if tip["slot"] is not None or tip["intent"] is not None or tip["cycle"] >= (1 << 32) - 1:
+            raise CursorChainRefused("learning_rollover_chain_not_terminal")
+        expected_pending = {Path(s["path"]) for row in tip["state"].values()
+                            for s in row["streams"] if Path(s["path"]).parent == self.queue.pending}
+        if set(self.queue.segments()) != expected_pending:
+            raise CursorChainRefused("learning_rollover_foreign_pending")
+        expected = dict(schema=3, kind="original-learning-cursor-anchor",
+                        generation=proof.generation, epoch_sha256=_digest(epoch_raw),
+                        native_map_sha256=proof.native_map_sha256,
+                        final_args_sha256=proof.final_args_sha256,
+                        cycle=tip["cycle"] + 1,
+                        previous_ack_sha256=tip["previous_ack_sha256"],
+                        native_numbers=list(tip["state"]),
+                        native_sha256=_learning_records_digest(tip["state"]),
+                        debug=tip["debug"], ack_authorized=False)
+        for cursor in [tip["debug"], *(s for row in tip["state"].values() for s in row["streams"])]:
+            st, data, _ = _native_rebind_stable_snapshot(
+                Path(cursor["path"]), self.receipts.uid, self.queue.writer_gid,
+                allowed_links=(1,))
+            _learning_prefix(cursor, st, data)
+        if not prepared.exists():
+            prepared.mkdir(mode=0o700)
+            _sync(folder)
+        _directory(prepared, self.receipts.uid)
+        if set(os.listdir(prepared)) - {ANCHOR, "anchor-native"}:
+            raise CursorChainRefused("learning_rollover_foreign_stage")
+        records = prepared / "anchor-native"
+        if not records.exists():
+            records.mkdir(mode=0o700)
+            _sync(prepared)
+        for n, row in tip["state"].items():
+            _write_once(records, f"{n:03d}.json", _canonical(row), self.receipts.uid)
+        _write_once(prepared, ANCHOR, _canonical(expected), self.receipts.uid)
+        proposed, state = _learning_checked_anchor(prepared, proof, epoch_raw, self.receipts.uid)
+        if proposed != expected or state != tip["state"] or attest() != proof or self.learning_tip(proof, workspace) != tip:
+            raise CursorChainRefused("learning_rollover_state_changed_before_swap")
+        root.rename(retired)
+        _sync(folder)
+        prepared.rename(root)
+        _sync(folder)
+        self._erase_old_tree(retired)
+        if attest() != proof or self.learning_tip(proof, workspace)["cycle"] != expected["cycle"]:
+            raise CursorChainRefused("learning_rollover_successor_not_published")
+
+    def prepare_learning_cycle(self, proof, workspace, *, attest,
+                               inspect=probe_pending_fd):
+        from auto_detect_original_v2_model import _native_rebind_stable_snapshot
+        from auto_detect_debug_window import ADD, MAX_WINDOW, _hostname
+        if not callable(attest) or attest() != proof or not callable(inspect):
+            raise CursorChainRefused("learning_cycle_owner_required")
+        self.queue._verify()
+        tip = self.learning_tip(proof, workspace)
+        if tip["sequence"] >= MAX_STEPS:
+            raise CursorChainRefused("learning_cycle_capacity_requires_rollover")
+        slot = tip["slot"] or tip["root"] / f'{tip["sequence"]:08d}'
+        if tip["intent"] is not None:
+            intent = tip["intent"]
+            # After the original durable checkpoint, replay is ACK-only.
+            # Cleaned native source paths need never be reopened for P1.
+            if (slot / "destination" / "checkpoint.json").exists():
+                learning_cycle_checkpoint(slot, intent, self.receipts.uid)
+            else:
+                self.attest_learning_cycle_prefix(proof, workspace, slot, intent,
+                                                   attest=attest, inspect=inspect)
+            return _learning_prepared(slot, intent)
+        state = tip["state"]
+        pending = {Path(s["path"]) for row in state.values()
+                   for s in row["streams"] if Path(s["path"]).parent == self.queue.pending}
+        if set(self.queue.segments()) != pending:
+            raise CursorChainRefused("learning_cycle_unattributed_pending")
+        snapshots = {}
+        source_bytes = 0
+        for row in state.values():
+            for cursor in row["streams"]:
+                path = Path(cursor["path"])
+                st, data, ident = _native_rebind_stable_snapshot(
+                    path, self.receipts.uid, self.queue.writer_gid, allowed_links=(1,))
+                _learning_prefix(cursor, st, data)
+                if inspect(path, st.st_dev, st.st_ino, owner=proof.owner,
+                           writer_gid=self.queue.writer_gid) is not FDState.DRAINED:
+                    raise CursorChainRefused("learning_cycle_native_busy")
+                snapshots[str(path)] = (st, data, ident)
+                source_bytes += len(data)
+                if source_bytes > 4 * 1024 * 1024:
+                    raise CursorChainRefused("learning_cycle_combined_native_limit")
+        dc = tip["debug"]
+        debug_st, debug_data, debug_ident = _native_rebind_stable_snapshot(
+            Path(dc["path"]), self.receipts.uid, self.queue.writer_gid,
+            allowed_links=(1,))
+        _learning_prefix(dc, debug_st, debug_data)
+        if source_bytes + len(debug_data) > 4 * 1024 * 1024:
+            raise CursorChainRefused("learning_cycle_combined_debug_limit")
+        if inspect(Path(dc["path"]), debug_st.st_dev, debug_st.st_ino,
+                   owner=proof.owner, writer_gid=self.queue.writer_gid) is not FDState.DRAINED:
+            raise CursorChainRefused("learning_cycle_debug_busy")
+        positions = {path: cursor["offset"] for row in state.values()
+                     for cursor in row["streams"] for path in [cursor["path"]]}
+        by_path = {row["path"]: row for row in state.values()}
+        observations = []
+        end = dc["offset"]
+        # A long-running dvtws2 can emit >2 MiB of *diagnostic-only* rows
+        # without a single native hostlist append. Advancing that complete
+        # non-positive suffix through the SAME original Config/P1 WAL and
+        # physical ACK need not consume eight 256-KiB minute slots. This is
+        # NOT a debug rotation, truncation, or inferred native attribution.
+        # Only full ASCII lines with no native-positive marker qualify.
+        # The original bounded stable snapshot and below source re-attest
+        # still protect every byte; a trailing partial line remains unread.
+        tail = debug_data[end:]
+        complete_end = tail.rfind(b"\n") + 1
+        diagnostic = tail[:complete_end]
+        if diagnostic and b" : adding to " not in diagnostic:
+            try:
+                diagnostic.decode("ascii")
+            except UnicodeDecodeError as exc:
+                raise CursorChainRefused("learning_cycle_nonascii_diagnostic") from exc
+            end += complete_end
+        else:
+            # An actual native positive (including malformed/unmatched
+            # rows) keeps the existing exact ordered 256-KiB/N limit.
+            for line in tail.splitlines(keepends=True):
+                if not line.endswith(b"\n") or end + len(line) - dc["offset"] > MAX_WINDOW:
+                    break
+                try:
+                    decoded = line[:-1].decode("ascii")
+                except UnicodeDecodeError as exc:
+                    raise CursorChainRefused("learning_cycle_nonascii_debug") from exc
+                if " : adding to " in decoded:
+                    event = ADD.fullmatch(decoded)
+                    if (event is None or event["path"] not in by_path or
+                            not _hostname(event["host"])):
+                        raise CursorChainRefused("learning_cycle_foreign_positive")
+                    row = by_path[event["path"]]
+                    if int(event["profile"]) != row["native_number"]:
+                        raise CursorChainRefused("learning_cycle_wrong_native_N")
+                    encoded = (event["host"] + "\n").encode("ascii")
+                    match = next((s for s in reversed(row["streams"])
+                                  if snapshots[s["path"]][1][positions[s["path"]]:].startswith(encoded)), None)
+                    if match is None:
+                        # Native debug precedes append_to_list_file. Keep this
+                        # line AND every unmatched raw byte for the next minute.
+                        break
+                    positions[match["path"]] += len(encoded)
+                    observations.append(dict(hostname=event["host"], hostlist=row["hostlist"]))
+                end += len(line)
+                if len(observations) == 32:
+                    break
+        if end == dc["offset"]:
+            return None
+        native = {}
+        for n, row in state.items():
+            streams = []
+            for cursor in row["streams"]:
+                path = cursor["path"]
+                st, data, ident = snapshots[path]
+                streams.append(dict(start=cursor, end=dict(
+                    path=path, device=st.st_dev, inode=st.st_ino,
+                    offset=positions[path], prefix_sha256=_digest(data[:positions[path]])),
+                    snapshot_size=len(data), snapshot_sha256=_digest(data)))
+            native[n] = {**row, "streams": streams}
+        intent = dict(schema=3, kind="original-learning-cycle-prepared",
+                      generation=proof.generation, sequence=tip["sequence"],
+                      cycle=tip["cycle"], operation_id=proof.operation_id,
+                      owner_candidate_sha256=proof.owner_candidate_sha256,
+                      owner_pid=proof.owner.pid, owner_start=proof.owner.started,
+                      final_args_sha256=proof.final_args_sha256,
+                      native_map_sha256=proof.native_map_sha256,
+                      epoch_sha256=tip["epoch_sha256"],
+                      previous_ack_sha256=tip["previous_ack_sha256"],
+                      native_numbers=list(native),
+                      native_sha256=_learning_records_digest(native),
+                      debug=dict(start=dc, end=dict(path=dc["path"],
+                          device=debug_st.st_dev, inode=debug_st.st_ino,
+                          offset=end, prefix_sha256=_digest(debug_data[:end]))),
+                      observations=observations, ack_authorized=False)
+        for path, (st, data, ident) in snapshots.items():
+            again = _native_rebind_stable_snapshot(Path(path), self.receipts.uid,
+                self.queue.writer_gid, allowed_links=(1,))
+            if again[1:] != (data, ident):
+                raise CursorChainRefused("learning_cycle_snapshot_raced")
+        if (_native_rebind_stable_snapshot(Path(dc["path"]), self.receipts.uid,
+                self.queue.writer_gid, allowed_links=(1,))[1:] != (debug_data, debug_ident)
+                or attest() != proof):
+            raise CursorChainRefused("learning_cycle_debug_owner_raced")
+        if not tip["root"].exists():
+            tip["root"].mkdir(mode=0o700)
+            _sync(tip["root"].parent)
+        if not slot.exists():
+            slot.mkdir(mode=0o700)
+            _sync(tip["root"])
+        native_dir = slot / "native"
+        if not native_dir.exists():
+            native_dir.mkdir(mode=0o700)
+            _sync(slot)
+        _directory(native_dir, self.receipts.uid)
+        for n, row in native.items():
+            _write_once(native_dir, f"{n:03d}.json", _canonical(row), self.receipts.uid)
+        _write_once(slot, "intent.json", _canonical(intent), self.receipts.uid)
+        self.attest_learning_cycle_prefix(proof, workspace, slot, intent,
+                                          attest=attest, inspect=inspect)
+        return _learning_prepared(slot, intent)
+
+    def attest_learning_cycle_prefix(self, proof, workspace, slot, intent, *,
+                                      attest, inspect=probe_pending_fd):
+        from auto_detect_original_v2_model import _native_rebind_stable_snapshot
+        self.learning_epoch(proof, workspace)
+        learning_cycle_source_fields(slot, intent, self.receipts.uid)
+        native = _learning_native_records(slot / "native", intent, self.receipts.uid)
+        expected = {n: (label, path) for n, label, path in proof.learning}
+        if (set(native) != set(expected) or attest() != proof or
+                intent["owner_pid"] != proof.owner.pid or
+                intent["owner_start"] != proof.owner.started or
+                intent["native_map_sha256"] != proof.native_map_sha256):
+            raise CursorChainRefused("learning_cycle_sealed_owner_changed")
+        for n, row in native.items():
+            if (row["hostlist"], row["path"]) != expected[n]:
+                raise CursorChainRefused("learning_cycle_sealed_native_map_changed")
+        cursors = [s["end"] for row in native.values() for s in row["streams"]]
+        cursors.append(intent["debug"]["end"])
+        snapshots = {}
+        for _ in range(2):
+            for cursor in cursors:
+                path = Path(cursor["path"])
+                st, data, _ = _native_rebind_stable_snapshot(
+                    path, self.receipts.uid, self.queue.writer_gid, allowed_links=(1,))
+                _learning_prefix(cursor, st, data)
+                snapshots[str(path)] = (st, data)
+                if inspect(path, st.st_dev, st.st_ino, owner=proof.owner,
+                           writer_gid=self.queue.writer_gid) is not FDState.DRAINED:
+                    raise CursorChainRefused("learning_cycle_sealed_native_busy")
+            if attest() != proof:
+                raise CursorChainRefused("learning_cycle_sealed_owner_raced")
+        # Prefix hashes alone cannot authorize a forged observation. Apply
+        # the original exact ADD/N/path/native-row correlation again to the
+        # immutable start/end cuts, independently of later producer appends.
+        from auto_detect_debug_window import ADD, _raw_hosts
+        remaining = {}
+        by_path = {row["path"]: row for row in native.values()}
+        for row in native.values():
+            for stream in row["streams"]:
+                start, end = stream["start"], stream["end"]
+                st, data = snapshots[end["path"]]
+                _learning_prefix(start, st, data)
+                cut = data[start["offset"]:end["offset"]]
+                remaining[end["path"]] = _raw_hosts(cut) if cut else []
+        start, end = intent["debug"]["start"], intent["debug"]["end"]
+        st, data = snapshots[end["path"]]
+        _learning_prefix(start, st, data)
+        observations = []
+        for line in data[start["offset"]:end["offset"]].splitlines(keepends=True):
+            if not line.endswith(b"\n"):
+                raise CursorChainRefused("learning_cycle_sealed_incomplete_debug")
+            decoded = line[:-1].decode("ascii")
+            if " : adding to " not in decoded:
+                continue
+            event = ADD.fullmatch(decoded)
+            row = by_path.get(event["path"]) if event else None
+            if row is None or int(event["profile"]) != row["native_number"]:
+                raise CursorChainRefused("learning_cycle_sealed_foreign_positive")
+            matched = next((s for s in reversed(row["streams"])
+                            if remaining[s["end"]["path"]] and
+                            remaining[s["end"]["path"]][0] == event["host"]), None)
+            if matched is None:
+                raise CursorChainRefused("learning_cycle_sealed_positive_without_native")
+            remaining[matched["end"]["path"]].pop(0)
+            observations.append(dict(hostname=event["host"], hostlist=row["hostlist"]))
+        if any(remaining.values()) or observations != intent["observations"]:
+            raise CursorChainRefused("learning_cycle_sealed_observations_changed")
+        return dict(source_intent_sha256=_digest(_canonical(intent)),
+                    p2b_drained=True, commit_authorized=False, ack_authorized=False)
+
+
+def _learning_prefix(cursor, st, data):
+    if (type(cursor) is not dict or set(cursor) != {
+            "path", "device", "inode", "offset", "prefix_sha256"} or
+            type(cursor["offset"]) is not int or
+            not 0 <= cursor["offset"] <= len(data) or
+            (st.st_dev, st.st_ino) != (cursor["device"], cursor["inode"]) or
+            _digest(data[:cursor["offset"]]) != cursor["prefix_sha256"]):
+        raise CursorChainRefused("learning_cycle_prefix_changed")
+
+
+def _learning_start(row):
+    return {**row, "streams": [s["start"] for s in row["streams"]]}
+
+
+def _learning_records_digest(rows):
+    return _digest(b"".join(_canonical(rows[n]) for n in sorted(rows)))
+
+
+def _learning_native_records(folder, intent, uid, *, progress=False):
+    _directory(folder, uid)
+    expected = {f"{n:03d}.json" for n in intent["native_numbers"]}
+    if set(os.listdir(folder)) != expected:
+        raise CursorChainRefused("learning_cycle_missing_or_foreign_N")
+    result = {}
+    for n in intent["native_numbers"]:
+        row, raw = _load(folder / f"{n:03d}.json", uid)
+        if (raw != _canonical(row) or row.get("native_number") != n or
+                row.get("hostlist") not in {"youtube", "user"} or
+                type(row.get("path")) is not str or
+                not Path(row["path"]).is_absolute() or
+                type(row.get("streams")) is not list or
+                not 1 <= len(row["streams"]) <= 2):
+            raise CursorChainRefused("learning_cycle_invalid_N_record")
+        source_path = Path(row["path"])
+        if source_path.name != f'learning-{intent["generation"]}-{n}.txt':
+            raise CursorChainRefused("learning_cycle_foreign_generation_filename")
+        cursors = row["streams"] if progress else [s["start"] for s in row["streams"]]
+        if cursors[0]["path"] != row["path"]:
+            raise CursorChainRefused("learning_cycle_live_cursor_path_changed")
+        for index, cursor in enumerate(cursors):
+            if (set(cursor) != {"path", "device", "inode", "offset", "prefix_sha256"} or
+                    any(type(cursor[k]) is not int or cursor[k] < 0
+                        for k in ("device", "inode", "offset")) or cursor["inode"] == 0 or
+                    not HEX64.fullmatch(str(cursor["prefix_sha256"]))):
+                raise CursorChainRefused("learning_cycle_invalid_physical_cursor")
+            if index:
+                from auto_detect_queue import NATIVE_PENDING
+                path = Path(cursor["path"])
+                match = NATIVE_PENDING.fullmatch(path.name)
+                if (path.parent != source_path.parent / "pending" or match is None or
+                        match[1] != intent["generation"] or int(match[2]) != n):
+                    raise CursorChainRefused("learning_cycle_foreign_old_cursor")
+            if not progress:
+                end = row["streams"][index]["end"]
+                if (set(end) != set(cursor) or
+                        any(end[k] != cursor[k] for k in ("path", "device", "inode")) or
+                        type(end["offset"]) is not int or end["offset"] < cursor["offset"] or
+                        not HEX64.fullmatch(str(end["prefix_sha256"]))):
+                    raise CursorChainRefused("learning_cycle_invalid_end_cursor")
+        if (len(cursors) == 2) != ("retained_prefix" in row):
+            raise CursorChainRefused("learning_cycle_old_without_retained_prefix")
+        result[n] = row
+    if not progress and _learning_records_digest(result) != intent["native_sha256"]:
+        raise CursorChainRefused("learning_cycle_source_N_digest_changed")
+    return result
+
+
+
+def _entry(path):
+    return path.exists() or path.is_symlink()
+
+
+
+def _recover_learning_debug_cut_staged(receipts, proof):
+    """Recover ONLY an exact original debug-cut _write_once .part stage.
+
+    The standard root-private write-once receipt uses a temporary inode
+    hardlinked to its final name. A crash may leave one name or two links.
+    Before any new debug pathname action, finish ONLY a canonical, exact
+    same-generation cut receipt in its already ACKed original cursor slot.
+    No arbitrary .part cleanup, Config, native source or ACK mutation.
+    """
+    folder = receipts._generation(proof.generation, create=False)
+    root = folder / CHAIN
+    if not _entry(root):
+        return
+    _directory(root, receipts.uid)
+    kinds = {
+        "original-learning-debug-cut-intent": DEBUG_CUT_INTENT,
+        "original-learning-debug-cut-complete": DEBUG_CUT_COMPLETE,
+        "original-learning-debug-cut-retired": DEBUG_CUT_RETIRE,
+        "original-learning-debug-cut-aborted": DEBUG_CUT_ABORT,
+        "original-learning-debug-cut-rollback": DEBUG_CUT_ROLLBACK,
+    }
+    for slot in root.iterdir():
+        if not STEP.fullmatch(slot.name):
+            if slot.name not in {ANCHOR, "anchor-native"}:
+                raise CursorChainRefused("learning_debug_cut_foreign_chain_entry")
+            continue
+        _directory(slot, receipts.uid)
+        # Do not confiscate a different original WAL writer's temporary
+        # receipt. Only a physically identifiable cut staging directory
+        # belongs to this specialized original debug-cut recovery.
+        if not any(_entry(slot / name) for name in (
+                DEBUG_CUT_INTENT, DEBUG_CUT_COMPLETE,
+                DEBUG_CUT_RETIRE, DEBUG_CUT_ABORT,
+                DEBUG_CUT_ROLLBACK, DEBUG_CUT_ROLLBACK_NEW,
+                DEBUG_CUT_FRESH, DEBUG_CUT_OLD)):
+            continue
+        parts = sorted(path for path in slot.iterdir()
+                       if re.fullmatch(r"\.[0-9a-f]{32}\.part", path.name))
+        if not parts:
+            continue
+        if len(parts) != 1:
+            raise CursorChainRefused("learning_debug_cut_ambiguous_staged_receipts")
+        part = parts[0]
+        named = part.lstat()
+        if (not stat.S_ISREG(named.st_mode) or
+                named.st_uid != receipts.uid or
+                stat.S_IMODE(named.st_mode) != 0o600 or
+                named.st_nlink not in (1, 2) or
+                not _entry(slot / "ack.json")):
+            raise CursorChainRefused("learning_debug_cut_untrusted_stage")
+        fd = os.open(part, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            opened = os.fstat(fd)
+            raw = os.read(fd, 16385)
+            closed = os.fstat(fd)
+        finally:
+            os.close(fd)
+        if ((named.st_dev, named.st_ino, named.st_size, named.st_mtime_ns) !=
+                (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns) or
+                (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns) !=
+                (closed.st_dev, closed.st_ino, closed.st_size, closed.st_mtime_ns) or
+                len(raw) != named.st_size or
+                len(raw) > 16384):
+            raise CursorChainRefused("learning_debug_cut_changed_staged_record")
+        try:
+            record = json.loads(raw)
+        except (ValueError, UnicodeError, TypeError) as exc:
+            raise CursorChainRefused("learning_debug_cut_staged_json_invalid") from exc
+        if (not isinstance(record, dict) or
+                raw != _canonical(record) or
+                record.get("schema") != 3 or
+                record.get("generation") != proof.generation or
+                record.get("ack_authorized") is not False or
+                record.get("kind") not in kinds):
+            raise CursorChainRefused("learning_debug_cut_foreign_staged_receipt")
+        target = slot / kinds[record["kind"]]
+        if _entry(target):
+            attached = target.lstat()
+            if ((attached.st_dev, attached.st_ino) !=
+                    (named.st_dev, named.st_ino) or
+                    attached.st_nlink != 2 or named.st_nlink != 2):
+                raise CursorChainRefused("learning_debug_cut_staged_link_changed")
+        elif named.st_nlink == 1:
+            os.link(part, target, follow_symlinks=False)
+        else:
+            raise CursorChainRefused("learning_debug_cut_staged_link_missing")
+        part.unlink()
+        _sync(slot)
+        if _read(target, receipts.uid) != raw:
+            raise CursorChainRefused("learning_debug_cut_staged_recovery_failed")
+
+
+
+
+def _learning_debug_cut_receipts(slot, proof, tip, uid, *, allow_unsealed=False):
+    """Verify immutable ACK→debug-inode transition, never infer it from FS.
+
+    No receipt: no cut. Incomplete cut: original minute refuses until the
+    exact original held-FD9 owner completes/aborts it. Only a retired
+    old inode grants the successor debug cursor. Prior cuts remain linked
+    through the same original cycle and ACK history, including rollover.
+    """
+    intent_path = slot / DEBUG_CUT_INTENT
+    complete_path = slot / DEBUG_CUT_COMPLETE
+    retire_path = slot / DEBUG_CUT_RETIRE
+    abort_path = slot / DEBUG_CUT_ABORT
+    fresh_path = slot / DEBUG_CUT_FRESH
+    old_path = slot / DEBUG_CUT_OLD
+    if not _entry(intent_path):
+        if any(_entry(path) for path in
+               (complete_path, retire_path, abort_path, old_path,
+             slot / DEBUG_CUT_ROLLBACK, slot / DEBUG_CUT_ROLLBACK_NEW)):
+            raise CursorChainRefused("learning_debug_cut_orphan_receipt")
+        # A prepared but unsealed empty inode is recovered only by the
+        # original cut owner, never by an ordinary ACK/Config reader.
+        if _entry(fresh_path) and not allow_unsealed:
+            raise CursorChainRefused("learning_debug_cut_unsealed_fresh")
+        return None
+    intent, intent_raw = _load(intent_path, uid)
+    expected = {
+        "schema", "kind", "generation", "sequence", "cycle",
+        "previous_ack_sha256", "native_map_sha256", "final_args_sha256",
+        "old", "new", "old_size", "old_sha256", "native_sha256",
+        "cut_authorized", "ack_authorized"}
+    previous = tip["debug"]
+    candidate_new = intent.get("new")
+    if (set(intent) != expected or intent["schema"] != 3 or
+            intent["kind"] != "original-learning-debug-cut-intent" or
+            intent["generation"] != proof.generation or
+            intent["sequence"] != tip["sequence"] - 1 or
+            intent["cycle"] != tip["cycle"] or
+            intent["previous_ack_sha256"] != tip["previous_ack_sha256"] or
+            intent["native_map_sha256"] != proof.native_map_sha256 or
+            intent["final_args_sha256"] != proof.final_args_sha256 or
+            intent["native_sha256"] != _learning_records_digest(tip["state"]) or
+            intent["old"] != previous or
+            type(intent["old_size"]) is not int or
+            intent["old_size"] < MAX_DEBUG // 2 or
+            intent["old_size"] > MAX_DEBUG or
+            intent["old_size"] != previous["offset"] or
+            intent["old_sha256"] != previous["prefix_sha256"] or
+            not isinstance(candidate_new, dict) or
+            set(candidate_new) != set(previous) or
+            candidate_new["path"] != previous["path"] or
+            type(candidate_new["device"]) is not int or
+            type(candidate_new["inode"]) is not int or
+            candidate_new["device"] < 0 or candidate_new["inode"] <= 0 or
+            (candidate_new["device"], candidate_new["inode"]) ==
+                (previous["device"], previous["inode"]) or
+            candidate_new["offset"] != 0 or
+            candidate_new["prefix_sha256"] != EMPTY_HASH or
+            intent["cut_authorized"] is not False or
+            intent["ack_authorized"] is not False):
+        raise CursorChainRefused("learning_debug_cut_not_original_ack")
+    digest = _digest(intent_raw)
+    rollback_path = slot / DEBUG_CUT_ROLLBACK
+    backup_path = slot / DEBUG_CUT_ROLLBACK_NEW
+    rollback = None
+    if _entry(rollback_path):
+        rollback, rollback_raw = _load(rollback_path, uid)
+        if (rollback_raw != _canonical(rollback) or set(rollback) != {
+                "schema", "kind", "generation", "intent_sha256",
+                "old_retained_size", "old_retained_sha256",
+                "positive_events", "ack_authorized"} or
+                rollback["schema"] != 3 or
+                rollback["kind"] != "original-learning-debug-cut-rollback" or
+                rollback["generation"] != proof.generation or
+                rollback["intent_sha256"] != digest or
+                type(rollback["old_retained_size"]) is not int or
+                not intent["old_size"] < rollback["old_retained_size"] <= MAX_DEBUG or
+                not HEX64.fullmatch(str(rollback["old_retained_sha256"])) or
+                type(rollback["positive_events"]) is not int or
+                not 1 <= rollback["positive_events"] <= 32 or
+                rollback["ack_authorized"] is not False or
+                _entry(complete_path) or _entry(retire_path)):
+            raise CursorChainRefused("learning_debug_cut_rollback_receipt_changed")
+    elif _entry(backup_path):
+        raise CursorChainRefused("learning_debug_cut_orphan_rollback_new")
+    if _entry(abort_path):
+        abort, raw = _load(abort_path, uid)
+        if (raw != _canonical(abort) or abort != {
+                "schema": 3, "kind": "original-learning-debug-cut-aborted",
+                "generation": proof.generation, "intent_sha256": digest,
+                "ack_authorized": False} or
+                any(_entry(path) for path in
+                    (complete_path, retire_path, fresh_path, old_path))):
+            raise CursorChainRefused("learning_debug_cut_abort_ambiguous")
+        if _entry(backup_path):
+            # The original abort was durably sealed BEFORE unlinking the
+            # empty NEW backup. A crash here must resume under the same
+            # FD9/P2a owner; normal source WAL remains strictly blocked.
+            if not allow_unsealed or rollback is None:
+                raise CursorChainRefused("learning_debug_cut_abort_backup_not_retired")
+            return None
+        return False
+    if rollback is not None:
+        # The only successful rollback is a final, immutable abort.
+        # Until then the original minute holds the old/new paths and
+        # refuses any normal source WAL; all post-cut bytes remain safe.
+        return None
+    if not _entry(complete_path) or not _entry(retire_path):
+        return None
+    complete, complete_raw = _load(complete_path, uid)
+    retired, retired_raw = _load(retire_path, uid)
+    if (complete_raw != _canonical(complete) or
+            complete != {
+                "schema": 3, "kind": "original-learning-debug-cut-complete",
+                "generation": proof.generation, "intent_sha256": digest,
+                "new": candidate_new, "ack_authorized": False} or
+            retired_raw != _canonical(retired) or
+            retired != {
+                "schema": 3, "kind": "original-learning-debug-cut-retired",
+                "generation": proof.generation,
+                "complete_sha256": _digest(complete_raw),
+                "old_size": intent["old_size"],
+                "old_sha256": intent["old_sha256"],
+                "retained_size": retired.get("retained_size"),
+                "retained_sha256": retired.get("retained_sha256"),
+                "late_diagnostic_bytes": retired.get("late_diagnostic_bytes"),
+                "ack_authorized": False} or
+            type(retired.get("retained_size")) is not int or
+            not intent["old_size"] <= retired["retained_size"] <= MAX_DEBUG or
+            type(retired.get("late_diagnostic_bytes")) is not int or
+            retired["late_diagnostic_bytes"] != (
+                retired["retained_size"] - intent["old_size"]) or
+            not HEX64.fullmatch(str(retired.get("retained_sha256"))) or
+            (retired["late_diagnostic_bytes"] == 0 and
+             retired["retained_sha256"] != intent["old_sha256"]) or
+            _entry(fresh_path)):
+        raise CursorChainRefused("learning_debug_cut_not_fully_retired")
+    if _entry(old_path):
+        # Crash after a durable retirement receipt but before unlink:
+        # the original FD9 owner must recheck P2b and remove the archive.
+        return None
+    return candidate_new
+
+
+
+def _learning_checked_anchor(root, proof, epoch_raw, uid):
+    anchor, raw = _load(root / ANCHOR, uid)
+    if (raw != _canonical(anchor) or set(anchor) != {
+            "schema", "kind", "generation", "epoch_sha256", "native_map_sha256",
+            "final_args_sha256", "cycle", "previous_ack_sha256", "native_numbers",
+            "native_sha256", "debug", "ack_authorized"} or
+            anchor["schema"] != 3 or anchor["kind"] != "original-learning-cursor-anchor" or
+            anchor["generation"] != proof.generation or
+            anchor["epoch_sha256"] != _digest(epoch_raw) or
+            anchor["native_map_sha256"] != proof.native_map_sha256 or
+            anchor["final_args_sha256"] != proof.final_args_sha256 or
+            type(anchor["cycle"]) is not int or not 0 < anchor["cycle"] < (1 << 32) or
+            anchor["native_numbers"] != [n for n, _, _ in proof.learning] or
+            not HEX64.fullmatch(str(anchor["previous_ack_sha256"])) or
+            anchor["ack_authorized"] is not False):
+        raise CursorChainRefused("learning_rollover_anchor_not_original_epoch")
+    state = _learning_native_records(root / "anchor-native", anchor, uid, progress=True)
+    if _learning_records_digest(state) != anchor["native_sha256"]:
+        raise CursorChainRefused("learning_rollover_anchor_N_state_changed")
+    return anchor, state
+
+
+def _learning_prepared(slot, intent):
+    return dict(slot=slot, generation=intent["generation"], sequence=intent["sequence"],
+                intent_sha256=_digest(_canonical(intent)),
+                cursor_advanced=False, commit_authorized=False, ack_authorized=False)
+
+
+def learning_cycle_source_fields(folder, intent, uid):
+    """Original DestinationCommit source codec; never reads mutable inodes."""
+    sequence = intent.get("sequence")
+    if (intent.get("schema") != 3 or
+            intent.get("kind") != "original-learning-cycle-prepared" or
+            type(sequence) is not int or not 0 <= sequence < MAX_STEPS or
+            folder.name != f"{sequence:08d}" or folder.parent.name != CHAIN or
+            folder.parent.parent.name != intent.get("generation") or
+            intent.get("ack_authorized") is not False or
+            _read(folder / "intent.json", uid) != _canonical(intent) or
+            type(intent.get("observations")) is not list or
+            len(intent["observations"]) > 32 or
+            type(intent.get("native_numbers")) is not list or
+            not 1 <= len(intent["native_numbers"]) <= 255 or
+            intent["native_numbers"] != sorted(set(intent["native_numbers"])) or
+            any(type(n) is not int or not 1 <= n <= 255 for n in intent["native_numbers"])):
+        raise CursorChainRefused("learning_cycle_wal_not_original_source")
+    _learning_native_records(folder / "native", intent, uid)
+    if sequence:
+        prev, prev_raw = _load(folder.parent / f"{sequence - 1:08d}" / "ack.json", uid)
+        if (_digest(prev_raw) != intent["previous_ack_sha256"] or
+                prev.get("generation") != intent["generation"] or
+                prev.get("sequence") != sequence - 1):
+            raise CursorChainRefused("learning_cycle_wal_previous_ack_changed")
+    elif intent["cycle"] == 0:
+        epoch = _read(folder.parent.parent / "epoch.json", uid)
+        if _digest(epoch) != intent["previous_ack_sha256"]:
+            raise CursorChainRefused("learning_cycle_wal_zero_not_original_epoch")
+    else:
+        anchor, _ = _load(folder.parent / ANCHOR, uid)
+        if (anchor.get("previous_ack_sha256") != intent["previous_ack_sha256"] or
+                anchor.get("cycle") != intent["cycle"] or
+                anchor.get("generation") != intent["generation"] or
+                anchor.get("epoch_sha256") != intent["epoch_sha256"]):
+            raise CursorChainRefused("learning_cycle_wal_zero_not_original_anchor")
+    end = intent["debug"]["end"]
+    return dict(schema=3, kind="durable-destination-plan",
+                generation=intent["generation"], pending_name="learning-" + folder.name,
+                pending_sha256=_digest(_canonical({"observations": intent["observations"]})),
+                evidence="learning-native-debug", debug_end_offset=end["offset"],
+                debug_end_sha256=end["prefix_sha256"],
+                source_intent_sha256=_digest(_canonical(intent)))
+
+
+def learning_cycle_checkpoint(slot, intent, uid, *, targets=None):
+    plan, raw = qualified_destination_plan(slot, intent, uid, targets=targets)
+    source = learning_cycle_source_fields(slot, intent, uid)
+    cp, cp_raw = _load(slot / "destination" / "checkpoint.json", uid)
+    expected = dict(schema=1, kind="destination-and-cursor-committed",
+                    generation=intent["generation"], pending_name=source["pending_name"],
+                    plan_sha256=_digest(raw), evidence=source["evidence"],
+                    committed_cursor_offset=source["debug_end_offset"],
+                    committed_cursor_sha256=source["debug_end_sha256"], ack_authorized=False)
+    if cp != expected or cp_raw != _canonical(cp):
+        raise CursorChainRefused("learning_cycle_checkpoint_not_original")
+    return cp, cp_raw

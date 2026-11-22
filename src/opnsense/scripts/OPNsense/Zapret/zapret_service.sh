@@ -992,7 +992,14 @@ shared_apply_stop_service()
         if [ "$_shared_stop_observer" = 1 ]; then
             _shared_stop_epoch=$("$PYTHON_RUNTIME" \
                 "$BACKEND_DIR/auto_detect_minute.py" --pre-retire) || return 69
-            [ "$_shared_stop_epoch" = auto-detect-retire=original-running-attested ] || return 69
+            # Only the exact sealed active schema may authorize stopping
+            # this original owner. The original post-Stop FD9 retirement
+            # MUST complete before Stop returns success or a new Boot.
+            case "$_apply_native_schema:$_shared_stop_epoch" in
+                2:auto-detect-retire=original-running-attested|\
+                3:auto-detect-retire=original-learning-running-attested) ;;
+                *) return 69 ;;
+            esac
         else
             apply_runtime_observer_retirement_preflight || return 69
         fi
@@ -1171,25 +1178,37 @@ shared_apply_boot_service()
         # exact same user Config and only one original shared engine.
         [ -x /usr/local/bin/php ] || return 69
         _shared_boot_stage=$(/usr/local/bin/php \
-            "$SCRIPT_DIR/shared_apply_request.php" saved-unchanged) || return 69
+            "$SCRIPT_DIR/shared_apply_request.php" saved-unchanged) || {
+            echo "native-common-boot-guard=saved-candidate" >&2
+            return 69
+        }
         case "$_shared_boot_stage" in
             prepared-id=*) _shared_boot_new_id="${_shared_boot_stage#prepared-id=}" ;;
-            *) return 69 ;;
+            *) echo "native-common-boot-guard=candidate-identity" >&2; return 69 ;;
         esac
         case "$_shared_boot_new_id" in ""|*[!a-f0-9]*) return 69 ;; esac
         [ "${#_shared_boot_new_id}" -eq 32 ] &&
         [ "$_shared_boot_new_id" != "$_shared_boot_id" ] || return 69
-        _shared_boot_build=$(shared_apply_prepare_service "$_shared_boot_new_id") || return 69
+        _shared_boot_build=$(shared_apply_prepare_service "$_shared_boot_new_id") || {
+            echo "native-common-boot-guard=build-command" >&2
+            return 69
+        }
         _shared_boot_last=$(printf '%s\n' "$_shared_boot_build" | tail -n 1)
-        case "$_shared_boot_last" in preflight-rejected=*) return 69 ;; esac
+        case "$_shared_boot_last" in
+            preflight-rejected=*) echo "native-common-boot-guard=build-preflight" >&2; return 69 ;;
+        esac
         # Shared Apply intentionally reports preflight-rejected=... with
         # shell exit 0. A cold Boot must NOT translate that non-activation
         # into success or claim a new engine merely from the exit status.
         _shared_boot_apply=$(
             shared_apply_execute_service "$_shared_boot_new_id" strategies
-        ) || return 70
+        ) || {
+            echo "native-common-boot-guard=execute" >&2
+            return 70
+        }
         shared_apply_boot_receipt_verified_service             "$_shared_boot_apply" "$_shared_boot_new_id" || {
             common_error "native common boot: saved-unchanged Config/Apply receipts do not match"
+            echo "native-common-boot-guard=receipt" >&2
             return 70
         }
         return 0
@@ -1210,8 +1229,14 @@ shared_apply_boot_service()
     fi
 
     # A partial failure is never a successful boot.
-    apply_runtime_activate "$_shared_boot_dir/release" "$_shared_boot_mode" || return 70
-    apply_runtime_commit || return 70
+    apply_runtime_activate "$_shared_boot_dir/release" "$_shared_boot_mode" || {
+        echo "native-common-boot-guard=ordinary-activate" >&2
+        return 70
+    }
+    apply_runtime_commit || {
+        echo "native-common-boot-guard=ordinary-commit" >&2
+        return 70
+    }
     # A successful IPFW commit is not a running service receipt. The
     # cold-boot path must meet the same post-COMMIT guarantee as normal
     # Voice/Strategies Apply: the installed profile/traffic.conf/IPSET
@@ -1305,17 +1330,35 @@ shared_apply_execute_service()
             *) _shared_apply_mode=0 ;;
         esac
     fi
-    # Re-read the original source-to-native profile mapping after seal:
-    # the promoted schema-2 map/args must still exactly bind this PHP
-    # candidate and the original generated profile order. The launcher
-    # retains its separate fail-closed original-FD9/epoch authorization.
+    # Re-read the original source-to-native profile mapping after seal.
+    # Each schema has a DIFFERENT independently authenticated verifier.
+    # Schema3 can never be accepted by the old schema2 observer verifier.
+    # This is before durable Apply preparation or service/IPFW mutation.
     if [ "$_shared_apply_mode" = 1 ] &&
        [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
-        if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-active \
-            "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
+        _shared_apply_native_schema=$(/usr/local/bin/jq -er \
+            '.schema | select(. == 2 or . == 3)' \
+            "$_shared_apply_root/release/auto-detect-generation.json") || {
             printf '%s\n' preflight-rejected=observer-generation
             return 0
-        fi
+        }
+        case "$_shared_apply_native_schema" in
+            2)
+                if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-active \
+                    "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
+                    printf '%s\n' preflight-rejected=observer-generation
+                    return 0
+                fi
+                ;;
+            3)
+                if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-learning-active \
+                    "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
+                    printf '%s\n' preflight-rejected=observer-generation
+                    return 0
+                fi
+                ;;
+            *) printf '%s\n' preflight-rejected=observer-generation; return 0 ;;
+        esac
     elif [ "$_shared_apply_mode" = 1 ] &&
          [ -f "$_shared_apply_root/release/auto-detect-source-map.json" ]; then
         # Source says Target Mode=auto, but the one protected schema-2
@@ -1434,6 +1477,7 @@ shared_apply_activate_and_commit_service()
         # because a shell status is zero or APPLY_PHASE was reset.
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=activate' >&2
         return 70
     fi
     if ! shared_apply_record_current_service activated "$_shared_apply_id" "$_shared_apply_page" \
@@ -1445,6 +1489,7 @@ shared_apply_activate_and_commit_service()
         fi
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=activated-journal' >&2
         return 70
     fi
     # Independent proof against a swap between preflight and kernel install.
@@ -1457,6 +1502,7 @@ shared_apply_activate_and_commit_service()
         fi
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=activated-bundle' >&2
         return 70
     fi
     # Independent post-activation proof for both Strategies and Voice Apply.
@@ -1465,6 +1511,7 @@ shared_apply_activate_and_commit_service()
     if ! apply_runtime_attest_activated; then
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=activated-probe' >&2
         return 70
     fi
     if [ "$_shared_found_scope" = ordinary ]; then
@@ -1483,6 +1530,7 @@ shared_apply_activate_and_commit_service()
             fi
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+            printf '%s\n' 'shared-apply-guard=config-save' >&2
             return 70
         fi
     fi
@@ -1496,6 +1544,7 @@ shared_apply_activate_and_commit_service()
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields"; then
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+            printf '%s\n' 'shared-apply-guard=epoch-journal' >&2
             return 70
         fi
     else
@@ -1509,6 +1558,7 @@ shared_apply_activate_and_commit_service()
         "$_shared_apply_id" "$_shared_apply_page") || {
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=saved-readback' >&2
         return 70
     }
     if ! {
@@ -1527,11 +1577,13 @@ shared_apply_activate_and_commit_service()
         # AFTER save cannot be undone by merely restoring the old release.
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=saved-probe' >&2
         return 70
     fi
     if ! apply_runtime_commit; then
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=ipfw-commit' >&2
         return 70
     fi
     # COMMIT discarded the reversible IPFW stage. Only now can the final
@@ -1553,6 +1605,7 @@ shared_apply_activate_and_commit_service()
         # durable transaction and force review instead of false success.
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        printf '%s\n' 'shared-apply-guard=committed-probe' >&2
         return 70
     fi
     # Do NOT write terminal committed before the original pretraffic epoch
@@ -1562,17 +1615,47 @@ shared_apply_activate_and_commit_service()
     if [ "$_shared_apply_epoch_required" = 1 ]; then
         # First native packets may already have been appended. Do not reset
         # original raw/debug or move the starting cursor away from zero.
+        # The finalized sealed map alone chooses which existing original
+        # FD9 epoch attester to call. A schema3 N-inbox generation must NOT
+        # be falsely completed with the schema2 observer PID/debug receipt.
+        _shared_epoch_schema=$(/usr/local/bin/jq -er \
+            '.schema | select(. == 2 or . == 3)' \
+            "$_shared_apply_root/release/auto-detect-generation.json") || {
+            shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+                "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+            common_error "shared Apply: original epoch schema unavailable"
+            printf '%s\n' 'shared-apply-guard=epoch-schema' >&2
+            return 70
+        }
+        case "$_shared_epoch_schema" in
+            2)
+                _shared_epoch_verb=finish-epoch
+                _shared_epoch_expected=original-fd9-running-epoch=attested
+                ;;
+            3)
+                _shared_epoch_verb=finish-learning-epoch
+                _shared_epoch_expected=original-fd9-learning-running-epoch=attested
+                ;;
+            *)
+                shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+                    "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+                printf '%s\n' 'shared-apply-guard=epoch-dispatch' >&2
+                return 70
+                ;;
+        esac
         _shared_epoch_complete=$("$PYTHON_RUNTIME" \
-            "$BACKEND_DIR/auto_detect_post_drop.py" finish-epoch "$_shared_apply_id") || {
+            "$BACKEND_DIR/auto_detect_post_drop.py" "$_shared_epoch_verb" "$_shared_apply_id") || {
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
             common_error "shared Apply: original epoch completion refused"
+            printf '%s\n' 'shared-apply-guard=epoch-attest' >&2
             return 70
         }
-        if [ "$_shared_epoch_complete" != original-fd9-running-epoch=attested ]; then
+        if [ "$_shared_epoch_complete" != "$_shared_epoch_expected" ]; then
             shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
             common_error "shared Apply: original epoch completion unverified"
+            printf '%s\n' 'shared-apply-guard=epoch-receipt' >&2
             return 70
         fi
     fi
@@ -1951,11 +2034,13 @@ shared_apply_prepare_service()
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }
-    # P2: under the original FD9, reverify the native PHP candidate and
-    # original generated profiles BEFORE seal. The P2h no-action preview
-    # is promoted into the exact native argv/schema-2 owner once, without
-    # leaving an inert duplicate in the final release. Runtime still needs
-    # independent original-FD9 launch/epoch authorization (fail closed).
+    # The original FD9 and native PHP candidate must agree BEFORE seal.
+    # Explicit native Target Mode AUTO selects the now-qualified per-profile
+    # schema3 lifecycle, not a hidden global observer. List/All retain the
+    # existing schema2 route for a safe and intentional compatibility boundary.
+    # No environment-only CI flag may change user traffic semantics; the
+    # schema3 eligibility and source map are independently checked below.
+    # Neither path owns an extra process, Config writer, or lifecycle lock.
     if [ -f "$_shared_work/release/auto-detect-source-map.json" ]; then
         _shared_auto_page=$(/usr/local/bin/jq -er \
             '.page | select(.=="voice" or .=="strategies")' \
@@ -1983,12 +2068,47 @@ shared_apply_prepare_service()
             esac
         fi
         if [ "$_shared_auto_mode" = 1 ]; then
-            if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
-                preview "$_shared_work" "$_shared_auto_digest" >/dev/null ||
-               ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
-                promote "$_shared_work" "$_shared_auto_digest" >/dev/null; then
+            _shared_target_mode=$(/usr/local/bin/jq -er \
+                '.mode | select(.=="auto" or .=="list" or .=="all")' \
+                "$_shared_work/release/auto-detect-source-map.json") || {
                 printf '%s\n' preflight-rejected=runtime-build
                 return 0
+            }
+            if [ "$_shared_target_mode" = auto ]; then
+                _shared_learning_preflight=$("$PYTHON_RUNTIME" \
+                    "$BACKEND_DIR/auto_detect_origin_map.py" preflight-learning \
+                    "$_shared_work" "$_shared_auto_digest") || {
+                    printf '%s\n' preflight-rejected=runtime-build
+                    return 0
+                }
+                # No eligible per-profile HOSTLIST means no learning epoch.
+                # Never replace it with an unqualified global observer.
+                if ! printf '%s\n' "$_shared_learning_preflight" | \
+                    /usr/local/bin/jq -e --arg id "$1" --arg digest "$_shared_auto_digest" \
+                    'select(.generation == $id and .native_candidate_sha256 == $digest and
+                        .evidence == "TZ6V4_ORIGINAL_FD9_LEARNING_PREFLIGHT_NONACTIVATING") |
+                     .learning_native_numbers | select(type == "array" and length > 0 and length <= 255)' \
+                    >/dev/null; then
+                    printf '%s\n' preflight-rejected=runtime-build
+                    return 0
+                fi
+                if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                    promote-learning "$_shared_work" "$_shared_auto_digest" >/dev/null ||
+                   ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                    verify-learning-active "$_shared_work" "$_shared_auto_digest" >/dev/null; then
+                    printf '%s\n' preflight-rejected=runtime-build
+                    return 0
+                fi
+            else
+                # List and All retain the original schema2 preview/promotion.
+                # They do not create per-profile learning N-inboxes.
+                if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                    preview "$_shared_work" "$_shared_auto_digest" >/dev/null ||
+                   ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                    promote "$_shared_work" "$_shared_auto_digest" >/dev/null; then
+                    printf '%s\n' preflight-rejected=runtime-build
+                    return 0
+                fi
             fi
         fi
     fi
@@ -2988,7 +3108,11 @@ pkg_update_finish_service()
         if shared_apply_has_record_service; then
             _pkg_new_owner=$(shared_apply_inspect_service) || return 69
             case "${_pkg_new_owner}" in
-                committed\ *) shared_apply_boot_service "${_pkg_new_owner}" || return 70 ;;
+                committed\ *) shared_apply_boot_service "${_pkg_new_owner}" || {
+                    # Fixed diagnostic only; never expose saved Config or shell trace.
+                    echo "pkg-update-finish-failed=boot" >&2
+                    return 70
+                } ;;
                 *) return 69 ;;
             esac
         else

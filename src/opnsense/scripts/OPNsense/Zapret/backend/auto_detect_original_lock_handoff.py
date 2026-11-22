@@ -21,7 +21,8 @@ import sys
 from auto_detect_queue import DurableInbox, QueueSafetyError
 from auto_detect_storage import ROOT as QUEUE_ROOT
 from auto_detect_destination_commit import DestinationCommit, DestinationRefused
-from auto_detect_fd import probe_pending_fd, probe_stopped_pending_fd
+from auto_detect_fd import (probe_pending_fd, probe_stopped_pending_fd,
+                            probe_stopped_learning_pending_fd)
 from auto_detect_owner import (GenerationProof, attest_running_generation,
                                attest_stopped_generation)
 from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
@@ -112,7 +113,9 @@ def inherited_original_locks(queue: DurableInbox, queue_fd: int, config_fd: int,
 
 def _original_completion_locked(queue: DurableInbox, pending: Path, *,
                                 php_bin: str, php_script: Path,
-                                timeout: int, retired: bool = False) -> dict:
+                                timeout: int, retired: bool = False,
+                                learning: bool = False,
+                                stopped_learning: bool = False) -> dict:
     """One genuine PHP Config-held completion while ORIGINAL queue FD is held.
 
     The caller owns queue.exclusive(); this function MUST NOT take a second
@@ -121,36 +124,53 @@ def _original_completion_locked(queue: DurableInbox, pending: Path, *,
     """
     if (not isinstance(queue, DurableInbox) or not queue._held or
             not isinstance(pending, Path) or pending.parent != queue.pending or
-            not PENDING_NAME.fullmatch(pending.name) or
+            not (re.fullmatch(r"[0-9a-f]{32}", pending.name) if learning
+                 else PENDING_NAME.fullmatch(pending.name)) or
+            (learning and retired) or
+            (stopped_learning and (retired or not learning)) or
             type(timeout) is not int or not 1 <= timeout <= 120 or
             not isinstance(php_bin, str) or not php_bin or
             not isinstance(php_script, Path) or not php_script.is_absolute()):
         raise OriginalLockRefused('invalid_original_pending_cycle')
-    if pending not in queue.segments():
+    if not learning and pending not in queue.segments():
         raise OriginalLockRefused('original_pending_missing')
     original_fd = queue.locked_fd
-    if retired:
+    if retired or learning:
         from voice_ipfw_adapter import require_lifecycle_lock
         require_lifecycle_lock()
     try:
         result = subprocess.run(
             [php_bin, str(php_script),
+             'commit-stopped-learning-with-fds' if stopped_learning else
+             'commit-learning-with-fds' if learning else
              'commit-retired-with-fds' if retired else 'commit-with-fds',
              str(original_fd), pending.name],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            pass_fds=(original_fd, 9) if retired else (original_fd,),
+            pass_fds=(original_fd, 9) if retired or learning else (original_fd,),
             timeout=timeout, check=False, close_fds=True)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except subprocess.TimeoutExpired as exc:
+        # A PHP parent has an independently bounded native Config/P1 child.
+        # Distinguish its deadline from transport failures for operator Stop
+        # evidence. Do not log private Config, argv, stderr or child output.
+        raise OriginalLockRefused('original_config_child_deadline') from exc
+    except OSError as exc:
         raise OriginalLockRefused('original_config_owner_unavailable') from exc
-    if result.returncode != 0 or not result.stdout or len(result.stdout) > 16384:
+    if result.returncode != 0:
+        if result.returncode == 69:
+            raise OriginalLockRefused('original_config_child_rc69')
         raise OriginalLockRefused('original_config_child_refused')
+    if not result.stdout or len(result.stdout) > 16384:
+        raise OriginalLockRefused('original_config_child_receipt_unavailable')
     try:
         response = json.loads(result.stdout)
     except (UnicodeError, ValueError) as exc:
         raise OriginalLockRefused('invalid_original_owner_result') from exc
     if (not isinstance(response, dict) or
-            response.get('kind') != 'destination-and-cursor-committed' or
+            response.get('kind') != ('original-learning-minute-completed' if learning
+                                     else 'destination-and-cursor-committed') or
+            (learning and (type(response.get('processed')) is not bool or
+                           response.get('generation') != pending.name)) or
             response.get('ack_authorized') is not False):
         raise OriginalLockRefused('unqualified_original_owner_result')
     return response  # returned child receipt, NOT ACK permission
@@ -227,7 +247,9 @@ def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
         raise OriginalLockRefused("original_v2_transaction_or_ack_unavailable") from exc
 
 
-def run_native_original_v2_cycle_once(*, retired: bool = False) -> bool:
+def run_native_original_v2_cycle_once(*, retired: bool = False,
+                                      learning: bool = False,
+                                      stopped_learning: bool = False) -> bool:
     """One original FD9 service-owned native minute, with no new worker."""
     if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
         raise OriginalLockRefused("original_native_fd9_required")
@@ -253,6 +275,23 @@ def run_native_original_v2_cycle_once(*, retired: bool = False) -> bool:
              "youtube": OWNED_ROOT / "youtube.txt",
              "user": OWNED_ROOT / "user.txt"}, AUTO_LOCK)
         with queue.exclusive():
+            if stopped_learning and (not learning or retired):
+                raise OriginalLockRefused("stopped_learning_requires_original_mode")
+            if learning:
+                if retired:
+                    raise OriginalLockRefused("learning_minute_cannot_be_retired_raw")
+                from auto_detect_owner import (
+                    attest_learning_running_generation,
+                    attest_learning_stopped_generation,
+                )
+                proof = (attest_learning_stopped_generation() if stopped_learning
+                         else attest_learning_running_generation())
+                response = _original_completion_locked(
+                    queue, queue.pending / proof.generation,
+                    php_bin="/usr/local/bin/php", php_script=PHP_CONFIG,
+                    timeout=25, learning=True,
+                    stopped_learning=stopped_learning)
+                return response["processed"]
             return _original_v2_cycle_locked(
                 queue, writer, php_bin="/usr/local/bin/php",
                 php_script=PHP_CONFIG, timeout=25,
@@ -285,10 +324,14 @@ def read_bounded_original_model(reader=os.read) -> bytes:
 
 
 def _native_fd_child(pending_name: str, payload: dict, *,
-                     retired: bool = False) -> dict:
+                     retired: bool = False, learning: bool = False,
+                     stopped_learning: bool = False) -> dict:
     """Original PHP Config child with BOTH verified inherited lock descriptors."""
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
-            not PENDING_NAME.fullmatch(pending_name) or
+            not (re.fullmatch(r"[0-9a-f]{32}", pending_name) if learning
+                 else PENDING_NAME.fullmatch(pending_name)) or
+            (learning and retired) or
+            (stopped_learning and (not learning or retired)) or
             not isinstance(payload, dict) or
             set(payload) != {"manual_hostlists", "global_exclude",
                              "config_snapshot_sha256"} or
@@ -303,7 +346,7 @@ def _native_fd_child(pending_name: str, payload: dict, *,
     queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
     pending = queue.pending / pending_name
     with inherited_original_locks(queue, 3, 4, CONFIG_PATH, owner_uid=0):
-        if pending not in queue.segments():
+        if not learning and pending not in queue.segments():
             raise OriginalLockRefused("original_pending_not_in_queue")
         receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
         writer = DestinationCommit(
@@ -311,6 +354,27 @@ def _native_fd_child(pending_name: str, payload: dict, *,
             {"auto": AUTO_HOSTLIST,
              "youtube": OWNED_ROOT / "youtube.txt",
              "user": OWNED_ROOT / "user.txt"}, AUTO_LOCK)
+        if learning:
+            from auto_detect_owner import (
+                attest_learning_running_generation,
+                attest_learning_stopped_generation, WORK,
+            )
+            from auto_detect_original_v2_model import process_original_learning_cycle
+            learning_attest = (attest_learning_stopped_generation if stopped_learning
+                               else attest_learning_running_generation)
+            proof = learning_attest()
+            if proof.generation != pending_name:
+                raise OriginalLockRefused("learning_original_generation_changed_in_child")
+            processed = process_original_learning_cycle(
+                writer, proof, WORK / proof.operation_id, config_fd=4,
+                config_path=CONFIG_PATH, owned_root=OWNED_ROOT,
+                manual_hostlists=payload["manual_hostlists"],
+                global_exclude=payload["global_exclude"],
+                attest=learning_attest,
+                inspect=probe_stopped_learning_pending_fd if stopped_learning else probe_pending_fd,
+                stopped=stopped_learning)
+            return dict(kind="original-learning-minute-completed", processed=processed,
+                        generation=proof.generation, ack_authorized=False)
         completion = commit_with_original_v2_model(
             writer, pending, owned_root=OWNED_ROOT,
             manual_hostlists=payload["manual_hostlists"],
@@ -325,12 +389,19 @@ def _native_fd_child(pending_name: str, payload: dict, *,
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if (len(argv) != 2 or argv[0] not in ("commit-fds", "commit-retired-fds") or
+    if (len(argv) != 2 or argv[0] not in (
+            "commit-fds", "commit-retired-fds", "commit-learning-fds",
+            "commit-stopped-learning-fds") or
             not sys.platform.startswith("freebsd") or os.geteuid() != 0):
         return 64
     try:
         response = _native_fd_child(argv[1], json.loads(read_bounded_original_model()),
-                                    retired=argv[0] == "commit-retired-fds")
+                                    retired=argv[0] == "commit-retired-fds",
+                                    learning=argv[0] in (
+                                        "commit-learning-fds",
+                                        "commit-stopped-learning-fds"),
+                                    stopped_learning=argv[0] ==
+                                        "commit-stopped-learning-fds")
         print(json.dumps(response, sort_keys=True, separators=(",", ":")))
         return 0
     except (OriginalLockRefused, V2OriginalConfigRefused,

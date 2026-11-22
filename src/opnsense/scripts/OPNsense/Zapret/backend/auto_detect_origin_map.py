@@ -210,19 +210,24 @@ def build_map(*, generation: str, mode: str, strategy: bytes, bindings: bytes,
             authored_has_ipset=origin.get("authored_has_ipset", False),
             source_has_ipset=origin.get("source_has_ipset", False),
             selector=origin.get("selector"), hostlist=hostlist, status=status,
+            native_row_sha256=_sha("\x00".join(row).encode("utf-8")),
+            native_hostlist_token=(selector_bindings.get(origin.get("selector"))
+                                   if status == "known-hostlist" else None),
         ))
     # Upstream appends a separate low-priority no_action profile numbered 0.
     records.append(dict(id=f"{generation}:default", native_number=0,
                         role="native-default", source_number=None, source_sha256=None,
                         source_selectors=[], authored_has_ipset=False, source_has_ipset=False,
-                        selector=None, hostlist=None, status="unknown-native-default"))
+                        selector=None, hostlist=None, status="unknown-native-default",
+                        native_row_sha256=None, native_hostlist_token=None))
     digest = hashlib.sha256()
     for capture in captures:
         digest.update(len(capture).to_bytes(8, "big"))
         digest.update(capture)
     return dict(schema=1, generation=generation, mode=mode,
                 evidence="P0_DETACHED_GENERATOR_ONLY", final_args_sha256=_sha(final),
-                strategy_sha256=_sha(strategy), captures_sha256=digest.hexdigest(), profiles=records)
+                strategy_sha256=_sha(strategy), captures_sha256=digest.hexdigest(),
+                native_selector_bindings=selector_bindings, profiles=records)
 
 
 def _original_global_policy_paths(release: Path) -> tuple:
@@ -275,6 +280,190 @@ def _attach_original_global_exclusions(release: Path, original: bytes,
         return final_text.encode("utf-8")
     except (OSError, ValueError, TypeError, KeyError) as exc:
         raise AttributionError("observer global exclusion proof unavailable") from exc
+
+
+
+# TZ6v4 STEP 2: offline-only learning-tier projection. The running owner
+# deliberately does not accept this proposal schema: the original FD9/P2
+# and native inbox lifecycle must be cut over in the SAME #1052 PR first.
+LEARNING_PROPOSAL = "TZ6V4_OFFLINE_LEARNING_PROPOSAL_ONLY"
+
+
+def plan_learning_tier(mapping: dict, original: bytes, *,
+                       owner_id: str, owner_candidate_sha256: str) -> tuple[bytes, dict]:
+    """Project exact ordinary native argv followed by qualified learning copies.
+
+    The original source map is produced by the one real generator AFTER
+    expansion, native --new, Voice/Extra and global exclusions. This function
+    neither edits that generation nor provisions files, signs an epoch, starts
+    the service or authorizes any native owner. Its planned raw paths are
+    *reservations*, not trustworthy filesystem artifacts or ACK permissions.
+    """
+    from auto_detect_owned_sources import KNOWN_HOSTLISTS
+
+    if (not isinstance(original, bytes) or not original
+            or len(original) > ARGS_LIMIT or b"\x00" in original
+            or not isinstance(mapping, dict)
+            or mapping.get("schema") != 1
+            or mapping.get("evidence") != NONACTIVATING
+            or mapping.get("activation_authorized") is not False
+            or mapping.get("observer_attached") is not False
+            or mapping.get("mode") not in {"auto", "list", "all"}
+            or mapping.get("final_args_sha256") != _sha(original)
+            or not re.fullmatch(r"[0-9a-f]{32}", owner_id)
+            or mapping.get("generation") != owner_id
+            or not re.fullmatch(r"[0-9a-f]{64}", owner_candidate_sha256)):
+        raise AttributionError("unqualified original generator learning input")
+
+    try:
+        original_text = _text(original)
+        rows = segments(original_text)
+    except ExclusionError as exc:
+        raise AttributionError("invalid final native profile sequence") from exc
+    if any(t.startswith("--hostlist-auto") for t in original_text.split()):
+        raise AttributionError("original native argv already includes auto detector")
+    bindings = mapping.get("native_selector_bindings")
+    if (not isinstance(bindings, dict) or any(
+            not isinstance(k, str) or not profile_policy.SELECTOR.fullmatch(k)
+            or not isinstance(v, str) or not v.startswith((
+                "--hostlist=/", "--ipset=/"))
+            for k, v in bindings.items())):
+        raise AttributionError("unqualified canonical target bindings")
+    records = mapping.get("profiles")
+    if (not isinstance(records, list) or len(records) != len(rows) + 1
+            or not isinstance(records[-1], dict)
+            or records[-1].get("native_number") != 0
+            or records[-1].get("status") != "unknown-native-default"):
+        raise AttributionError("original source map and final argv disagree")
+
+    next_number = 0
+    working = []
+    learning = []
+    seen = set()
+    for ordinal, (row, source) in enumerate(zip(rows, records), 1):
+        if (not isinstance(source, dict)
+                or source.get("id") != f"{owner_id}:{ordinal}"):
+            raise AttributionError("stale original source profile identity")
+        if source.get("native_row_sha256") != _sha("\x00".join(row).encode("utf-8")):
+            raise AttributionError("native source row changed after mapping")
+        if (source.get("status") == "known-hostlist" and
+                (source.get("native_hostlist_token") !=
+                 bindings.get(source.get("selector")) or
+                 source.get("native_hostlist_token") not in row)):
+            raise AttributionError("source hostlist differs from native binding")
+        number = source.get("native_number")
+        if number is not None:
+            if (type(number) is not int or number != next_number + 1
+                    or number in seen):
+                raise AttributionError("unqualified final executable numbering")
+            next_number = number
+            seen.add(number)
+        hostlist = source.get("hostlist")
+        eligible = (
+            mapping["mode"] == "auto"
+            and number is not None
+            and source.get("status") == "known-hostlist"
+            and source.get("role") == "strategy"
+            and source.get("authored_has_ipset") is False
+            and source.get("source_has_ipset") is False
+            and isinstance(hostlist, str)
+            and hostlist in KNOWN_HOSTLISTS
+            and source.get("selector") == f"<HOSTLIST:{hostlist}>"
+            and source.get("native_hostlist_token") == bindings.get(
+                f"<HOSTLIST:{hostlist}>")
+            and source.get("source_selectors") == [f"<HOSTLIST:{hostlist}>"]
+            and sum(t.startswith("--hostlist=") for t in row) == 1
+            and not any(t.startswith(("--ipset=", "--ipset-ip=",
+                                      "--hostlist-domains=", "--import",
+                                      "--template", "--skip")) for t in row)
+            and not is_stun(visible(row))
+            and not any(t.startswith("--name=") for t in row)
+        )
+        found = f"{hostlist}_found" if eligible else None
+        working.append({
+            "native_number": number,
+            "role": "working" if source.get("status") == "known-hostlist" else "excluded",
+            "source_profile": source.get("id"),
+            "source_sha256": source.get("source_sha256"),
+            "selector": source.get("selector"),
+            "hostlist": hostlist,
+            "found_source_id": found,
+            "auto_inbox": None,
+            "debug_identity": None,
+            "origin_status": source.get("status"),
+        })
+        if not eligible:
+            continue
+        # Never copy global --port/other engine preamble or named --new
+        # boundaries. Preserve the exact effective filters, exclusions,
+        # payload and desync arguments of this one ordinary native row.
+        clone = [t for t in visible(row)
+                 if t.partition("=")[0] not in BASE]
+        if not clone:
+            raise AttributionError("empty original learning profile")
+        learning.append((source, hostlist, found, clone))
+    # Native numbers account for *all* regular executable profiles, including
+    # Voice/IPSET and unknown profiles skipped for learning.
+    ordinary_numbers = [r["native_number"] for r in working
+                        if r["native_number"] is not None]
+    if ordinary_numbers != list(range(1, len(ordinary_numbers) + 1)):
+        raise AttributionError("nonsequential native ordinary profiles")
+    next_number = len(ordinary_numbers)
+
+    projected = original_text.split()
+    result = list(working)
+    for source, hostlist, found, clone in learning:
+        next_number += 1
+        native_inbox = str(RAW_PATH.parent /
+                           f"learning-{owner_id}-{next_number}.txt")
+        projected.extend(["--new", *clone,
+                          f"--hostlist-auto={native_inbox}",
+                          "--hostlist-auto-retrans-reset=0"])
+        result.append({
+            "native_number": next_number,
+            "role": "learning",
+            "source_profile": source["id"],
+            "source_sha256": source["source_sha256"],
+            "selector": source["selector"],
+            "hostlist": hostlist,
+            "found_source_id": found,
+            "auto_inbox": native_inbox,
+            "debug_identity": str(DEBUG_PATH),
+            "origin_status": "qualified-source-proposal",
+        })
+    if learning:
+        # The original global option is inserted exactly once, not into
+        # every learning profile; provenance comes from its unique inbox.
+        if not projected[0].startswith("--port="):
+            raise AttributionError("original native preamble not qualified")
+        projected.insert(1, f"--hostlist-auto-debug={DEBUG_PATH}")
+        planned = ("\n".join(projected) + "\n").encode("utf-8")
+    else:
+        planned = original  # all/list and no-eligible auto must not change argv
+    try:
+        final_rows = segments(_text(planned))
+    except ExclusionError as exc:
+        raise AttributionError("learning tier exceeds native profile limit") from exc
+    if len(final_rows) != len(rows) + len(learning) or len(planned) > ARGS_LIMIT:
+        raise AttributionError("unbounded or misaligned native learning tier")
+    result.append({
+        "native_number": 0, "role": "excluded",
+        "source_profile": records[-1].get("id"),
+        "source_sha256": None, "selector": None, "hostlist": None,
+        "found_source_id": None, "auto_inbox": None, "debug_identity": None,
+        "origin_status": "unknown-native-default",
+    })
+    return planned, {
+        "schema": 3, "evidence": LEARNING_PROPOSAL,
+        "activation_authorized": False,
+        "generation": owner_id, "owner_operation_id": owner_id,
+        "owner_candidate_sha256": owner_candidate_sha256,
+        "mode": mapping["mode"],
+        "original_args_sha256": _sha(original),
+        "final_args_sha256": _sha(planned),
+        "profiles": result,
+    }
+
 
 
 def plan_trailing_observer(mapping: dict, original: bytes, *, owner_id: str,
@@ -576,6 +765,50 @@ def preflight_original_observer(workspace: Path, candidate_digest: str) -> dict:
     }
 
 
+
+def preflight_learning_tier(workspace: Path, candidate_digest: str) -> dict:
+    """Read-only, candidate-locked TZ6v4 projection under the original FD9.
+
+    This is deliberately separate from promote_original_preview(): it cannot
+    create an executable generation map, native producer or runtime epoch.
+    Existing FD9 source/Config preflight is reused, never relaxed.
+    """
+    original_proof = preflight_original_observer(workspace, candidate_digest)
+    work = Path(workspace)
+    release = work / "release"
+    source = json.loads(_capture_file(release / ORIGIN_FILE, owner_uid=os.geteuid()))
+    original = _capture_file(release / "dvtws.args", owner_uid=os.geteuid())
+    if _sha(original) != original_proof["original_args_sha256"]:
+        raise AttributionError("original FD9 source changed during preflight")
+    planned, proposal = plan_learning_tier(
+        source, original, owner_id=work.name,
+        owner_candidate_sha256=candidate_digest)
+    if (proposal["evidence"] != LEARNING_PROPOSAL
+            or proposal["activation_authorized"] is not False
+            or proposal["final_args_sha256"] != _sha(planned)):
+        raise AttributionError("learning preflight unexpectedly authorized runtime")
+    from auto_detect_owner import _valid_learning_proposal
+    serialized = json.dumps(proposal, sort_keys=True, separators=(",", ":")).encode()
+    # A second exact native-order reader independently rejects map/argv
+    # mismatches. It cannot unlock the installed schema-2 production owner.
+    verified = _valid_learning_proposal(
+        serialized, {"id": work.name, "candidate": candidate_digest},
+        original, planned)
+    learning = [row for row in proposal["profiles"] if row["role"] == "learning"]
+    if [row["native_number"] for row in learning] != [n for n, _, _ in verified]:
+        raise AttributionError("learning proposal differs from native attestation")
+    return {
+        "evidence": "TZ6V4_ORIGINAL_FD9_LEARNING_PREFLIGHT_NONACTIVATING",
+        "generation": work.name,
+        "native_candidate_sha256": candidate_digest,
+        "original_args_sha256": original_proof["original_args_sha256"],
+        "proposed_args_sha256": _sha(planned),
+        "learning_native_numbers": [row["native_number"] for row in learning],
+        "learning_hostlists": [row["hostlist"] for row in learning],
+    }
+
+
+
 def _secure_new_file(path: Path, content: bytes) -> None:
     """Sealed-candidate workspace only; never replace an existing witness."""
     if path.exists() or path.is_symlink() or not isinstance(content, bytes):
@@ -800,6 +1033,192 @@ def promote_original_preview(workspace: Path, candidate_digest: str) -> dict:
     return record
 
 
+
+
+# TZ6v4: sealed candidate promotion now has an exact *schema3* counterpart.
+# This is the original shared release candidate writer (BEFORE bundle seal),
+# not a second runtime launcher, public Config writer or background worker.
+# No installed flow invokes it until the same original FD9/P2a/P2c/ACK
+# lifecycle can fully own the promoted native generation.
+def _learning_promotion_projection(
+    workspace: Path, candidate_digest: str,
+) -> tuple[bytes, bytes, bytes, dict, dict]:
+    from auto_detect_owner import _valid_learning_active, LEARNING_ACTIVE
+    work = Path(workspace)
+    # The original source/Config-candidate gate still runs first. It proves
+    # the original candidate BEFORE any promotion or executable argv edits.
+    original_preflight = preflight_learning_tier(work, candidate_digest)
+    release = work / "release"
+    original = _capture_file(release / "dvtws.args", owner_uid=os.geteuid())
+    if _sha(original) != original_preflight["original_args_sha256"]:
+        raise AttributionError("learning_original_candidate_changed")
+    source = json.loads(_capture_file(
+        release / ORIGIN_FILE, owner_uid=os.geteuid()))
+    projected, proposal = plan_learning_tier(
+        source, original, owner_id=work.name,
+        owner_candidate_sha256=candidate_digest)
+    learning = [row for row in proposal["profiles"]
+                if row["role"] == "learning"]
+    if (not learning or proposal["mode"] != "auto" or
+            [row["native_number"] for row in learning] !=
+            original_preflight["learning_native_numbers"] or
+            _sha(projected) != original_preflight["proposed_args_sha256"]):
+        raise AttributionError("learning_active_candidate_is_not_qualified")
+    # Reuse Stage 3 global IPSET/domain exclusion audit; ordinary working
+    # profiles and clones must retain the same effective global exclusion.
+    policy_file = release / "dvtws.args.global-policy.json"
+    has_policy = policy_file.exists() or policy_file.is_symlink()
+    if has_policy:
+        from global_exclusions import audit
+        details = json.loads(_capture_file(
+            policy_file, limit=16384, owner_uid=os.geteuid()))
+        if (not isinstance(details, dict) or set(details) !=
+                {"schema", "argv_sha256", "profiles"} or
+                details["schema"] != 1 or
+                details["argv_sha256"] != _sha(original) or
+                details["profiles"] != len(segments(_text(original)))):
+            raise AttributionError("learning_original_global_policy_mismatch")
+        args = _original_global_policy_paths(release)
+        audit(_text(original), *args)
+        audit(_text(projected), *args)
+    active = {
+        **proposal, "evidence": LEARNING_ACTIVE,
+        "activation_authorized": True,
+    }
+    encoded = (json.dumps(
+        active, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    independent = _valid_learning_active(
+        encoded, {"id": work.name, "candidate": candidate_digest},
+        source, original, projected)
+    if ([row["native_number"] for row in learning] !=
+            [number for number, _, _ in independent]):
+        raise AttributionError("learning_active_not_independently_verified")
+    return original, projected, encoded, active, details if has_policy else None
+
+
+def verify_learning_promotion(workspace: Path, candidate_digest: str) -> dict:
+    """Read-only exact verification of one *promoted* schema3 release.
+
+    This does not grant process or FD9 permission. The live attester must
+    independently verify the SAME sealed candidate and active runtime.
+    """
+    from auto_detect_owner import _valid_learning_active, MAP_NAME
+    work = Path(workspace)
+    if (not re.fullmatch(r"[0-9a-f]{32}", work.name) or
+            not re.fullmatch(r"[0-9a-f]{64}", candidate_digest)):
+        raise AttributionError("invalid_learning_promoted_generation")
+    release = work / "release"
+    old = _capture_file(release / "dvtws.original.args",
+                        owner_uid=os.geteuid())
+    final = _capture_file(release / "dvtws.args",
+                          owner_uid=os.geteuid())
+    mapping_raw = _capture_file(release / MAP_NAME,
+                                owner_uid=os.geteuid())
+    source = json.loads(_capture_file(
+        release / ORIGIN_FILE, owner_uid=os.geteuid()))
+    from auto_detect_owner import LEARNING_ACTIVE
+    projected, expected = plan_learning_tier(
+        source, old, owner_id=work.name,
+        owner_candidate_sha256=candidate_digest)
+    expected = {**expected, "evidence": LEARNING_ACTIVE,
+                "activation_authorized": True}
+    if (final != projected or
+            json.loads(mapping_raw) != expected or
+            not _valid_learning_active(
+                mapping_raw,
+                {"id": work.name, "candidate": candidate_digest},
+                source, old, final)):
+        raise AttributionError("learning_promotion_differs_from_original_native_source")
+    forbidden = (
+        ".dvtws.original.args.learning.pending",
+        ".dvtws.args.learning.pending",
+        ".auto-detect-generation.learning.pending",
+        ".dvtws.args.global-policy.learning.pending",
+        "auto-detect-observer-preview.args",
+        "auto-detect-observer-preview.json",
+    )
+    if any((release / name).exists() or (release / name).is_symlink()
+           for name in forbidden):
+        raise AttributionError("incomplete_learning_candidate_promotion")
+    # If Stage3 created a global policy marker, the existing one remains
+    # binding for all ordinary and learning native profiles.
+    policy_path = release / "dvtws.args.global-policy.json"
+    if policy_path.exists() or policy_path.is_symlink():
+        from global_exclusions import audit
+        policy = json.loads(_capture_file(
+            policy_path, limit=16384, owner_uid=os.geteuid()))
+        if (not isinstance(policy, dict) or set(policy) !=
+                {"schema", "argv_sha256", "profiles"} or
+                policy["schema"] != 1 or
+                policy["argv_sha256"] != _sha(final) or
+                policy["profiles"] != len(segments(_text(final)))):
+            raise AttributionError("learning_promoted_global_policy_mismatch")
+        audit(_text(final), *_original_global_policy_paths(release))
+    return expected
+
+
+def promote_learning_release(workspace: Path, candidate_digest: str) -> dict:
+    """Promote native two-tier candidate in the ORIGINAL shared workspace.
+
+    Before the original bundle is sealed, save the original argv, install
+    final argv and the exact active schema3 map. The existing shared Apply
+    owns later atomic tree activation, process, Config, and IPFW. A crash
+    leaves an unsealed/torn candidate that the verifier rejects. The old
+    P2f observer promoter stays a separate unchanged schema2 path.
+    """
+    from auto_detect_owner import MAP_NAME
+    work = Path(workspace)
+    original, projected, encoded, active, policy = (
+        _learning_promotion_projection(work, candidate_digest))
+    release = work / "release"
+    old_args = release / "dvtws.original.args"
+    argv = release / "dvtws.args"
+    active_map = release / MAP_NAME
+    stage_old = release / ".dvtws.original.args.learning.pending"
+    stage_final = release / ".dvtws.args.learning.pending"
+    stage_map = release / ".auto-detect-generation.learning.pending"
+    policy_path = release / "dvtws.args.global-policy.json"
+    stage_policy = release / ".dvtws.args.global-policy.learning.pending"
+    if (any(p.exists() or p.is_symlink() for p in (
+            old_args, active_map, stage_old, stage_final,
+            stage_map, stage_policy)) or
+            _capture_file(argv, owner_uid=os.geteuid()) != original):
+        raise AttributionError("learning_original_candidate_already_promoted")
+    _secure_new_file(stage_old, original)
+    _secure_new_file(stage_final, projected)
+    _secure_new_file(stage_map, encoded)
+    if policy is not None:
+        renewed = {
+            "schema": 1, "argv_sha256": _sha(projected),
+            "profiles": len(segments(_text(projected))),
+        }
+        _secure_new_file(
+            stage_policy, (json.dumps(
+                renewed, sort_keys=True, separators=(",", ":")) + "\n").encode())
+    if ( _capture_file(argv, owner_uid=os.geteuid()) != original or
+         _capture_file(stage_old, owner_uid=os.geteuid()) != original or
+         _capture_file(stage_final, owner_uid=os.geteuid()) != projected or
+         _capture_file(stage_map, owner_uid=os.geteuid()) != encoded or
+         (policy is not None and json.loads(_capture_file(
+             policy_path, limit=16384, owner_uid=os.geteuid())) != policy)):
+        raise AttributionError("learning_original_candidate_drifted_during_promotion")
+    os.replace(stage_old, old_args)
+    os.replace(stage_final, argv)
+    os.replace(stage_map, active_map)
+    if policy is not None:
+        os.replace(stage_policy, policy_path)
+    directory = os.open(release, os.O_RDONLY |
+                        getattr(os, "O_DIRECTORY", 0) |
+                        getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    if verify_learning_promotion(work, candidate_digest) != active:
+        raise AttributionError("learning_candidate_failed_promotion_verify")
+    return active
+
+
 def _require_original_fd9_cli(work: Path) -> None:
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0
             or work.parent != Path("/var/db/zapret2/shared-work")):
@@ -809,21 +1228,34 @@ def _require_original_fd9_cli(work: Path) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 4 or argv[1] not in {"emit", "preflight", "preview", "verify-preview", "promote", "verify-active"}:
+    if len(argv) != 4 or argv[1] not in {"emit", "preflight", "preflight-learning", "preview", "verify-preview", "promote", "verify-active", "promote-learning", "verify-learning-active"}:
         return 64
     workspace = Path(argv[2])
     try:
-        if argv[1] in {"preview", "verify-preview", "promote", "verify-active"}:
+        if argv[1] in {"preview", "verify-preview", "promote", "verify-active", "promote-learning", "verify-learning-active"}:
             _require_original_fd9_cli(workspace)
             operations = {
                 "preview": stage_original_preview,
                 "verify-preview": verify_original_preview,
                 "promote": promote_original_preview,
                 "verify-active": verify_original_promotion,
+                "promote-learning": promote_learning_release,
+                "verify-learning-active": verify_learning_promotion,
             }
             record = operations[argv[1]](workspace, argv[3])
-            print(json.dumps({"observer_native_number": record["observer_native_number"],
-                              "generation": workspace.name}, sort_keys=True))
+            print(json.dumps({
+                "schema": record["schema"],
+                "generation": workspace.name,
+                "learning_native_numbers": [
+                    p["native_number"] for p in record["profiles"]
+                    if p.get("role") == "learning"
+                ] if record["schema"] == 3 else [],
+                "observer_native_number": record.get("observer_native_number"),
+            }, sort_keys=True))
+        elif argv[1] == "preflight-learning":
+            _require_original_fd9_cli(workspace)
+            print(json.dumps(preflight_learning_tier(workspace, argv[3]),
+                             sort_keys=True, separators=(",", ":")))
         elif argv[1] == "preflight":
             print(json.dumps(preflight_original_observer(workspace, argv[3]),
                              sort_keys=True, separators=(",", ":")))

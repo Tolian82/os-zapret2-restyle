@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import pwd
+import re
 import stat
 import sys
 
@@ -22,6 +23,7 @@ ROOT_MODE = 0o710
 FILE_MODE = 0o660
 PENDING_MODE = 0o700
 ENGINE_USER = "nobody"
+LEARNING_NAME = re.compile(r"learning-([0-9a-f]{32})-([1-9][0-9]{0,2})\.txt\Z")
 
 
 class StorageRefused(RuntimeError):
@@ -83,11 +85,39 @@ def _entry(root: Path, name: str, *, directory: bool, uid: int,
             links=None if directory else 1)
 
 
-def _prepare(root: Path, *, uid: int, engine_gid: int) -> None:
-    """Internal testable primitive. The only production root is ROOT."""
+
+def _learning_names(names: tuple[str, ...]) -> tuple[str, ...]:
+    """Qualify only generator-owned per-profile paths, before any write."""
+    if type(names) is not tuple or len(names) > 255:
+        raise StorageRefused("unqualified_native_learning_inbox_set")
+    numbers = []
+    generations = set()
+    for name in names:
+        found = LEARNING_NAME.fullmatch(name) if type(name) is str else None
+        if found is None or int(found[2]) > 255:
+            raise StorageRefused("unqualified_native_learning_inbox_name")
+        generations.add(found[1])
+        numbers.append(int(found[2]))
+    if (len(generations) > 1 or
+            len(set(numbers)) != len(numbers) or
+            (bool(numbers) and
+             numbers != list(range(numbers[0], numbers[0] + len(numbers))))):
+        raise StorageRefused("ambiguous_native_learning_inbox_sequence")
+    return names
+
+
+def _prepare(root: Path, *, uid: int, engine_gid: int,
+             learning_inboxes: tuple[str, ...] = ()) -> None:
+    """Internal testable primitive. The only production root is ROOT.
+
+    The current native launcher still calls this with NO learning inboxes;
+    this bounded extension is inert until the approved FD9 generation map
+    is connected to the same prelaunch owner and P2 pipeline.
+    """
     if (root == root.parent or not root.is_absolute()
             or not isinstance(engine_gid, int) or engine_gid < 0):
         raise StorageRefused("invalid_producer_location_or_group")
+    names = _learning_names(learning_inboxes)
     _parent(root, uid)
     try:
         root.mkdir(mode=0o700)
@@ -100,14 +130,18 @@ def _prepare(root: Path, *, uid: int, engine_gid: int) -> None:
         root.chmod(ROOT_MODE)
         _sync(root.parent)
     _secure(root, directory=True, uid=uid, gid=engine_gid, mode=ROOT_MODE)
+    allowed = {"pending", "inbox.txt", "debug.log", "worker.lock"} | set(names)
+    # A different generation's existing inbox is a foreign object. Refuse
+    # BEFORE creating even one newly named file in this original root.
+    if set(os.listdir(root)) - allowed:
+        raise StorageRefused("foreign_native_producer_entry")
     _entry(root, "pending", directory=True, uid=uid,
            gid=uid, mode=PENDING_MODE)
-    for name in ("inbox.txt", "debug.log"):
+    for name in ("inbox.txt", "debug.log", *names):
         _entry(root, name, directory=False, uid=uid,
                gid=engine_gid, mode=FILE_MODE)
     # Unknown objects are preserved, but never silently accepted.
     # pending contents are owned by the future durable queue.
-    allowed = {"pending", "inbox.txt", "debug.log", "worker.lock"}
     if set(os.listdir(root)) - allowed:
         raise StorageRefused("foreign_native_producer_entry")
     lock = root / "worker.lock"
@@ -127,6 +161,30 @@ def prepare_native() -> None:
     if identity.pw_gid <= 0:
         raise StorageRefused("native_engine_group_unqualified")
     _prepare(ROOT, uid=0, engine_gid=identity.pw_gid)
+
+
+
+
+def prepare_native_learning(names: tuple[str, ...]) -> None:
+    """Original FD9-only N-inbox preparation after SEALED source-map proof.
+
+    This does not independently authorize a generation: the caller must
+    already have attested the original sealed candidate and mapped these
+    exact names to qualified native learning profiles. It uses precisely
+    the existing producer root and P2a layout, never a second queue.
+    """
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise StorageRefused("learning_native_root_freebsd_only")
+    validated = _learning_names(names)
+    if not validated:
+        raise StorageRefused("empty_learning_native_producer_set")
+    from voice_ipfw_adapter import require_lifecycle_lock
+    require_lifecycle_lock()
+    identity = pwd.getpwnam(ENGINE_USER)
+    if identity.pw_uid <= 0 or identity.pw_gid <= 0:
+        raise StorageRefused("learning_native_engine_group_unqualified")
+    _prepare(ROOT, uid=0, engine_gid=identity.pw_gid,
+             learning_inboxes=validated)
 
 
 def main() -> None:

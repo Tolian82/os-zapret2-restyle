@@ -267,7 +267,8 @@ final class AutoDetectConfigSnapshot
      * or permission to call Config::save().
      */
     public static function withLockedOriginalModel(
-        object $config, callable $modelFactory, callable $operation
+        object $config, callable $modelFactory, callable $operation,
+        bool $learning = false
     ): array {
         $config->lock();
         try {
@@ -289,7 +290,10 @@ final class AutoDetectConfigSnapshot
                 'config_snapshot_sha256' => $digest,
             ]);
             if (!is_array($result) ||
-                ($result['kind'] ?? null) !== 'destination-and-cursor-committed' ||
+                ($result['kind'] ?? null) !== ($learning ?
+                    'original-learning-minute-completed' : 'destination-and-cursor-committed') ||
+                ($learning && (!is_bool($result['processed'] ?? null) ||
+                    preg_match('/^[0-9a-f]{32}$/D', $result['generation'] ?? '') !== 1)) ||
                 ($result['ack_authorized'] ?? null) !== false) {
                 throw new \RuntimeException('Unqualified destination checkpoint');
             }
@@ -322,9 +326,9 @@ final class AutoDetectConfigSnapshot
     public static function commitWithInheritedOriginalLocks(
         object $config, callable $modelFactory, int $queueFd,
         string $queuePath, string $configPath, array $pythonCommand,
-        bool $retired = false
+        bool $retired = false, bool $learning = false
     ): array {
-        if ($queueFd < 3 || $queueFd > 1024 || $queuePath === '' ||
+        if (($retired && $learning) || $queueFd < 3 || $queueFd > 1024 || $queuePath === '' ||
             $configPath === '' || !str_starts_with($queuePath, '/') ||
             !str_starts_with($configPath, '/') ||
             !$pythonCommand || !array_is_list($pythonCommand) ||
@@ -333,7 +337,7 @@ final class AutoDetectConfigSnapshot
         }
         return self::withLockedOriginalModel(
             $config, $modelFactory,
-            static function (array $source) use ($config, $queueFd, $queuePath, $configPath, $pythonCommand, $retired): array {
+            static function (array $source) use ($config, $queueFd, $queuePath, $configPath, $pythonCommand, $retired, $learning): array {
                 // Both descriptors come from their ORIGINAL owners. The
                 // child receives duped open-file descriptions, not newly
                 // opened paths or guessed flock ownership.
@@ -368,7 +372,7 @@ final class AutoDetectConfigSnapshot
                     // lifecycle lock. Normal running-minute descriptors
                     // remain unchanged.
                     $lifecycle = null;
-                    if ($retired) {
+                    if ($retired || $learning) {
                         SharedApplyLifecycleLock::assertHeld();
                         $lifecycle = @fopen('php://fd/9', 'r+b');
                         if (!is_resource($lifecycle)) {
@@ -378,7 +382,7 @@ final class AutoDetectConfigSnapshot
                     $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'],
                                     2 => ['file', '/dev/null', 'a'],
                                     3 => $queueStream, 4 => $handle];
-                    if ($retired) {
+                    if ($retired || $learning) {
                         $descriptors[9] = $lifecycle;
                     }
                     $pipes = [];
@@ -461,7 +465,7 @@ final class AutoDetectConfigSnapshot
                 } finally {
                     fclose($queueStream);
                 }
-            }
+            }, $learning
         );
     }
 
@@ -691,9 +695,15 @@ final class AutoDetectConfigSnapshot
                 );
                 $result = ['result' => $state];
             } elseif (count($argv) === 4 &&
-                      in_array($argv[1], ['commit-with-fds', 'commit-retired-with-fds'], true) &&
+                      in_array($argv[1], [
+                          'commit-with-fds', 'commit-retired-with-fds',
+                          'commit-learning-with-fds', 'commit-stopped-learning-with-fds',
+                      ], true) &&
                       preg_match('/^[0-9]{1,4}$/D', $argv[2]) === 1 &&
-                      preg_match('/^[0-9a-f]{32}-[0-9a-f]{32}\.txt$/D', $argv[3]) === 1) {
+                      preg_match(in_array($argv[1], [
+                          'commit-learning-with-fds', 'commit-stopped-learning-with-fds',
+                      ], true) ? '/^[0-9a-f]{32}$/D' :
+                        '/^[0-9a-f]{32}-[0-9a-f]{32}\.txt$/D', $argv[3]) === 1) {
                 // No direct worker, no independent Config/XML writer. A
                 // native parent must already hold the P2a worker.lock.
                 $result = self::commitWithInheritedOriginalLocks(
@@ -701,9 +711,17 @@ final class AutoDetectConfigSnapshot
                     (int)$argv[2], '/var/db/zapret2-auto-detect/worker.lock',
                     '/conf/config.xml',
                     [self::NATIVE_PYTHON, self::FD_COMMIT,
-                     $argv[1] === 'commit-retired-with-fds' ? 'commit-retired-fds' : 'commit-fds',
+                     $argv[1] === 'commit-stopped-learning-with-fds' ?
+                         'commit-stopped-learning-fds' :
+                         ($argv[1] === 'commit-learning-with-fds' ?
+                             'commit-learning-fds' :
+                             ($argv[1] === 'commit-retired-with-fds' ?
+                                 'commit-retired-fds' : 'commit-fds')),
                      $argv[3]],
-                    $argv[1] === 'commit-retired-with-fds'
+                    $argv[1] === 'commit-retired-with-fds',
+                    in_array($argv[1], [
+                        'commit-learning-with-fds', 'commit-stopped-learning-with-fds',
+                    ], true)
                 );
             } else {
                 return 64;
