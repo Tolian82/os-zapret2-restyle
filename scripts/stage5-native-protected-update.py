@@ -623,11 +623,34 @@ def native_partial_payload_interruption(archive, target, digest):
          "MIDEXTRACT_STAGED_ARCHIVE_DRIFT")
     prepared = run([str(SERVICE), "pkg-update-prepare", str(stage),
                     stage_sha, stage_ver], timeout=150)
-    need(prepared.returncode == 0 and
-         "zapret-pkg-update-prepared=1" in prepared.stdout and
-         ACTIVE.is_file() and MARKER.is_file() and
-         verified_old_auto_retirement(old_id, old_schema, old_learning) and
-         run([str(SERVICE), "status"]).returncode == 1,
+    prepared_receipt = "zapret-pkg-update-prepared=1" in prepared.stdout
+    prepared_state = None
+    if ACTIVE.is_file() and not ACTIVE.is_symlink():
+        try:
+            prepared_state = json.loads(ACTIVE.read_bytes()).get("phase")
+        except (OSError, ValueError, TypeError):
+            prepared_state = "unreadable"
+    prepared_status_rc = run([str(SERVICE), "status"]).returncode
+    prepared_retired = verified_old_auto_retirement(
+        old_id, old_schema, old_learning)
+    print("NATIVE_PROTECTED_MIDEXTRACT_PREPARE_EVIDENCE=" + json.dumps({
+        "prepare_rc": prepared.returncode,
+        "prepare_receipt": prepared_receipt,
+        "record_phase": prepared_state,
+        "restart_marker_exists": MARKER.is_file(),
+        "old_schema": old_schema,
+        "old_learning_N_count": len(old_learning),
+        "old_terminal_retired": prepared_retired,
+        "service_status_rc": prepared_status_rc,
+        "config_unchanged": sha(CONFIG) == saved_config,
+        "old_pid_present": Path("/var/run/dvtws2.pid").exists(),
+        "prepare_stderr_class": (
+            "error" if "ERROR:" in prepared.stderr else
+            "refused" if "REFUSED" in prepared.stderr else "none"),
+    }, sort_keys=True), flush=True)
+    need(prepared.returncode == 0 and prepared_receipt and
+         ACTIVE.is_file() and MARKER.is_file() and prepared_retired and
+         prepared_status_rc == 1,
          "MIDEXTRACT_PREPARE_DID_NOT_STOP_OWNER")
     record_before = sha(ACTIVE)
     need(json.loads(ACTIVE.read_text()).get("phase") == "prepared",
