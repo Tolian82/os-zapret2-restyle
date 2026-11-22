@@ -117,6 +117,31 @@ class ProtectedPkgUpdate(unittest.TestCase):
             self.assertEqual(error, "RUNTIME_RESTORE_REQUIRES_REVIEW")
             self.assertTrue(exists)
 
+    def test_restore_failure_marker_redacted_and_not_authorizing(self):
+        from contextlib import redirect_stderr
+        from io import StringIO
+
+        private = "private /conf/config.xml <HOSTLIST:user> secret.example"
+        self.assertEqual(
+            m.restore_finish_evidence(result([], 70, stderr=
+                "pkg-update-finish-failed=boot\n" + private)),
+            "rc:70,stage:boot")
+        self.assertEqual(
+            m.restore_finish_evidence(result([], 99, stderr=private)),
+            "rc:other,stage:unknown")
+        self.assertNotIn(private, m.restore_finish_evidence(
+            result([], 70, stderr="pkg-update-finish-failed=boot\n" + private)))
+        self.assertIn('pkg-update-finish-failed=boot', SERVICE.read_text())
+
+        output = StringIO()
+        with tempfile.TemporaryDirectory() as tmp, redirect_stderr(output):
+            calls, error, staged = self.trial(tmp, finish=False)
+        self.assertEqual(error, "RUNTIME_RESTORE_REQUIRES_REVIEW")
+        self.assertTrue(staged)
+        self.assertEqual(len(calls), 3)
+        self.assertIn("pkg-update-restore-evidence=rc:70,stage:unknown",
+                      output.getvalue())
+
     def test_exact_success_dispatches_one_native_pkg(self):
         with tempfile.TemporaryDirectory() as tmp:
             calls, error, exists = self.trial(tmp)

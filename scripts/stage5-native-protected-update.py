@@ -232,6 +232,9 @@ def native_running_reinstall(archive, target, candidate_sha):
                    else "missing")
         why = re.search(r"(?m)^pkg-update-refused=([A-Z0-9_]+)$",
                         replaced.stderr)
+        finish_evidence = re.search(
+            r"(?m)^pkg-update-restore-evidence=(rc:(?:0|69|70|other),stage:(?:boot|unknown))$",
+            replaced.stderr)
         new_schema, new_learning = original_auto_generation(
             new_id, observer_required) if status_after.returncode == 0 else (0, [])
         retired_verified = verified_old_auto_retirement(
@@ -245,6 +248,12 @@ def native_running_reinstall(archive, target, candidate_sha):
             "native_learning_profiles_after": len(new_learning),
             "protected_running_replacement_rc": replaced.returncode,
             "refusal": why.group(1) if why else "none",
+            "restore_finish_evidence": (finish_evidence.group(1)
+                                        if finish_evidence else "none"),
+            "shared_journal_phase": (successor.get("phase")
+                                     if successor.get("phase") in (
+                                         "committed", "prepared", "activating",
+                                         "requires-review", "restored") else "other"),
             "verified_receipt":
                 "pkg-update=verified-installed-and-restored" in replaced.stdout,
             "after_status_rc": status_after.returncode,

@@ -3076,7 +3076,11 @@ pkg_update_finish_service()
         if shared_apply_has_record_service; then
             _pkg_new_owner=$(shared_apply_inspect_service) || return 69
             case "${_pkg_new_owner}" in
-                committed\ *) shared_apply_boot_service "${_pkg_new_owner}" || return 70 ;;
+                committed\ *) shared_apply_boot_service "${_pkg_new_owner}" || {
+                    # Fixed diagnostic only; never expose saved Config or shell trace.
+                    echo "pkg-update-finish-failed=boot" >&2
+                    return 70
+                } ;;
                 *) return 69 ;;
             esac
         else

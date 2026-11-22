@@ -294,6 +294,16 @@ def stage_archive(path: Path) -> tuple[Path, str, str]:
         raise
 
 
+def restore_finish_evidence(finished: subprocess.CompletedProcess) -> str:
+    """Bounded, non-authorizing reason; never echo child stdout/stderr or Config."""
+    rc = str(finished.returncode) if finished.returncode in (0, 69, 70) else "other"
+    if "pkg-update-finish-failed=boot" in (finished.stderr or ""):
+        stage = "boot"
+    else:
+        stage = "unknown"
+    return f"rc:{rc},stage:{stage}"
+
+
 def replace(path: Path) -> None:
     stage, digest, version = stage_archive(path)
     prepared = False
@@ -316,9 +326,13 @@ def replace(path: Path) -> None:
         need(installed_version() == version, "WRONG_INSTALLED_SUCCESSOR")
         finished = native_command([str(SERVICE), "pkg-update-finish",
                                    digest, version], timeout=120)
-        need(finished.returncode == 0 and
-             "zapret-pkg-update-committed=1" in finished.stdout,
-             "RUNTIME_RESTORE_REQUIRES_REVIEW")
+        if not (finished.returncode == 0 and
+                "zapret-pkg-update-committed=1" in finished.stdout):
+            # The protected record is retained. Do not leak native stderr,
+            # stage paths, hostlists, or Config to the caller/log.
+            print("pkg-update-restore-evidence=" + restore_finish_evidence(finished),
+                  file=sys.stderr)
+            raise Refused("RUNTIME_RESTORE_REQUIRES_REVIEW")
         need(not ACTIVE.exists() and not ACTIVE.is_symlink(),
              "UPDATE_RECORD_NOT_CLOSED")
         stage.unlink()
