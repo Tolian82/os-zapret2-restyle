@@ -637,7 +637,7 @@ def native_partial_payload_interruption(archive, target, digest):
         r"auto-detect-retire-refused=([A-Za-z][A-Za-z0-9_]*)",
         prepared.stderr)
     terminal = EPOCHS / old_id / "learning-retirement"
-    archived_names = [row["name"] for row in old_learning]
+    archived_names = [Path(row["auto_inbox"]).name for row in old_learning]
     archived_names.append("debug.log")
     print("NATIVE_PROTECTED_MIDEXTRACT_PREPARE_EVIDENCE=" + json.dumps({
         "prepare_rc": prepared.returncode,
