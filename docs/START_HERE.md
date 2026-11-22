@@ -1,6 +1,15 @@
 # os-zapret2-restyle — current handoff
 
-## 22 November 2026 — APPROVED one JSON runtime manifest, clean install and errors (CURRENT)
+## 22 ноября 2026 — CURRENT: ТЗ_6v5, единый запуск и маршрут S00–S20 (docs-only)
+
+**Source boundary:** `VERSION=0.6.5`, `PLUGIN_REVISION=122`, source candidate `v0.6.5_122`; prospective `os-zapret2-restyle-0.6.5_122.pkg` **не построен и не опубликован** — документационный кандидат `v0.6.5_122` основан на текущем `main _121` (`62b64e82`); до merge это **не** новая версия main, **не** собранный `_122.pkg`. На устройстве владельца установлен `_117.pkg`; ручной Stop→Start RUNNING, два Strategies Apply PASS, но Lab #1224 RESTORE_FAILED и Auto #1223 no Found остаются OPEN. Draft #1228 нельзя объединять как готовый код.
+
+**Активные требования:** [ТЗ_6v5](architecture/TZ_6v5.md) и **единственный** [пошаговый план S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). XML OPNsense → read-only adapter → pure compiler → sealed reference-only JSON manifest → один physical `zapret_service.sh start/stop/status` (original FD9) → read-only native status/diagnostics. Empty installation без engine/Config/manifest, preservation on reinstall, исходные Auto/Voice/first-match/rollback обязательны.
+
+**Next:** S00 завершить docs merge → S01 reconcile/rebase старый #1228 → S02 source-route audit → S03 RED → S04–S09 status/clean install/compiler → S10–S14 release/runner → S15 Lab, S16 Auto → S17 native → S18 go/no-go → S19 testing .pkg → S20 owner acceptance. Старый P0–P5 — историческое доказательство, не новый маршрут.
+
+
+## 22 November 2026 — APPROVED one JSON runtime manifest, clean install and errors (HISTORICAL prerequisite)
 
 **Source-only identity:** `v0.6.5_121`, `VERSION=0.6.5`, `PLUGIN_REVISION=121`; prospective `os-zapret2-restyle-0.6.5_121.pkg` **not built/published**. Owner's installed physical package is `_117`, last manual Stop→Start yielded `zapret is running`, `status_rc=0`, independent earlier edited/no-edit Strategies Apply PASS. Native Lab stage90/99 `RESTORE_FAILED` and Auto YouTube missing Found remain OPEN.
 
