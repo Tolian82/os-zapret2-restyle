@@ -4,6 +4,8 @@
 
 ## 22 November 2026 — published v0.6.5_109 testing .pkg; source-only _110 record (CURRENT)
 
+**Source candidate identity (publication-record only):** `v0.6.5_110` uses `VERSION=0.6.5` and `PLUGIN_REVISION=110`. The filename `os-zapret2-restyle-0.6.5_110.pkg` denotes only the *unpublished* source-revision package identity: **no such `.pkg` was built or offered**. The actual owner-installable asset remains the immutable published `_109.pkg`.
+
 **Current artifact:** [os-zapret2-restyle-0.6.5_109.pkg](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_109/os-zapret2-restyle-0.6.5_109.pkg) is a persistent GitHub **testing prerelease**, built from the [exact merged source commit](https://github.com/Tolian82/os-zapret2-restyle/commit/1aab4480701258275fbb356b6f96ab1322182d23) (PR [#1209](https://github.com/Tolian82/os-zapret2-restyle/pull/1209)). Tag `v0.6.5_109` points to that commit; the package manifest ABI is `FreeBSD:15:amd64`; SHA-256 is `1e08caf8dae9552e86085abf1d7f5c8db1e85a5640da4bfc197f9462f25e7d8a`. [Publication evidence](verification/evidence/testing-publications/v0.6.5_109.md). The publisher's package, tag and cleanup stages succeeded; GitHub Actions could not open its record PR, completed manually as [#1212](https://github.com/Tolian82/os-zapret2-restyle/pull/1212). Stable Pages/pkg repository unchanged.
 
 **Source revision boundary:** After this docs-only record PR merges, main is `v0.6.5_110` **source only**; there is no `_110.pkg`. On the owner's OPNsense, the last reported installed plugin is still `_107`; no installation or router mutation was performed by GitHub. Do not confuse the published testing package with the new docs-only main revision.
