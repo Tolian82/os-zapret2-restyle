@@ -84,3 +84,38 @@ jobs:
             export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             /usr/local/bin/python3 scripts/stage2-opnsense-schema3-native-lifecycle.py --native
+
+  native-crash:
+    needs: source
+    name: Real original worker crash after fsynced N then original FD9 Boot repair
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Disposable OPNsense 26.7 original retired-N crash and safe Boot
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1
+            export ZAPRET2_G04_DISPOSABLE_NATIVE=1
+            export ZAPRET2_G04_RUNTIME_NATIVE=1
+            export ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL=1
+            export ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            /usr/local/bin/python3 scripts/stage2-opnsense-schema3-native-lifecycle.py --native-crash
