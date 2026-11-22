@@ -73,6 +73,20 @@ def gate():
          "DISPOSABLE_107_GUEST_NOT_CLEAN")
 
 
+def qualified_postboot_generation(protected, boot_id):
+    """Record a genuine mismatched native owner without masking Boot evidence.
+
+    The original protected fixture raises RuntimeError from need(), not a
+    custom Refused type. A mismatch still makes mandatory acceptance fail.
+    No user data or raw exception string is logged.
+    """
+    try:
+        schema, learning = protected.original_auto_generation(boot_id, True)
+    except RuntimeError:
+        return 0, [], False
+    return schema, learning, True
+
+
 def main():
     gate()
     protected = load("stage5-native-protected-update.py",
@@ -222,13 +236,8 @@ def main():
     bootstate = json.loads(journal.read_bytes())
     boot_id = bootstate.get("detail", {}).get("id", "")
     boot_status = run([str(service), "status"]).returncode
-    boot_schema, boot_learning = 0, []
-    map_consistent = False
-    try:
-        boot_schema, boot_learning = protected.original_auto_generation(boot_id, True)
-        map_consistent = True
-    except protected.Refused:
-        pass
+    boot_schema, boot_learning, map_consistent = qualified_postboot_generation(
+        protected, boot_id)
     guard = re.search(
         r"(?m)^native-common-boot-guard="
         r"(saved-candidate|candidate-identity|build-command|build-preflight|"

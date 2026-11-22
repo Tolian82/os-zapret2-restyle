@@ -235,6 +235,26 @@ class ProtectedPkgUpdate(unittest.TestCase):
                 fixture.classify_native_interrupted_refusal(
                     verified, service), "unqualified")
 
+    def test_published107_postboot_mismatch_is_reported_not_masked(self):
+        fixture_path = ROOT / "scripts" / "stage5-native-published107-schema3-upgrade.py"
+        spec = importlib.util.spec_from_file_location(
+            "published107_postboot_fixture", fixture_path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        from types import SimpleNamespace
+        bad = SimpleNamespace(original_auto_generation=mock.Mock(
+            side_effect=RuntimeError("AUTO_NATIVE_GENERATION_OWNER_MISMATCH")))
+        self.assertEqual(
+            fixture.qualified_postboot_generation(bad, "a" * 32),
+            (0, [], False))
+        bad.original_auto_generation.assert_called_once_with("a" * 32, True)
+        records = [{"native_number": 3, "role": "learning"}]
+        good = SimpleNamespace(original_auto_generation=mock.Mock(
+            return_value=(3, records)))
+        self.assertEqual(
+            fixture.qualified_postboot_generation(good, "b" * 32),
+            (3, records, True))
+
     def test_native_interrupted_finish_missing_pid_reports_failure_not_exception(self):
         fixture_path = ROOT / "scripts" / "stage5-native-protected-update.py"
         spec = importlib.util.spec_from_file_location(
