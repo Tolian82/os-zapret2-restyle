@@ -219,7 +219,7 @@ def disposable_attested_package_code_handoff(staged, original_pkg):
     print("P0_DIAGNOSTIC_ONLY_FIXED_PHP_ABSOLUTE_CHILD_SOURCE=" +
           json.dumps({"package_owned_modules": len(PATCH),
                       "installed_pkgdb_still_109": installed() == BROKEN[0],
-                      "restored_config_unchanged": RECORD.exists() is False,
+                      "old_protected_update_record_closed": not RECORD.exists(),
                       "not_qualified_for_owner": True},
                      sort_keys=True), flush=True)
 
