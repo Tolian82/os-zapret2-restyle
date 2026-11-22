@@ -172,6 +172,42 @@ class StoppedLearningRetirementTests(unittest.TestCase):
         self.assertFalse((self.epoch / "learning-retirement" /
                           "intent.json").exists())
 
+    def test_fd_close_race_rechecked_only_on_same_stopped_source(self):
+        tip = self.tip()
+        observed = []
+
+        def closing_fd(path, device, inode, *, owner, writer_gid):
+            observed.append((Path(path), device, inode, owner, writer_gid))
+            # The first fstat races the last reader. Only a later complete
+            # independently reattested P2b DRAINED can authorize archive.
+            return (FDState.BUSY if len(observed) == 1
+                    else FDState.DRAINED)
+
+        with patch("auto_detect_learning_retirement.time.sleep") as sleep:
+            self.assertTrue(self.run_retire(tip=tip, inspect=closing_fd))
+        self.assertEqual(len(observed) > 1, True)
+        self.assertEqual(observed[0], observed[1])
+        sleep.assert_called_once_with(0.15)
+        self.assertFalse(self.native.exists())
+
+    def test_fd_unknown_or_busy_never_authorizes_retirement(self):
+        for observation, reason in (
+                (FDState.BUSY, "stopped_learning_source_fd_busy"),
+                (FDState.UNKNOWN, "stopped_learning_source_fd_unknown")):
+            with self.subTest(observation=observation):
+                calls = []
+                def probe(*args, **kwargs):
+                    calls.append((args, kwargs))
+                    return observation
+                with patch("auto_detect_learning_retirement.time.sleep") as sleep:
+                    with self.assertRaisesRegex(LearningRetirementRefused, reason):
+                        self.run_retire(inspect=probe)
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(calls[0], calls[1])
+                sleep.assert_called_once_with(0.15)
+                self.assertTrue(self.native.exists())
+                self.assertFalse((self.epoch / "learning-retirement" / "intent.json").exists())
+
     def test_busy_fd_refuses_without_source_change(self):
         tip = self.tip()
         with self.assertRaises(LearningRetirementRefused):

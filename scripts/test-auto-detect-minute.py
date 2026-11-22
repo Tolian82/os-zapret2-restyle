@@ -296,10 +296,10 @@ class MinuteIngressContract(unittest.TestCase):
 
     def test_schema3_retirement_reports_only_qualified_static_guard(self):
         from auto_detect_learning_retirement import LearningRetirementRefused
-        qualified = LearningRetirementRefused("stopped_learning_source_fd_not_drained")
+        qualified = LearningRetirementRefused("stopped_learning_source_fd_busy")
         self.assertEqual(
             minute.learning_retirement_guard(qualified),
-            "stopped_learning_source_fd_not_drained")
+            "stopped_learning_source_fd_busy")
         private = "private config.example.org /conf/config.xml"
         self.assertEqual(
             minute.learning_retirement_guard(LearningRetirementRefused(private)),
@@ -315,7 +315,7 @@ class MinuteIngressContract(unittest.TestCase):
              redirect_stderr(io.StringIO()) as output:
             self.assertEqual(minute.native_retire_once(), 69)
         self.assertIn(
-            'auto-detect-retire-guard=stopped_learning_source_fd_not_drained',
+            'auto-detect-retire-guard=stopped_learning_source_fd_busy',
             output.getvalue())
         self.assertIn(
             'auto-detect-retire-refused=LearningRetirementRefused',

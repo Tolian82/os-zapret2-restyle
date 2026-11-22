@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import stat
 import sys
+import time
 
 from auto_detect_cursor_chain import CursorChain, _learning_records_digest
 from auto_detect_epoch_receipts import (
@@ -74,10 +75,30 @@ def _image(path: Path, receipts, queue, *, expected=None):
 
 
 def _drained(path, row, proof, queue, inspect):
-    if (not callable(inspect) or
-            inspect(path, row[0], row[1], owner=proof.owner,
-                    writer_gid=queue.writer_gid) is not FDState.DRAINED):
-        raise LearningRetirementRefused("stopped_learning_source_fd_not_drained")
+    """One original P2b census, with one bounded fresh re-observation.
+
+    Following explicit operator Stop, the final daemon/reader FD may close
+    between two kernel fstat snapshots. Never infer DRAINED from time, PID
+    exit or a previous UNKNOWN/BUSY result: only a NEW full census with the
+    SAME stopped owner may authorize the old source's retirement. This is
+    not an engine retry, a second owner, or a weakened safety guard.
+    """
+    if not callable(inspect):
+        raise LearningRetirementRefused("stopped_learning_source_fd_unknown")
+    for attempt in range(2):
+        observed = inspect(path, row[0], row[1], owner=proof.owner,
+                           writer_gid=queue.writer_gid)
+        if observed is FDState.DRAINED:
+            return
+        if observed not in (FDState.BUSY, FDState.UNKNOWN):
+            raise LearningRetirementRefused("stopped_learning_source_fd_unknown")
+        if attempt == 0:
+            # The file is already under explicit STOPPED original FD9/P2a.
+            # A single short passive wait only, never touch traffic/IPFW.
+            time.sleep(0.15)
+    if observed is FDState.BUSY:
+        raise LearningRetirementRefused("stopped_learning_source_fd_busy")
+    raise LearningRetirementRefused("stopped_learning_source_fd_unknown")
 
 
 def _tip(receipts, queue, proof, workspace):

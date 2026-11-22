@@ -221,6 +221,8 @@ _SAFE_LEARNING_RETIRE_GUARDS = frozenset((
     "stopped_original_root_required",
     "stopped_learning_source_changed",
     "stopped_learning_source_fd_not_drained",
+    "stopped_learning_source_fd_busy",
+    "stopped_learning_source_fd_unknown",
     "stopped_learning_unacknowledged_source",
     "stopped_learning_final_tip_untrusted",
     "stopped_learning_native_stream_unretired",
