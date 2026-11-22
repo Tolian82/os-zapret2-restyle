@@ -189,21 +189,36 @@ def main():
     engine_sha = digest(engine)
     refused = run([str(SERVICE), "pkg-update", str(broken)], timeout=450)
     pkg_record = json.loads(RECORD.read_bytes()) if RECORD.is_file() else {}
-    expected_refusal = (refused.returncode == 69 and
-                        "pkg-update-refused=RUNTIME_RESTORE_REQUIRES_REVIEW" in refused.stderr and
-                        "stage:boot" in refused.stderr and
-                        "postinstall-attested" == pkg_record.get("phase") and
-                        pkg_record.get("from_version") == OLD[0] and
-                        pkg_record.get("to_version") == BROKEN[0] and
-                        pkg_record.get("sha256") == BROKEN[1] and
-                        pkg_record.get("was_running") is True and
-                        installed() == BROKEN[0] and state()["phase"] == "committed" and
-                        status() == 1 and MARKER.is_file() and not PIDFILE.exists() and
-                        digest(CONFIG) == config_sha and digest(engine) == engine_sha)
+    observed = {
+        "protected_rc69": refused.returncode == 69,
+        "guarded_review_refusal":
+            "pkg-update-refused=RUNTIME_RESTORE_REQUIRES_REVIEW" in
+            (refused.stderr + refused.stdout),
+        "original_boot_stage": "stage:boot" in
+            (refused.stderr + refused.stdout),
+        "original_restore_guard_known": any(
+            marker in (refused.stderr + refused.stdout)
+            for marker in ("guard:unknown", "guard:config-save",
+                           "guard:committed-probe", "guard:saved-probe",
+                           "guard:ipfw-commit")),
+        "postinstall_attested": pkg_record.get("phase") == "postinstall-attested",
+        "original_from107": pkg_record.get("from_version") == OLD[0],
+        "successor109": pkg_record.get("to_version") == BROKEN[0],
+        "immutable_109_hash": pkg_record.get("sha256") == BROKEN[1],
+        "previously_running": pkg_record.get("was_running") is True,
+        "installed109": installed() == BROKEN[0],
+        "shared_committed": state().get("phase") == "committed",
+        "engine_stopped": status() == 1,
+        "restart_marker": MARKER.is_file(),
+        "child_pid_absent": not PIDFILE.exists(),
+        "saved_config_unchanged": digest(CONFIG) == config_sha,
+        "dvtws_binary_unchanged": digest(engine) == engine_sha,
+    }
+    expected_refusal = all(v for k, v in observed.items()
+                           if k != "original_restore_guard_known")
     print("P0_OWNER_NATIVE_109_REFUSAL=" +
-          json.dumps({"reproduced": expected_refusal,
-                      "phase": pkg_record.get("phase"),
-                      "installed": installed(), "stopped": status() == 1}), flush=True)
+          json.dumps({"reproduced": expected_refusal, "checks": observed},
+                     sort_keys=True), flush=True)
     need(expected_refusal, "REAL_107_TO_109_OWNER_FAILURE_NOT_REPRODUCED")
     staged = stage_backend(fixed, manifest111)
     env = {**os.environ, "BACKEND_DIR": str(staged), "PYTHONDONTWRITEBYTECODE": "1"}
