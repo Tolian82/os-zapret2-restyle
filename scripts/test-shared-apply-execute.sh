@@ -1,5 +1,7 @@
 #!/bin/sh
 set -eu
+# Test real RUNNING schema3 preflight before generic FD9 transaction tests.
+sh "$(CDPATH= cd -- "$(dirname "$0")" && pwd)/test-schema3-running-apply-preflight.sh"
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/shared-exec.XXXXXXXX") || exit 1
 trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }

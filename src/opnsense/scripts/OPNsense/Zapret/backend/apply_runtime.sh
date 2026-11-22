@@ -300,6 +300,23 @@ apply_runtime_observer_previous_preflight()
 {
     [ "$#" -eq 0 ] || return 64
     case "${_apply_engine:-}" in 0|1) ;; *) return 69 ;; esac
+    # TZ6v4: a RUNNING schema3 generation legitimately owns native
+    # --hostlist-auto on learning profiles. Authenticate the existing exact
+    # generation/argv and original PID-bound epoch BEFORE routing to the
+    # already qualified FD9 Stop/retirement path. This is read-only;
+    # the actual Stop independently repeats these guards before signaling.
+    if [ "$_apply_engine" = 1 ] &&
+       [ -f "$ACTIVE_DIR/auto-detect-generation.json" ] &&
+       [ ! -L "$ACTIVE_DIR/auto-detect-generation.json" ]; then
+        apply_runtime_observer_preflight "$ACTIVE_DIR" || return 69
+        if [ "$_apply_native_schema" = 3 ]; then
+            _apply_learning_epoch=$("$PYTHON_RUNTIME" \
+                "$BACKEND_DIR/auto_detect_minute.py" --pre-retire) || return 69
+            [ "$_apply_learning_epoch" = \
+              auto-detect-retire=original-learning-running-attested ] || return 69
+            return 0
+        fi
+    fi
     if [ "$_apply_engine" = 0 ] &&
        { [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
          [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; }; then
