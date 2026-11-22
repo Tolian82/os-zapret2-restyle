@@ -1,6 +1,15 @@
 # os-zapret2-restyle — current handoff
 
-## 22 November 2026 — DEV-065 canonical Start/Stop FIRST; `_120` source-only rule/audit (CURRENT)
+## 22 November 2026 — APPROVED one JSON runtime manifest, clean install and errors (CURRENT)
+
+**Source-only identity:** `v0.6.5_121`, `VERSION=0.6.5`, `PLUGIN_REVISION=121`; prospective `os-zapret2-restyle-0.6.5_121.pkg` **not built/published**. Owner's installed physical package is `_117`, last manual Stop→Start yielded `zapret is running`, `status_rc=0`, independent earlier edited/no-edit Strategies Apply PASS. Native Lab stage90/99 `RESTORE_FAILED` and Auto YouTube missing Found remain OPEN.
+
+**Owner APPROVED architecture:** [#1229](https://github.com/Tolian82/os-zapret2-restyle/issues/1229) and [declarative runtime contract](architecture/ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md). One script `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh` contains only physical **Start/Stop/Status** policy under original FD9. One immutable generated JSON root manifest refers to separate enabled/disabled file sources, profile order and Voice/Auto/IPFW/engine-args artifacts. The compiler reads existing OPNsense XML and registered files; later pfSense adds **XML reader adapter**, not a separate runtime manifest format. No domains, IPs or strategy bodies inline in the root manifest and no second Config writer.
+
+**New hard clean-install/error acceptance:** plugin installed != engine installed != initialized saved settings != valid sealed manifest != RUNNING service. Fresh installation with no engine or configured parameters must show GUI/read-only status and permit explicit engine-version installation, leaving service STOPPED; seed only approved first-install defaults and never overwrite saved config on reinstall. Preserve native dvtws2, supervisor, configd, IPFW and Lab errors with stage/rc/generation/typed code and bounded sanitized stderr in GUI/diagnostic log. No automatic start, PID/journal cleanup or silent failure.
+
+**Engineering priority:** document/design frozen first, then pure compiler+status parity, sealed manifest promotion and **single original FD9 launcher** delegation, exact-head native Lab/Voice/Auto/upgrade acceptance. DRAFT PR #1228 `_121` represents an **older partial Start/Stop approach**; must be reconciled/rebased and cannot be merged as complete implementation. No code or router change has been made for this approved architecture.
+## 22 November 2026 — DEV-065 canonical Start/Stop FIRST; `_120` source-only rule/audit (HISTORICAL)
 
 **Source candidate:** `v0.6.5_120`, `VERSION=0.6.5`, `PLUGIN_REVISION=120`; prospective `os-zapret2-restyle-0.6.5_120.pkg` **not built or published**. Owner physical system remains installed test `.pkg` `_117` with RUNNING service verified `status_rc=0` **after owner manually stopped and restarted it**. Prior physical edited/unedited Strategies Apply also remained RUNNING. Lab `job.iDvhRh` stage 90/99 `RESTORE_FAILED` remains a real failure; manual recovery is not a Lab PASS.
 
