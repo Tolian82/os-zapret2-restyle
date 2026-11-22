@@ -4,6 +4,8 @@
 
 **Current candidate:** `v0.6.5_121`, `VERSION=0.6.5`, `PLUGIN_REVISION=121`; prospective `os-zapret2-restyle-0.6.5_121.pkg` **not built/published**, current physical owner installed `_117` and manually Stop→Start RUNNING. No physical `_121` acceptance.
 
+**New hard owner acceptance criterion:** one actual product file, `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh`, contains all Start/Stop policy and physical transition orchestration. Changing service Start/Stop must never require hunting down other scattered scripts. `original_fd9_lifecycle_transition` in current DRAFT PR #1228 is a first step, not completion; Common Apply `backend/apply_runtime.sh` and other remaining code paths still need real consolidation.
+
 **DEV-065 partial source consolidation, not completed:** `zapret_service.sh` contains one guarded inherited-FD9 owner router `original_fd9_lifecycle_transition` consumed by **Strategy Lab Start/Stop and protected pkg prepare/finish**, preserving native Common vs legacy and refusal of uncommitted owner. Original public Start/Stop/Restart, Shared Apply candidate activation, upstream installer and auto-restart still need migration; no assertion of fully shared behavior. Portable POSIX unit smoke PASS on the intended helper and targeted CI test added. Real native lifecycle and installed owner `_121` remain NOT TESTED.
 
 **Open P0:** finish all controls per [canonical routing contract](architecture/ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md), then fix Lab exact semantic restore and YouTube native Auto→Found. `job.iDvhRh` Stage 90/99 `RESTORE_FAILED` not resolved by owner's manual recovery.

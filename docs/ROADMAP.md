@@ -4,6 +4,8 @@
 
 ## Current priority
 
+**Owner's single-file test (HARD GATE):** changing Start or Stop behavior requires modifying only `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh`; all other files are callers/neutral primitives. Shared URL and one helper are insufficient if backend, Lab or Apply still contain service-level start/stop logic.
+
 1. **P0 — canonical Start/Stop [#1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225):** audit exact handlers for screenshots' Play/Restart/Stop, Strategies/Voice/Service buttons, both Apply paths, Lab special start/stop, `Установить версию`, protected `.pkg` update and recovery; refactor duplicated owner selection and transition implementations behind ONE original FD9-protected start/stop without a second FD9/Config writer. Preserve distinct operation pre/post/rollback semantics.
 2. **P0 — Lab terminal restore [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224):** `job.iDvhRh` stage 90/99 RESTORE_FAILED; manual Stop→Start subsequent RUNNING is accepted but not a Lab PASS. Fix duplicated Lab lifecycle routing and inspect its native schema3 generation-sensitive semantic evidence with read-only stage receipts. Prove exact pre-Lab RUNNING/STOPPED restoration after normal/error/timeout/cancel on disposable native OPNsense.
 3. **P0 — native Auto→Found [#1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223):** after lifecycle is safe, trace real IPFW capture→original native inbox/debug→minute→Found/managed. Do not treat direct HTTPS TIMEOUT or manually interrupted curl as native event; missing `fail-threshold=1` remains a candidate source delta, not established physical root.
