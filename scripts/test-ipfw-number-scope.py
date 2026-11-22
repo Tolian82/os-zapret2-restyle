@@ -167,7 +167,11 @@ firewall_restore_rules "$2" 19000 19099
         self.assertIn('[ -L "${PROTECTED_UPDATE_RECORD}" ]', branch)
         self.assertLess(branch.index("PROTECTED_UPDATE_RECORD"),
                         branch.index("preinstall_ipfw_policy_compatible || exit 1"))
-        executable = "\n".join(\n            line for line in helper.splitlines()\n            if not line.lstrip().startswith("#")\n        )\n        self.assertNotRegex(executable, r"\b(delete|flush|add)\b")
+        executable = "\n".join(
+            line for line in helper.splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        self.assertNotRegex(executable, r"\b(delete|flush|add)\b")
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             trace = root / "calls"

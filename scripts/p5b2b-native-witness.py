@@ -295,6 +295,71 @@ def native_installed_auto_handoff():
              'installed-auto-owner-status-not-running')
         return generation, pid, ps.stdout
 
+    def verify_original_terminal(generation: str) -> dict:
+        """Read-only original-FD9 terminal proof for schema2 and schema3.
+
+        Only existing native attestors and full archive verifiers qualify a
+        completed generation; mere file presence is never sufficient.
+        """
+        result = {'schema': 'unqualified', 'retired_present': False,
+                  'learning_ready_present': False, 'terminal_verified': False,
+                  'verification': 'not-run'}
+        if not isinstance(generation, str) or re.fullmatch('[0-9a-f]{32}', generation) is None:
+            return result
+        try:
+            hold_fd9()
+            try:
+                from auto_detect_owner import (
+                    MAP_NAME, MAX_MAP, _secure_bytes,
+                    attest_stopped_generation, attest_learning_stopped_generation,
+                )
+                from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
+                from auto_detect_queue import DurableInbox
+                from auto_detect_epoch_receipts import EpochReceipts
+                import pwd
+                mapping = json.loads(_secure_bytes(active / MAP_NAME, MAX_MAP, 0))
+                schema = mapping.get('schema') if type(mapping) is dict else None
+                if type(schema) is not int or schema not in (2, 3):
+                    return result
+                folder = epochs / generation
+                retired = folder / 'retired.json'
+                ready = folder / 'learning-retirement' / 'ready.json'
+                result['schema'] = schema
+                result['retired_present'] = retired.is_file() and not retired.is_symlink()
+                result['learning_ready_present'] = ready.is_file() and not ready.is_symlink()
+                if not (result['retired_present'] if schema == 2
+                        else result['learning_ready_present']):
+                    result['verification'] = 'terminal-missing'
+                    return result
+                gid = pwd.getpwnam(ENGINE_USER).pw_gid
+                if gid <= 0:
+                    result['verification'] = 'gid-unqualified'
+                    return result
+                queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+                if not queue.lock.is_file() or queue.lock.is_symlink():
+                    result['verification'] = 'queue-lock-unqualified'
+                    return result
+                receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+                proof = (attest_stopped_generation() if schema == 2
+                         else attest_learning_stopped_generation())
+                if proof.generation != generation:
+                    result['verification'] = 'generation-mismatch'
+                    return result
+                with queue.exclusive():
+                    if schema == 2:
+                        result['terminal_verified'] = receipts.verify_retired(proof, queue)
+                    else:
+                        from auto_detect_learning_gc import qualified_completed_learning
+                        qualified_completed_learning(receipts, queue, generation)
+                        result['terminal_verified'] = True
+                result['verification'] = ('verified' if result['terminal_verified']
+                                          else 'terminal-unverified')
+            finally:
+                os.close(9)
+        except (OSError, ValueError, TypeError, RuntimeError, KeyError) as exc:
+            result['verification'] = 'refused-' + type(exc).__name__
+        return result
+
     def minute(expected):
         response = run(cli, 'zapret', 'auto_detect_minute', timeout=85)
         succeeded = (response.returncode == 0 and
@@ -843,13 +908,17 @@ try {
             'execute-error' if b'Execute error' in stopped.stdout else
             'native-stopped' if b'native-common-stopped=' in stopped.stdout else
             'ok' if stopped.stdout.strip() == b'OK' else 'unqualified')
-        retired = epochs / first_gen / 'retired.json'
-        retired_present = retired.is_file() and not retired.is_symlink()
+        terminal = verify_original_terminal(first_gen)
+        retired_present = terminal['terminal_verified']
         stopped_diagnostic = {
             'configctl_rc': stopped.returncode,
             'receipt': stop_receipt,
             'stdout_length': len(stopped.stdout),
-            'retired_present': retired_present,
+            'retired_present': terminal['retired_present'],
+            'retirement_schema': terminal['schema'],
+            'learning_ready_present': terminal['learning_ready_present'],
+            'terminal_verified': terminal['terminal_verified'],
+            'terminal_verification': terminal['verification'],
             'engine_pidfile_present': pidfile.is_file(),
             'monitor_pidfile_present': Path(
                 '/var/run/zapret2-supervisor-monitor.pid').is_file(),
@@ -951,6 +1020,15 @@ try {
                     ), 'not-in-log')
             except OSError:
                 stopped_diagnostic['retire_refusal_class'] = 'unavailable'
+        # The legacy stopped attestor cannot interpret schema3 sources.
+        # The original-FD9 schema3 terminal/archive verifier above is the
+        # applicable authority; never mislabel a legacy rejection as a Stop
+        # failure when its incompatible predecessor schema was consulted.
+        if terminal['schema'] == 3:
+            stopped_diagnostic['stopped_owner'] = (
+                'learning-terminal-attested' if retired_present
+                else 'learning-terminal-unverified')
+            stopped_diagnostic.pop('retire_readonly_refusal', None)
         print('P2_INSTALLED_ORIGINAL_STOP=' +
               json.dumps(stopped_diagnostic, sort_keys=True), flush=True)
         need(stopped.returncode == 0 and stop_receipt in {'ok', 'native-stopped'},
@@ -1099,8 +1177,12 @@ try {
             # Do not suppress the original discovered/Config/P1/ACK error
             # merely because its own unprocessed raw blocked final retirement.
             stopped_generation = locals().get('second_gen', locals().get('first_gen'))
+            final_terminal = (verify_original_terminal(stopped_generation)
+                              if stopped_generation is not None and
+                              final.returncode == 0 else None)
             retirement_ok = (stopped_generation is None or
-                             (epochs / stopped_generation / 'retired.json').is_file())
+                             (final_terminal is not None and
+                              final_terminal['terminal_verified']))
             cleanup_ok = (final.returncode == 0 and
                           b'Execute error' not in final.stdout and retirement_ok)
             if sys.exc_info()[0] is not None:
