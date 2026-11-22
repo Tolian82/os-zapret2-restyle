@@ -678,14 +678,16 @@ def classify_native_interrupted_refusal(result, service=SERVICE):
         return "guard-69"
     if result.returncode != 1 or result.stdout:
         return "unqualified"
-    match = re.fullmatch(
-        r"ERROR: required backend module is missing: "
-        r"(/[^\\n]+/backend/([a-z_]+)\\.sh)\\n?",
-        result.stderr)
-    if match is None or match.group(2) not in _ORIGINAL_SERVICE_MODULES:
+    prefix = "ERROR: required backend module is missing: "
+    if (not result.stderr.startswith(prefix) or
+            not result.stderr.endswith("\n") or
+            result.stderr.count("\n") != 1):
         return "unqualified"
-    path = Path(match.group(1))
-    if (path.parent != service.parent / "backend" or
+    path = Path(result.stderr[len(prefix):-1])
+    module = path.name
+    if (not module.endswith(".sh") or
+            module[:-3] not in _ORIGINAL_SERVICE_MODULES or
+            path != service.parent / "backend" / module or
             path.exists() or path.is_symlink()):
         return "unqualified"
     return "missing-required-module-before-dispatch"
