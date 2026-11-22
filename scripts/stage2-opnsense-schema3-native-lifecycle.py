@@ -7,7 +7,9 @@ operator Stop/Start/Restart commands. It does NOT simulate the process or
 FD census, invent network discoveries, bypass Config, or write IPFW directly.
 
 The CI-only opt-in is deliberately NOT a production feature. Refuse all other
-platforms/contexts. This job does not qualify a power-loss recovery or ISP DPI.
+platforms/contexts. --native-crash proves the original worker dies after a
+physically fsynced native-N archive and ordinary Boot replays its immutable
+intent. This is not a hardware power cut or positive ISP DPI test.
 """
 from __future__ import annotations
 
@@ -229,7 +231,110 @@ def service_action(verb: str) -> None:
             (result.stdout + result.stderr)[-420:])
 
 
-def execute() -> dict:
+
+def interrupted_original_retirement(generation: str, learning: list[dict],
+                                    original_debug_inode: int,
+                                    saved_config: bytes, g04_runtime) -> dict:
+    """Abruptly terminate ONE root original STOPPED retirement worker.
+
+    Original operator Stop already shuts down dvtws2 and scoped IPFW before
+    the controlled worker exit. Confirm real incomplete files, without
+    creating/editing an epoch, then use ordinary Boot to recover that exact
+    immutable plan under the same FD9 policy and a new running epoch.
+    """
+    require(len(learning) >= 2, "CANARY_CRASH_REQUIRES_MULTI_N_LEARNING")
+    fault_env = dict(os.environ)
+    fault_env["ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH"] = generation
+    stop = subprocess.run([str(SERVICE), "stop"], env=fault_env,
+                          capture_output=True, text=True, timeout=180,
+                          check=False)
+    require(stop.returncode != 0 and
+            "TZ6V4_DISPOSABLE_CRASH_AFTER_FIRST_N_ARCHIVE" in stop.stderr,
+            "CANARY_EXPECTED_ORIGINAL_WORKER_EXIT_NOT_OBSERVED:rc=" +
+            str(stop.returncode) + ":" + stop.stderr[-300:])
+
+    # A partial Stop may report 'incomplete' rather than 'not running';
+    # physical PID census and IPFW determine actual safety at this point.
+    process = command("/bin/ps", "-ax", "-o", "pid=", "-o", "command=", timeout=20)
+    require(process.returncode == 0 and not PID.exists() and
+            not PID.is_symlink() and
+            not any(line.strip().split(None, 1)[-1].startswith(str(ENGINE) + " ")
+                    for line in process.stdout.splitlines()
+                    if line.strip().split(None, 1)[0].isdigit()),
+            "CANARY_OLD_DVTWS2_OR_PID_SURVIVED_INTERRUPTED_STOP")
+    require(not g04_runtime.owned_rules() and
+            CONFIG.read_bytes() == saved_config and
+            committed_id() == generation,
+            "CANARY_PARTIAL_STOP_CHANGED_IPFW_CONFIG_OR_COMMITTED_OWNER")
+
+    folder = EPOCHS / generation / "learning-retirement"
+    intent_path = folder / "intent.json"
+    require(intent_path.is_file() and not intent_path.is_symlink() and
+            not (folder / "ready.json").exists() and
+            not (folder / "ready.json").is_symlink(),
+            "CANARY_PARTIAL_STOP_MISSING_INTENT_OR_EARLY_READY")
+    intent = json.loads(intent_path.read_bytes())
+    sources = intent.get("sources")
+    require(intent.get("schema") == 3 and
+            intent.get("generation") == generation and
+            isinstance(sources, list) and len(sources) == len(learning) + 1 and
+            all(isinstance(row, dict) for row in sources),
+            "CANARY_INTERRUPTED_SOURCE_PLAN_NOT_ORIGINAL")
+    first = sources[0]
+    old = PRODUCERS / first["name"]
+    archived = folder / ("old-" + first["name"])
+    expected = first.get("image")
+    require(first["name"] == Path(learning[0]["auto_inbox"]).name and
+            not old.exists() and not old.is_symlink() and
+            archived.is_file() and not archived.is_symlink() and
+            type(expected) is list and len(expected) == 4 and
+            [archived.stat().st_dev, archived.stat().st_ino,
+             archived.stat().st_size,
+             hashlib.sha256(archived.read_bytes()).hexdigest()] == expected,
+            "CANARY_FIRST_NATIVE_N_WAS_NOT_SAFELY_FSYNC_ARCHIVED")
+    for source in sources[1:]:
+        live = PRODUCERS / source["name"]
+        require(live.is_file() and not live.is_symlink() and
+                not (folder / ("old-" + source["name"])).exists(),
+                "CANARY_CRASH_NOT_AT_SINGLE_N_ARCHIVE")
+    require((PRODUCERS / "debug.log").stat().st_ino == original_debug_inode,
+            "CANARY_DEBUG_INODE_WAS_EARLY_REPLACED")
+
+    # The next process has NO injection variable: ordinary protected
+    # Boot first completes the exact old stopped plan, then creates a new
+    # generation and one real engine without a second writer or IPFW owner.
+    service_action("start")
+    boot_pid = check_process(True)
+    boot_id = committed_id()
+    require(boot_pid is not None and boot_id != generation and
+            CONFIG.read_bytes() == saved_config,
+            "CANARY_ORIGINAL_BOOT_DID_NOT_RECOVER_OLD_PLAN")
+    stopped_receipts(generation, learning, original_debug_inode)
+    boot_learning, boot_debug_inode = schema3_receipts(boot_id, boot_pid)
+    service_action("stop")
+    check_process(False)
+    stopped_receipts(boot_id, boot_learning, boot_debug_inode)
+    require(not g04_runtime.owned_rules() and
+            CONFIG.read_bytes() == saved_config and
+            committed_id() == boot_id,
+            "CANARY_RECOVERED_NATIVE_FINAL_STOP_NOT_CLEAN")
+    return {
+        "status": "PASS_TZ6V4_DISPOSABLE_SCHEMA3_INTERRUPTED_STOP_BOOT_RECOVERY",
+        "initial_generation": generation,
+        "recovered_generation": boot_id,
+        "recovered_real_dvtws2_pid": boot_pid,
+        "worker_died_without_finally_after_fsync": True,
+        "first_old_N_inode_and_immutable_intent_retained": True,
+        "boot_finished_same_old_retirement_plan": True,
+        "new_epoch_real_engine_after_recovery": True,
+        "original_config_and_ipfw_protected": True,
+        "physical_power_cut_tested": False,
+        "owner_firewall_touched": False,
+        "positive_isp_attribution_tested": False,
+    }
+
+
+def execute(*, crash: bool = False) -> dict:
     head = native_root()
     g04 = module("stage2-opnsense-g04-native-config.py")
     # The SAME official-Mk physical archive, pkg installation and real
@@ -295,6 +400,11 @@ def execute() -> dict:
             saved_root.findtext("hostlist/mode") == "auto",
             "CANARY_SCHEMA3_NATIVE_CONFIG_NOT_COMMITTED")
 
+    if crash:
+        result = interrupted_original_retirement(
+            ident, learning, debug_inode, CONFIG.read_bytes(), g04_runtime)
+        return {"source_sha": head, **result}
+
     # Operator-authorized Stop only, no SIGSTOP/SIGCONT, no second daemon.
     service_action("stop")
     check_process(False)
@@ -351,11 +461,11 @@ def main() -> int:
     if sys.argv[1:] == ["--self-test"]:
         self_test()
         return 0
-    if sys.argv[1:] != ["--native"]:
+    if sys.argv[1:] not in (["--native"], ["--native-crash"]):
         print("TZ6V4_SCHEMA3_NATIVE=REFUSED_INVALID_COMMAND", file=sys.stderr)
         return 2
     try:
-        record = execute()
+        record = execute(crash=sys.argv[1:] == ["--native-crash"])
     except (Refused, OSError, ValueError, KeyError, TypeError,
             ET.ParseError, subprocess.TimeoutExpired) as error:
         print("TZ6V4_SCHEMA3_NATIVE=REFUSED:" + str(error), file=sys.stderr)
