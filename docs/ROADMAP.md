@@ -2,6 +2,10 @@
 
 ## Current priority — ТЗ_6v5 (22 ноября 2026)
 
+**Новая задача V5-15/V5-16 (23.11.2026, doc candidate `v0.6.5_127`):** единственный launcher поддерживает `start/stop/restart --force` для ручного администратора и только проверенного собственного зависшего процесса под original FD9, с TERM→bounded wait→re-attest PID+birth/argv→targeted KILL→verified full Stop/retirement/IPFW; без foreign kill, второго dvtws2, обхода owner/journal или автоматического использования в Apply/Lab/Boot/pkg. Глобальный/командный `--help` показывает пять команд и options без FD9/IO; `reload/status --force` и unknown args rc64. [ТЗ_6v5 §5.5–5.6](architecture/TZ_6v5.md), [DEV-070](PROJECT_PRINCIPLES.md), [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). Пока **только документация**, owner `_117.pkg` без изменений, новый пакет не создан. Двигатель не испытывать по описанным в [каноне](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) свойствам.
+
+
+
 **НОВЫЙ АБСОЛЮТНЫЙ ПРИОРИТЕТ — [DEV-069](PROJECT_PRINCIPLES.md):** [официальный upstream manual.en.md](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) является каноном. **Запрещено испытывать и доказывать описанное в нём поведение Zapret2**. Automatic hostlist/ipset reread без restart и SIGHUP forced reread на следующем пакете принимаются как факты; проверяем исключительно наш compiler/diff/FD9/Config/IPFW/list writer/target PID/signal delivery/GUI/rollback и поведение, которого руководство не описывает. [Подробное правило](architecture/ZAPRET2_UPSTREAM_MANUAL_CANON.md), [ТЗ_6v5](architecture/TZ_6v5.md), [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
 
 **Текущая идентичность:** документационный кандидат `v0.6.5_126`, `PLUGIN_REVISION=126` поверх merged `main _125 e60bc1d2`; пакет `_126.pkg` не создавался. Owner installed `_117.pkg`; #1228 закрыт без merge, #1223 Auto и #1224 Lab OPEN.

@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 23 ноября 2026 — CURRENT: canonical upstream manual.en.md, запрет повторных проверок (docs-only)
+## 23 ноября 2026 — CURRENT: guarded `--force` и безопасный `--help` (docs-only)
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=127`, `v0.6.5_127` — docs PR candidate от merged `main _126 945d9a29`. Prospective `os-zapret2-restyle-0.6.5_127.pkg` не создан. Физически owner по-прежнему на `_117.pkg`, рабочий runtime не менялся; #1223/#1224 OPEN.
+
+**Контракт:** [ТЗ_6v5 §5.5–5.6, V5-15/V5-16](architecture/TZ_6v5.md), [DEV-070](PROJECT_PRINCIPLES.md), [active S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). CLI force только для start/stop/restart и **только при подтверждённой собственной зависшей инкарнации** с original FD9+epoch+PID/birth/exe/argv: graceful bounded Stop/TERM, повторная аттестация, адресный KILL, verified STOPPED/retirement до нового Start; foreign/uncertain/incomplete → refusal. Healthy RUNNING нельзя убивать через start --force. CLI --help глобальный/командный rc0 и без FD9/IO, недопустимые опции rc64; GUI/Apply/Boot/Lab/pkg не добавляют force. Изменена только документация, никаких native tests или package не выпускалось.
+
+
+## 23 ноября 2026 — canonical upstream manual.en.md, запрет повторных проверок (предыдущая документационная веха)
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=126`, `v0.6.5_126` — docs-only candidate от `main _125 e60bc1d2`; `os-zapret2-restyle-0.6.5_126.pkg` **не построен**. Owner installed `_117.pkg` (не изменён). Lab #1224 и native Auto #1223 OPEN, PR #1228 CLOSED without merge.
 
