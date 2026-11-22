@@ -214,12 +214,43 @@ def main():
         "saved_config_unchanged": digest(CONFIG) == config_sha,
         "dvtws_binary_unchanged": digest(engine) == engine_sha,
     }
+    # The first pkg-update protection may classify its failed child as
+    # stage:unknown (rc69) even though the SAME stopped, attested successor
+    # later reaches the exact P2 build-preflight on a one-time explicit finish.
+    # Both steps occurred on the real router. Do not misclassify the first
+    # bounded reason as evidence that the restored generation was qualified.
     expected_refusal = all(v for k, v in observed.items()
-                           if k != "original_restore_guard_known")
+                           if k not in ("original_boot_stage",
+                                        "original_restore_guard_known"))
     print("P0_OWNER_NATIVE_109_REFUSAL=" +
           json.dumps({"reproduced": expected_refusal, "checks": observed},
                      sort_keys=True), flush=True)
     need(expected_refusal, "REAL_107_TO_109_OWNER_FAILURE_NOT_REPRODUCED")
+    # The owner next attempted this exactly once, seeing P2 canonical
+    # global-exclusion refusal. Qualify that same original installed service
+    # path BEFORE touching even the private repair overlay.
+    attempted = run([str(SERVICE), "pkg-update-finish", BROKEN[1], BROKEN[0]],
+                    timeout=300)
+    combined = attempted.stdout + "\n" + attempted.stderr
+    p2_refusal = (
+        attempted.returncode == 70 and
+        "P2 source-only provenance unavailable: native profile exclusion policy is missing or incorrectly ordered" in combined and
+        "native-common-boot-guard=build-preflight" in combined and
+        "pkg-update-finish-failed=boot" in combined and
+        RECORD.is_file() and
+        json.loads(RECORD.read_bytes()).get("phase") == "postinstall-attested" and
+        status() == 1 and installed() == BROKEN[0] and
+        digest(CONFIG) == config_sha and digest(engine) == engine_sha)
+    print("P0_OWNER_NATIVE_109_P2_BOOT_REFUSAL=" +
+          json.dumps({"reproduced": p2_refusal, "finish_rc": attempted.returncode,
+                      "exact_p2_exclusion_reason":
+                      "native profile exclusion policy is missing or incorrectly ordered" in combined,
+                      "guard_build_preflight":
+                      "native-common-boot-guard=build-preflight" in combined,
+                      "phase_postinstall_attested": RECORD.is_file() and
+                      json.loads(RECORD.read_bytes()).get("phase") == "postinstall-attested"},
+                     sort_keys=True), flush=True)
+    need(p2_refusal, "ORIGINAL_SECOND_OWNER_P2_REFUSAL_NOT_REPRODUCED")
     staged = stage_backend(fixed, manifest111)
     env = {**os.environ, "BACKEND_DIR": str(staged), "PYTHONDONTWRITEBYTECODE": "1"}
     finish = run([str(SERVICE), "pkg-update-finish", BROKEN[1], BROKEN[0]],
