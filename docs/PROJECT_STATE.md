@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current state v0.6.x
 
-## 22 ноября 2026 — CURRENT: обязательная WAN-first / prestart Lab регрессия ТЗ_6v5
+## 22 ноября 2026 — CURRENT: локализация ошибок старого Start/Stop/Restart (scope-only)
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=124`, `v0.6.5_124` — docs-only PR candidate поверх merged `main _123` (`b0dbbbfd`); prospective `os-zapret2-restyle-0.6.5_124.pkg` не построен и не опубликован. Owner installed `_117.pkg`, manual Stop→Start RUNNING и два Strategies Apply PASS; Lab #1224 RESTORE_FAILED и Auto #1223 OPEN.
+
+**ТЗ_6v5 `7.1/V5-12:** только сохранение/адаптация/удаление RU/EN сообщений о реально старых и новых **физических Start, Stop, Restart**, включая service transitions из Apply, Lab, Voice, pkg/boot. Прочие словари и коды ошибок GUI не входят в задачу. [ТЗ](architecture/TZ_6v5.md) / [план](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). Никаких изменений работающей службы, GUI, runtime или сборки package.
+
+
+## 22 ноября 2026 — WAN-first / prestart Lab (предыдущая документационная веха)
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=123`, `v0.6.5_123` (только docs PR candidate поверх merged `main _122`, SHA `2844573a`); prospective `os-zapret2-restyle-0.6.5_123.pkg` **не создан**. Owner installed `_117.pkg`, последний verified manual Stop→Start RUNNING и два Strategies Apply PASS; #1224 Stage90 RESTORE_FAILED, #1223 Auto no Found, #1225 GUI routes остаются OPEN.
 

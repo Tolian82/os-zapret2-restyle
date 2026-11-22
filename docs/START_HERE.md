@@ -1,6 +1,13 @@
 # os-zapret2-restyle — current handoff
 
-## 22 ноября 2026 — CURRENT: WAN-first/G05→G08 regression для ТЗ_6v5 (docs-only)
+## 22 ноября 2026 — CURRENT: только сообщения прежнего Start/Stop/Restart (ТЗ_6v5 V5-12)
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=124`, `v0.6.5_124` — docs-only PR candidate на базе merged `main _123` (`b0dbbbfd`). Prospective `os-zapret2-restyle-0.6.5_124.pkg` **не строился и не публиковался**. На владельческом OPNsense по-прежнему `_117.pkg`; Lab #1224 и Auto #1223 OPEN, рабочая служба не затрагивалась.
+
+**Узкое уточнение владельца:** [ТЗ_6v5 `7.1/V5-12](architecture/TZ_6v5.md) и [план S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) относятся **только** к RU/EN сообщениям об ошибках прежнего Start/Stop/Restart и физическим service transitions через Apply/Voice/Lab/pkg/boot. Живые сообщения сохранить/адаптировать, действительно недостижимые устаревшие переводные ключи удалить из обоих языков; реальные новые lifecycle errors показать в GUI. **Не** проводить общий аудит или чистку переводов форм, Voice validation, Lab candidate search, списков и других функций.
+
+
+## 22 ноября 2026 — WAN-first/G05→G08 regression (предыдущая документационная веха)
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=123`, `v0.6.5_123` — docs-only PR candidate на базе merged `main v0.6.5_122` (SHA `2844573a`). Prospective `os-zapret2-restyle-0.6.5_123.pkg` **не строился и не публиковался**. У владельца по-прежнему установлен `_117.pkg`; его работающая служба не затронута.
 

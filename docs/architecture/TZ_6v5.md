@@ -123,6 +123,34 @@
 
 Не раскрывать полный `config.xml`, IP/домены/списки, raw args/debug, токены и секреты; stderr whitelist/редакция, ограничение байт/строк, корректная UTF-8 и безопасный log-ref. Не выдавать success из-за подтверждения «процесс есть», если generation/IPFW/предыдущий runtime не восстановлены. CLI, GUI, конфигурационные операции и Lab обязаны показывать совместимую первопричину/стадию и правдивое итоговое состояние.
 
+### 7.1. Только ошибки прежнего Start/Stop/Restart: актуальность RU/EN GUI
+
+**Уточнённое решение владельца от 22.11.2026:** ревизия переводов при введении единого физического исполнителя касается **исключительно** ошибок и пользовательских уведомлений, связанных со **старым запуском, остановкой и перезапуском** обычной службы Zapret2. Проверять и исправлять нужно также те сообщения Apply, Lab, Voice, package update, boot/recovery и установки версии движка, **которые непосредственно сообщают о вызове/отказе/результате физического Start/Stop/Restart** или восстановлении прежнего service state. **Не требуется** общий аудит локализации всего GUI, IPSet, списков, отдельных полей валидации, поиска кандидатов Lab, обновления ресурсов или произвольных ошибок PHP.
+
+**Что уже имеется и должно переиспользоваться:** `general.volt` содержит `localizeStrategiesApplyError()`, RU/EN уведомления об управлении службой; `voice.volt` содержит двуязычные статусы общего runtime и отдельные сообщения о неуспешной реконфигурации; `diagnostics.volt` и Lab worker messages локализуют остановку/восстановление `RUNNING/STOPPED/RESTORE_FAILED`; `ServiceController.php`/`SettingsController.php` применяют `gettext()` и структурированные `reason`. Это **места для точечного аудита**, а не разрешение переписывать все их словари.
+
+**Граница охвата (строго):**
+
+| Входит в V5-12 | Не входит |
+| --- | --- |
+| Старт/останов/перезапуск обычной службы по GUI, System Services, CLI/configd/boot и исходная RU/EN ошибка при их отказе | Остальные ошибки форм, редакторов, Target Mode, HOSTLIST/IPSet и native parsing, если они не означают отказ Start/Stop/Restart |
+| Ошибка Stop/Start при Apply, Voice Apply, Lab restore, protected pkg-update, engine-version maintenance или callback, включая исходный/итоговый service state | Валидация Voice IPSet, исходных пользовательских данных, параметры/результаты поиска Lab, установки/загрузки ресурсов **как таковые** |
+| Ошибки физического Start при engine absent/invalid, WAN guard, sealed manifest/argv/IPFW/FD9 owner, early exit и при повторном Start после Stop | Массовая переработка текущих `gettext`, словаря `localizeVoiceErrors()` или всех `native-preflight-*` исключительно ради унификации |
+
+**Порядок миграции:**
+
+1. **INVENTORY:** для **каждого старого lifecycle message** определить живую цепочку `source emitter/function → reason/stage/exit → configd/API → конкретная кнопка/обработчик GUI → русский и английский текст`, а также физический переход, который вызвал ошибку. Проверить исторические protected operation receipts и сохранённые Lab jobs: они могут по-прежнему требовать совместимого текста.
+2. **KEEP:** сообщение по-прежнему реально возникает при canonical Start/Stop/Restart → оставить его в обеих локалях, даже если оно редко; проверить показ при соответствующей injected failure.
+3. **ADAPT:** прежний lifecycle source или stage исчезает, но тот же смысл сохраняется в едином исполнителе → обновить выдаваемый `reason/code` и обе RU/EN ветки **вместе**, не оставляя недостижимую старую строку. Не делать общий rewrite не относящихся к lifecycle валидаций.
+4. **REMOVE:** конкретное сообщение **о старом Start/Stop/Restart** подтверждённо больше не производится и не нужно для поддерживаемого восстановления/истории → удалить только этот obsolete key из русского и английского обработчиков и связанных тестов. Не трогать другие ошибки, даже если они находятся рядом в том же словаре.
+5. **ADD:** новый реальный отказ физического Start/Stop/Restart (например invalid sealed manifest, engine early exit, FD9 conflict, невозможность восстановить state) полезен пользователю → добавить понятное RU/EN уведомление **через существующий GUI путь** с защищёнными `code/stage/rc` для диагностики. Нет доказуемого producer — нет нового переводного ключа.
+
+Не смешивать `start_failed` с `stop_failed` или `restart_failed_after_stop`; не писать «перезапуск выполнен» без проверенного RUNNING. При недостоверном результате — честный локализованный статус и безопасная ссылка на диагностику, без сырых аргументов, IP/доменов/секретов и backend stderr. Сервисный Status читает факты, а не подменяет результат запуска.
+
+**Гейт проверки:** точечная таблица `old lifecycle message → KEEP/ADAPT/REMOVE → new lifecycle producer → GUI receiver → RU/EN → test`; controlled negative tests и два языка браузера для маршрутов Start/Stop/Restart, включая вызовы из Apply/Lab/pkg **только в части переходов службы**. Для снятых ключей тест отсутствия и доказательство отсутствия старого producer/поддерживаемого replay. Никакого требования чистить всю локализацию продукта.
+
+**V5-12:** в **подмножестве сообщений старого Start/Stop/Restart** нет необъяснённых недостижимых RU/EN ошибок; текущие и новые реальные lifecycle failures достигают нужной GUI-страницы и дают корректное сообщение на **обоих** языках, а obsolete переводы адаптированы/удалены без нарушения исторического чтения и без ложного успешного Start/Restart.
+
 ## 8. Непрерывный Auto и неизменность защищённого хранилища
 
 Двухуровневая схема ТЗ_6v4 остаётся обязательной: каждая квалифицированная native строка → original minute P2 → origin map → PSL/Exclude/CAS → постоянный YouTube/User/shared Found → live managed HOSTLIST → **только после подтверждённого destination** безопасная очистка соответствующего native inbox. Пустые Found могут наполняться позже без изменения immutable manifest, `Apply` или Restart. Сохраняются original FD9/P2a/P2b/P2c, inode/FD/epoch и WAL/ACK, защита от concurrent append, неразрушительный отказ для устаревших источников. `zapret-hosts-auto.txt` не мигрировать. Не добавлять observer, отдельный писатель или остановку трафика ради диагностики.
@@ -146,7 +174,9 @@
 | V5-07 | Native Lab RUNNING→RUNNING, STOPPED→STOPPED и ошибка/timeout/cancel/прерванное восстановление дают правдивые receipts |
 | V5-08 | Native Auto подтверждённым событием попадает в нужные persistent Found и hot managed на том же `dvtws2`, без Apply/Restart |
 | V5-09 | Native OPNsense и защищённые upgrade/rollback, Voice/Strategies Apply, WAN и пакетные сценарии проходят на **точном** исходнике |
-| V5-10 | Только после source/native приёмки, включая V5-11, — один testing `.pkg` с SHA/ABI/source identity; отдельно owner-live проверка на физическом устройстве; stable/pfSense не объявлять по одному CI |
+| V5-10 | Только после source/native приёмки, включая V5-11 и V5-12, — один testing `.pkg` с SHA/ABI/source identity; отдельно owner-live проверка на физическом устройстве; stable/pfSense не объявлять по одному CI |
 | V5-11 | WAN-only Save при `Enabled=OFF`, отсутствии upstream и отсутствии user strategy сохраняет WAN; после явной установки engine Standard/Extended Lab работают до первого ordinary Start без active runtime manifest, завершают Stage90 STOPPED→STOPPED и не оставляют ресурсов. Отсутствие WAN первее отсутствия движка, и ни один отказ не создаёт Job/IPFW |
+
+| V5-12 | **Только для сообщений прежнего Start/Stop/Restart**, включая их физические переходы через Apply, Voice, Lab restore, package update и boot: source→reason/stage→GUI→RU/EN проверены; действующие сохранены/адаптированы, недостижимые старые переводы удалены в обеих локалях без ущерба историческому recovery; новые lifecycle failures информируют пользователя на двух языках. Остальные GUI-переводы вне охвата |
 
 **Граница фактов на 22.11.2026:** merged documentation-only `main v0.6.5_121`, установленная у владельца тестовая `_117`, ручной Stop→Start RUNNING и два Strategies Apply PASS. ТЗ_6v5 — **критерий будущей реализации**, а не сообщение о завершённой работе. Исполнение идёт строго по [шагам и блокирующим гейтам](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).

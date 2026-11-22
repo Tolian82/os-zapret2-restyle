@@ -8,6 +8,8 @@
 
 **Наследуемый обязательный регрессионный сценарий WAN-first / Prestart Lab:** [LC-06/11/12](OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md), [G05](../verification/G05_WAN_ONLY_NATIVE.md), [G08](../verification/G08_PRESTART_LAB_NATIVE.md), [ТЗ_6v5 `6.1](TZ_6v5.md). **Сохранить** Save только WAN при Enabled=OFF, без upstream, обычного runtime/active manifest или непустой пользовательской стратегии. После **явной** установки upstream Standard/Extended Laboratory обязаны запускаться **без первого обычного Start**, проверять STOPPED→STOPPED и отсутствие остаточных Lab IPFW; старый native G08 PASS не переносится автоматически на новое поколение. Отсутствие WAN → `wan-required` раньше отсутствия двигателя; сохранённый WAN + отсутствующий двигатель → `engine-not-installed` без Job. G05→G08 — обязательный source/native RED→GREEN до и после переделки launcher.
 
+**Точный объём RU/EN (V5-12):** проверять **только** ошибки прежнего физического `Start/Stop/Restart` и связанные с этими переходами сообщения через GUI/Apply/Voice/Lab/pkg/boot. Не проводить аудит всех переводов Voice/Strategies/Lab. Для старых lifecycle ошибок — KEEP/ADAPT/REMOVE по действительным producer и GUI consumer; новые реальные ошибки единого Start/Stop/Restart — RU/EN через прежние механизмы. [ТЗ_6v5 `7.1](TZ_6v5.md).
+
 **Неприкосновенные инварианты:** один original FD9/Config writer/долговечный журнал, один `dvtws2`, original `shared_apply_operation`, native P1/P2/FD и WAL/ACK, только собственный IPFW; без SIGSTOP/SIGCONT, observer/second daemon, несанкционированных остановок для Auto, PID-journal deletion или угаданного recovery. Подтверждённый manual/Found/managed и исправный операторский Stop важнее неподтверждённых Auto-строк.
 
 ## G0 — документы, исходники и воспроизводимый RED (S00–S03)
@@ -34,6 +36,8 @@
 2. Для каждого зафиксировать где FD9, выбор Common/Voice/legacy owner, реальные `exec/kill/IPFW/Config` side effects, rollback/terminal receipts. Скриншотные иконки без проверки tooltip/handler **не** считать доказательством.
 3. Снять карту current `zapret.conf` inline, XML `Zapret.xml`, `registry/storage`, `target_mode`, `profile_pipeline`, `auto_detect_origin_map`, Voice producers, `shared_apply_operation` и exact active source map.
 
+4. Для **старого Start/Stop/Restart** составить ограниченный реестр `emitter → stage/reason/rc → GUI caller/handler → RU/EN`, включая физические переходы при Apply, Voice, Lab restore, pkg/boot. Не инвентаризировать посторонние ошибки валидации и списков.
+
 **GO:** полная таблица физических writers и их callers, включая обходные paths и наследование FD9. **NO-GO:** проверены только публичные CLI три команды.
 
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
@@ -41,6 +45,8 @@
 1. Сохранить deterministic old baseline: итоговые `dvtws.args`, actual native profile order/source-map/IPFW/Voice для `all/list/auto`, explicit selectors, User vs YouTube first-match, empty/nonempty/large/invalid lists.
 2. Написать RED на no-engine, no-Config, no-manifest, иностранные PID/IPFW, stale map, invalid refs и Stage/rc diagnostics; на status no side effects и one physical transition dispatcher. Добавить регрессию G05/G08: WAN-only Save при пустых user Strategy/hostlists и Enabled=OFF без upstream/manifest; WAN-first error precedence до Lab Job; реальный Standard/Extended Lab после установки engine до обычного Start.
 3. Проверить, что тесты действительно вызывают производственный генератор/templates и **падают на доказуемом дефекте**; Lab stage90 RED и Auto learning RED добавлять по объективной физической трассе, не фальсифицируя событие.
+
+4. RED-тесты старых переводов Start/Stop/Restart: показать реальные sources, доходимость до обоих языков; отдельно фикстуры исчезнувших source stages, чтобы stale lifecycle errors не пережили refactor. Сохранённые Lab/operation receipts не считать «мёртвыми» без проверки.
 
 **GO:** baseline и воспроизводимый RED доступны CI. **NO-GO:** unit mocks или grep объявлены native доказательством.
 
@@ -59,6 +65,8 @@
 1. Реализовать `status --json` с прежним совместимым plain `status` и собственным верифицированным runtime/epoch/IPFW census; status **не** компилирует, не Apply, не стартует, не сохраняет.
 2. Кодировать `timestamp/stage/code/operation_id/generation/exit_status/runtime_state/message/stderr_excerpt/log_ref`. Подключить реальные `dvtws2`, supervisor, setup, configd, IPFW, P2, Apply, Lab errors в существующее защищённое, ограниченное, ротируемое хранилище.
 3. RED→GREEN для `ENGINE_NOT_INSTALLED`, `CONFIG_UNINITIALIZED`, `MANIFEST_UNAVAILABLE`, `MANIFEST_INVALID`, `ENGINE_EXIT_EARLY`, `WAN_UNAVAILABLE`, `IPFW_ATTACH_FAILED`, `LAB_RESTORE_FAILED`; ограничить/очистить stderr, секреты/домены/IP/args не раскрывать.
+
+4. Сохранить уже существующие RU/EN сообщения о запуске/остановке/перезапуске и правдивом состоянии после ошибки; новый diagnostic code полезен GUI только если связан с действительным lifecycle failure. Не переделывать остальные сообщения.
 
 **GO:** действительный stage/rc + последняя ошибка показаны в CLI/GUI; no-write/secret tests PASS. **NO-GO:** зелёный Status лишь по PID.
 
@@ -114,6 +122,8 @@
 2. Verify binary, saved owner, generation, current journal, WAN, IPFW and engine args/maps before starting ровно одного `dvtws2`/supervisor; attest terminal RUNNING.
 3. Negative: no binary/manifest/Config, engine early exit, invalid WAN, foreign PID/IPFW, stale/mutated release, concurrent operation.
 
+4. Для отказов **физического Start** проверить source/error stage/rc, существующее GUI уведомление в RU и EN; новый genuine Start error оформить в обеих локалях без висящего неиспользуемого ключа.
+
 **GO:** exact Start state and errors; нет скрытой альтернативной ветки.
 
 ### S12. Единственный физический Stop
@@ -121,6 +131,8 @@
 1. В том же файле реализовать ONE authoritative Stop verified previous owner; Stop не должен зависеть от возможности пересобрать теперь повреждённый редактируемый XML/new candidate.
 2. Делегировать неизменённые P2/epoch/FD/N retirement и удаление **только подтверждённого** собственного IPFW, supervisor/engine cleanup, terminal STOPPED.
 3. Native negative: late append, stopped/no owner, foreign owner, wrong epoch/lock, external IPFW missing (#1210 — отдельная диагностика, НЕ новый auto-heal), interrupted Stop/Resume; неизвестный owner → fail-closed, никакого `pkill`/`rm pid`.
+
+4. Для отказов **физического Stop** проверить RU/EN уведомления в GUI и честное состояние; сообщения устаревшего Stop, чей producer исчез, адаптировать/удалить.
 
 **GO:** безопасный операторский Stop и подтверждённая защита чужого состояния.
 
@@ -131,6 +143,8 @@
 3. `restart/reconfigure` — guarded Stop→Start под непрерывным FD9; confirmed user STOPPED не запускается из-за scheduler. Проверить все handler/CLI paths автоматически и фактически на GUI.
 4. Лаборатория не должна требовать ordinary sealed manifest/непустую пользовательскую Strategy или прежний release для работы с исходно STOPPED. Job-owned temporary runtime остаётся отделённым от обычного Start; при наличии ordinary owner Lab использует ту же original FD9 безопасность.
 
+5. При переводе всех callers на единый физический Start/Stop заменить **только** их старые GUI error reason/translation mappings. Сохранить поддерживаемые исторические Lab restore и protected package recovery receipts; не трогать независимые Voice/Input/Strategy/Lab messages.
+
 **GO:** один physical dispatcher и одна политика, все пути из S02 трассируются. **NO-GO:** альтернативный direct exec/kill/IPFW script.
 
 ### S14. Apply/Restart/Boot/rollback end-to-end
@@ -138,6 +152,8 @@
 1. Проверить RUNNING/STOPPED, idempotence/refusal, unchanged+edited Strategies и Voice Apply, Config/list ownership, TUN WAN и one-engine/IPFW state.
 2. Failure inject at promotion, early engine exit, crash Stop/Boot, protected upgrade, Setup install rollback; проверить предыдущий terminal semantic state, no stranded broken journal.
 3. Проверить native N/debug retirement, P1/CAS/ACK/Found protection, service state после каждого результата; original restoration error важнее промежуточного успешного UI.
+
+4. Инъекции отказов при Stop→Start/restart, failed Start after Stop и rollback: сверить фактическую причину/стадию с RU/EN уведомлением именно о service transition, исключить ложный «Restart successful».
 
 **GO:** original FD9 tests + equivalent native tests PASS; rc=0 недостаточно без physical witness.
 
@@ -166,13 +182,17 @@
 2. Подтвердить защищённое STOPPED/RUNNING package-update, torn extraction, interrupted restore, no foreign IPFW cleanup, exactly one `dvtws2` и сохранность Config.
 3. Собирать точные SHA/run IDs/log stage/rc. Failed attempt нельзя объявить PASS лишь потому, что rerun стал зелёным; исправлять причинный FAIL.
 
+4. На disposable native OPNsense проверить RU/EN GUI отображение фактических отказов Start/Stop/Restart, в том числе вызванных через Apply/Lab/pkg; для опасных сценариев использовать контролируемые negative fixtures, а не устройство владельца.
+
 **GO:** affected native scenarios on exact code candidate PASS, critical restore FAIL eliminated.
 
 ### S18. Перед тестовой публикацией
 
-1. Сверить ТЗ_6v5 V5-01…09 на уровне source/CI/native; OPEN owner-live строки не подменять.
+1. Сверить ТЗ_6v5 V5-01…V5-12 на уровне source/CI/native; OPEN owner-live строки не подменять.
 2. Обновить facts `PROJECT_STATE`/`ROADMAP`/`START_HERE` и issue statuses только по доказательствам. Проверить exact candidate revision, зависимости/ABI, official Mk package build.
 3. Squash merge **product** PR только после safety checks/native gate; не объявлять stable или pfSense support.
+
+4. V5-12 проверять **только** по old/new Start/Stop/Restart-related UI errors: нет orphan keys от удалённого lifecycle, все существенные действующие отказные ветки имеют RU/EN, сохранённые старые записи читаются; общий аудит иных переводов не требуется.
 
 **GO:** конкретный merged main SHA готов к **testing** .pkg, с сохранением owner-live OPEN.
 
@@ -194,7 +214,9 @@
 4. Обычное удаление→повторная установка сохраняет настройки; отдельный deliberate purge проходит на тестовом устройстве. Проверить ошибки GUI и no-engine pathways.
 5. Только после фактических свидетельств закрыть #1223/#1224/#1225/#1052; stable и pfSense — отдельные решения, не часть ТЗ_6v5 shipping.
 
-**DONE:** функциональность подтверждена на соответствующих source/native/owner уровнях, включая WAN-first/G05→G08/V5-11; любые непроверенные строки остаются OPEN.
+6. Подтвердить RU/EN обратную связь **только по Start/Stop/Restart** и неудачным переходам службы в Apply/Lab; другие GUI переводы остаются вне V5-12.
+
+**DONE:** функциональность подтверждена на соответствующих source/native/owner уровнях, включая WAN-first/G05→G08/V5-11 и строго ограниченный lifecycle RU/EN V5-12; любые непроверенные строки остаются OPEN.
 
 ---
 
