@@ -120,7 +120,7 @@
 
 ### 5.3. Расширяемые параметры CLI
 
-Команды имеют вид `zapret_service.sh <action> [declared options]` со строгой проверкой action-specific allowlist, длины/количества аргументов и rc 64 `INVALID_ARGUMENT` для неподдерживаемых. Минимум: `status --json` read-only, `reload --check [--json]` read-only diff/preflight без signal/записи; остальные базовые команды без необязательных параметров. В будущем допустимы аутентифицированные root-only `--expect-generation=<id>`/`--operation=<sealed-id>` **только** после native qualification original FD9, не произвольные пути. Нельзя принимать произвольный `--manifest`, `--args`, PID, signal, shell fragments, `eval`, runtime env override. Прежние configd/installer/Lab внутренние action имена могут быть совместимыми фасадами, не новыми физическими процессными менеджерами.
+Команды имеют вид `zapret_service.sh <action> [declared options]` (дополнены `start|stop|restart --force`, глобальным и командным `--help`; см. §5.5–5.6) со строгой проверкой action-specific allowlist, длины/количества аргументов и rc 64 `INVALID_ARGUMENT` для неподдерживаемых. Минимум: `status --json` read-only, `reload --check [--json]` read-only diff/preflight без signal/записи; остальные базовые команды без необязательных параметров. В будущем допустимы аутентифицированные root-only `--expect-generation=<id>`/`--operation=<sealed-id>` **только** после native qualification original FD9, не произвольные пути. Нельзя принимать произвольный `--manifest`, `--args`, PID, signal, shell fragments, `eval`, runtime env override. Прежние configd/installer/Lab внутренние action имена могут быть совместимыми фасадами, не новыми физическими процессными менеджерами.
 
 ### 5.4. Ошибки launcher, dvtws2 и жизненного цикла GUI RU/EN
 
@@ -131,6 +131,46 @@
 **V5-12 остаётся строго ограниченным** переводами старого Start/Stop/Restart и связанными service transitions из Apply/Voice/Lab/pkg/Boot: KEEP/ADAPT/REMOVE по реально достижимому producer; новые `RELOAD_*`/restart error добавляются RU/EN по аналогии, **только когда реально возникают**. Общий перевод других ошибок Voice/Strategies/Lab вне scope. Поддерживаемые исторические receipts не теряют читаемость.
 
 **V5-13:** проверены **только интеграционные действия плагина**: list-only decision, безопасная запись, точная доставка сигнала (если требуется), отсутствие смены PID/supervisor/IPFW, NO_CHANGE без сигнала, structural/mixed→полный Restart, unsafe/uncertain→refuse. **Не проверять** автоматическое reread и SIGHUP-семантику самого Zapret2 — они уже нормативно установлены `manual.en.md`. **V5-14:** все пять команд/strict options/native error receipt/GUI RU+EN lifecycle путь имеют source+native доказательство до testing package.
+
+### 5.5. Аварийный параметр `--force` — только для подтверждённого зависшего собственного процесса
+
+**Решение владельца от 23.11.2026:** поддержать три команды оператора: `zapret_service.sh start --force`, `stop --force`, `restart --force`. Параметр означает **разрешение на ограниченную принудительную остановку только ранее аттестованного собственного зависшего runtime**, если штатная graceful Stop/TERM с установленным timeout не завершила процесс. **Не** означает обход FD9, sealed owner, process identity, journal/P1, чужого PID/IPFW, WAN/manifest или права на безусловное `kill -9`.
+
+**Единая безопасная последовательность под original FD9:**
+
+1. Команду с `--force` принимает только явно уполномоченный root CLI/подтверждённый администраторский context; GUI Apply, Lab, Auto-minute, boot, pkg updater, фоновые callbacks **никогда не добавляют флаг автоматически**. Сохранять факт явного использования в текущем protected operation receipt (action, force_requested, original owner, stage, result), без нового писателя Config и без постоянного включения режима.
+2. Проверить, что PID (child `dvtws2`, monitor/supervisor, если требуется) принадлежит **именно текущему подтверждённому поколению плагина**: sealed owner/FD9/epoch, точный исполняемый файл и командная строка, PID **и время создания/birth**, process inventory и собственные IPFW. Не полагаться только на `/var/run/*.pid` или совпадение имени. Устаревший PID-файл, отсутствующий процесс, PID reuse и чужой экземпляр — разные состояния; если нет аттестации, `FORCE_OWNER_UNVERIFIED`/refusal, **ничего не убивать и не удалять наугад**.
+3. Сначала запретить/остановить **только подтверждённый собственный** supervisor/respawn и сделать обычный защищённый graceful Stop/TERM с bounded wait. Если owner уже корректно остановлен — `stop --force` возвращает проверенный STOPPED без лишнего сигнала. Эскалация `SIGKILL` допускается **только если процесс сохранил тот же PID+birth+exe/argv+epoch после таймаута** и повторной проверки непосредственно перед сигналом. Между `TERM` и `KILL` повторная аттестация обязательна, чтобы не убить новый процесс после PID reuse. Никаких `pkill`/`killall`/wide PID scan как действия по умолчанию.
+4. После эскалации отдельно проверить фактическое исчезновение старого child/monitor, отсутствие автоматического respawn и новых неаттестованных процессов; завершить существующий original P2/N/epoch retirement и очистить **только** подтверждённые plugin-owned IPFW по штатной процедуре. Нельзя считать `SIGKILL`/exit-status=0 успешным Stop. Если процесс не завершился, ownership изменился, journal не закончен или kernel rules не восстановлены — `FORCE_TERMINATION_UNCONFIRMED`/`INCOMPLETE`, прежние журналы остаются для восстановления, новый Start запрещён.
+5. **`stop --force`**: только guarded Stop с возможной эскалацией; без запуска. **`restart --force`**: тот же guarded forced Stop, а затем **полный** стандартный Start **только после доказанного завершённого STOPPED/retirement**. Если Stop отказал — **никогда** не стартовать второй `dvtws2`; если последующий Start отказал — честный `RESTART_FAILED` и существующий semantic rollback, без фиктивного RUNNING. Намеренно STOPPED не становится RUNNING от `restart --force`.
+6. **`start --force`**: если уже RUNNING и healthy — не убивать работающую службу, не запускать дубль (обычный idempotent/already-running результат). Если подтверждённый зависший **старый** собственный процесс препятствует Start — выполнить **ровно ту же** безопасную forced Stop/retirement и только затем обычный Start из валидного active release. Если старый owner недоказан, Config/WAN/engine/manifest не готовы или orphan/foreign — refusal, не широкая «автоочистка».
+7. **Сохранность:** не менять пользовательские списки, XML, Config, debug/Found/managed, защищённые older/pending receipts ради `--force`; no second writer, no IPFW flush чужого диапазона, no SIGSTOP/SIGCONT. При любой неопределённости оставлять diagnosis/stage, а не маскировать дефект принудительным убийством. **Ни один принудительный путь не становится implicit fallback обычного Stop/Start/Apply/Reload.**
+
+**Проверка V5-15:** на disposable OPNsense/контролируемом процессе: graceful success (без KILL), зависший подтверждённый child/monitor (TERM timeout→exact-owner KILL→verified STOPPED→Start при необходимости), уже STOPPED, healthy RUNNING, stale PID-file без процесса, PID reuse/foreign process, PREPARED/incomplete owner, FD9 busy, unkillable process, SIGKILL race и failure retirement/IPFW. В негативных случаях **ни один чужой PID/IPFW/Config не тронут**, двойного `dvtws2` нет, durable journal не стирается. На рабочей OPNsense владельца **не** провоцировать зависания/force-KILL ради теста.
+
+### 5.6. `--help` — публичная безопасная справка
+
+`zapret_service.sh --help` и `zapret_service.sh <command> --help` **обязаны возвращать краткую понятную справку** и завершаться с rc=0 **без захвата FD9, работы с PID/IPFW, чтения Config, компиляции, диагностики движка, файловых мутаций и запуска**. Показать usage, все пять команд, `--force` (только для `start|stop|restart` с предупреждением о проверке ownership), `status --json`, `reload --check [--json]`, текущие поддерживаемые разрешённые флаги и типовые коды отказов. Никакой секретной информации/путей к private runtime из справки.
+
+Пример краткой формы:
+
+```text
+Usage: zapret_service.sh <start|stop|restart|reload|status> [options]
+  start      Start the configured service
+  stop       Gracefully stop the owned service
+  restart    Full stop and start
+  reload     Apply supported live list updates without restart
+  status     Show actual service state
+Options:
+  --force    start/stop/restart only: allow guarded termination of a hung OWNED process
+  --help     Show help and exit (also available per command)
+  --json     status; with reload --check
+  --check    reload: read-only eligibility check
+```
+
+Не поддерживаемые сочетания, например `reload --force`, `status --force`, повторяющиеся/неизвестные опции или `start --check` — `INVALID_ARGUMENT`/rc=64 **без побочных действий**. `--help` на уровне глобального и командного entrypoint отрабатывает **до** lifecycle dispatch/lock, без обхода безопасности иных вызовов. Новые future options — только явно добавленные в action-specific allowlist.
+
+**Критерий V5-16:** текст обеих справок содержит актуальные команды/флаги, exit 0, подтверждённые no-write/no-lock/no-PID effects; parser отклоняет недопустимые комбинации. При обновлении интерфейса справка и тесты меняются одновременно.
 
 ## 6. Чистая установка и пять независимых состояний
 
@@ -227,11 +267,13 @@
 | V5-07 | Native Lab RUNNING→RUNNING, STOPPED→STOPPED и ошибка/timeout/cancel/прерванное восстановление дают правдивые receipts |
 | V5-08 | При **заранее данном** реальном native событии или достоверной fixture **наш плагин** доставляет данные через Source Map/P2 в правильные persistent Found и managed, без Apply/Restart; **не проверять** описанный в каноне upstream Autohostlist detector |
 | V5-09 | Native OPNsense и защищённые upgrade/rollback, Voice/Strategies Apply, WAN и пакетные сценарии проходят на **точном** исходнике |
-| V5-10 | Только после source/native приёмки, включая V5-11–V5-14, — один testing `.pkg` с SHA/ABI/source identity; отдельно owner-live проверка на физическом устройстве; stable/pfSense не объявлять по одному CI |
+| V5-10 | Только после source/native приёмки, включая V5-11–V5-16, — один testing `.pkg` с SHA/ABI/source identity; отдельно owner-live проверка на физическом устройстве; stable/pfSense не объявлять по одному CI |
 | V5-11 | WAN-only Save при `Enabled=OFF`, отсутствии upstream и отсутствии user strategy сохраняет WAN; после явной установки engine Standard/Extended Lab работают до первого ordinary Start без active runtime manifest, завершают Stage90 STOPPED→STOPPED и не оставляют ресурсов. Отсутствие WAN первее отсутствия движка, и ни один отказ не создаёт Job/IPFW |
 
 | V5-12 | **Только для сообщений прежнего Start/Stop/Restart**, включая их физические переходы через Apply, Voice, Lab restore, package update и boot: source→reason/stage→GUI→RU/EN проверены; действующие сохранены/адаптированы, недостижимые старые переводы удалены в обеих локалях без ущерба историческому recovery; новые lifecycle failures информируют пользователя на двух языках. Остальные GUI-переводы вне охвата |
 | V5-13 | На exact-head проверены только **наши** diff-planner, сохранение файлов, точная адресная доставка SIGHUP, unchanged PID/supervisor/IPFW и выбор NO_CHANGE/RELOAD/RESTART/START/STOP/SAVE_ONLY; **само перечитывание HOSTLIST/IPSet движком не испытывать**, оно принято из канона. Нет скрытого рестарта после ошибки |
 | V5-14 | Пять команд и строгие action options, typed native dvtws2/supervisor errors, truthful verification, RU/EN lifecycle GUI delivery проверены на exact FreeBSD native перед тестовой сборкой |
+| V5-15 | `start|stop|restart --force` ограничен явным оператором, original FD9 и точной owner/PID+birth/epoch аттестацией: TERM→bounded wait→повторная проверка→KILL только своему зависшему процессу; terminal Stop/retirement/IPFW проверяются, чужие процессы не затронуты, второй dvtws2 никогда не стартует |
+| V5-16 | Глобальный/командный `--help` выдаёт актуальный usage с пятью командами и опциями, rc0 без FD9/Config/PID/IPFW; запрещённые `--force` сочетания и неизвестные options возвращают rc64 без побочных действий |
 
 **Граница фактов на 22.11.2026:** merged documentation-only `main v0.6.5_121`, установленная у владельца тестовая `_117`, ручной Stop→Start RUNNING и два Strategies Apply PASS. ТЗ_6v5 — **критерий будущей реализации**, а не сообщение о завершённой работе. Исполнение идёт строго по [шагам и блокирующим гейтам](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).

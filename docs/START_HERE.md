@@ -1,6 +1,15 @@
 # os-zapret2-restyle — current handoff
 
-## 23 ноября 2026 — CURRENT: manual.en.md — безусловный канон движка (docs-only)
+## 23 ноября 2026 — CURRENT: `--force` и `--help` для единого launcher (docs-only)
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=127`, `v0.6.5_127` — кандидат документации от merged `main _126 945d9a29`. Prospective `os-zapret2-restyle-0.6.5_127.pkg` **не создан и не опубликован**. У владельца установлен `_117.pkg` без изменений; Lab #1224 и Auto #1223 остаются OPEN.
+
+**Новые требования:** [ТЗ_6v5 §5.5–5.6/V5-15/V5-16](architecture/TZ_6v5.md), [DEV-070](PROJECT_PRINCIPLES.md), [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). `start --force`, `stop --force`, `restart --force` только по явному ручному запросу администратора: точно подтверждённый own PID+birth/epoch/argv под original FD9 → graceful Stop/TERM + timeout → re-attest → адресный SIGKILL **только если собственный процесс сохранился** → проверенный STOPPED/P2/IPFW. Foreign/stale/reused, неизвестный owner, незавершённый журнал и неубиваемый процесс — отказ без нового Start, без удаления PID/чужого IPFW. В GUI/Apply/Lab/pkg/Boot флаг автоматически не появляется. Глобальная и командная `--help` показывают пять команд и разрешённые параметры с rc0, без FD9/файлов/процессов; несовместимый `reload/status --force` даёт rc64.
+
+**Объём:** строго документационная ревизия, **реализация CLI пока не выполнена** и на рабочем маршрутизаторе никаких принудительных остановок не проводилось. [Канон](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) остаётся обязательным: документированное поведение движка не перепроверяем.
+
+
+## 23 ноября 2026 — manual.en.md — безусловный канон движка (предыдущая документационная веха)
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=126`, `v0.6.5_126` — docs-only PR candidate поверх merged `main _125 e60bc1d2`. Prospective `os-zapret2-restyle-0.6.5_126.pkg` **не построен и не опубликован**; у владельца по-прежнему `_117.pkg`.
 
