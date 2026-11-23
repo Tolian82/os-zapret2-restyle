@@ -61,6 +61,8 @@
 
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
 
+**S03a source candidate (23.11.2026, `_132`):** [реальный S03 old-generator matrix/CLI/learning/no-manifest native-disposable Status RED](ZAPRET2_TZ6V5_S03_ORIGINAL_GENERATOR_RED.md), using existing P2e production orchestrator and isolated FreeBSD workflow. **CI witness pending, S03 incomplete/NO-GO**: пункты G05→G08/diff/force/locale/native Lab и другие матрицы не закрыты; не переходить к S04 из-за одного RED набора.
+
 1. Сохранить deterministic old baseline: итоговые `dvtws.args`, actual native profile order/source-map/IPFW/Voice для `all/list/auto`, explicit selectors, User vs YouTube first-match, empty/nonempty/large/invalid lists.
 2. Написать RED на no-engine, no-Config, no-manifest, иностранные PID/IPFW, stale map, invalid refs и Stage/rc diagnostics; на status no side effects и one physical transition dispatcher. Добавить регрессию G05/G08: WAN-only Save при пустых user Strategy/hostlists и Enabled=OFF без upstream/manifest; WAN-first error precedence до Lab Job; реальный Standard/Extended Lab после установки engine до обычного Start.
 3. Проверить, что тесты действительно вызывают производственный генератор/templates и **падают на доказуемом дефекте**; Lab stage90 RED и Auto learning RED добавлять по объективной физической трассе, не фальсифицируя событие.
@@ -307,7 +309,7 @@
 
 | Гейт | Этапы | На 22.11.2026 | Документ завершения |
 | --- | --- | --- | --- |
-| G0 | S00–S03 | S00/S01 merged; S02 source route audit complete on `_130` base (source-level, pending `_131` doc PR gate); S03 RED NOT RUN | [S01 matrix](ZAPRET2_TZ6V5_S01_PR1228_DISPOSITION.md) + [S02 source map](ZAPRET2_TZ6V5_S02_ACTUAL_LIFECYCLE_ROUTE_AUDIT.md), next real generator RED |
+| G0 | S00–S03 | S00/S01/S02 merged; S03a actual-generator RED candidate `_132` wired to isolated P2e OPNsense (CI pending); whole S03 still NO-GO | [S02 map](ZAPRET2_TZ6V5_S02_ACTUAL_LIFECYCLE_ROUTE_AUDIT.md), [S03a RED](ZAPRET2_TZ6V5_S03_ORIGINAL_GENERATOR_RED.md); finish remaining S03 before S04 |
 | G1 | S04–S09 | NOT RUN | empty-install/status/compiler parity + secure refs |
 | G2 | S10–S14 | NOT RUN; #1228 только partial | five commands + safe Reload/Restart + FD9 rollback |
 | G3 | S15–S18 | OPEN: Lab #1224, Auto #1223 | actual native restoration + Found |
