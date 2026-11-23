@@ -6,7 +6,7 @@ installation. No real start/stop/restart reaches the dispatcher: mutating
 verbs are invoked ONLY while the actual ORIGINAL lockf FD9 is provably held
 on a private temp path; all must return BUSY. Other commands are plain
 status/unsupported/help, with exact Config/IPFW before-after fingerprints.
-This is not a V5-14/16 implementation and not a native GUI locale proof.
+This is not a complete V5-14/16 implementation or native GUI locale proof.\nThe historic status --json RED becomes S05a GREEN; other CLI RED remains.
 """
 from __future__ import annotations
 
@@ -195,23 +195,32 @@ def native_cli() -> dict:
         check(plain.returncode == 1 and
               "zapret is not running" in plain.stdout and lock.exists(),
               "S03E_PLAIN_COLD_STATUS_BASELINE_CHANGED")
-        status_cases = (
-            ("--json",), ("--help",), ("--force",),
-            ("--json", "--json"), ("--unknown",),
+        # S05a has intentionally turned the historic S03e JSON RED into
+        # a bounded GREEN. Unsupported options are now rejected BEFORE FD9;
+        # unlike new JSON the old *plain* path remains unchanged.
+        status_invalid = (
+            ("--help",), ("--force",), ("--json", "--json"),
+            ("--unknown",),
         )
-        for opts in status_cases:
+        for opts in status_invalid:
             p = invoke(["status", *opts], env)
-            check((p.returncode, p.stdout, p.stderr) ==
-                  (plain.returncode, plain.stdout, plain.stderr),
-                  "S03E_OLD_STATUS_UNCHECKED_OPTIONS_RED_CHANGED_" +
+            check(p.returncode == 64 and not p.stdout.strip() and
+                  "INVALID_ARGUMENT" in p.stderr,
+                  "S03E_S05A_STATUS_INVALID_OPTIONS_NOT_REJECTED_" +
                   "_".join(opts))
             assert_foreign_same(before_config, before_ipfw)
+        json_status = invoke(["status", "--json"], env)
         try:
-            json.loads(invoke(["status", "--json"], env).stdout)
+            json_data = json.loads(json_status.stdout)
         except ValueError:
-            pass
-        else:
-            raise Refusal("S03E_LEGACY_STATUS_UNEXPECTEDLY_VALID_JSON")
+            raise Refusal("S03E_S05A_JSON_STATUS_NOT_JSON") from None
+        check(json_status.returncode == 1 and
+              json_data.get("runtime_state") == "STOPPED" and
+              json_data.get("status_exit_code") == 1 and
+              json_data.get("authorization") == "NONE" and
+              json_data.get("physical_transition_allowed") is False,
+              "S03E_S05A_JSON_STATUS_SOURCE_NOT_VERIFIED_STOPPED")
+        assert_foreign_same(before_config, before_ipfw)
         # Positive control of real FreeBSD descriptor-only lockf.
         positive = cmd(["/bin/sh", "-c",
                         'exec 9>"$1"; /usr/bin/lockf -s -t 0 9',
@@ -236,7 +245,18 @@ def native_cli() -> dict:
                     break
                 time.sleep(0.1)
             check(ready, "S03E_FD9_BUSY_NOT_VERIFIED")
-            # Even --help is routed THROUGH the real FD9 in the old CLI.
+            # JSON Status must remain independent of the held lifecycle FD9,
+            # without weakening the old Start/Stop/Restart lock refusal.
+            locked_json = invoke(["status", "--json"], env, timeout=15)
+            try:
+                locked_result = json.loads(locked_json.stdout)
+            except ValueError:
+                raise Refusal("S03E_S05A_JSON_FAILED_WHILE_FD9_BUSY") from None
+            check(locked_json.returncode == 1 and
+                  locked_result.get("runtime_state") == "STOPPED" and
+                  locked_result.get("authorization") == "NONE",
+                  "S03E_S05A_JSON_WAITED_FOR_OR_CHANGED_FD9")
+            # Old Start/Stop/Restart still route through original FD9.
             # No Start/Stop/Restart CAN reach the dispatcher. Launch these
             # concurrent on the same verified BUSY lock, otherwise each
             # native timeout would take 30 s serially.
@@ -249,7 +269,6 @@ def native_cli() -> dict:
                 ("restart", "--force", "--force"),
                 ("start", "--unknown"),
                 ("stop", "--check"),
-                ("status", "--help"),
             ]
             pending = [subprocess.Popen(["/bin/sh", str(SERVICE), *args],
                        env=env, stdout=subprocess.PIPE,
@@ -290,8 +309,8 @@ def native_cli() -> dict:
     assert_foreign_same(before_config, before_ipfw)
     result = {
         "unsupported_reload_and_global_help_usage_rc64": len(unsupported),
-        "status_ignored_options_identical_to_plain": len(status_cases),
-        "status_json_not_json_and_private_fd9_created": True,
+        "status_invalid_options_rejected_before_fd9": len(status_invalid),
+        "s05a_status_json_verified_stopped_even_with_busy_fd9": True,
         "private_real_fd9_busy_rejects_unparsed_cli_rc75": len(blocked),
         "config_ipfw_engine_unchanged": True,
         "native_gui_locale_clicks_not_claimed": True,
@@ -299,7 +318,8 @@ def native_cli() -> dict:
     }
     print("S03E_NATIVE_LEGACY_PUBLIC_CLI_RED=" + json.dumps(result, sort_keys=True))
     print("S03E_ACTUAL_ORIGINAL_SERVICE_CLI_EXPECTED_RED=PASS")
-    print("S03E_NEW_CLI_HELP_JSON_RELOAD_FORCE_NOT_IMPLEMENTED=1")
+    print("S03E_S05A_JSON_IMPLEMENTED=1")
+    print("S03E_LEGACY_HELP_RELOAD_FORCE_NOT_IMPLEMENTED=1")
     return result
 
 
