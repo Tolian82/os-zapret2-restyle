@@ -1,4 +1,10 @@
-## 23.11.2026 — CURRENT TZ6v5 S04a pure neutral component model
+## 23.11.2026 — CURRENT TZ6v5 S04b OPNsense read-only adapter candidate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=152`, `v0.6.5_152`, CI-only prospective `os-zapret2-restyle-0.6.5_152.pkg` **NOT published or installed on operator OPNsense**. Base accepted `main _151 aac77c8a`. [S04b adapter](architecture/ZAPRET2_TZ6V5_S04B_OPNSENSE_READONLY_COMPONENT_ADAPTER.md) reads installed pkg, fixed engine ELF structure, bounded saved XML and reuses existing original Common journal/seal/runtime inspector; neutral output NEVER authorizes lifecycle. **Source tests only; no real five-case native acceptance yet, S04 NO-GO and S05 blocked.** No second FD9/Config/PID/IPFW owner, no operator router action. Exact-head CI PENDING, #1223/#1224/#1225 OPEN.
+
+---
+
+## 23.11.2026 — HISTORICAL TZ6v5 S04a pure neutral component model
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=151`, `v0.6.5_151`; prospective CI-only `os-zapret2-restyle-0.6.5_151.pkg` **NOT published/installable on owner**. Based on merged `main _150 b4e94219`, [formal S03 RED GO](architecture/ZAPRET2_TZ6V5_S03_RED_BASELINE_GO.md). [S04a typed classifier](architecture/ZAPRET2_TZ6V5_S04A_NEUTRAL_COMPONENT_MODEL.md) adds pure source model for five component axes and safe no-authorization classifications; **not yet** a real filesystem/pkg/owner inventory, no S04 GO and no `status --json`. Read-only platform-source/native evidence still required. No new physical service owner, Config/IPFW writer, testing release or operator device action. Exact-head CI PENDING; #1223/#1224/#1225 OPEN; S05–S20 blocked.
 

@@ -1175,6 +1175,9 @@ jobs:
       - name: Test S04 neutral component facts without lifecycle authority
         run: python3.13 scripts/test-tz6v5-s04-neutral-component-model.py
 
+      - name: Test S04b OPNsense read-only original-reader adapter (source only)
+        run: python3.13 scripts/test-tz6v5-s04b-opnsense-readonly-adapter.py
+
       - name: Test Strategy Lab Python candidate and family screening
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-candidate-family.sh
 
