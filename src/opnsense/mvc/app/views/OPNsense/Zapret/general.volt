@@ -1516,6 +1516,18 @@
                 dataType: 'json',
                 timeout: 600000
             }).done(function() {
+                const receipt = arguments[0];
+                if (action === 'stop' && (!receipt || receipt.status !== 'ok' ||
+                    receipt.action !== 'stop' || receipt.state !== 'stopped' ||
+                    receipt.verified !== true)) {
+                    // A 200 without a native terminal receipt is uncertainty,
+                    // not success. Never echo untrusted response contents.
+                    showRuntimeError(runtimeText.serviceError, isRussian
+                        ? 'Остановка Zapret2 не подтверждена. Проверьте состояние службы и журнал.'
+                        : 'Zapret2 Stop was not confirmed. Check the service status and log.');
+                    refreshRuntime();
+                    return;
+                }
                 refreshRuntime();
                 updateServiceControlUI('zapret');
             }).fail(function(xhr) {
@@ -1539,8 +1551,11 @@
                     Object.prototype.hasOwnProperty.call(nativeStartErrors, nativeError)
                     ? nativeStartErrors[nativeError] : '';
                 const legacyMessage = response && response.message;
-                const message = typeof legacyMessage === 'string' && legacyMessage
-                    ? legacyMessage : knownStartError;
+                // Legacy Stop errors are untrusted: never reflect arbitrary
+                // configd stderr or PHP traces into the GUI.
+                const message = action === 'stop' ? '' :
+                    (typeof legacyMessage === 'string' && legacyMessage
+                        ? legacyMessage : knownStartError);
                 // Do not claim a failed Stop was a failed Start. Preserve the
                 // bounded server gettext mapping and the actual requested verb.
                 const fallback = action === 'stop'

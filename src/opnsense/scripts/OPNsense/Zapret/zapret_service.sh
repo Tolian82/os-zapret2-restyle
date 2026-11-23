@@ -3454,12 +3454,53 @@ stop_legacy_without_python_service()
     return 0
 }
 
+# A single writer (the original FD9 holder) may print this fixed, bounded
+# GUI receipt, and ONLY after the normal mutation returns success AND a
+# read-only native state probe verifies the target while FD9 is still held.
+# Old public start/stop/restart callers never request a receipt.
+service_api_terminal_receipt()
+{
+    [ "$#" -eq 2 ] || return 64
+    _service_api_verb="$1"
+    _service_api_rc="$2"
+    [ "$_service_api_rc" -eq 0 ] || return "$_service_api_rc"
+    _service_api_state_rc=0
+    shared_apply_status_service >/dev/null 2>&1 || _service_api_state_rc=$?
+    case "$_service_api_verb:$_service_api_state_rc" in
+        stop:1)
+            printf '%s\n' zapret-api-lifecycle-v1:stop:stopped
+            return 0
+            ;;
+        restart:0)
+            printf '%s\n' zapret-api-lifecycle-v1:restart:running
+            return 0
+            ;;
+        *)
+            # rc=0 from a dispatcher is NOT a terminal runtime witness.
+            return 70
+            ;;
+    esac
+}
+
 service_with_lifecycle_lock()
 {
     # This function is also sourced alone by native fail-closed shell tests.
     : "${PKG_UPDATE_RECORD:=/var/db/zapret2/pkg-update/operation.json}"
     _service_lock_timeout="$1"
     shift
+    # The GUI transport is an optional parameter to the EXISTING original
+    # Stop/Restart dispatcher, not an independent lifecycle implementation.
+    # The private parameter is stripped before any normal guarded operation.
+    _service_receipt_action=
+    if [ "$#" -eq 2 ] && [ "$2" = "--configd-receipt" ]; then
+        case "$1" in
+            stop|restart)
+                _service_receipt_action="$1"
+                set -- "$1"
+                ;;
+            *) return 64 ;;
+        esac
+    fi
 
     [ -x "${LOCKF_BIN}" ] || {
         echo "ERROR: required lock utility is missing: ${LOCKF_BIN}" >&2
@@ -3502,7 +3543,12 @@ service_with_lifecycle_lock()
         if [ "${1:-}" = stop ] &&
            ! "${PYTHON_RUNTIME}" --check >/dev/null 2>&1; then
             stop_legacy_without_python_service
-            return $?
+            _service_pythonless_rc=$?
+            if [ -n "$_service_receipt_action" ]; then
+                service_api_terminal_receipt "$_service_receipt_action" "$_service_pythonless_rc"
+                return $?
+            fi
+            return "$_service_pythonless_rc"
         fi
         # Do not permit ANY legacy lifecycle action to overwrite the
         # evidence of an interrupted Voice cutover. Status/inspection remain
@@ -3602,10 +3648,16 @@ service_with_lifecycle_lock()
                     case "$_shared_owner" in
                         committed\ *)
                             shared_apply_stop_service "$_shared_owner" || return $?
+                            _service_common_rc=0
                             if [ "${1:-}" = restart ]; then
                                 shared_apply_boot_service "$_shared_owner"
+                                _service_common_rc=$?
                             fi
-                            return $?
+                            if [ -n "$_service_receipt_action" ]; then
+                                service_api_terminal_receipt "$_service_receipt_action" "$_service_common_rc"
+                                return $?
+                            fi
+                            return "$_service_common_rc"
                             ;;
                         none|restored) ;;
                         *) return 69 ;;
@@ -3676,6 +3728,12 @@ service_with_lifecycle_lock()
                 ;;
         esac
         service_dispatch "$@"
+        _service_dispatch_rc=$?
+        if [ -n "$_service_receipt_action" ]; then
+            service_api_terminal_receipt "$_service_receipt_action" "$_service_dispatch_rc"
+            return $?
+        fi
+        return "$_service_dispatch_rc"
     ) 9>"${LIFECYCLE_LOCK_FILE}"
 }
 

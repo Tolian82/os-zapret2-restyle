@@ -58,6 +58,61 @@ class ServiceController extends ApiMutableServiceControllerBase
         return parent::startAction();
     }
 
+    /**
+     * Require a trusted terminal receipt from the SAME original FD9 holder.
+     * configd type:script can return HTTP 200 even after a shell rc75. A
+     * transport success, an empty output, and arbitrary upstream stdout are
+     * NEVER evidence of a completed Stop or Restart.
+     */
+    private function verifiedLifecycleAction(string $action): array
+    {
+        if (!$this->request->isPost()) {
+            return ['response' => []];
+        }
+        $isStop = $action === 'stop';
+        if (!$isStop && $action !== 'restart') {
+            throw new \\InvalidArgumentException('Unsupported lifecycle action');
+        }
+        $backendAction = $isStop ? 'zapret stop_verified' : 'zapret restart_verified';
+        $expected = $isStop
+            ? 'zapret-api-lifecycle-v1:stop:stopped'
+            : 'zapret-api-lifecycle-v1:restart:running';
+        $state = $isStop ? 'stopped' : 'started';
+        $raw = (string)(new Backend())->configdRun(
+            $backendAction, false, $isStop ? 120 : 600
+        );
+        // Do not parse or return raw configd text. At most one exact receipt
+        // must end the bounded output; all refusals are handled by gettext.
+        $valid = strlen($raw) <= 8192 &&
+            substr_count($raw, 'zapret-api-lifecycle-v1:') === 1 &&
+            preg_match('/(?:\\A|\\n)' . preg_quote($expected, '/') . '\\z/D', trim($raw)) === 1;
+        if (!$valid) {
+            throw new UserException(
+                $isStop
+                    ? gettext('Zapret2 Stop was not confirmed. Check the service status and log.')
+                    : gettext('Zapret2 Restart was not confirmed. Check the service status and log.'),
+                gettext('Service operation failed')
+            );
+        }
+        return [
+            'response' => 'OK',
+            'status' => 'ok',
+            'action' => $action,
+            'state' => $state,
+            'verified' => true,
+        ];
+    }
+
+    public function stopAction(): array
+    {
+        return $this->verifiedLifecycleAction('stop');
+    }
+
+    public function restartAction(): array
+    {
+        return $this->verifiedLifecycleAction('restart');
+    }
+
     private const RELEASE_PATTERN = '/^v[0-9]+(?:\\.[0-9]+)+$/D';
 
     private function getReleaseList(Backend $backend): array
