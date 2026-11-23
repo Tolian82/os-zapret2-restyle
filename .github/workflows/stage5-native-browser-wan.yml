@@ -7,6 +7,7 @@ on:
       - scripts/stage5-browser-wan.py
       - scripts/test-tz6v5-s03e3-native-wan-refusal.py
       - scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py
+      - scripts/test-tz6v5-s03e3c-native-http-fd9-hold.py
       - scripts/p3-browser-i18n.py
       - scripts/p3-native-profile-locale.php
       - src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt
@@ -21,6 +22,7 @@ on:
       - scripts/stage5-browser-wan.py
       - scripts/test-tz6v5-s03e3-native-wan-refusal.py
       - scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py
+      - scripts/test-tz6v5-s03e3c-native-http-fd9-hold.py
       - scripts/p3-browser-i18n.py
       - scripts/p3-native-profile-locale.php
       - src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt
@@ -56,6 +58,8 @@ jobs:
           python3.13 scripts/test-tz6v5-s03e3-native-wan-refusal.py --self-test
           python3.13 -m py_compile scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py
           python3.13 scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py --self-test
+          python3.13 -m py_compile scripts/test-tz6v5-s03e3c-native-http-fd9-hold.py
+          python3.13 scripts/test-tz6v5-s03e3c-native-http-fd9-hold.py --self-test
           python3.13 scripts/p3-browser-i18n.py --self-test
           python3.13 -m pip install --disable-pip-version-check playwright
           chromium_bin="$(command -v chromium || command -v chromium-browser || command -v google-chrome || command -v google-chrome-stable || true)"
@@ -179,6 +183,40 @@ jobs:
             -o UserKnownHostsFile="$RUNNER_TEMP/zapret2-browser-ssh/known_hosts" \
             -L 127.0.0.1:18443:127.0.0.1:443 root@127.0.0.1
           curl -kfsS --max-time 20 -o /dev/null https://127.0.0.1:18443/index.php
+      - name: S03e3c attest native installed guest and install ephemeral FD9 holder
+        shell: opnsense {0}
+        run: |
+          set -eu
+          test ! -e /root/s03e3c-native-http-fd9-hold.py
+          test ! -e /root/s03e3c-disposable-ci.pub
+          install -m 0700 scripts/test-tz6v5-s03e3c-native-http-fd9-hold.py /root/s03e3c-native-http-fd9-hold.py
+          install -m 0600 stage5-browser-wan-ci.pub /root/s03e3c-disposable-ci.pub
+          /usr/local/bin/python3 /root/s03e3c-native-http-fd9-hold.py --self-test
+          GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php en_US
+      - name: S03e3c genuine installed PHP Stop Restart HTTP RED English (native original FD9 BUSY)
+        env:
+          ZAPRET2_STAGE5_BROWSER_WAN: '1'
+        run: |
+          set -eu
+          python3.13 scripts/stage5-browser-wan.py --s03e3c-en-browser
+      - name: S03e3c genuine Russian locale on disposable OPNsense
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php ru_RU
+      - name: S03e3c genuine installed PHP Stop Restart HTTP RED Russian (native original FD9 BUSY)
+        env:
+          ZAPRET2_STAGE5_BROWSER_WAN: '1'
+        run: |
+          set -eu
+          python3.13 scripts/stage5-browser-wan.py --s03e3c-ru-browser
+      - name: S03e3c remove ephemeral guest-only native FD9 holder files
+        shell: opnsense {0}
+        run: |
+          set -eu
+          test -f /root/s03e3c-native-http-fd9-hold.py
+          test -f /root/s03e3c-disposable-ci.pub
+          rm /root/s03e3c-native-http-fd9-hold.py /root/s03e3c-disposable-ci.pub
       - name: S03e3 prepare genuine WAN-required native witness for English
         shell: opnsense {0}
         run: |
