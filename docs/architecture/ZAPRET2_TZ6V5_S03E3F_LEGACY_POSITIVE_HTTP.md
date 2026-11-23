@@ -1,0 +1,24 @@
+# TZ6v5 S03e3f — genuinely RUNNING Legacy Stop/Restart positive HTTP
+
+**23 November 2026. Source-only candidate v0.6.5_144** on merged Common-positive `main af4999a4` / `v0.6.5_143`. No product code changes, no published package, no owner-gateway changes. Separate disposable OPNsense 26.7, actual Mk-built plugin, upstream v1.0.7 and original FD9.
+
+## Required evidence
+- Strict guest proof, exact source SHA, exact installed Mk archive, original shipped service and no Common shared-Apply journal or pending package operation before/during/after lifecycle. Do **not** delete or suppress a Common journal to manufacture Legacy.
+- Native already-approved G04 test-only stock MVC `Config::save()` updates the initial **disabled and WAN-missing** model to enabled/lo0; the same saved seeded 10 YouTube domains and exact TCP+QUIC strategy remain. This is an isolated test operator-like initial settings save, **not** an added production Config writer. No manual IPFW or synthetic daemon.
+- Authenticated unmocked HTTPS `POST service/start` then physical RUNNING; `service/restart` must contain `verified=true,action=restart,state=started` and rotate a genuine unique engine PID while preserving saved arguments and one engine/supervisor. `service/stop` must contain `verified=true,action=stop,state=stopped` and independently prove no engine, no PID/monitor and zero plugin-owned rule numbers 19000–19099. Repeat Start/Stop and prove disabled model restored in disposable after test. Foreign Config/IPFW remain unchanged.
+- Retain strict red negative-receipt matrix in fast test. Native output is bounded fixed status fields; never emit raw Config, hosts, full commandline or secrets.
+- Native legacy gate is separate from [Common G07 PASS #45160845481](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45160845481). It does not prove Chromium UI click, traffic bypass, live ISP Auto discovery, Lab restore or S03 completion.
+
+**Status: native CI PENDING**; full S03 remains **NO-GO**, S04–S20 blocked. Earlier G07 first upstream setup transient failure remains on record; rerun success is evidence, not root-cause closure for setup or Auto.
+
+## Initial CI correction (fixture, not a product result)
+
+First exact-head [native workflow #45168661945](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45168661945) confirmed official real `v0.6.5_144` .pkg installed with matching 353 native owned files, then refused **before upstream setup**: the test had rerun `stage0-opnsense-guest-readonly.evaluate()` *after* installation, although this guard intentionally requires the predecessor plugin absent. Workflow already executes the original Stage0 qualification **before** pkg add. Corrected the after-install stage to independently attest real OPNsense 26.7, FreeBSD:15:amd64, kernel VM identity, exact checkout SHA, installed Mk version and shipped service bytes; no bypass of source/guest isolation. Strengthened post-Stop check of the previously attested supervisor PID. Native Legacy HTTP result still **PENDING**; this was a test precondition error, not a successful/failed service transition.
+
+## Exact-source metadata correction (test-only)
+
+Second native [CI #45169142010](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45169142010) verified real official-Mk clean-install with 353 exact installed pkg-owned files (and matching source package SHA) but failed the **test's post-install Git metadata precondition** with `S03E3F_SOURCE_SHA_MISMATCH`, before any upstream setup or Legacy engine transition. The vmactions `sync: tar` transport is not a promise to preserve a `.git` directory. New gate strictly compares Git HEAD when metadata actually exists; when absent, it requires real checkout VERSION/Makefile, CI-provided 40-hex exact head identity, official-Mk installed pkg version and byte-for-byte source/install service equality. No digest relaxation or test-side fabricated runtime is permitted. This was **not** a product Stop/Restart failure. Legacy native result still PENDING.
+
+## Third precondition: bind Git HEAD to actual tracked files
+
+Third [native CI #45169967801](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45169967801) again installed a matching genuine 353-file Mk `.pkg` but refused before upstream setup: the guest did contain Git metadata with `HEAD` different from the verified CI source `github.event.pull_request.head.sha`. The corrected transport-proof method seals a SHA-256 inventory of **all Git-tracked regular files and tracked symlinks** on the CI host after verifying its real HEAD. The job passes the inventory SHA-256 separately; the guest verifies the inventory, exact source SHA, every tracked byte and the installed original service/pkg version. Guest `.git` alone cannot authorize a different source. No production change, no weakening of FD9, Config, process, HTTP terminal receipts or IPFW criteria. **Legacy native result remains PENDING.**

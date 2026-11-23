@@ -1,4 +1,10 @@
-## 23.11.2026 — CURRENT TZ6v5 S03e3e genuine Common positive Stop/Restart receipt gate
+## 23.11.2026 — CURRENT TZ6v5 S03e3f native Legacy positive HTTP Stop/Restart
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=144`, `v0.6.5_144`; source-only prospective CI `os-zapret2-restyle-0.6.5_144.pkg` (NOT published or owner-installable), based on merged `main af4999a4` (`_143`, [PR #1255](https://github.com/Tolian82/os-zapret2-restyle/pull/1255)). Common real native G07 **PASS** on exact `c43e9173` ([#45160845481](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45160845481)); [Legacy S03e3f](architecture/ZAPRET2_TZ6V5_S03E3F_LEGACY_POSITIVE_HTTP.md) tests unmocked installed PHP Stop/Restart against a true RUNNING Legacy owner with no Common journal and physical PID/IPFW/status attestation on separate disposable OPNsense. **Legacy exact-head CI PENDING.** Auto issue #1223 unresolved; full S03 NO-GO, S04–S20 not begun; owner last-confirmed installed `_117` untouched.
+
+---
+
+## 23.11.2026 — HISTORICAL (merged `_143`) TZ6v5 S03e3e genuine Common positive Stop/Restart receipt gate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=143`, `v0.6.5_143`; candidate based on merged `main 0738f2ea` (`_142`, [PR #1254](https://github.com/Tolian82/os-zapret2-restyle/pull/1254)). **Draft [PR #1255](https://github.com/Tolian82/os-zapret2-restyle/pull/1255), test-only candidate:** temporary CI guest may build/install exact `os-zapret2-restyle-0.6.5_143.pkg`, but NO public/operator package exists and the owner's installed `_117` is untouched. G07 real Common RUNNING native engine + original FD9 now requires an actual HTTP terminal `verified=true` Stop/Restart receipt alongside independent STOPPED/RUNNING, PID/generation/IPFW evidence. [Detailed S03e3e proof contract](architecture/ZAPRET2_TZ6V5_S03E3E_COMMON_POSITIVE_TERMINAL_RECEIPT.md). **Exact-head CI PENDING; Legacy positive still OPEN; Auto flaky native attempts remain recorded [#1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223). Full S03 NO-GO; S04–S20 forbidden.**
 

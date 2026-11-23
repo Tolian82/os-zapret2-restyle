@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_143 S03e3e actual Common HTTP terminal receipt gate
+# 23.11.2026 — CURRENT v0.6.5_144 S03e3f true Legacy positive HTTP lifecycle
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=144`, `v0.6.5_144`; prospective CI-only `os-zapret2-restyle-0.6.5_144.pkg` NOT public or operator-installable. Based on merged `main af4999a4` / Common-positive `_143`, whose exact-head G07 original FD9 running-Common HTTP Stop/Restart **PASS** ([#45160845481](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45160845481)). [S03e3f](architecture/ZAPRET2_TZ6V5_S03E3F_LEGACY_POSITIVE_HTTP.md) creates a separate strictly disposable native **Legacy no-common-journal** owner through existing test-only native Config::save and shipped service; checks genuine HTTP `verified` terminal receipts and physical engine/PID/own IPFW. **Legacy native result PENDING**, full S03 NO-GO; no product runtime writer change, no public pkg, no owner gateway action. Auto flakiness #1223 still OPEN; S04–S20 blocked.
+
+---
+
+# 23.11.2026 — HISTORICAL merged v0.6.5_143 S03e3e actual Common HTTP terminal receipt gate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=143`, `v0.6.5_143`, CI-only prospective `os-zapret2-restyle-0.6.5_143.pkg` (NOT published or operator-installable). Base merged `main 0738f2ea` / `_142`. [Draft PR #1255](https://github.com/Tolian82/os-zapret2-restyle/pull/1255) strengthens genuine disposable OPNsense G07 Common positive Stop/Restart native real-engine HTTP acceptance to require exact `response=OK,status=ok,verified=true,action,state` in addition to real PID/status/owned IPFW/generation witnesses. Source-only testing: no new product runtime owner, no second writer, no public pkg, no owner hardware change. [S03e3e proof boundary](architecture/ZAPRET2_TZ6V5_S03E3E_COMMON_POSITIVE_TERMINAL_RECEIPT.md). **Exact-head CI PENDING; Legacy separate positive proof OPEN; Auto flaky evidence #1223 preserved. Full S03 NO-GO; S04–S20 not begun.**
 
