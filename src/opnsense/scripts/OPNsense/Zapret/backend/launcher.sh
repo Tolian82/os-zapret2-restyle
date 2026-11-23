@@ -164,7 +164,6 @@ launcher_start_once()
 
     launcher_is_running "${_launcher_once_pidfile}" || {
         common_error "dvtws2 did not create a live PID"
-        [ ! -s "${_launcher_once_log}" ] || tail -20 "${_launcher_once_log}" >&2
         return 1
     }
 
@@ -172,7 +171,6 @@ launcher_start_once()
     while [ "${_launcher_once_stable}" -lt "${_launcher_once_stability}" ]; do
         launcher_is_running "${_launcher_once_pidfile}" || {
             common_error "dvtws2 exited during startup stability window"
-            [ ! -s "${_launcher_once_log}" ] || tail -20 "${_launcher_once_log}" >&2
             launcher_stop "${_launcher_once_pidfile}" 1
             return 1
         }
