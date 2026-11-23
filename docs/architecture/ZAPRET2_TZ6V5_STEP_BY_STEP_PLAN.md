@@ -61,6 +61,9 @@
 
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
 
+**S03e3c candidate (`_141`, 23.11.2026):** [actual PHP Stop/Restart HTTP + Strategies GUI RED on held original FD9](ZAPRET2_TZ6V5_S03E3C_NATIVE_PHP_STOP_RESTART_HTTP_RED.md). On disposable OPNsense cold installed guest, EN/RU authenticated Chromium executes real Stop click and separate HTTP Restart; neither POST is intercepted, read-only runtime only stubbed to expose the button. Native test-owned FD9 proves BUSY, drains configd children and demands unchanged Config/IPFW/engine. Expected old API returns `response` under HTTP 200 and old GUI does not show Stop error; no lifecycle code change or owner hardware operation. **Native exact-head CI PENDING**; full S03 NO-GO, S04 forbidden.
+
+
 **S03e3b native source candidate (`_140`, 23.11.2026):** [real original configd Stop/Restart denied by verified original FD9 BUSY](ZAPRET2_TZ6V5_S03E3B_CONFIGD_LOCKED_STOP_RESTART_RED.md) in disposable cold OPNsense: genuine `zapret_service.sh stop|restart` rc75, configd response categorized without raw text, no Config/IPFW/engine change and no pending native child. Existing inherited API returns `response` without service terminal proof; Strategies `.done` ignores that data. This is RED evidence only, not repaired Stop/Restart RU/EN consumer, no physical transitions. **Native RED PASS** ([#45138033995](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45138033995)): original shell Stop/Restart both rc75 under verified original FD9; real configctl returns process rc0 + OTHER_REDACTED nonempty stdout for both, so CLI rc0 is not service transition evidence. Config/IPFW/engine unchanged, old WAN-only/F5 and P3 RU/EN preserved. Revised exact-head CI required; full S03 NO-GO; S04 forbidden.
 
 
