@@ -3,6 +3,7 @@
 CHILD_PIDFILE="$1"
 SERVICE_SCRIPT="$2"
 EXPECTED_CHILD="$3"
+PINNED_CHILD="${4:-}"
 
 read_pid()
 {
@@ -15,6 +16,10 @@ read_pid()
 }
 
 child_pid=$(read_pid) || exit 2
+# The launcher has already verified this exact PID before daemon launched
+# us. Never silently adopt a different engine when the current pidfile moves.
+case "$PINNED_CHILD" in ""|*[!0-9]*) exit 2 ;; esac
+[ "$child_pid" = "$PINNED_CHILD" ] || exit 2
 
 process_matches()
 {
@@ -37,5 +42,5 @@ done
 
 "${SERVICE_SCRIPT}" runtime-failure \
     "dvtws2 exited after the service reached ready state" \
-    "$child_pid" >/dev/null 2>&1
+    "$child_pid" "$" >/dev/null 2>&1
 exit 0

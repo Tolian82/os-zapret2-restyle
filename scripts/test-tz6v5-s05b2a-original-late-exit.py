@@ -142,10 +142,10 @@ class LateExitOriginalWriter(unittest.TestCase):
         text = path.read_text()
         self.assertIn('runtime-exit-record "$_exit_owner_id"', text)
         self.assertIn('runtime-exit-clear "$_shared_boot_id"', text)
-        self.assertIn('shared_apply_stop_service "$_shared_owner" "$3" || return $?', text)
+        self.assertIn('shared_apply_stop_service "$_shared_owner" "$3" "$4" || return $?', text)
         # The existing legacy orchestrator path stays untouched; the
         # earlier Common branch returns before reaching that path.
-        self.assertIn('shared_apply_stop_service "$_shared_owner" "$3" || return $?', text)
+        self.assertIn('shared_apply_stop_service "$_shared_owner" "$3" "$4" || return $?', text)
         src = (BACKEND / "status_error_original.py").read_text()
         for symbol in (".write_text(", ".write_bytes(", "O_CREAT", "os.kill("):
             self.assertNotIn(symbol, src)

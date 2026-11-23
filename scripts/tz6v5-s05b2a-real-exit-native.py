@@ -105,6 +105,19 @@ def real_fault():
     source_pid = PID.read_text("ascii").strip()
     s04.need(re.fullmatch(r"[1-9][0-9]{1,9}", source_pid) is not None,
              "S05B2_ORIGINAL_PID_UNQUALIFIED")
+    # Validate physical monitor OS argv PINNED at the original engine start.
+    monitor_pid = Path("/var/run/zapret2-supervisor-monitor.pid").read_text("ascii").strip()
+    s04.need(re.fullmatch(r"[1-9][0-9]{1,9}", monitor_pid) is not None,
+             "S05B2_MONITOR_PID_UNQUALIFIED")
+    monitor_cmd = s04.run(["/bin/ps", "-p", monitor_pid, "-o", "command="])
+    expected_monitor = ("/usr/local/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh "
+                        "/var/run/dvtws2.pid "
+                        "/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh "
+                        "/usr/local/etc/zapret2/binaries/my/dvtws2 " + source_pid)
+    s04.need(monitor_cmd.returncode == 0 and
+             monitor_cmd.stdout.strip() in
+             (expected_monitor, "/bin/sh " + expected_monitor),
+             "S05B2_UNPINNED_ORIGINAL_SUPERVISOR_ARGV")
     wrong = str(int(source_pid) + 1)
     # Test a stale callback while real Common RUNNING: no cleanup, no journal
     # mutation, no IPFW modification or change of PID/protected Config.

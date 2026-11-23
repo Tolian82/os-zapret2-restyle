@@ -913,17 +913,60 @@ shared_apply_retire_stopped_original_service()
     return 70
 }
 
+
+# Original, non-queued FD9 callback proof, not a second process/owner ledger.
+# The monitor is still alive synchronously while invoking runtime-failure.
+# Its exact OS command (including pinned CHILD PID) and start-time must agree
+# with the current daemon -p PID, even if daemon removed the child's PIDFILE.
+# Old/replaced monitors cannot authorize a new common owner or kernel cleanup.
+shared_apply_callback_monitor_service()
+{
+    [ "$#" -eq 2 ] || return 69
+    _cb_child="$1"
+    _cb_monitor="$2"
+    case "$_cb_child:$_cb_monitor" in *[!0-9:]*|:*|*:) return 69 ;; esac
+    [ "$_cb_child" -gt 1 ] 2>/dev/null && [ "$_cb_monitor" -gt 1 ] 2>/dev/null || return 69
+    [ "$_cb_child" != "$_cb_monitor" ] || return 69
+    [ -f "$SUPERVISOR_MONITOR_PIDFILE" ] && [ ! -L "$SUPERVISOR_MONITOR_PIDFILE" ] || return 69
+    _cb_current=$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE") || return 69
+    [ "$_cb_monitor" = "$_cb_current" ] || return 69
+    common_process_matches "$_cb_monitor" "$SUPERVISOR_LOOP" || return 69
+    _cb_ps="${COMMON_PS_BIN:-${ZAPRET_PROCESS_QUERY_BIN}}"
+    [ -x "$_cb_ps" ] || return 69
+    _cb_first=$("$_cb_ps" -p "$_cb_monitor" -o lstart= -o command= 2>/dev/null) || return 69
+    case "$_cb_first" in
+        *" /bin/sh $SUPERVISOR_LOOP $CHILD_PIDFILE $SERVICE_SCRIPT $DVTWS_BIN $_cb_child" | \
+        *" $SUPERVISOR_LOOP $CHILD_PIDFILE $SERVICE_SCRIPT $DVTWS_BIN $_cb_child")
+            ;;
+        *) return 69 ;;
+    esac
+    # Verify process birth/argv and fixed current monitor PID a second time
+    # before original Common sealed-release and owned-IPFW preflight.
+    [ "$_cb_first" = "$("$_cb_ps" -p "$_cb_monitor" -o lstart= -o command= 2>/dev/null)" ] || return 69
+    [ "$_cb_monitor" = "$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE")" ] || return 69
+}
+
 shared_apply_stop_service()
 {
-    [ "$#" -eq 1 ] || [ "$#" -eq 2 ] || return 64
-    # A supervisor callback carries the PID it originally monitored. A
-    # delayed callback must NEVER stop a newer shared dvtws2 incarnation.
+    [ "$#" -eq 1 ] || [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || return 64
+    # The original supervisor's *live* PID+birth+exact pinned-child argv
+    # supplies post-ready provenance after daemon(8) has removed its child
+    # PIDFILE. A delayed callback can NEVER adopt a replacement monitor.
+    # The two-argument path preserves the old private direct-Stop API, but
+    # the public runtime-failure dispatch NEVER permits it as a callback.
     _shared_stop_failed_pid=
     if [ "$#" -eq 2 ]; then
         _shared_stop_failed_pid="$2"
         case "$_shared_stop_failed_pid" in ""|*[!0-9]*) return 69 ;; esac
         _shared_stop_recorded_pid=$(common_pidfile_read "$CHILD_PIDFILE") || return 69
         [ "$_shared_stop_failed_pid" = "$_shared_stop_recorded_pid" ] || return 69
+    elif [ "$#" -eq 3 ]; then
+        _shared_stop_failed_pid="$2"
+        shared_apply_callback_monitor_service "$2" "$3" || return 69
+        if [ -e "$CHILD_PIDFILE" ] || [ -L "$CHILD_PIDFILE" ]; then
+            _shared_stop_recorded_pid=$(common_pidfile_read "$CHILD_PIDFILE") || return 69
+            [ "$_shared_stop_failed_pid" = "$_shared_stop_recorded_pid" ] || return 69
+        fi
     fi
     case "$1" in committed\ *) ;; *) return 69 ;; esac
     _shared_stop_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
@@ -3681,10 +3724,11 @@ service_with_lifecycle_lock()
                     _shared_owner=$(shared_apply_inspect_service) || return 69
                     case "$_shared_owner" in
                         committed\ *)
-                            [ "$#" -eq 3 ] || return 69
-                            # Stop verifies exact monitored PID and original
-                            # seal/Config/kernel before any notification.
-                            shared_apply_stop_service "$_shared_owner" "$3" || return $?
+                            [ "$#" -eq 4 ] || return 69
+                            # Original live monitor must match the exact
+                            # child PID pinned at start; kernel/Config/seal
+                            # must still qualify before any cleanup.
+                            shared_apply_stop_service "$_shared_owner" "$3" "$4" || return $?
                             _exit_owner_id=$(printf '%s\n' "$_shared_owner" | cut -d ' ' -f 2)
                             "$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
                                 runtime-exit-record "$_exit_owner_id" >/dev/null || return 70
