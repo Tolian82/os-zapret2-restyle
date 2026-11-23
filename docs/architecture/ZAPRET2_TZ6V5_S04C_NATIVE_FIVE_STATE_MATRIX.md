@@ -13,6 +13,8 @@ One healthy RUNNING control precedes hot fault fixtures. Every fixture mutation 
 
 The first no-plugin observation runs the **exact checked-out source adapter**, because no installed CLI exists; after real pkg installation, source and installed adapter bytes must match. All other states invoke the **actual installed** `backend/component_inventory_opnsense.py`, never mocks; compares `/conf/config.xml` bytes/inode/mtime, installed engine, pkgdb tree, original Apply journal/seal/active release tree, relevant PID files, native process census, IPFW rules/tables/module statuses **before and after**. Output contains only neutral enums, no args, PID, secrets or raw addresses. Any changed bytes, created files, unexpected result, unavailable original attestation or foreign-owner misclassification is RED.
 
+The stock `pkg info -e` subprocess now drops to the fixed system `nobody` user/group without supplementary privileges, so the reader cannot mutate root-owned pkgdb SQLite shared-memory or journals even when the vendor `pkg` implementation uses internal writable DB mappings. A failure to read now yields `unknown`, not a root retry. **Only exact native evidence can qualify this least-privilege choice.**
+
 The adapter must set `sys.dont_write_bytecode = True` **before** importing the pure model or original Common inspectors, preventing new `__pycache__` under the installed plugin tree. No original FD9 acquisition, second process-matcher, independent status authority, active generation write or `status --json`.
 
 ## Exact gate

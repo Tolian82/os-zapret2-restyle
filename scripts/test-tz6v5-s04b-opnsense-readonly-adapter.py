@@ -91,6 +91,9 @@ class S04BReadOnlyAdapter(unittest.TestCase):
                              ["/usr/local/sbin/pkg", "info", "-e", "os-zapret2-restyle"])
             self.assertTrue(calls[0][1]["capture_output"])
             self.assertFalse(calls[0][1]["check"])
+            self.assertNotEqual(calls[0][1]["user"], 0)
+            self.assertNotEqual(calls[0][1]["group"], 0)
+            self.assertEqual(calls[0][1]["extra_groups"], [])
         with patch.object(sut.os.path, "isfile", return_value=False):
             self.assertEqual(sut.probe_plugin(runner=lambda *a, **k:
                              self.fail("bootstrapped pkg")), "unknown")
