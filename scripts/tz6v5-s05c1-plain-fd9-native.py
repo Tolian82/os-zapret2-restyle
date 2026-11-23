@@ -92,8 +92,11 @@ def verify_plain(label, message, rc, *, busy=False):
                      ("--filter-", "/conf/", "token=", "password")),
              "S05C1_PLAIN_SECRET_LEAK_" + label)
     if flags:
+        # Existing-file truncation and first-use creation are DISTINCT bugs.
+        # Show only this boolean, never FD9 inode, paths or private contents.
+        fd9_cause = ("_preexisting" if exists_before else "_missing")
         raise s04.Refusal("S05C1_PLAIN_STATUS_WROTE_" + label + "__" +
-                          "_".join(flags))
+                          "_".join(flags) + fd9_cause)
     return {"case": label, "rc": rc, "original_fd9": True,
             "no_write": True, "lockfile_preexisting": exists_before,
             "held_lock_serialized": busy}

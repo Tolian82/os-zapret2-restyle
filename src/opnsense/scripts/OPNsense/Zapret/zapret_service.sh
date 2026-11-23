@@ -3571,6 +3571,16 @@ service_with_lifecycle_lock()
     }
 
     (
+        # Preserve the ONE original FD9 + BSD flock across every public
+        # lifecycle operation. Plain Status must not truncate an existing
+        # lockfile merely to inspect the current native owner. <> opens the
+        # same FD9 read/write WITHOUT O_TRUNC; the original lockf still
+        # serializes with Start/Stop/Boot/Apply and returns its normal rc.
+        # All mutating actions retain their historical > redirection.
+        case "${1:-}" in
+            status) exec 9<>"${LIFECYCLE_LOCK_FILE}" ;;
+            *) exec 9>"${LIFECYCLE_LOCK_FILE}" ;;
+        esac
         if ! "${LOCKF_BIN}" -s -t "${_service_lock_timeout}" 9; then
             return 75
         fi
@@ -3803,7 +3813,7 @@ service_with_lifecycle_lock()
             return $?
         fi
         return "$_service_dispatch_rc"
-    ) 9>"${LIFECYCLE_LOCK_FILE}"
+    )
 }
 
 case "${1:-}" in
