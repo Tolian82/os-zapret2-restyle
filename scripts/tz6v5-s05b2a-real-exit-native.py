@@ -112,9 +112,37 @@ def real_fault():
     stale = s04.run([str(SERVICE), "runtime-failure",
                      "dvtws2 exited after ready", wrong], timeout=35)
     after = s04.snapshot()
-    s04.need(stale.returncode == 69 and before == after and
-             original_record() == original,
-             "S05B2_STALE_CALLBACK_TOUCHED_OWNER")
+    s04.need(stale.returncode == 69,
+             "S05B2_STALE_CALLBACK_NOT_REFUSED_RC_" + str(stale.returncode))
+    s04.need(original_record() == original,
+             "S05B2_STALE_CALLBACK_CHANGED_ORIGINAL_JOURNAL")
+    if before != after:
+        # Classified evidence only: never print private path/argv/rule bytes.
+        changed = []
+        for key in ("config", "engine", "process"):
+            if before[key] != after[key]:
+                changed.append(key)
+        for key in ("rules", "tables", "ipfw_module", "ipdivert_module"):
+            if before["kernel"][key] != after["kernel"][key]:
+                changed.append("kernel_" + key)
+        if before["tree"] != after["tree"]:
+            keys = set(before["tree"]) | set(after["tree"])
+            groups = (
+                ("lock", "/var/run/zapret2-lifecycle.lock"),
+                ("pkgdb", "/var/db/pkg/"),
+                ("original", "/var/db/zapret2/"),
+                ("runtime", "/usr/local/etc/zapret2/runtime-v2/"),
+                ("pid", "/var/run/"),
+                ("backend", "/usr/local/opnsense/scripts/OPNsense/Zapret/backend/"),
+            )
+            for label, prefix in groups:
+                count = sum(k.startswith(prefix) and
+                            before["tree"].get(k) != after["tree"].get(k)
+                            for k in keys)
+                if count:
+                    changed.append(label + "_" + str(count))
+        s04.need(False, "S05B2_STALE_CALLBACK_STATE_DRIFT_" +
+                 "_".join(changed[:10]))
     rows.append(status_json("stale-callback-no-effect", "RUNNING",
                             "RUNNING_REQUIRES_ORIGINAL_OWNER_ATTESTATION"))
     # Only now intentionally terminate the genuine installed native child.
