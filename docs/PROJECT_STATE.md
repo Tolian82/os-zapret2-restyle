@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_151 S04a neutral component model
+# 23.11.2026 — CURRENT v0.6.5_152 S04b bounded native component reader (candidate)
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=152`, `v0.6.5_152`, prospective `os-zapret2-restyle-0.6.5_152.pkg` **not published/installable**. Base `main _151 aac77c8a`. [S04b](architecture/ZAPRET2_TZ6V5_S04B_OPNSENSE_READONLY_COMPONENT_ADAPTER.md) connects neutral five-axis facts to installed pkg, fixed ELF, root-owned Config XML and the already existing original read-only Common seal/manifest/runtime inspector. Source tests only; **real native five-scenario/no-write gate OPEN**. S04 NO-GO, S05 blocked, no owner hardware or lifecycle writer changes. #1223/#1224/#1225 OPEN; CI PENDING.
+
+---
+
+# 23.11.2026 — HISTORICAL v0.6.5_151 S04a neutral component model
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=151`, `v0.6.5_151`, prospective CI-only `os-zapret2-restyle-0.6.5_151.pkg` (NOT published/installable). Base `main _150 b4e94219`; S03 genuine original RED baseline formal GO. [S04a](architecture/ZAPRET2_TZ6V5_S04A_NEUTRAL_COMPONENT_MODEL.md) adds only neutral five-axis facts classifier, enum validation, read-only/pure tests and central CI integration, without physical Status/Start/Stop or reader of Config/pkg/PID. **S04 remains NO-GO** until native actual probes/matrix and no-write witnesses; S05 not authorized. Owner untouched, no package release, #1223/#1224/#1225 OPEN. Exact-head CI PENDING.
 
