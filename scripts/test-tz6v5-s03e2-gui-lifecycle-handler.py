@@ -109,7 +109,7 @@ clickOne('started', 'ru', null, 'Не удалось остановить Zapret
 clickOne('started', 'en', null, 'Zapret2 could not be stopped.');
 clickOne('stopped', 'ru', null, 'Не удалось запустить Zapret2.');
 clickOne('stopped', 'en', null, 'Zapret2 could not be started.');
-clickOne('started', 'ru', 'Select a WAN interface', 'mapped:Select a WAN interface');
+clickOne('started', 'ru', 'Select a WAN interface', 'Не удалось остановить Zapret2.');
 // The genuine OPNsense PHP UserException producer has errorMessage/errorTitle;
 // unknown server exception bytes MUST NOT be passed directly into the dialog.
 clickOne('stopped', 'en', 'Select a WAN interface',
@@ -128,10 +128,25 @@ strategiesApplyPending = false;
 currentServiceState = 'started';
 clickHandler.call(button, {preventDefault(){}});
 const req = requests.at(-1), beforeSuccess = successCount, beforeRefresh = refreshCount;
-req.done();
+req.done({status:'ok',action:'stop',state:'stopped',verified:true});
 check(successCount === beforeSuccess + 1 && refreshCount === beforeRefresh + 1,
-      'success route no longer refreshes common service');
+      'verified Stop success no longer refreshes common service');
+// Transport-200 without the original-FD9 terminal proof MUST be visible
+// uncertainty, not an apparently successful Stop (inert JS source test).
+button.disabled = false;
+const beforeBad = shown.length, successBeforeBad = successCount;
+clickHandler.call(button, {preventDefault(){}});
+requests.at(-1).done({status:'ok',action:'stop',state:'stopped',verified:false});
+check(shown.length === beforeBad+1 && successCount === successBeforeBad &&
+      shown.at(-1)[1].includes('Остановка Zapret2 не подтверждена.'),
+      'unconfirmed 200 accepted as stopped');
+// Raw legacy configd stderr on Stop must never be reflected.
+clickOne('started','en','/conf/config.xml:secret-backend-error',
+         'Zapret2 could not be stopped.');
+check(!shown.at(-1)[1].includes('/conf/config.xml'),
+      'Stop leaked backend diagnostic');
 console.log('S03E2_ACTUAL_STRATEGIES_HANDLER_INERT_RU_EN_PASS');
+console.log('S03E3D_UNCONFIRMED_HTTP_200_FAIL_CLOSED_INERT_PASS');
 """
     result = subprocess.run([node, "-"], input=script, text=True,
                             capture_output=True, timeout=20, check=False)
