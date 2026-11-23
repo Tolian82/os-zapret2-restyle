@@ -8,7 +8,7 @@ $(document).ready(function () {
                 infoTitle: 'Как работают голосовые профили',
         infoText: 'WAN для голоса автоматически берётся со страницы «Стратегии» и здесь не настраивается. UDP/STUN-профили пяти сервисов используют общий движок Zapret2 и штатную операцию Apply вместе со «Стратегиями». «Применить» сохраняет настройки и переключает runtime/IPFW с проверяемым возвратом при ошибке. «Сохранить черновик» доступно только для выключенных профилей и не перезапускает службу. Голосовые профили применяются только через общий Apply; отдельной Voice-службы нет. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
-        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', draftReview: 'Результат сохранения черновика неизвестен. Перезагрузите страницу и проверьте настройки перед повторной попыткой.', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить',
+        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', draftReview: 'Результат сохранения черновика неизвестен. Перезагрузите страницу и проверьте настройки перед повторной попыткой.', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна',
         notice: 'Кнопка «Применить» использует единый native Apply для включённых и выключенных профилей, с проверкой Config, runtime и IPFW. «Сохранить черновик» сохраняет только выключенные профили без переключения службы. При незавершённом общем применении проверьте состояние Zapret2, Config и IPFW; не запускайте повторное применение вслепую.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно', runningUnverified: 'Запущена · Voice не подтверждён', stoppedUnverified: 'Остановлена · Voice не подтверждён',
@@ -47,7 +47,7 @@ $(document).ready(function () {
                 infoTitle: 'About Voice Profiles',
         infoText: 'Voice always inherits the WAN selected on the Strategies page; change it there. Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. Voice profiles activate only through shared Apply, not a separate Voice service. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
-        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', draftReview: 'Draft save result is unknown. Reload the page and inspect saved settings before retrying.', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop',
+        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', draftReview: 'Draft save result is unknown. Reload the page and inspect saved settings before retrying.', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable',
         notice: 'Apply uses the single native transaction for enabled and disabled Voice profiles, checking Config, runtime and IPFW. Save inactive draft only persists disabled profiles without restarting the service. If shared Apply was interrupted, inspect Zapret2, Config and IPFW before retrying.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown', runningUnverified: 'Started · Voice not verified', stoppedUnverified: 'Stopped · Voice not verified',
@@ -350,7 +350,7 @@ $(document).ready(function () {
     $('#voiceSaveDraft').on('click', function () {
         var button = $(this);
         if (button.prop('disabled') || voiceMutationPending ||
-            voiceControlPending || voiceApplyNeedsReview) return;
+            voiceApplyNeedsReview) return;
         // Both Config writers must be exclusive, even after uncertain Apply.
         voiceMutationPending = true;
         reconcileVoiceServiceStatus();
@@ -397,7 +397,7 @@ $(document).ready(function () {
     $('#voiceApply').on('click', function () {
         var button = $(this);
         if (button.prop('disabled') || voiceMutationPending ||
-            voiceControlPending || voiceApplyNeedsReview) return;
+            voiceApplyNeedsReview) return;
         voiceMutationPending = true;
         voiceInspectionState = null;
         reconcileVoiceServiceStatus();
@@ -468,8 +468,8 @@ $(document).ready(function () {
         localizeForm();
         refreshVoiceIPFW();
     });
-    var runtimeState = 'error', runtimeInstalled = false, runtimeBusy = true;
-    var voiceInspectionState = null, voiceControlPending = false;
+    var runtimeState = 'error', runtimeInstalled = false;
+    var voiceInspectionState = null;
     var voiceRuntimeEpoch = 0, voiceInspectionEpoch = 0;
     function voiceRuntimeAligned() {
         // setup_status is a general service indicator, not proof of native
@@ -484,18 +484,11 @@ $(document).ready(function () {
         // or when shared Apply has returned an indeterminate result.
         var fresh = /^[a-f0-9]{64}$/.test(voiceSnapshot.val() || '');
         $('#voiceSaveDraft,#voiceApply').prop('disabled',
-            !fresh || voiceMutationPending || voiceControlPending ||
-            voiceApplyNeedsReview);
-    }
-    function setServiceControlsBusy(busy) {
-        runtimeBusy = !!busy;
-        var controllable = voiceRuntimeAligned() &&
-            !voiceMutationPending && !voiceControlPending && !voiceApplyNeedsReview;
-        $('#voiceServiceControl').prop('disabled', runtimeBusy || !controllable);
+            !fresh || voiceMutationPending || voiceApplyNeedsReview);
     }
     function reconcileVoiceServiceStatus() {
         var aligned = voiceRuntimeAligned() && !voiceMutationPending &&
-            !voiceControlPending && !voiceApplyNeedsReview;
+            !voiceApplyNeedsReview;
         var serviceRunning = runtimeInstalled && runtimeState === 'started';
         var serviceStopped = runtimeInstalled && runtimeState === 'stopped';
         var started = aligned && serviceRunning;
@@ -512,17 +505,12 @@ $(document).ready(function () {
                   serviceRunning ? text.runningUnverified :
                   serviceStopped ? text.stoppedUnverified :
                   runtimeState === 'error' ? text.error : text.incomplete);
-        $('#voiceServiceControl')
-            .toggle(runtimeInstalled && ['started', 'stopped'].includes(runtimeState))
-            .text(runtimeState === 'started' ? text.stop : text.start);
-        setServiceControlsBusy(runtimeBusy);
         reconcileVoiceMutationControls();
     }
     function refreshRuntime() {
         var epoch = ++voiceRuntimeEpoch;
         // Invalidate the old "started" display while the new request runs.
         runtimeState = 'error';
-        runtimeBusy = true;
         reconcileVoiceServiceStatus();
         return $.ajax({type:'POST', url:'/api/zapret/service/runtime', dataType:'json', timeout:30000})
             .done(function (reply) {
@@ -530,13 +518,11 @@ $(document).ready(function () {
                 runtimeInstalled = !!(reply && reply.installed);
                 runtimeState = runtimeInstalled ? reply.service : 'error';
                 $('#voiceRuntimeVersion').text((reply && reply.version) || '—');
-                runtimeBusy = !!(reply && reply.busy);
                 reconcileVoiceServiceStatus();
             }).fail(function () {
                 if (epoch !== voiceRuntimeEpoch) return;
                 runtimeInstalled = false;
                 runtimeState = 'error';
-                runtimeBusy = true;
                 $('#voiceRuntimeVersion').text('—');
                 reconcileVoiceServiceStatus();
             });
@@ -721,24 +707,6 @@ $(document).ready(function () {
         };
         return $.when(settle(refreshRuntime()), settle(refreshVoiceIPFW()));
     }
-    $('#voiceServiceControl').on('click', function () {
-        if (runtimeBusy || voiceControlPending || voiceMutationPending ||
-            voiceApplyNeedsReview || !voiceRuntimeAligned()) return;
-        var action = runtimeState === 'started' ? 'stop' : 'start';
-        voiceControlPending = true;
-        voiceInspectionState = null;
-        reconcileVoiceServiceStatus();
-        $.ajax({type:'POST',url:'/api/zapret/service/' + action,dataType:'json',timeout:600000})
-            .always(function () {
-                // A successful API response is not proof that post-COMMIT
-                // native runtime, IPFW and processes match the saved model.
-                refreshVoiceHealthSettled().always(function () {
-                    voiceControlPending = false;
-                    updateServiceControlUI('zapret');
-                    reconcileVoiceServiceStatus();
-                });
-            });
-    });
     $('#voiceServiceHeader').on('click', function () {
         $('#voiceServiceBody').toggle();
         $('#voiceServiceCollapseIcon').toggleClass('fa-angle-down fa-angle-right');
@@ -774,7 +742,7 @@ $(document).ready(function () {
     }
     #voiceServiceLine {
         display: grid;
-        grid-template-columns: max-content max-content 14ch 12ch;
+        grid-template-columns: max-content max-content 14ch;
         column-gap: 8px;
         align-items: center;
         min-width: max-content;
@@ -782,7 +750,6 @@ $(document).ready(function () {
         white-space: nowrap;
     }
     #voiceRuntimeVersion { display: inline-block; width: 14ch; }
-    #voiceServiceControlSlot, #voiceServiceControl { min-width: 12ch; }
     #frm_VoiceSettings textarea {max-width:100%; box-sizing:border-box;}
     /* A row of four actions can fill the viewport at desktop zoom.
        Keep the actual validation result visible on its own wrapping line
@@ -815,7 +782,6 @@ $(document).ready(function () {
                     <b id="voiceStatusLabel">Status:</b>
                     <span id="voiceServiceState" class="label label-danger">—</span>
                     <strong id="voiceRuntimeVersion">—</strong>
-                    <span id="voiceServiceControlSlot"><button type="button" class="btn btn-default" id="voiceServiceControl" disabled style="display:none">Start</button></span>
                 </div>
             </td></tr>
             <tr><td colspan="3">
