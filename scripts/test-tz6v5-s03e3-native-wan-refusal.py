@@ -93,26 +93,35 @@ def witness():
     }
 
 
-def prepare():
-    need(not RECEIPT.exists() and not RECEIPT.is_symlink(),
-         "S03E3_RECEIPT_ALREADY_PRESENT")
+def receipt_path(locale):
+    need(locale in ("en", "ru"), "S03E3_INVALID_LOCALE_SCOPE")
+    # The OPNsense VM wrapper may synchronize test-owned dist content across
+    # shell steps. Never reuse a witness name between separate EN/RU phases.
+    return RECEIPT.with_name("s03e3-native-wan-refusal-witness-" + locale + ".json")
+
+
+def prepare(locale):
+    target = receipt_path(locale)
+    need(not target.exists() and not target.is_symlink(),
+         "S03E3_RECEIPT_ALREADY_PRESENT_" + locale)
     observed = witness()
-    RECEIPT.parent.mkdir(parents=True, exist_ok=True)
+    target.parent.mkdir(parents=True, exist_ok=True)
     # No secrets are written: only digests and boolean witnesses.
-    with RECEIPT.open("x", encoding="utf-8") as out:
-        os.chmod(RECEIPT, 0o600)
+    with target.open("x", encoding="utf-8") as out:
+        os.chmod(target, 0o600)
         json.dump(observed, out, sort_keys=True)
         out.write("\n")
-    print("S03E3_GENUINE_NATIVE_WAN_REQUIRED_PRE_DISPATCH_GUARD=PASS")
+    print("S03E3_GENUINE_NATIVE_WAN_REQUIRED_PRE_DISPATCH_GUARD_" + locale.upper() + "=PASS")
 
 
-def verify():
-    need(RECEIPT.is_file() and not RECEIPT.is_symlink(),
-         "S03E3_PREPARED_WITNESS_MISSING")
-    before = json.loads(RECEIPT.read_text(encoding="utf-8"))
-    need(before == witness(), "S03E3_REAL_BROWSER_CHANGED_CONFIG_IPFW_OR_ENGINE")
-    RECEIPT.unlink()
-    print("S03E3_REAL_BACKEND_USEREXCEPTION_NO_CONFIG_IPFW_ENGINE_CHANGE=PASS")
+def verify(locale):
+    target = receipt_path(locale)
+    need(target.is_file() and not target.is_symlink(),
+         "S03E3_PREPARED_WITNESS_MISSING_" + locale)
+    before = json.loads(target.read_text(encoding="utf-8"))
+    need(before == witness(), "S03E3_REAL_BROWSER_CHANGED_CONFIG_IPFW_OR_ENGINE_" + locale)
+    target.unlink()
+    print("S03E3_REAL_BACKEND_USEREXCEPTION_NO_CONFIG_IPFW_ENGINE_CHANGE_" + locale.upper() + "=PASS")
 
 
 def self_test():
@@ -120,8 +129,9 @@ def self_test():
     need(not sys.platform.startswith("freebsd") or
          os.environ.get("ZAPRET2_STAGE5_BROWSER_WAN") != "1",
          "S03E3_SELF_TEST_ONLY_ON_HOST")
-    need(RECEIPT.name == "s03e3-native-wan-refusal-witness.json",
-         "S03E3_BAD_PATH")
+    need(receipt_path("en").name == "s03e3-native-wan-refusal-witness-en.json" and
+         receipt_path("ru").name == "s03e3-native-wan-refusal-witness-ru.json",
+         "S03E3_BAD_PER_LOCALE_WITNESS_PATH")
     print("S03E3_NATIVE_GUARD_SELF_TEST=PASS")
 
 
@@ -130,10 +140,10 @@ def main():
         args = sys.argv[1:]
         if args == ["--self-test"]:
             self_test()
-        elif args == ["--prepare"]:
-            prepare()
-        elif args == ["--verify"]:
-            verify()
+        elif args in (["--prepare-en"], ["--prepare-ru"]):
+            prepare(args[0][-2:])
+        elif args in (["--verify-en"], ["--verify-ru"]):
+            verify(args[0][-2:])
         else:
             raise Refusal("S03E3_BAD_MODE")
     except (Refusal, OSError, ValueError, KeyError) as exc:
