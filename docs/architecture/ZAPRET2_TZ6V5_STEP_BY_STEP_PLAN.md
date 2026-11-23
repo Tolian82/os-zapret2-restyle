@@ -124,6 +124,8 @@
 
 ### S04. Независимый inventory компонентов
 
+**FULL S04 GO (23.11.2026):** [formal physical five-case native acceptance and no-write evidence](ZAPRET2_TZ6V5_S04_NATIVE_INVENTORY_GO.md). Actual installed OPNsense reader, real fresh/G03/Config/RUNNING/foreign IPFW, source-byte-identity pre-install adapter exception, exact two native SUCCESS [#45215394069](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45215394069) and five exact-head PR workflow gates PASS on `_153 / 7f4c6a4f`, merged `main 6a71e10e`. Pure S04 classifier and native adapter do not authorize lifecycle; no CLI `status --json` yet. **S05 NEXT; not yet implemented.** Historic candidate paragraphs below retain their original pending language intentionally.
+
 **S04c candidate (`_153`, 23.11.2026):** [two-guest native real five-case no-write gate](ZAPRET2_TZ6V5_S04C_NATIVE_FIVE_STATE_MATRIX.md). No S04 GO until original installed reader and true physical Config/epoch/PID/IPFW/file-tree invariants pass on both exact-head disposable OPNsense guests. S05 blocked.
 
 **S04b candidate (`_152`, 23.11.2026):** [OPNsense read-only component adapter](ZAPRET2_TZ6V5_S04B_OPNSENSE_READONLY_COMPONENT_ADAPTER.md) uses installed pkg, fixed binary/XML and existing original Common seal/manifest/runtime inspector. Source-only bounded tests; still requires five physical native no-write witnesses for full S04 GO. S05 remains blocked.
