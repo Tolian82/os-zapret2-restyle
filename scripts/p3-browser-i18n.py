@@ -652,9 +652,84 @@ def check_lab_guidance(page, mode: str) -> bool:
     return True
 
 
+def check_s03e2_lifecycle_failure_browser(context, mode: str) -> None:
+    """Real logged-in Chromium + real Strategies listener; mocked HTTP 503.
+
+    All Start/Stop HTTP requests are fulfilled inside Playwright and NEVER
+    reach configd or the OPNsense guest. Runtime and resources status are
+    intentionally synthetic to render an actionable Start/Stop button on a
+    clean guest without an installed upstream engine. This proves GUI
+    consumer/translation only, NOT native producer or physical lifecycle.
+    """
+    for state, action, expected in (
+        ("started", "stop", ("Не удалось остановить Zapret2." if mode == "ru"
+                               else "Zapret2 could not be stopped.")),
+        ("stopped", "start", ("Не удалось запустить Zapret2." if mode == "ru"
+                                 else "Zapret2 could not be started.")),
+    ):
+        probe = context.new_page()
+        mutations = []
+        def runtime_stub(route):
+            route.fulfill(status=200, content_type="application/json",
+                          body=json.dumps({
+                              "status": "ok", "installed": True, "busy": False,
+                              "version": "v1.0.7", "setup": "ready", "service": state
+                          }))
+        def resources_stub(route):
+            route.fulfill(status=200, content_type="application/json",
+                          body=json.dumps({
+                              "status": "ok", "installed": False,
+                              "busy": False, "phase": "not_installed"
+                          }))
+        def mutation_stub(route):
+            mutations.append(route.request.url.rsplit("/", 1)[-1])
+            # Prevent any physical Start/Stop: never route.continue_().
+            route.fulfill(status=503, content_type="application/json",
+                          body='{"message":""}')
+        try:
+            probe.route("**/api/zapret/service/runtime", runtime_stub)
+            probe.route("**/api/zapret/service/resourcesStatus", resources_stub)
+            probe.route("**/api/zapret/service/start", mutation_stub)
+            probe.route("**/api/zapret/service/stop", mutation_stub)
+            wait_native_load(probe, "/api/zapret/settings/get", "/ui/zapret",
+                             "frm_GeneralSettings")
+            wait_locale(probe, mode)
+            probe.wait_for_function(
+                "() => {const b=document.querySelector('#zapretServiceControl');"
+                "return !!b && !b.disabled && b.offsetWidth > 0;}",
+                timeout=20000,
+            )
+            with probe.expect_response(
+                lambda response: response.request.method == "POST" and
+                    response.url.split("?")[0].endswith("/api/zapret/service/" + action),
+                timeout=25000,
+            ) as result:
+                probe.locator("#zapretServiceControl").click(timeout=20000)
+            need(result.value.status == 503 and mutations == [action],
+                 "S03E2_BROWSER_MUTATING_REQUEST_NOT_INTERCEPTED_" + mode + action)
+            probe.get_by_text(expected, exact=False).first.wait_for(
+                state="visible", timeout=15000)
+            title = ("Ошибка управления службой" if mode == "ru"
+                     else "Service operation failed")
+            probe.get_by_text(title, exact=False).first.wait_for(
+                state="visible", timeout=15000)
+        finally:
+            probe.close()
+    print("S03E2_ACTUAL_OPNSENSE_CHROMIUM_MOCKED_HTTP_RU_EN_" + mode.upper() + "=PASS")
+
+
 def check_voice(page, mode: str) -> tuple[dict[str, str], bool]:
     wait_native_load(page, "/api/zapret/voice/load", "/ui/zapret/voice", "frm_VoiceSettings")
     wait_locale(page, mode)
+    # S03e2: true installed Chromium DOM in both EN/RU, never a source-only
+    # assertion. Voice has no independent Start/Stop entrypoint or service.
+    need(page.locator("#voiceServiceControl").count() == 0 and
+         page.locator("#voiceServiceControlSlot").count() == 0,
+         "S03E2_VOICE_DUPLICATE_LIFECYCLE_BUTTON_" + mode)
+    need(page.locator("#voiceServiceState").count() == 1 and
+         page.locator("#voiceIPFWState").count() == 1 and
+         page.locator("#voiceApply").count() == 1,
+         "S03E2_VOICE_READONLY_STATUS_OR_SHARED_APPLY_MISSING_" + mode)
     labels = (
         ("Telegram — параметры", "Параметры передачи голоса", "Проверить")
         if mode == "ru" else
@@ -753,6 +828,7 @@ def browser_run(mode: str) -> None:
             page = context.new_page()
             login(page)
             strategies, cache_state, p4_editor_status = check_strategies(page, mode)
+            check_s03e2_lifecycle_failure_browser(context, mode)
             voice, validated = check_voice(page, mode)
             lab_guidance = check_lab_guidance(page, mode)
             context.close()
@@ -778,6 +854,10 @@ def browser_run(mode: str) -> None:
         "native_popup_and_full_help_checked": True,
         "f5_values_unchanged": True,
         "readonly_voice_error_checked": validated,
+        "s03e2_voice_lifecycle_button_absent_native_dom": True,
+        "s03e2_browser_http503_start_stop_ruen": True,
+        "s03e2_http503_intercepted_no_physical_service_transition": True,
+        "s03e2_native_lifecycle_error_producer_tested": False,
         "strategy_lab_p4_guidance_checked": lab_guidance,
         "strategies_p4_native_full_help_checked": True,
         "tz6v2_five_editors_read_only_gui_checked": True,

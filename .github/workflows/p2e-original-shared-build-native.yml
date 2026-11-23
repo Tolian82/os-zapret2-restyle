@@ -13,6 +13,10 @@ on:
       - scripts/test-tz6v5-s03c-prestart-lab-native.py
       - scripts/test-tz6v5-s03d-pid-fd9-force-red-native.py
       - scripts/test-tz6v5-s03e-public-cli-locale-red-native.py
+      - scripts/test-tz6v5-s03e2-gui-lifecycle-handler.py
+      - scripts/test-voice-gui-contract.py
+      - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
+      - src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt
       - scripts/test-tz6v4-schema3-dryrun.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/validator.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py
@@ -63,8 +67,12 @@ jobs:
           python3 -m py_compile scripts/test-tz6v5-s03-effective-diff-baseline.py
           python3 -m py_compile scripts/test-tz6v5-s03c-prestart-lab-native.py
           python3 -m py_compile scripts/test-tz6v5-s03d-pid-fd9-force-red-native.py
-          python3 -m py_compile scripts/test-tz6v5-s03e-public-cli-locale-red-native.py
+          python3 -m py_compile scripts/test-tz6v5-s03e-public-cli-locale-red-native.py scripts/test-tz6v5-s03e2-gui-lifecycle-handler.py scripts/test-voice-gui-contract.py
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-tz6v5-s03e-public-cli-locale-red-native.py --source-routes
+          # S03e2 executes the extracted production JS listener with inert
+          # jQuery/configd stubs; this is NOT an OPNsense browser GUI test.
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-tz6v5-s03e2-gui-lifecycle-handler.py
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-voice-gui-contract.py
           # Native side effects are prohibited on host/Linux, before any subprocess.
           if GITHUB_ACTIONS=true ZAPRET2_S03E_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
               python3 scripts/test-tz6v5-s03e-public-cli-locale-red-native.py --native \

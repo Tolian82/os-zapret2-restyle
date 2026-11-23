@@ -50,6 +50,7 @@
                 : 'Zapret2 installation failed. See /var/log/zapret2/setup.log for details.',
             setupError: isRussian ? 'Ошибка установки Zapret2' : 'Zapret2 setup error',
             applyError: isRussian ? 'Ошибка применения настроек' : 'Settings Apply failed',
+            serviceError: isRussian ? 'Ошибка управления службой' : 'Service operation failed',
             strategiesReview: isRussian
                 ? 'Результат применения настроек не подтверждён. Не повторяйте применение до проверки состояния Shared Apply и службы.'
                 : 'Settings Apply result is unconfirmed. Do not retry until Shared Apply and service state have been inspected.',
@@ -1517,11 +1518,18 @@
                 updateServiceControlUI('zapret');
             }).fail(function(xhr) {
                 const message = xhr && xhr.responseJSON && xhr.responseJSON.message;
-                showRuntimeError(runtimeText.applyError,
+                // Do not claim a failed Stop was a failed Start. Preserve the
+                // bounded server gettext mapping and the actual requested verb.
+                const fallback = action === 'stop'
+                    ? (isRussian
+                        ? 'Не удалось остановить Zapret2. Проверьте состояние службы и журнал.'
+                        : 'Zapret2 could not be stopped. Check the service state and log.')
+                    : (isRussian
+                        ? 'Не удалось запустить Zapret2. Проверьте WAN интерфейс.'
+                        : 'Zapret2 could not be started. Check the WAN interface.');
+                showRuntimeError(runtimeText.serviceError,
                     typeof message === 'string' && message
-                        ? localizeStrategiesApplyError(message) :
-                    (isRussian ? 'Не удалось запустить Zapret2. Проверьте WAN интерфейс.' :
-                        'Zapret2 could not be started. Check the WAN interface.'));
+                        ? localizeStrategiesApplyError(message) : fallback);
                 refreshRuntime();
             });
         });
