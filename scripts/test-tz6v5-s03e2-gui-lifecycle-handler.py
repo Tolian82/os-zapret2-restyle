@@ -33,8 +33,10 @@ def assert_source() -> str:
     assert "voiceRuntimeAligned()" in voice
     assert "voiceApplyNeedsReview" in voice
     assert "serviceError: isRussian ? 'Ошибка управления службой' : 'Service operation failed'" in general
+    # Match the literal production selector without hand-escaped nested parens.
+    prefix = "        $('#zapretServiceControl').off('click').on('click', function(event) {"
     click = re.search(
-        r"^        \$('#zapretServiceControl'\)\.off\('click'\)\.on\('click', function\(event\) \{.*?^        \}\);",
+        r"^" + re.escape(prefix) + r".*?^        \}\);",
         general, re.MULTILINE | re.DOTALL,
     )
     assert click is not None, "Actual Strategies service click handler missing"
