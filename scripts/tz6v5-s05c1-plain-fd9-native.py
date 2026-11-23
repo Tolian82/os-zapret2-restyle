@@ -154,7 +154,7 @@ def main(argv):
         return 0
     except (s04.Refusal, OSError, ValueError, TypeError, KeyError) as exc:
         label = str(exc).split(":", 1)[0][:160]
-        if not re.fullmatch("[A-Z0-9_]+", label):
+        if not re.fullmatch(r"(?:S05C1|S04C|G04)_[A-Za-z0-9_-]+", label):
             label = "UNQUALIFIED"
         print("S05C1_NATIVE=REFUSED:" + label, file=sys.stderr)
         return 1

@@ -1,6 +1,6 @@
 # 23.11.2026 — CURRENT v0.6.5_160 S05c1 plain FD9 Status physical no-write gate
 
-**Identity:** `v0.6.5_160` prospective source-only candidate, base accepted `main _159 85167a3d` with exact-head original early/late engine diagnostics and main push CI/Chromium PASS. New disposable OPNsense 26.7 native cold/hot status source witness asserts full no-write Config/pkg/journal/PID/IPFW/process, exact old plain stdout/rc, original FD9 BUSY serialization, and no foreign cleanup. `status --json` unchanged; original shell `9>` open suspected truncation. Native baseline RED/PASS TBD, do not skip physical proof or claim GO. Full S05 NO-GO, S06+ blocked, no owner device changes or public pkg.
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=160`, `v0.6.5_160` prospective source-only candidate, base accepted `main _159 85167a3d` with exact-head original early/late engine diagnostics and main push CI/Chromium PASS. New disposable OPNsense 26.7 native cold/hot status source witness asserts full no-write Config/pkg/journal/PID/IPFW/process, exact old plain stdout/rc, original FD9 BUSY serialization, and no foreign cleanup. `status --json` unchanged; original shell `9>` open suspected truncation. Native baseline RED/PASS TBD, do not skip physical proof or claim GO. Full S05 NO-GO, S06+ blocked, no owner device changes or public pkg.
 
 ---
 
