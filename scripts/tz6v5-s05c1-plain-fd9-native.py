@@ -97,7 +97,8 @@ def verify_plain(label, message, rc, *, busy=False):
         fd9_cause = ("_preexisting" if exists_before else "_missing")
         raise s04.Refusal("S05C1_PLAIN_STATUS_WROTE_" + label + "__" +
                           "_".join(flags) + fd9_cause)
-    return {"case": label, "rc": rc, "original_fd9": True,
+    return {"case": label, "rc": rc, "original_fd9": exists_before,
+            "safe_absent_fd9_projection": not exists_before,
             "no_write": True, "lockfile_preexisting": exists_before,
             "held_lock_serialized": busy}
 
@@ -151,7 +152,7 @@ def main(argv):
         rows = cold() if argv == ["cold"] else hot()
         print("S05C1_NATIVE=" + json.dumps({
             "status": "PASS", "cases": rows, "strict_no_write": True,
-            "original_fd9": True, "operator_device_touched": False,
+            "existing_fd9_kept": True, "operator_device_touched": False,
             "source_sha": os.environ["ZAPRET2_NATIVE_PROJECT_SHA"],
         }, sort_keys=True, separators=(",", ":")))
         return 0

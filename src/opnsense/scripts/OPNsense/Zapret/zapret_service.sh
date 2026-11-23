@@ -3570,15 +3570,53 @@ service_with_lifecycle_lock()
         return 1
     }
 
+    # The original FD9 lock inode may be absent immediately after an install.
+    # Plain Status MUST NEVER create it just to report a physical state.
+    # In that one exceptional state, the already accepted S04 read-only
+    # status projection may confirm STOPPED (rc1); RUNNING/uncertain status
+    # is refused as INCOMPLETE (rc2), never used as lifecycle authority.
+    # Check again after S04: a concurrent first writer must not be mistaken
+    # for a stable unlocked owner. No nested lock, Config writer or PID claim.
+    if [ "${1:-}" = status ] &&
+       [ ! -e "${LIFECYCLE_LOCK_FILE}" ] &&
+       [ ! -L "${LIFECYCLE_LOCK_FILE}" ]; then
+        _plain_missing_fd9_rc=2
+        if [ -r "${BACKEND_DIR}/status_readonly.py" ]; then
+            if PYTHONDONTWRITEBYTECODE=1 "${PYTHON_RUNTIME}" \
+                "${BACKEND_DIR}/status_readonly.py" >/dev/null 2>&1; then
+                _plain_missing_fd9_rc=0
+            else
+                _plain_missing_fd9_rc=$?
+            fi
+        fi
+        if [ -e "${LIFECYCLE_LOCK_FILE}" ] ||
+           [ -L "${LIFECYCLE_LOCK_FILE}" ]; then
+            echo "zapret is in an incomplete runtime state"
+            return 2
+        fi
+        if [ "${_plain_missing_fd9_rc}" -eq 1 ]; then
+            echo "zapret is not running"
+            return 1
+        fi
+        echo "zapret is in an incomplete runtime state"
+        return 2
+    fi
+
     (
         # Preserve the ONE original FD9 + BSD flock across every public
-        # lifecycle operation. Plain Status must not truncate an existing
-        # lockfile merely to inspect the current native owner. <> opens the
-        # same FD9 read/write WITHOUT O_TRUNC; the original lockf still
-        # serializes with Start/Stop/Boot/Apply and returns its normal rc.
-        # All mutating actions retain their historical > redirection.
+        # lifecycle operation. A local FreeBSD original lockf(1) uses
+        # flock(2), which supports an exclusive lock on a read-only FD9.
+        # Opening 9< is strictly noncreating and nontruncating even if the
+        # lockfile disappears after the preflight. Mutators retain 9>.
         case "${1:-}" in
-            status) exec 9<>"${LIFECYCLE_LOCK_FILE}" ;;
+            status)
+                if [ -L "${LIFECYCLE_LOCK_FILE}" ] ||
+                   [ ! -f "${LIFECYCLE_LOCK_FILE}" ]; then
+                    echo "zapret is in an incomplete runtime state"
+                    return 2
+                fi
+                exec 9<"${LIFECYCLE_LOCK_FILE}"
+                ;;
             *) exec 9>"${LIFECYCLE_LOCK_FILE}" ;;
         esac
         if ! "${LOCKF_BIN}" -s -t "${_service_lock_timeout}" 9; then
