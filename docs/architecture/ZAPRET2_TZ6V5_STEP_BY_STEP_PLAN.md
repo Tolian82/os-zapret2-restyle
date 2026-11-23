@@ -61,6 +61,8 @@
 
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
 
+**S03c1 candidate (`_134`, 23.11.2026):** [genuine unchanged Lab launcher, isolated FreeBSD lockf/jq, injected WAN boundary, seven typed/no-Job/Config/IPFW refusal cases](ZAPRET2_TZ6V5_S03C_PRESTART_LAB_REFUSAL_NATIVE.md) in existing disposable P2e CI. S03a (6 expected RED) and S03b (10 actual old generator effective diffs) have exact-head CI PASS and are merged `_132/_133`. **S03c1 not a full real native G05/G03/G08 or physical Lab restoration, and CI is pending.** Do not promote to S04 until full S03 including actual Config/WAN Save, PID/force, CLI, RU/EN lifecycle and Lab restoration is proven.
+
 **S03b actual source diff candidate (`_133`, 23.11.2026):** [10-case normalised real generator `dvtws.args` + managed file SHA + source-map comparison](ZAPRET2_TZ6V5_S03_EFFECTIVE_DIFF_BASELINE.md) added to disposable OPNsense P2e; CI pending. In particular same argv for Auto→List requires semantic RESTART; same argv for changed YouTube/User/Exclude is **only candidate**, not confirmed reload. S03 still NO-GO pending G05→G08/FD9/PID/force/locale/native routes; S04 cannot start yet.
 
 

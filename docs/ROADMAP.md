@@ -1,3 +1,9 @@
+## 23 November 2026 — CURRENT TZ6v5 S03c1 native prestart Lab refusal
+
+Base `main v0.6.5_133 72027e4b` (S03a six RED and S03b ten real-generator comparisons merged/CI PASS). Candidate `v0.6.5_134`; `os-zapret2-restyle-0.6.5_134.pkg` **NOT BUILT OR PUBLISHED**, owner `_117` unchanged. [S03c1 scope](architecture/ZAPRET2_TZ6V5_S03C_PRESTART_LAB_REFUSAL_NATIVE.md): same disposable OPNsense P2e invokes real unchanged Lab launcher and FreeBSD lockf/jq with **only WAN preflight boundary injected**; seven WAN-first/engine-second refusals, exact RU/EN, no Job/Config/IPFW/ordinary process. CI PENDING; full authenticated native G05→G03→G08 still OPEN, as are force/PID/FD9/real lifecycle locale/Stage90 restore. **Full S03 NO-GO; S04–S20 NOT RUN.** Historical records below are not current release statuses.
+
+---
+
 ## 23 November 2026 — CURRENT post-#1237 / TZ6v5 S01
 
 **Prospective testing package name ONLY (NOT BUILT / NOT PUBLISHED):** `os-zapret2-restyle-0.6.5_130.pkg`. This is a source identity token required by CI, not a release asset. Existing owner install `_117` remains untouched.

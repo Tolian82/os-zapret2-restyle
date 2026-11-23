@@ -1,3 +1,11 @@
+# 23 Nov 2026 — CURRENT TZ6v5 S03c1 native Lab pre-Job refusal candidate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=134`, `v0.6.5_134` on `feat/tz6v5-s03c-prestart-lab-refusal-native`, from accepted `main _133 72027e4b`. Name `os-zapret2-restyle-0.6.5_134.pkg` **prospective only, NOT BUILT/PUBLISHED**; owner last installed `_117.pkg` untouched.
+
+**S03a/S03b accepted CI:** [#1241](https://github.com/Tolian82/os-zapret2-restyle/pull/1241) 6/6 real RED, [#1242](https://github.com/Tolian82/os-zapret2-restyle/pull/1242) 10 actual old-generator source diffs; both merged. **S03c1 source/CI:** [native-disposable real Lab launcher pre-job refusal cases](architecture/ZAPRET2_TZ6V5_S03C_PRESTART_LAB_REFUSAL_NATIVE.md) for Standard/Extended RU/EN with injected WAN boundary, missing real upstream engine, no Job or kernel/Config mutation. **Not a real native WAN Config save or full G05/G03/G08**; no new Lab success claim. Exact-head CI PENDING. Only test scripts, CI, docs, Makefile revision changed; no production `src/` or owner action. Still need S03c2 physical WAN/Lab + PID/force/FD9, CLI/locale and Stage90/99, #1223/#1224/#1225 OPEN; full S03 NO-GO, S04–S20 NOT RUN.
+
+---
+
 
 # 23 Nov 2026 — CURRENT TZ6v5 S03b real old-generator effective diff baseline
 

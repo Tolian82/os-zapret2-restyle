@@ -1,3 +1,13 @@
+## 23 ноября 2026 — CURRENT: ТЗ_6v5 S03c1 native Lab WAN/engine-first refusal
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=134`, `v0.6.5_134`, branch `feat/tz6v5-s03c-prestart-lab-refusal-native`, base merged `main v0.6.5_133` (`72027e4b`). Prospective ONLY `os-zapret2-restyle-0.6.5_134.pkg` — **NOT BUILT / NOT PUBLISHED**. Last owner-installed `_117.pkg`, no physical appliance actions.
+
+**S03a/S03b merged + exact-head CI PASS:** [six genuine RED](architecture/ZAPRET2_TZ6V5_S03_ORIGINAL_GENERATOR_RED.md), [ten genuine real-generator effective diff pairs](architecture/ZAPRET2_TZ6V5_S03_EFFECTIVE_DIFF_BASELINE.md). **Current S03c1:** [production Strategy Lab launcher, real FreeBSD lockf/jq, isolated WAN boundary, seven early refusal/locale/no-Job/IPFW/Config cases](architecture/ZAPRET2_TZ6V5_S03C_PRESTART_LAB_REFUSAL_NATIVE.md), running on same disposable OPNsense 26.7 **before upstream engine installation**. This is instrumented boundary proof, NOT actual saved WAN/HTTPS G05→G08 nor Lab restore. Exact-head native CI **PENDING**. Product `src/`/pkg unchanged.
+
+**Next:** prove S03c1 CI then complete S03c2 full native WAN-only Save+engine-second+prestart Lab (without early testing release), force/PID/FD9 negative, terminal locale/Help/Reload and restoration gates. **Whole S03 NO-GO; S04–S20 NOT RUN.**
+
+---
+
 ## 23 ноября 2026 — CURRENT: TZ6v5 S01 completion evidence; S02 next
 
 **Prospective testing package name ONLY (NOT BUILT / NOT PUBLISHED):** `os-zapret2-restyle-0.6.5_130.pkg`. This is a source identity token required by CI, not a release asset. Existing owner install `_117` remains untouched.
