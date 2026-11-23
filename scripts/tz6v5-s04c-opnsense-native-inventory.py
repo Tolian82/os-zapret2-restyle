@@ -132,6 +132,37 @@ def snapshot():
     }
 
 
+def config_shape_diagnostic():
+    """Bounded native shape only; never log XML, a field value or a path."""
+    s = CONFIG.lstat()
+    raw = CONFIG.read_bytes()
+    try:
+        root = ET.fromstring(raw)
+        model = root.find("./OPNsense/Zapret")
+        enabled = model.findtext("general/enabled") if model is not None else None
+        root_ok = root.tag == "opnsense"
+        model_present = model is not None
+        enabled_in_enum = enabled in ("0", "1") if model_present else None
+        xml_valid = True
+    except ET.ParseError:
+        root_ok = False
+        model_present = False
+        enabled_in_enum = None
+        xml_valid = False
+    record = {
+        "owner_root": s.st_uid == 0,
+        "regular": stat.S_ISREG(s.st_mode),
+        "nlink_one": s.st_nlink == 1,
+        "no_group_world_write": (s.st_mode & 0o022) == 0,
+        "size_bounded": 0 < s.st_size <= 16 * 1024 * 1024,
+        "doctype_present": b"<!DOCTYPE" in raw.upper(),
+        "entity_present": b"<!ENTITY" in raw.upper(),
+        "xml_valid": xml_valid, "root_ok": root_ok,
+        "model_present": model_present, "enabled_in_enum": enabled_in_enum,
+    }
+    print("S04C_CONFIG_SHAPE=" + json.dumps(record, sort_keys=True))
+
+
 def witness(label, expected, *, preinstall=False):
     before = snapshot()
     # In a genuinely empty installation there can be no installed CLI.
@@ -304,6 +335,7 @@ def cold():
     clean.preflight()
     need(ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret") is None and
          not ENGINE.exists(), "S04C_NOT_CLEAN_INITIAL_GUEST")
+    config_shape_diagnostic()
     rows = [witness("nothing", {"plugin": "absent", "engine": "absent",
              "config": "absent", "manifest": "missing",
              "classification": "PLUGIN_NOT_INSTALLED"}, preinstall=True)]
@@ -331,6 +363,7 @@ def hot():
     need(traffic.count("--new") == 1 and len(youtube.splitlines()) == 10,
          "S04C_INITIAL_G04_STRATEGY_CHANGED")
     g04.authenticated_first_apply(traffic, youtube)
+    config_shape_diagnostic()
     rows = [witness("healthy-running-control", {
         "plugin": "installed", "engine": "valid", "config": "initialized",
         "manifest": "valid", "runtime": "RUNNING",
