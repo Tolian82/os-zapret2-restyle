@@ -42,5 +42,5 @@ done
 
 "${SERVICE_SCRIPT}" runtime-failure \
     "dvtws2 exited after the service reached ready state" \
-    "$child_pid" "$" >/dev/null 2>&1
+    "$child_pid" "$$" >/dev/null 2>&1
 exit 0
