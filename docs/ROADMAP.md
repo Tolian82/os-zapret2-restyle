@@ -1,3 +1,9 @@
+## 23 November 2026 — TZ6v5 S03d native PID/FD9/force legacy expected RED
+
+Current candidate `v0.6.5_136` from `main _135 f58c45f4` after [#1244](https://github.com/Tolian82/os-zapret2-restyle/pull/1244) native real G05→G03→G08 PASS. New [S03d true source-run RED](architecture/ZAPRET2_TZ6V5_S03D_PID_FD9_FORCE_RED_NATIVE.md) reads original launcher/CLI and runs only test-owned `/bin/sleep` + private FreeBSD FD9 on disposable guest, never actual router PID or running engine. CI PENDING, no production `src/` changes, `os-zapret2-restyle-0.6.5_136.pkg` NOT built/published, owner `_117` untouched. S03 still NO-GO: V5-15 implementation, CLI Help/Reload/locale and #1223/#1224 remain. S04–S20 NOT RUN.
+
+---
+
 ## 23 November 2026 — CURRENT S03c2 actual G05→G03→G08 prestart native acceptance candidate
 
 `main v0.6.5_134` merged `09a8947d`, S03c1 exact-head seven native early refusals PASS. New source-only `_135` [S03c2](architecture/ZAPRET2_TZ6V5_S03C2_AUTH_NATIVE_PRESTART.md) corrects historical G08 composition: `g03.main()` did ordinary Start/Restart via five-list regression; now only original stock configd G03 upstream install/reinstall runs, followed by real authenticated Standard RU + Extended EN Lab, Stage90/99 STOPPED→STOPPED and foreign IPFW/Config invariants. G03 standalone not changed; only disposable OPNsense temporarily builds an official-Mk .pkg (no published testing release, owner `_117` untouched). **Exact-head CI PENDING; whole S03 NO-GO; S04–S20 NOT RUN.**

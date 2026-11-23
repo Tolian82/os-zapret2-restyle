@@ -1,3 +1,17 @@
+# 23 Nov 2026 — CURRENT TZ6v5 S03d PID/FD9/force actual legacy expected RED
+
+Current source `VERSION=0.6.5`, `PLUGIN_REVISION=136`, `v0.6.5_136` branch `feat/tz6v5-s03d-native-force-red`; base accepted `main _135 f58c45f4`. Prospective `os-zapret2-restyle-0.6.5_136.pkg` **NOT BUILT/PUBLISHED**; owner OPNsense last installed `_117.pkg` untouched. Product `src/` unchanged.
+
+S03d fixture runs [#45111559386](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45111559386) and [#45111935530](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45111935530) both stopped before signals. Second run confirmed native child argv `/bin/sleep 90`, but actual `common_process_matches` failed because cold-source `SCRIPT_DIR` did not resolve the real `process_query.sh` (default `COMMON_PS_BIN`). Fixed ONLY fixture binding to original `process_query.sh`, not mock ps/kill or product source; exact-head CI PENDING.
+
+Third native [#45112537151](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45112537151) on `f41635b2`: real common→process_query→launcher PID stage progressed; FD9 stage failed with `S03D_REAL_FD9_BUSY_FORCE_DID_NOT_REFUSE`. The fixture now requires a positive uncontended **actual** `/usr/bin/lockf` control before treating a failed contender as proof of a held lock, and reports bounded actual `rc`/busy-message/elapsed on mismatch. No source/force product change; exact-head native CI PENDING.
+
+**Точный FD9 fixture fix (FreeBSD lockf):** official [lockf(1)](https://man.freebsd.org/cgi/man.cgi?manpath=FreeBSD+15.1-RELEASE&query=lockf&sektion=1) distinguishes `lockf file command` from **`lockf -s -t seconds fd` without command**. Previous test mistakenly used `lockf -s -t 0 9 /bin/sleep`, thereby locking relative file named `9`, NOT inherited fd9; therefore its BUSY result was invalid even with a positive control of the same wrong form. Both positive check and competing check NOW use exact `lockf -s -t 0 9` no-command FD form; shell holder retains fd9 while its test-owned sleep runs. Product service uses the same FD-only syntax. No claim of an FD9 product defect; new exact-head CI PENDING.
+
+S03c2 [#1244](https://github.com/Tolian82/os-zapret2-restyle/pull/1244) exact-head authenticated native G05→G03→G08 PASS and MERGED. [S03d](architecture/ZAPRET2_TZ6V5_S03D_PID_FD9_FORCE_RED_NATIVE.md) now invokes actual legacy `backend/common.sh` and `launcher.sh` on disposable FreeBSD with test-owned `/bin/sleep`, private PID file and lock; verifies known unsafe expected RED: executable-only matching without sealed epoch/birth, automatic stale/foreign PID removal, `--help` rc64 and no protected force parser. Actual private original `lockf` FD9 denial also required. No real Zapret2 process/pidfile/foreign IPFW/Config mutation. **S03d native CI PENDING**, this proves pre-refactor RED **not** V5-15 GREEN. Whole S03 NO-GO; S04–S20 NOT RUN.
+
+---
+
 # 23 Nov 2026 — CURRENT: TZ6v5 S03c2 native authenticated pre-first-Start G05→G03→G08
 
 Source identity `VERSION=0.6.5`, `PLUGIN_REVISION=135`, `v0.6.5_135`, candidate branch `feat/tz6v5-s03c2-auth-native-prestart`, from merged `main 09a8947d` / `_134`. The official-Mk `os-zapret2-restyle-0.6.5_135.pkg` is **built only ephemerally by a disposable OPNsense CI runner for genuine installed-native tests**, not published as a release, not installed on owner OPNsense. Owner last-confirmed `_117.pkg` unchanged.

@@ -11,6 +11,7 @@ on:
       - scripts/test-tz6v5-s03-original-red.py
       - scripts/test-tz6v5-s03-effective-diff-baseline.py
       - scripts/test-tz6v5-s03c-prestart-lab-native.py
+      - scripts/test-tz6v5-s03d-pid-fd9-force-red-native.py
       - scripts/test-tz6v4-schema3-dryrun.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/validator.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py
@@ -60,6 +61,15 @@ jobs:
           python3 -m py_compile scripts/test-tz6v5-s03-original-red.py
           python3 -m py_compile scripts/test-tz6v5-s03-effective-diff-baseline.py
           python3 -m py_compile scripts/test-tz6v5-s03c-prestart-lab-native.py
+          python3 -m py_compile scripts/test-tz6v5-s03d-pid-fd9-force-red-native.py
+          # Real PID/FD9 probe must abort BEFORE any subprocess on Linux.
+          if GITHUB_ACTIONS=true ZAPRET2_S03D_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
+              python3 scripts/test-tz6v5-s03d-pid-fd9-force-red-native.py \
+              >"${RUNNER_TEMP}/s03d-native-refusal.log" 2>&1; then
+            echo '::error::S03d fixture ran on Linux rather than refusing'
+            exit 1
+          fi
+          grep -q 'S03D_NATIVE_FAIL=S03D_FREEBSD_ROOT_ONLY' "${RUNNER_TEMP}/s03d-native-refusal.log"
           # Refuse any accidental host/Linux attempt before process or kernel I/O.
           if GITHUB_ACTIONS=true ZAPRET2_S03C_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
               python3 scripts/test-tz6v5-s03c-prestart-lab-native.py \
@@ -138,6 +148,11 @@ jobs:
             # no Job, Config, engine, PID or IPFW mutation.
             ZAPRET2_S03C_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
               /usr/local/bin/python3 scripts/test-tz6v5-s03c-prestart-lab-native.py
+            # S03d: controlled test-owned /bin/sleep is the ONLY signal target;
+            # real old common/launcher and real source service original FD9.
+            # Expected legacy RED, never a successful operator --force claim.
+            ZAPRET2_S03D_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
+              /usr/local/bin/python3 scripts/test-tz6v5-s03d-pid-fd9-force-red-native.py
             # TZ6v5 S03: the SAME actual legacy generator, no installed engine
             # or ordinary Start. Deliberately enforce proof of expected RED.
             ZAPRET2_S03_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 \
