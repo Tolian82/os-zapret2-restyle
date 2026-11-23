@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_145 S03e3g Auto Stop no-Boot fixture
+# 23.11.2026 — CURRENT v0.6.5_146 S03e3h genuine RUNNING Lab restore test
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=146`, `v0.6.5_146`, prospective CI-only `os-zapret2-restyle-0.6.5_146.pkg` (not published). Base main `_145 974ea07a`, PR #1257 safely merged after published _107→schema3 Auto native and no-Boot refusal tests PASS. [S03e3h](architecture/ZAPRET2_TZ6V5_S03E3H_RUNNING_LAB_RESTORE.md) supplies missing disposable native original-FD9 Common **RUNNING→Lab→RUNNING** physical restoration with stage90/99 terminal receipts to investigate [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224), independent of previous G08 STOPPED→STOPPED. Previous guest native full Standard Lab Stage90/99 and RUNNING→RUNNING physical result PASS [#45177877230](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45177877230), but CI red from Python all(values) treating successful cli_status_rc=0 as false; corrected with exact typed receipt check. Revised exact-head native PENDING. Auto #1223 source-level fail-threshold omission remains S03 expected RED, not independently repaired; full S03 NO-GO and S04–S20 blocked. No product writer/runtime changes, public pkg, or owner device mutation.
+
+---
+
+# 23.11.2026 — HISTORICAL merged v0.6.5_145 S03e3g Auto Stop no-Boot fixture
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=145`, `v0.6.5_145`; prospective source-only CI `os-zapret2-restyle-0.6.5_145.pkg` (not public or operator-installable), base main `_144 21602659`. Common original FD9 genuine HTTPS Stop/Restart accepted [#45160845481](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45160845481); separate no-common-journal Legacy native accepted [#45171380056](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45171380056). [S03e3g test-only Auto Stop guard](architecture/ZAPRET2_TZ6V5_S03E3G_AUTO_STOP_NO_BOOT.md) fails closed before any Boot after incomplete original retirement and emits only bounded source-allowlisted diagnostics. Exact-head CI PENDING; Auto issue #1223 root cause not fixed, Lab #1224 OPEN, S03 overall NO-GO and S04–S20 blocked. No new production writer/FD9 behavior, no published pkg or owner actions.
 
