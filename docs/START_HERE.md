@@ -1,3 +1,9 @@
+## 23.11.2026 — CURRENT ТЗ_6v5 S03e3c: genuine PHP Stop/Restart HTTP FD9 BUSY RED
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=141`, `v0.6.5_141`. The prospective CI-only filename `os-zapret2-restyle-0.6.5_141.pkg` is NOT a public package or an owner-installable release. Base merged `main 2dcd0a45` ([#1251](https://github.com/Tolian82/os-zapret2-restyle/pull/1251)); [S03e3c](architecture/ZAPRET2_TZ6V5_S03E3C_NATIVE_PHP_STOP_RESTART_HTTP_RED.md) adds actual installed HTTP Stop-button + authenticated API Restart under a continuously held original FD9, separate EN/RU and post-HTTP Config/IPFW/engine attestation. **Actual native RED PASS on initial source** ([run #45142099971](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45142099971)): EN and RU each real PHP Stop/Restart HTTP 200 under verified FD9 BUSY, both `response` classes OTHER_REDACTED, old GUI Stop error absent and Config/IPFW/engine unchanged. Clean [draft PR #1253](https://github.com/Tolian82/os-zapret2-restyle/pull/1253) requires exact-head requalification; **native exact-head CI PENDING**. S03 overall **NO-GO**, S04 forbidden, no changes to service/FD9/Config writers or owner hardware.
+
+---
+
 ## 23.11.2026 — CURRENT ТЗ_6v5 S03e3b: actual original Stop/Restart configd FD9 BUSY RED
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=140`, `v0.6.5_140`; expected build filename `os-zapret2-restyle-0.6.5_140.pkg` is **prospective only**, NOT a published or operator-installable artifact.
