@@ -5,6 +5,7 @@ on:
     paths:
       - VERSION
       - scripts/stage5-browser-wan.py
+      - scripts/test-tz6v5-s03e3-native-wan-refusal.py
       - scripts/p3-browser-i18n.py
       - scripts/p3-native-profile-locale.php
       - src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt
@@ -17,6 +18,7 @@ on:
     paths:
       - VERSION
       - scripts/stage5-browser-wan.py
+      - scripts/test-tz6v5-s03e3-native-wan-refusal.py
       - scripts/p3-browser-i18n.py
       - scripts/p3-native-profile-locale.php
       - src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt
@@ -48,7 +50,8 @@ jobs:
       - name: Offline exact-source GUI selectors and actual Chromium harness
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage5-browser-wan.py scripts/p3-browser-i18n.py
+          python3.13 -m py_compile scripts/stage5-browser-wan.py scripts/p3-browser-i18n.py scripts/test-tz6v5-s03e3-native-wan-refusal.py
+          python3.13 scripts/test-tz6v5-s03e3-native-wan-refusal.py --self-test
           python3.13 scripts/p3-browser-i18n.py --self-test
           python3.13 -m pip install --disable-pip-version-check playwright
           chromium_bin="$(command -v chromium || command -v chromium-browser || command -v google-chrome || command -v google-chrome-stable || true)"
@@ -155,7 +158,7 @@ jobs:
             cat stage5-browser-wan-ci.pub >> /root/.ssh/authorized_keys
             chmod 0600 /root/.ssh/authorized_keys
             # The QEMU guest is disposable; this key never enters the plugin.
-      - name: Chromium through authenticated loopback-only SSH tunnel; real lower Apply
+      - name: Open authenticated loopback-only SSH tunnel to disposable OPNsense
         env:
           ZAPRET2_STAGE5_BROWSER_WAN: '1'
         run: |
@@ -167,6 +170,50 @@ jobs:
             -o UserKnownHostsFile="$RUNNER_TEMP/zapret2-browser-ssh/known_hosts" \
             -L 127.0.0.1:18443:127.0.0.1:443 root@127.0.0.1
           curl -kfsS --max-time 20 -o /dev/null https://127.0.0.1:18443/index.php
+      - name: S03e3 prepare genuine WAN-required native witness for English
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php en_US
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --prepare
+      - name: S03e3 actual installed Chromium English native PHP WAN UserException
+        env:
+          ZAPRET2_STAGE5_BROWSER_WAN: '1'
+        run: |
+          set -eu
+          python3.13 scripts/stage5-browser-wan.py --s03e3-en-browser
+      - name: S03e3 native verify English did not mutate Config IPFW or engine
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --verify
+      - name: S03e3 prepare genuine WAN-required native witness for Russian
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php ru_RU
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --prepare
+      - name: S03e3 actual installed Chromium Russian native PHP WAN UserException
+        env:
+          ZAPRET2_STAGE5_BROWSER_WAN: '1'
+        run: |
+          set -eu
+          python3.13 scripts/stage5-browser-wan.py --s03e3-ru-browser
+      - name: S03e3 native verify Russian did not mutate Config IPFW or engine
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --verify
+      - name: S03e3 restore disposable native root locale before WAN Apply
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php en_US
+      - name: Chromium real lower WAN Apply after pre-dispatch refusal tests
+        env:
+          ZAPRET2_STAGE5_BROWSER_WAN: '1'
+        run: |
+          set -eu
           python3.13 scripts/stage5-browser-wan.py --browser
       - name: Independent native Config verification after Chromium F5
         shell: opnsense {0}
