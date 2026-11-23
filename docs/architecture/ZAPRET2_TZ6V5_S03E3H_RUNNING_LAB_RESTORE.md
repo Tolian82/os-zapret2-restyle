@@ -1,0 +1,27 @@
+# TZ6v5 S03e3h — native RUNNING Common → Strategy Lab → RUNNING
+
+**23 November 2026, source-only candidate v0.6.5_146** on merged main v0.6.5_145 (commit 974ea07a). No production src code, no publicly distributed .pkg, no owner gateway operation.
+
+## Why
+
+Owner [#1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224) observed Strategy Lab stage90/99 RESTORE_FAILED on _117 after previously accepted RUNNING Strategies Apply. The earlier G08 native evidence validates truly cold STOPPED→Lab→STOPPED on a genuine OPNsense guest but **cannot** attest RUNNING restoration. S03 requires independent physical evidence, not a mock or manufactured failing event.
+
+## Native contract
+
+Separate disposable OPNsense 26.7: original stock Mk clean package, upstream v1.0.7 genuine compiled dvtws2, unchanged source service bytes, pinned CI SHA, first authenticated HTTPS Strategies Apply from initial safe profile (enabled/lo0) to committed Common original FD9. Exact one RUNNING engine and one supervisor; Config and IPFW saved.
+
+Then the existing installed /api/zapret/strategy_lab/start starts one real **Standard RU** job against a public TLS control (not a DPI bypass test); status/result are read-only polled to stage99, without service lifecycle spoofing. On any completed or error outcome collect only safe stage90/99 status and restoration booleans; independently observe real service rc, exact one engine/PID, committed journal, unchanged Config/normal 19000–19099 and foreign IPFW, and Lab idle. **Never call Start/Stop or repair on failed Lab restoration**. No forced exit/recovery, no owner-side test, no automatic retries or release.
+
+PASS requires terminal stage90 and stage99 PASS, attested restoration initial=RUNNING final=RUNNING, unchanged strategy, clean Lab temporary runtime, preserved Config/IPFW/Common owner and real exactly-one dvtws2. If native job returns stage90 FAIL, the original native receipt is preserved and the test fails, producing an independent bounded reproduction for #1224.
+
+Existing Common/Legacy positive Stop/Restart and Auto no-Boot native outcomes: [#45160845481](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45160845481), [#45171380056](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45171380056), [#45173446308](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45173446308). **Native result PENDING.** Full S03 NO-GO; S04–S20 blocked.
+
+## First native exact-head result: independent stage90 PASS vs stage99 FAIL
+
+Real [disposable OPNsense 26.7 run #45176733898](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45176733898), source SHA `f9a6a4b8287bd83c1ae4814d20888b24be7090a9`, installed exactly matching 353-file source-built `_146` pkg and actual real Common RUNNING before Lab. Lab returned true terminal stage90 **PASS** / stage99 **FAIL**. Its restoration was `verified=true, initial_state=RUNNING, final_state=RUNNING, strategy_unchanged=true, temporary_runtime_clean=true`. Independent after-state: shell status rc0, one dvtws2 PID matching pidfile, Config unchanged, owned/foreign IPFW identical, journal committed and Lab idle. **This did not reproduce the owner's stage90 RESTORE_FAILED.** Stage99 may be reflecting an earlier nonrestoration stage; the initial bounded summary omitted the intermediate stage numbers and outcome. A second exact-head test is required with safe bounded status for stages 00–99 and allowlisted outcome class before attributing cause. Existing G06 RUNNING tests cancel after Stage10/Stage50, so this complete un-cancelled Standard job is a different acceptance path. Keep initial native FAIL and [owner issue #1224](https://github.com/Tolian82/os-zapret2-restyle/issues/1224) open; do not relax full Lab acceptance or modify product code. Stage1 also caught the candidate package name missing from current docs; corrected in both identity documents, with no runtime/CI guard relaxation.
+
+## Second exact-head native: full Lab terminal PASS, false-negative fixture discovered
+
+The independently repeated [actual disposable OPNsense run #45177877230](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45177877230), candidate SHA `ac6a818fc4028be9a80437f76a557c7e927626da`, installed the exact genuine 353-file `_146` Mk package and ran genuine upstream/stock HTTPS Common and complete Standard RU Lab **without cancellation**. Native safe terminal: `outcome_class=TARGET_ACCESSIBLE`, Stage00/10/20/30/40 **PASS**, Stage50/60/70/80/85 **SKIPPED** (correct when direct baseline is accessible), Stage90 **PASS**, Stage99 **PASS**; semantic `RUNNING→RUNNING` restoration verified, Config/normal and foreign IPFW unchanged, one dvtws2, original committed FD9 journal, Lab idle. **No Strategy Lab product defect demonstrated in this repeat.**
+
+Despite the physically verified positive result, the *test itself* raised `S03E3H_NATIVE_RUNNING_LAB_STAGE90_RESTORE_NOT_VERIFIED` solely because its `all(physical_report.values())` erroneously treats the successful `cli_status_rc=0` as boolean false. That is a test-only Python assertion defect. Corrected by exact integer-0 comparison and strict seven named boolean witnesses, with fast negative tests rejecting rc1, rcFalse, rc-string0, one missing witness and false/nonboolean values. Recheck **on the new exact HEAD required**; never relabel old failed Actions run as PASS. Earlier first run Stage99 FAIL also remains real evidence of a separate uncertain full Lab outcome; owner #1224 cannot be closed based on this VM result.
