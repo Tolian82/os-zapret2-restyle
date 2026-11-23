@@ -1,3 +1,9 @@
+## 23.11.2026 — CURRENT: ТЗ_6v5 S03e2, Voice read-only status + Strategies Start/Stop RU/EN
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=138`, `v0.6.5_138`, branch `fix/tz6v5-s03e2-voice-readonly-lifecycle-locale` from merged `main _137 9127b9f3`, [S03e1 #1246](https://github.com/Tolian82/os-zapret2-restyle/pull/1246) exact-head native CLI expected RED PASS. [S03e2 evidence](architecture/ZAPRET2_TZ6V5_S03E2_VOICE_CONTROL_RETIRED_GUI_LOCALE.md): owner-approved removal of redundant Voice Start/Stop (no separate Voice service), passive runtime/Voice IPFW/Apply preserved; Strategies failed Stop/Start fallback now verb-specific RU/EN. Actual JS handler is probed inertly with Node; independent installed Chromium RU/EN probes use **intercepted HTTP 503**, not an actual backend Start/Stop. Real native failure producer and full RU/EN lifecycle acceptance **NOT claimed**. CI exact-head PENDING; no published `_138.pkg`, owner last-installed `_117.pkg` untouched, full S03 NO-GO and S04–S20 NOT RUN.
+
+---
+
 ## 23.11.2026 — CURRENT: ТЗ_6v5 S03e1 exact old public CLI/Status/FD9 RED + RU/EN source-only routes
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=137`, `v0.6.5_137`,  branch `feat/tz6v5-s03e-public-cli-locale-red`, base merged `main v0.6.5_136 aa3e2993` after [#1245](https://github.com/Tolian82/os-zapret2-restyle/pull/1245) exact native PID/FD9 expected RED PASS. New [S03e1 genuine executable cold FreeBSD CLI/options fixture + separate lifecycle RU/EN source-only audit](architecture/ZAPRET2_TZ6V5_S03E_PUBLIC_CLI_LOCALE_RED_NATIVE.md) runs in existing P2e disposable guest **before upstream install**. No production `src/` changes, `os-zapret2-restyle-0.6.5_137.pkg` **NOT BUILT/PUBLISHED**, owner OPNsense last-confirmed `_117.pkg` untouched.
