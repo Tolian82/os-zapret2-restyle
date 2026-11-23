@@ -61,6 +61,9 @@
 
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
 
+**S03e3d source candidate (`_142`, 23.11.2026):** [single-original-FD9 post-dispatch terminal receipt + true native PHP Stop/Restart refusal RU/EN](ZAPRET2_TZ6V5_S03E3D_ORIGINAL_FD9_TERMINAL_RECEIPT.md). Private configd `type:script_output` invokes existing Stop/Restart with internal flag (same FD9); verified `shared_apply_status_service` within lock gates fixed success receipt. PHP fails closed via `UserException` if missing, GUI Stop never treats HTTP 200 without `verified` as successful. Earlier S03e3c native [RED](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45143375706) must become actual installed Chromium RU/EN **GREEN refusal** on lock-BUSY in disposable no-engine guest, Config/IPFW/engine intact. **Exact-head CI PENDING**, no positive RUNNING physical Stop/Restart attested; full S03 NO-GO, S04 forbidden.
+
+
 **S03e3c candidate (`_141`, 23.11.2026):** [actual PHP Stop/Restart HTTP + Strategies GUI RED on held original FD9](ZAPRET2_TZ6V5_S03E3C_NATIVE_PHP_STOP_RESTART_HTTP_RED.md). On disposable OPNsense cold installed guest, EN/RU authenticated Chromium executes real Stop click and separate HTTP Restart; neither POST is intercepted, read-only runtime only stubbed to expose the button. Native test-owned FD9 proves BUSY, drains configd children and demands unchanged Config/IPFW/engine. Expected old API returns `response` under HTTP 200 and old GUI does not show Stop error; no lifecycle code change or owner hardware operation. **Initial real native RED PASS** ([run #45142099971](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45142099971)): EN/RU HTTP 200 for both actions despite genuine FD9 BUSY, response OTHER_REDACTED, old GUI Stop failure absent, Config/IPFW/engine identical. Clean [PR #1253](https://github.com/Tolian82/os-zapret2-restyle/pull/1253) exact-head recheck PENDING; full S03 NO-GO, S04 forbidden.
 
 

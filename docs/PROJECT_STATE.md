@@ -1,3 +1,9 @@
+# 23.11.2026 — CURRENT v0.6.5_142 S03e3d single-original-FD9 Stop/Restart terminal proof candidate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=142`, `v0.6.5_142`, prospective CI-only `os-zapret2-restyle-0.6.5_142.pkg` NOT operator/public. Based on accepted `main ecaca1aa` (`_141`). [S03e3d narrow fix](architecture/ZAPRET2_TZ6V5_S03E3D_ORIGINAL_FD9_TERMINAL_RECEIPT.md) makes original FD9-owned Stop/Restart issue bounded terminal receipt only if existing verified read-only state agrees after dispatch; native PHP refuses missing/unknown receipts; Strategies handles Stop RU/EN and rejects any unproven HTTP 200. No second writer, no native engine interference beyond existing ordinary verbs. **Native exact-head CI PENDING**; no positive physical RUNNING transition attested; full S03 NO-GO; S04–S20 NOT RUN; owner `_117.pkg` unchanged.
+
+---
+
 # 23.11.2026 — CURRENT v0.6.5_141: S03e3c genuine installed Stop/Restart PHP+GUI FD9 BUSY RED
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=141`, `v0.6.5_141` from accepted `main 2dcd0a45` (`_140`). Prospective disposable-only `os-zapret2-restyle-0.6.5_141.pkg` is not released/published. [Native S03e3c contract](architecture/ZAPRET2_TZ6V5_S03E3C_NATIVE_PHP_STOP_RESTART_HTTP_RED.md): real installed Strategies browser Stop + authenticated API Restart EN/RU against PHP/configd under proven held FD9, no upstream engine, no mutation response interception, exact before/after Config/IPFW/processes. Initial native installed RED **PASS** ([run #45142099971](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45142099971)): both RU/EN Stop and Restart returned real HTTP 200 with inherited redacted nonempty `response`; no native mutation and no GUI Stop failure. Exact-head clean [PR #1253](https://github.com/Tolian82/os-zapret2-restyle/pull/1253) **CI PENDING**; full S03 NO-GO, S04–S20 not started, owner `_117.pkg` untouched.
