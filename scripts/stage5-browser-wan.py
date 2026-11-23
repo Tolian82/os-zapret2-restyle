@@ -82,10 +82,14 @@ def native_wan_start_error_browser(mode):
             response = result.value
             need(response.status >= 400, 'S03E3_NATIVE_START_NOT_REJECTED')
             body = response.json()
-            message = body.get('message') if isinstance(body, dict) else None
+            message = body.get('errorMessage') if isinstance(body, dict) else None
+            native_title = body.get('errorTitle') if isinstance(body, dict) else None
+            need(isinstance(native_title, str) and len(native_title) > 0,
+                 'S03E3_ACTUAL_NATIVE_USEREXCEPTION_TITLE_MISSING')
             need(message in ('Select a WAN interface','Укажите WAN интерфейс',
                              'Укажите WAN-интерфейс.'),
-                 'S03E3_ACTUAL_NATIVE_WAN_USEREXCEPTION_NOT_RETURNED')
+                 'S03E3_ACTUAL_NATIVE_WAN_USEREXCEPTION_NOT_RETURNED_KEYS_' +
+                 (','.join(sorted(body))[:120] if isinstance(body, dict) else 'NOT_JSON_OBJECT'))
             expected = 'Укажите WAN интерфейс' if mode == 'ru' else 'Select a WAN interface'
             page.get_by_text(expected, exact=False).first.wait_for(state='visible', timeout=15000)
             title = 'Ошибка управления службой' if mode == 'ru' else 'Service operation failed'
