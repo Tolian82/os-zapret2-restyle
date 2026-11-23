@@ -84,6 +84,25 @@ def self_test():
                            ({**seed, "installed": True, "service": "started",
                              "version": ""}, "error")):
         need(runtime_classifier(args) == expected, "G07_FAST_STATUS_INCONSISTENT")
+    stop = {"response": "OK", "status": "ok", "verified": True,
+            "action": "stop", "state": "stopped"}
+    restart = {"response": "OK", "status": "ok", "verified": True,
+               "action": "restart", "state": "started"}
+    need(verified_lifecycle_response("stop", stop) and
+         verified_lifecycle_response("restart", restart),
+         "G07_FAST_VALID_TERMINAL_RECEIPT_REJECTED")
+    for name, candidate in (
+        ("stop", {**stop, "verified": False}),
+        ("stop", {**stop, "state": "started"}),
+        ("stop", {**stop, "action": "restart"}),
+        ("stop", {"response": "OK"}),
+        ("restart", {**restart, "verified": False}),
+        ("restart", {**restart, "state": "stopped"}),
+        ("restart", {**restart, "action": "stop"}),
+        ("restart", {"response": "OK"}),
+    ):
+        need(not verified_lifecycle_response(name, candidate),
+             "G07_FAST_FALSE_TERMINAL_PROOF_ACCEPTED")
     print("G07_NATIVE_LIFECYCLE_FAST=PASS")
 
 
@@ -124,11 +143,32 @@ def apply_wan_only(web, g05):
     need(after == "lo0", "G07_SAVED_WAN_NOT_READABLE_AFTER_GUI_REFRESH")
 
 
+def verified_lifecycle_response(name, payload):
+    """The _142 PHP success envelope requires original-FD9 terminal proof.
+
+    This is NOT a synthetic receipt: the native G07 caller verifies the
+    unmocked installed HTTPS response and independently checks real process,
+    generation, scoped IPFW and stopped/running state after the request.
+    """
+    if name not in ("stop", "restart") or not isinstance(payload, dict):
+        return False
+    state = "stopped" if name == "stop" else "started"
+    return (payload.get("response") == "OK" and
+            payload.get("status") == "ok" and
+            payload.get("verified") is True and
+            payload.get("action") == name and
+            payload.get("state") == state)
+
+
 def action(web, name):
     need(name in ("stop", "start", "restart"), "G07_UNTRUSTED_NATIVE_ACTION")
-    # Same authenticated endpoint used by the actual service control button.
+    # Actual installed authenticated HTTP, no mocked mutation route.
     response = web.api("POST", "/api/zapret/service/" + name)
     need(isinstance(response, dict), "G07_SERVICE_ACTION_NOT_JSON")
+    if name in ("stop", "restart"):
+        need(verified_lifecycle_response(name, response),
+             "G07_REAL_COMMON_" + name.upper() + "_TERMINAL_RECEIPT_MISSING")
+    return response
 
 
 def execute():
@@ -241,6 +281,7 @@ def execute():
         "disabled_wan_save_preserves_stopped_state": True,
         "first_https_lower_apply_real_process": True,
         "https_stop_start_restart_real_one_engine": True,
+        "common_real_http_stop_restart_terminal_receipts": True,
         "lower_apply_ordinary_add_remove_exact_ipfw": True,
         "invalid_profile_apply_refused_unchanged": True,
         "saved_wan_and_foreign_config_ipfw_preserved": True,
