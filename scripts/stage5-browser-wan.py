@@ -28,6 +28,80 @@ def field_options(page):
     need(field.count() == 1, 'NATIVE_WAN_FIELD_MISSING_OR_AMBIGUOUS')
     return field.evaluate('e=>Array.from(e.options).map(o=>({value:o.value,disabled:o.disabled}))')
 
+def native_wan_start_error_browser(mode):
+    """Genuine installed controller WAN UserException; only READ-ONLY display endpoints mocked.
+
+    Requires native guest witness --prepare with wan-required before this run;
+    guest --verify later compares Config/IPFW/engine. No HTTP Start interception.
+    """
+    from playwright.sync_api import sync_playwright
+    need(mode in ('en', 'ru') and os.environ.get('GITHUB_ACTIONS') == 'true' and
+         os.environ.get('ZAPRET2_STAGE5_BROWSER_WAN') == '1',
+         'S03E3_DISPOSABLE_BROWSER_OPTIN_REQUIRED')
+    origin = 'https://127.0.0.1:18443'
+    with sync_playwright() as pw:
+        options = {'executable_path': os.environ['STAGE5_LOCAL_CHROMIUM']} if os.environ.get('STAGE5_LOCAL_CHROMIUM') else {}
+        browser = pw.chromium.launch(headless=True, **options)
+        try:
+            context = browser.new_context(ignore_https_errors=True)
+            page = context.new_page()
+            calls = []
+            def runtime_display(route):
+                route.fulfill(status=200, content_type='application/json',
+                              body=json.dumps({'status':'ok','installed':True,'busy':False,
+                                               'version':'v1.0.7','setup':'ready','service':'stopped'}))
+            def resources_display(route):
+                route.fulfill(status=200, content_type='application/json',
+                              body=json.dumps({'status':'ok','installed':False,
+                                               'busy':False,'phase':'not_installed'}))
+            # No route for Start/Stop/Restart: mutation reaches actual PHP.
+            page.route('**/api/zapret/service/runtime', runtime_display)
+            page.route('**/api/zapret/service/resourcesStatus', resources_display)
+            page.on('request', lambda req: calls.append(req.method + ':' + req.url.split('?')[0].rsplit('/',1)[-1])
+                    if '/api/zapret/service/' in req.url and req.method == 'POST' else None)
+            page.goto(origin + '/index.php', wait_until='domcontentloaded', timeout=45000)
+            page.locator('input[name="usernamefld"]').fill('root')
+            page.locator('input[name="passwordfld"]').fill('opnsense')
+            submits = page.locator('button[type="submit"],input[type="submit"]')
+            if submits.count():
+                submits.first.click()
+            else:
+                page.locator('input[name="passwordfld"]').press('Enter')
+            with page.expect_response(lambda r: '/api/zapret/settings/get' in r.url and r.status == 200, timeout=45000):
+                page.goto(origin + '/ui/zapret', wait_until='domcontentloaded', timeout=45000)
+            page.locator('form#frm_GeneralSettings').wait_for(timeout=45000)
+            need(page.evaluate("document.documentElement.lang || ''").lower().startswith(mode),
+                 'S03E3_REAL_PROFILE_LOCALE_WRONG_' + mode)
+            page.wait_for_function(
+                "() => {let b=document.querySelector('#zapretServiceControl');"
+                "return !!b && !b.disabled && b.offsetWidth>0 && b.textContent.trim().length>0;}",
+                timeout=20000)
+            with page.expect_response(lambda r: r.request.method == 'POST' and
+                    r.url.split('?')[0].endswith('/api/zapret/service/start'), timeout=30000) as result:
+                page.locator('#zapretServiceControl').click(timeout=20000)
+            response = result.value
+            need(response.status >= 400, 'S03E3_NATIVE_START_NOT_REJECTED')
+            body = response.json()
+            message = body.get('errorMessage') if isinstance(body, dict) else None
+            native_title = body.get('errorTitle') if isinstance(body, dict) else None
+            need(isinstance(native_title, str) and len(native_title) > 0,
+                 'S03E3_ACTUAL_NATIVE_USEREXCEPTION_TITLE_MISSING')
+            need(message in ('Select a WAN interface','Укажите WAN интерфейс',
+                             'Укажите WAN-интерфейс.'),
+                 'S03E3_ACTUAL_NATIVE_WAN_USEREXCEPTION_NOT_RETURNED_KEYS_' +
+                 (','.join(sorted(body))[:120] if isinstance(body, dict) else 'NOT_JSON_OBJECT'))
+            expected = 'Укажите WAN интерфейс' if mode == 'ru' else 'Select a WAN interface'
+            page.get_by_text(expected, exact=False).first.wait_for(state='visible', timeout=15000)
+            title = 'Ошибка управления службой' if mode == 'ru' else 'Service operation failed'
+            page.get_by_text(title, exact=False).first.wait_for(state='visible', timeout=15000)
+            need(calls.count('POST:start') == 1 and
+                 'POST:stop' not in calls and 'POST:restart' not in calls,
+                 'S03E3_UNEXPECTED_MUTATING_HTTP')
+            context.close()
+        finally:
+            browser.close()
+    print('S03E3_GENUINE_NATIVE_START_USEREXCEPTION_BROWSER_' + mode.upper() + '=PASS')
+
 def real_browser():
     from playwright.sync_api import sync_playwright
     need(os.environ.get('GITHUB_ACTIONS') == 'true' and
@@ -153,6 +227,8 @@ def main():
     try:
         if sys.argv[1:] == ['--self-test']:
             self_test()
+        elif sys.argv[1:] in (['--s03e3-en-browser'], ['--s03e3-ru-browser']):
+            native_wan_start_error_browser('en' if 'en' in sys.argv[1] else 'ru')
         elif sys.argv[1:] == ['--browser']:
             need(not RESULT.exists() and not RESULT.is_symlink(), 'RECEIPT_PREEXISTS')
             result = real_browser()

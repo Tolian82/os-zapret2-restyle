@@ -82,7 +82,7 @@ function check(cond,msg){if(!cond)throw Error(msg);}
 """ + click + r"""
 check(typeof clickHandler === 'function', 'real handler not bound');
 
-function clickOne(state, locale, failure, expectedPhrase) {
+function clickOne(state, locale, failure, expectedPhrase, native = false) {
   currentServiceState = state;
   isRussian = locale === 'ru';
   runtimeText.serviceError = isRussian ? 'Ошибка управления службой' : 'Service operation failed';
@@ -97,7 +97,9 @@ function clickOne(state, locale, failure, expectedPhrase) {
   check(req.opts.url === '/api/zapret/service/' + (state==='started'?'stop':'start'), 'wrong action');
   check(req.opts.type === 'POST' && req.opts.timeout === 600000, 'wrong transport contract');
   check(typeof req.fail === 'function', 'failure consumer is unreachable');
-  req.fail(failure === null ? {} : {responseJSON:{message:failure}});
+  req.fail(failure === null ? {} :
+    native ? {responseJSON:{errorMessage:failure,errorTitle:'Zapret configuration error'}} :
+             {responseJSON:{message:failure}});
   check(shown.length === initialShown + 1, 'failure not visible');
   check(shown.at(-1)[0] === runtimeText.serviceError, 'wrong lifecycle error title');
   check(shown.at(-1)[1].includes(expectedPhrase), 'wrong RU/EN verb or message: '+shown.at(-1)[1]);
@@ -108,6 +110,16 @@ clickOne('started', 'en', null, 'Zapret2 could not be stopped.');
 clickOne('stopped', 'ru', null, 'Не удалось запустить Zapret2.');
 clickOne('stopped', 'en', null, 'Zapret2 could not be started.');
 clickOne('started', 'ru', 'Select a WAN interface', 'mapped:Select a WAN interface');
+// The genuine OPNsense PHP UserException producer has errorMessage/errorTitle;
+// unknown server exception bytes MUST NOT be passed directly into the dialog.
+clickOne('stopped', 'en', 'Select a WAN interface',
+         'mapped:Select a WAN interface', true);
+clickOne('stopped', 'ru', 'Select a WAN interface',
+         'mapped:Select a WAN interface', true);
+clickOne('stopped', 'ru', '/conf/config.xml:secret-backend-error',
+         'Не удалось запустить Zapret2.', true);
+check(!shown.at(-1)[1].includes('/conf/config.xml'),
+      'raw OPNsense exception leaked to GUI');
 strategiesApplyPending = true;
 const before = requests.length;
 clickHandler.call(button, {preventDefault(){}});
