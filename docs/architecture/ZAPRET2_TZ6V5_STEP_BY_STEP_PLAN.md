@@ -61,6 +61,9 @@
 
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
 
+**S03b actual source diff candidate (`_133`, 23.11.2026):** [10-case normalised real generator `dvtws.args` + managed file SHA + source-map comparison](ZAPRET2_TZ6V5_S03_EFFECTIVE_DIFF_BASELINE.md) added to disposable OPNsense P2e; CI pending. In particular same argv for Auto→List requires semantic RESTART; same argv for changed YouTube/User/Exclude is **only candidate**, not confirmed reload. S03 still NO-GO pending G05→G08/FD9/PID/force/locale/native routes; S04 cannot start yet.
+
+
 **S03a source candidate (23.11.2026, `_132`):** [реальный S03 old-generator matrix/CLI/learning/no-manifest native-disposable Status RED](ZAPRET2_TZ6V5_S03_ORIGINAL_GENERATOR_RED.md), using existing P2e production orchestrator and isolated FreeBSD workflow. **CI witness pending, S03 incomplete/NO-GO**: пункты G05→G08/diff/force/locale/native Lab и другие матрицы не закрыты; не переходить к S04 из-за одного RED набора.
 
 1. Сохранить deterministic old baseline: итоговые `dvtws.args`, actual native profile order/source-map/IPFW/Voice для `all/list/auto`, explicit selectors, User vs YouTube first-match, empty/nonempty/large/invalid lists.

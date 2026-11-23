@@ -1,3 +1,12 @@
+
+# 23 Nov 2026 — CURRENT TZ6v5 S03b real old-generator effective diff baseline
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=133`, `v0.6.5_133`, proposed branch `feat/tz6v5-s03b-real-effective-diff-baseline` from merged `main _132 88425da7`. Prospective `os-zapret2-restyle-0.6.5_133.pkg` **NOT BUILT/NOT PUBLISHED**; owner `_117.pkg` last installed unchanged.
+
+**S03a accepted:** exact-head [PR #1241](https://github.com/Tolian82/os-zapret2-restyle/pull/1241) native P2e on disposable OPNsense 26.7 produced 8 original build cases, 2 invalid reject and 6/6 expected source/CLI/read-only Status RED; note RED is **defect evidence**, not runtime GREEN. **S03b pending CI:** [actual old-generator 10-case effective diff map](architecture/ZAPRET2_TZ6V5_S03_EFFECTIVE_DIFF_BASELINE.md). Expected content-only ref candidates vs structural DPI/order/Voice/divert/exclude-presence; Auto→List has identical old argv yet semantic change. Future Reload-safe remains unproven. All product `src/` unchanged, owner not contacted. Full S03 NO-GO and S04–S20 NOT RUN. #1223/#1224/#1225 OPEN.
+
+---
+
 # 23 Nov 2026 — CURRENT TZ6v5 S03a real-generator expected RED candidate
 
 **Source candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=132`, `v0.6.5_132` branch `feat/tz6v5-s03-original-generator-red` based on merged `main _131 3742188b`. `os-zapret2-restyle-0.6.5_132.pkg` is ONLY a **prospective name, NOT built/published**; owner last-confirmed `_117.pkg` untouched. All product runtime `src/` unchanged.

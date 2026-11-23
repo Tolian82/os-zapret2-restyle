@@ -8,6 +8,10 @@
 
 # os-zapret2-restyle — master plan
 
+## 23 November 2026 — S03b actual effective diff baseline candidate
+
+Merged `main _132 88425da7` has **six verified RED** from disposable OPNsense (PR #1241). Proposed source `v0.6.5_133`, prospective `os-zapret2-restyle-0.6.5_133.pkg` **not built**. [S03b genuine generator 10-case parity](architecture/ZAPRET2_TZ6V5_S03_EFFECTIVE_DIFF_BASELINE.md) distinguishes NO_CHANGE vs list bytes-only candidates (not live reload proof), structural DPI/order/Voice/divert and semantic Auto→List even with identical actual argv. CI proof PENDING; current owner `_117` untouched. Do not proceed S04; finish full S03.
+
 ## 23 November 2026 — S03a actual-generator fail-first probe
 
 [Live S03a test and remaining S03 matrix](architecture/ZAPRET2_TZ6V5_S03_ORIGINAL_GENERATOR_RED.md): source-only `v0.6.5_132` (prospective `os-zapret2-restyle-0.6.5_132.pkg` NOT built), based on accepted `main _131` (`3742188b`). Real old orchestrator/Voice/Target Mode/source map generates synthetic `dvtws.args`; expected RED checks schema3 Auto learning missing fail-threshold, help/reload, immutable reference-only manifest and disposable FreeBSD status JSON/FD9 read-only. Hooked to existing P2e isolated OPNsense native CI; **pending exact-head CI result**, not accepted current runtime, not S03 complete. Full diff/force/G05→G08/locale/PID/native Lab gates remain; owner `_117` unchanged. Do not proceed to S04 until remaining S03 is GO.

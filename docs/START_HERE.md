@@ -12,6 +12,15 @@
 
 # os-zapret2-restyle — current handoff
 
+## 23 ноября 2026 — CURRENT: TZ6v5 S03b genuine effective-diff baseline candidate
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=133`, `v0.6.5_133` from merged `main v0.6.5_132` (`88425da7`), branch `feat/tz6v5-s03b-real-effective-diff-baseline`; **prospective `os-zapret2-restyle-0.6.5_133.pkg` NOT BUILT / NOT PUBLISHED**. Owner last installed `_117.pkg` unchanged.
+
+**S03a** confirmed six expected RED on isolated OPNsense [PR #1241 merged](https://github.com/Tolian82/os-zapret2-restyle/pull/1241). **S03b** [new actual source-generator diff baseline](architecture/ZAPRET2_TZ6V5_S03_EFFECTIVE_DIFF_BASELINE.md) compares genuine staged argv, real YouTube/User/Exclude contents, Voice, Target Mode, DPI, divert and first-match across 10 cases; correct result distinguishes content-only candidate from safe Reload (NOT PROVEN), and Auto→List even when argv identical. New CI proof PENDING. No production service code or device action; **whole S03 NO-GO**, S04–S20 NOT RUN.
+
+---
+
+
 ## 23 ноября 2026 — CURRENT: ТЗ_6v5 S03a old-generator RED candidate
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=132`, `v0.6.5_132`, based on merged `main v0.6.5_131` (`3742188b`), branch `feat/tz6v5-s03-original-generator-red`. Prospective only `os-zapret2-restyle-0.6.5_132.pkg` **NOT BUILT / NOT PUBLISHED**. Owner last confirmed installed `_117.pkg` unchanged.

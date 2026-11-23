@@ -9,6 +9,7 @@ on:
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py
       - scripts/test-p2e-original-shared-build.py
       - scripts/test-tz6v5-s03-original-red.py
+      - scripts/test-tz6v5-s03-effective-diff-baseline.py
       - scripts/test-tz6v4-schema3-dryrun.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/validator.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py
@@ -56,6 +57,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p2i-original-preview-native.py --self-test
           python3 -m py_compile scripts/test-tz6v4-schema3-dryrun.py
           python3 -m py_compile scripts/test-tz6v5-s03-original-red.py
+          python3 -m py_compile scripts/test-tz6v5-s03-effective-diff-baseline.py
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-tz6v4-schema3-dryrun.py
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-voice-ipfw-adapter.py
           python3 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py scripts/test-auto-detect-post-drop.py
@@ -118,6 +120,9 @@ jobs:
                 raise SystemExit("P2E_REFUSED_NOT_ROOT_FREEBSD")
             PY
             PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-p2e-original-shared-build.py
+            # S03b: compare real emitted native argv + managed artifacts;
+            # no service transitions, no claim that live Reload is safe.
+            PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-tz6v5-s03-effective-diff-baseline.py
             # TZ6v5 S03: the SAME actual legacy generator, no installed engine
             # or ordinary Start. Deliberately enforce proof of expected RED.
             ZAPRET2_S03_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 \
