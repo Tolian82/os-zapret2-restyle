@@ -6,6 +6,7 @@ on:
       - VERSION
       - scripts/stage5-browser-wan.py
       - scripts/test-tz6v5-s03e3-native-wan-refusal.py
+      - scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py
       - scripts/p3-browser-i18n.py
       - scripts/p3-native-profile-locale.php
       - src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt
@@ -19,6 +20,7 @@ on:
       - VERSION
       - scripts/stage5-browser-wan.py
       - scripts/test-tz6v5-s03e3-native-wan-refusal.py
+      - scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py
       - scripts/p3-browser-i18n.py
       - scripts/p3-native-profile-locale.php
       - src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt
@@ -52,6 +54,8 @@ jobs:
           set -eu
           python3.13 -m py_compile scripts/stage5-browser-wan.py scripts/p3-browser-i18n.py scripts/test-tz6v5-s03e3-native-wan-refusal.py
           python3.13 scripts/test-tz6v5-s03e3-native-wan-refusal.py --self-test
+          python3.13 -m py_compile scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py
+          python3.13 scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py --self-test
           python3.13 scripts/p3-browser-i18n.py --self-test
           python3.13 -m pip install --disable-pip-version-check playwright
           chromium_bin="$(command -v chromium || command -v chromium-browser || command -v google-chrome || command -v google-chrome-stable || true)"
@@ -158,6 +162,11 @@ jobs:
             cat stage5-browser-wan-ci.pub >> /root/.ssh/authorized_keys
             chmod 0600 /root/.ssh/authorized_keys
             # The QEMU guest is disposable; this key never enters the plugin.
+      - name: S03e3b original configd Stop and Restart FD9 BUSY RED on clean native guest
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py --native
       - name: Open authenticated loopback-only SSH tunnel to disposable OPNsense
         env:
           ZAPRET2_STAGE5_BROWSER_WAN: '1'
