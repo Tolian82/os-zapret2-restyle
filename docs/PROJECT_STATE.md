@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_142 S03e3d single-original-FD9 Stop/Restart terminal proof candidate
+# 23.11.2026 — CURRENT v0.6.5_143 S03e3e actual Common HTTP terminal receipt gate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=143`, `v0.6.5_143`, CI-only prospective `os-zapret2-restyle-0.6.5_143.pkg` (NOT published or operator-installable). Base merged `main 0738f2ea` / `_142`. [Draft PR #1255](https://github.com/Tolian82/os-zapret2-restyle/pull/1255) strengthens genuine disposable OPNsense G07 Common positive Stop/Restart native real-engine HTTP acceptance to require exact `response=OK,status=ok,verified=true,action,state` in addition to real PID/status/owned IPFW/generation witnesses. Source-only testing: no new product runtime owner, no second writer, no public pkg, no owner hardware change. [S03e3e proof boundary](architecture/ZAPRET2_TZ6V5_S03E3E_COMMON_POSITIVE_TERMINAL_RECEIPT.md). **Exact-head CI PENDING; Legacy separate positive proof OPEN; Auto flaky evidence #1223 preserved. Full S03 NO-GO; S04–S20 not begun.**
+
+---
+
+# 23.11.2026 — HISTORICAL merged v0.6.5_142 S03e3d single-original-FD9 Stop/Restart terminal proof candidate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=142`, `v0.6.5_142`, prospective CI-only `os-zapret2-restyle-0.6.5_142.pkg` NOT operator/public. Based on accepted `main ecaca1aa` (`_141`). [S03e3d narrow fix](architecture/ZAPRET2_TZ6V5_S03E3D_ORIGINAL_FD9_TERMINAL_RECEIPT.md) makes original FD9-owned Stop/Restart issue bounded terminal receipt only if existing verified read-only state agrees after dispatch; native PHP refuses missing/unknown receipts; Strategies handles Stop RU/EN and rejects any unproven HTTP 200. No second writer, no native engine interference beyond existing ordinary verbs. **Genuine installed HTTP GREEN** ([native #45147056314](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45147056314)): Stop and Restart HTTP 500 in both EN/RU, native UserException with visible Stop error, original FD9 BUSY, exact Config/IPFW/engine unchanged, P3 locale and WAN Apply/F5 preserved. All previous exact-head 12 workflows ultimately PASS (two initial Auto failures rerun SUCCESS); last read-only live configd registration witness added and new SHA CI PENDING. No positive physical RUNNING transition attested; full S03 NO-GO; S04–S20 NOT RUN; owner `_117.pkg` unchanged.
 
