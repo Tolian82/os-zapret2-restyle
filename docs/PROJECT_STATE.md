@@ -1,5 +1,7 @@
 # 23.11.2026 — CURRENT v0.6.5_140 S03e3b genuine installed configd Stop/Restart FD9 BUSY RED
 
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=140`, `v0.6.5_140`; expected build filename `os-zapret2-restyle-0.6.5_140.pkg` is **prospective only**, NOT a published or operator-installable artifact.
+
 **Source-only candidate**, from accepted `main 0e877e99` (`_139`). [Native S03e3b contract](architecture/ZAPRET2_TZ6V5_S03E3B_CONFIGD_LOCKED_STOP_RESTART_RED.md): real `configctl zapret stop|restart` and script under test-owned verified original FD9 lock, cold disposable OPNsense without engine or pending pkg update; native shell rc75 and classified configd response, exact Config/IPFW/no-engine before/after. API inherited return shape `response` does not certify terminal state; GUI `.done` lacks a Stop/Restart receipt check. **Native isolated RED PASS** ([#45138033995](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45138033995)): actual shell rc75 for Stop and Restart; real configctl exits 0 in both cases while stdout is nonempty/OTHER_REDACTED. No config/IPFW/engine drift and original FD9 remained held; prior WAN-only Apply/F5 and P3 EN/RU also PASS. Stage1 primary-doc identity format initially failed and is corrected; revised exact-head CI PENDING. **S03 overall NO-GO; S04–S20 not begun.** No public `.pkg`; user's last owner `_117.pkg` unchanged.
 
 ---
