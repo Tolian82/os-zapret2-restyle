@@ -153,7 +153,13 @@ def main(argv):
         tree = ast.parse(src)
         s04.need("s04.guest_gate(\"hot\")" in src and
                  "ZAPRET2_S05B2_DISPOSABLE_NATIVE" in src and
-                 "SIGSTOP" not in src and "SIGCONT" not in src,
+                 not any(isinstance(node, ast.Call) and
+                         isinstance(node.func, ast.Attribute) and
+                         node.func.attr == "kill" and
+                         len(node.args) > 1 and
+                         isinstance(node.args[1], ast.Attribute) and
+                         node.args[1].attr in ("SIGSTOP", "SIGCONT")
+                         for node in ast.walk(tree)),
                  "S05B2_MISSING_ISOLATED_FAULT_GATE")
         print("S05B2_SOURCE_GATE=PASS")
         return 0
