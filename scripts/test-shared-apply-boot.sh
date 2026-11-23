@@ -7,9 +7,24 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # Mock only the read-only qualified-Python preflight; the real launcher and
 # inherited FD9 are checked in their own native contract test.
 PYTHON_RUNTIME="${ROOT}/python-preflight-fixture"
+BACKEND_DIR="${ROOT}/backend"
+MOCK_BACKEND="$BACKEND_DIR"
+MOCK_CLEAR_LOG="${ROOT}/steps.log"
+export MOCK_BACKEND MOCK_CLEAR_LOG
 cat > "${PYTHON_RUNTIME}" <<'MOCKPY'
 #!/bin/sh
-[ "$#" -eq 1 ] && [ "$1" = --check ]
+case "$#" in
+    1) [ "$1" = --check ] ;;
+    3)
+        # Only original FD9's fully verified RUNNING Boot may clear its
+        # own recorded failure; unknown operation and arguments refuse.
+        [ "$1" = "$MOCK_BACKEND/shared_apply_operation.py" ] &&
+        [ "$2" = runtime-exit-clear ] &&
+        [ "$3" = "$MOCK_EXPECTED_ID" ] || exit 1
+        printf '%s\n' original-exit-cleared >> "$MOCK_CLEAR_LOG"
+        ;;
+    *) exit 1 ;;
+esac
 MOCKPY
 chmod 0700 "${PYTHON_RUNTIME}"
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
@@ -23,6 +38,8 @@ sed -n '/^apply_runtime_observer_previous_preflight()$/,/^}$/p' "$RUNTIME" >> "$
 sh -n "$ROOT/boot.sh" || fail "boot shell syntax"
 . "$ROOT/boot.sh"
 ID=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+MOCK_EXPECTED_ID="$ID"
+export MOCK_EXPECTED_ID
 mkdir -p "$ROOT/work/release" "$ROOT/active"
 ACTIVE_DIR="$ROOT/active"
 # The sealed ordinary release has native argv even if stopped.
@@ -85,7 +102,7 @@ expect() {
   [ "$got" = "$*" ] || fail "boot steps: $got"
 }
 reset
-expect 0 'guard:common-apply seal:verify config:saved wan:require activate commit tree-verify probe:1 '
+expect 0 'guard:common-apply seal:verify config:saved wan:require activate commit tree-verify probe:1 original-exit-cleared '
 grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "boot receipt"
 # This gate must reject a committed owner before attempting activation/IPFW.
 reset; WAN_OK=0
@@ -142,7 +159,7 @@ done
 # Repeated Start/reconfigure on already verified shared Voice ON must not
 # stop, launch or replace the engine; a mismatched release/kernel refuses.
 reset; ENGINE=1; MONITOR=1
-expect 0 'guard:common-apply seal:verify config:saved wan:require tree-verify probe:1 '
+expect 0 'guard:common-apply seal:verify config:saved wan:require tree-verify probe:1 original-exit-cleared '
 grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "idempotent boot receipt"
 reset; ENGINE=1; MONITOR=1; TREE_OK=0
 expect 69 'guard:common-apply seal:verify config:saved wan:require tree-verify '
