@@ -34,7 +34,7 @@ def assert_source() -> str:
     assert "voiceApplyNeedsReview" in voice
     assert "serviceError: isRussian ? 'Ошибка управления службой' : 'Service operation failed'" in general
     click = re.search(
-        r"^        \\$('#zapretServiceControl'\\)\\.off\\('click'\\)\\.on\\('click', function\\(event\\) \\{.*?^        \\}\\);",
+        r"^        \$('#zapretServiceControl'\)\.off\('click'\)\.on\('click', function\(event\) \{.*?^        \}\);",
         general, re.MULTILINE | re.DOTALL,
     )
     assert click is not None, "Actual Strategies service click handler missing"
