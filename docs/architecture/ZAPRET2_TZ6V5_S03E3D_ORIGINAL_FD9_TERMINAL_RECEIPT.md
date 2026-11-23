@@ -21,6 +21,12 @@
 - Гарантированное физическое **положительное** завершение Stop/Restart при RUNNING и его terminal receipt пока **не подтверждены** данным холодным negative test. Сценарии не применять к рабочему маршрутизатору; отдельный native positive proof для каждой ветви Legacy/Common потребуется до полного S03 GO.
 - Запрещены ложный HTTP 200, автоперезапуск движка ради тестирования, неподтверждённый Stop, SIGSTOP/SIGCONT, KILL по PID-файлу, изменение чужого IPFW, любые действия в диапазоне 19140–19200 и правило 65534.
 
-**Кандидат S03e3d: CI PENDING.** До 4/4 exact-head PASS и native producer→consumer RU/EN — не merge. Даже после принятия этой узкой ошибки **full S03 остаётся NO-GO** (public CLI/force/reload/help + реальные Lab/Auto гейты); S04–S20 не начинать, публичный .pkg не выпускать.
+## Реальные нативные результаты (23.11.2026)
+
+[Нативный disposable OPNsense + Chromium RU/EN #45147056314](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45147056314): **PASS** на exact source `def3fb8c`. При тестовом занятом original FD9 настоящие PHP Stop и Restart вернули **HTTP 500** в обеих локалях; `errorMessage/errorTitle` доставлены, Stop ошибка показана локализованно, Config/IPFW/engine неизменны. После отказов WAN-only Apply+F5 и P3 RU/EN PASS. Инертная shell-матрица terminal receipt PASS. Остальные нативные workflow: G03, P0, schema3 canary, P2e, P5c, `_79` upgrade PASS; два Auto-проверочных прогона сперва REFUSED, затем **оба PASS на повторе того же SHA**, без правок кода. Первоначальные неудачи записаны в [issue #1223](https://github.com/Tolian82/os-zapret2-restyle/issues/1223); причина нестабильности ещё не доказана.
+
+**Дополнительный защитный gate:** отдельный read-only вызов установленного `configctl configd actions json` обязан показать **оба** зарегистрированных `zapret stop_verified` и `zapret restart_verified` (совпадение со штатным `actions_zapret.conf`), прежде чем считать HTTP 500 доказательством конкретного native PHP пути. Это исключает ложный GREEN из-за неизвестных команд. Новый exact-head CI после этого шага **PENDING**.
+
+**S03e3d narrow negative GREEN; итоговый merge gate PENDING.** До 4/4 exact-head PASS и native producer→consumer RU/EN — не merge. Даже после принятия этой узкой ошибки **full S03 остаётся NO-GO** (public CLI/force/reload/help + реальные Lab/Auto гейты); S04–S20 не начинать, публичный .pkg не выпускать.
 
 [ТЗ](TZ_6v5.md) · [план](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) · [S03e3c RED](ZAPRET2_TZ6V5_S03E3C_NATIVE_PHP_STOP_RESTART_HTTP_RED.md) · [issue #1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225).
