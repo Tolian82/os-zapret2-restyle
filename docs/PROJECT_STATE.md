@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_155 S05a read-only JSON Status source candidate
+# 23.11.2026 — CURRENT v0.6.5_156 S05b1 original Apply error read-only source candidate
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=156`, `v0.6.5_156`, prospective `os-zapret2-restyle-0.6.5_156.pkg` (CI-only, NOT published); based on accepted S05a `main _155 8be9ca9e`. [S05b1 documented boundary](architecture/ZAPRET2_TZ6V5_S05B1_ORIGINAL_APPLY_ERROR.md) projects only genuine `restore-failed/requires-review` from existing original SharedApply durable journal when native S04 reads stale+INCOMPLETE; no second writer, FD9 or invented engine error/exit status. Full native physical negative errors, GUI RU/EN and old plain FD9 no-write **not yet accepted**; S05 NO-GO, later S06–S20 blocked. No public package / owner device action.
+
+---
+
+# 23.11.2026 — HISTORICAL v0.6.5_155 S05a read-only JSON Status source candidate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=155`, `v0.6.5_155`, prospective source-only `os-zapret2-restyle-0.6.5_155.pkg` **NOT published/installable**. Base merged `main _154 67133c88`. [S05a Status model](architecture/ZAPRET2_TZ6V5_S05A_READONLY_JSON_STATUS.md): existing `status` routing unchanged; new `status --json` reads S04 original native owner/Config/pkg/ELF facts without FD9 or writes and fails closed on uncertain status. No claim of real last error until original producer receipt exists. **S05 NO-GO until native/no-write and real diagnostics; S06+ blocked**, related #1223/#1224/#1225 OPEN. No owner device action. CI pending.
 

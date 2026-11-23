@@ -1,0 +1,19 @@
+# TZ6v5 S05b1 — original SharedApply failure journal, additive Status view
+
+**23.11.2026; source candidate v0.6.5_156.** Base `main _155 8be9ca9e` ([accepted S05a PR #1268](https://github.com/Tolian82/os-zapret2-restyle/pull/1268)). S05b1 is a **restricted subset** of original lifecycle diagnostics. It does not claim full S05b or S05 GO.
+
+## Original producer and exact trust boundary
+
+The installed **original** `shared_apply_operation.py::SharedApplyOperation.advance()` records terminal error phases `restore-failed` and `requires-review` in the **same durable** root-owned `/var/db/zapret2/shared-apply/operation.json`. Existing original writer validates schema, phase transitions, operation ID (32 lower-hex), page (Strategies/Voice), predecessor and candidate digests. S04 OPNsense adapter already uses this same reader to classify any nonterminal original operation as **manifest STALE / runtime INCOMPLETE**.
+
+S05b1 adds only a read-only projection using `SharedApplyOperation(owner=0).read()`, the existing original exact schema validator and a second equality read for race detection. It supplies a diagnostic **only** when S04's physical facts simultaneously say `manifest=stale`, `runtime=INCOMPLETE` AND the original validated journal says `restore-failed` or `requires-review`. An ordinary `prepared`/activating state, absent/corrupt/racing record, another runtime cause or a recovered/committed owner does **not** invent a failure. A corrupt/racing original journal marks `diagnostic_state=unavailable`, retaining the already observed S04 physical status/rc.
+
+The existing schema-1 Status envelope is extended additively with `last_error` (nullable) and `diagnostic_state=qualified|not-qualified|unavailable`. Top-level `code` stays the **S04 component classification**. A qualified `last_error` includes only fixed-source `code` (`RESTORE_FAILED` or `APPLY_REQUIRES_REVIEW`), `message` (fixed safe text), `action=apply|voice-apply`, `stage=apply`, validated random `operation_id`, `runtime_after=INCOMPLETE`, `verification=uncertain`; public top-level `stage` and `operation_id` reuse those values.
+
+**Known source limitations, never fabricated:** original SharedApply journal has no event timestamp, native engine exit-code, sealed *active* generation receipt or safe stderr excerpt. Consequently `last_error.timestamp`, `generation`, `exit_status`, `stderr_excerpt`, `log_ref`, `runtime_before` are `null`. Top-level timestamp remains the status observation time, **not** the failure time. No raw Config XML, candidate or predecessor digest, user changed_fields/domains/IPs, argv or shell stderr reaches the public response.
+
+## Gate, exclusions and next step
+
+S05b1 source RED→GREEN tests write sample records **only into disposable test directories using the original SharedApplyOperation writer**, then read through the new product reader. They test both genuine original terminal failure phases, Voice/Strategies action, PREPARED/RESTORED non-errors, forged/path/symlink evidence, racing re-reads, runtime mismatches, code compatibility and no data leakage. The S05a full native cold/hot suite must still pass on the exact PR head, verifying unchanged Config/pkgdb/epoch/PID/IPFW/backend and null error for all six original no-error controls.
+
+**Not yet proven:** actual native engine failure → original Apply rollback-failed/needs-review → GUI RU/EN. S05b2 must connect and physically verify the remaining original engine/supervisor/setup/Lab/pkg failure producers, bounded native cause and rc, with actual causal operation ID. Later S05c must connect only live lifecycle GUI consumers and resolve plain Status's historical FD9 file side effect without weakening ownership. No new persistent error database, no new writer, no PID watcher, no external monitoring, no operator-device upgrade, no public pkg and **no full S05 GO**.

@@ -6,6 +6,8 @@ on:
       - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/status_readonly.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/status_projection.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/status_error_original.py
+      - scripts/test-tz6v5-s05b1-original-apply-error.py
       - scripts/tz6v5-s05a-status-json-native.py
       - .github/workflows/tz6v5-s05a-status-native.yml
   workflow_dispatch:
@@ -31,8 +33,9 @@ jobs:
           python-version: "3.13"
       - name: S05a exact source status syntax and pure model RED/GREEN
         run: |
-          python3.13 -m py_compile scripts/tz6v5-s05a-status-json-native.py src/opnsense/scripts/OPNsense/Zapret/backend/status_projection.py src/opnsense/scripts/OPNsense/Zapret/backend/status_readonly.py
+          python3.13 -m py_compile scripts/tz6v5-s05a-status-json-native.py src/opnsense/scripts/OPNsense/Zapret/backend/status_projection.py src/opnsense/scripts/OPNsense/Zapret/backend/status_readonly.py src/opnsense/scripts/OPNsense/Zapret/backend/status_error_original.py
           python3.13 scripts/test-tz6v5-s05a-status-json-source.py
+          python3.13 scripts/test-tz6v5-s05b1-original-apply-error.py
           python3.13 scripts/tz6v5-s05a-status-json-native.py --self-test
       - name: Native installed Status on disposable OPNsense cold guest
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
@@ -72,8 +75,9 @@ jobs:
           python-version: "3.13"
       - name: S05a exact source status syntax and pure model RED/GREEN
         run: |
-          python3.13 -m py_compile scripts/tz6v5-s05a-status-json-native.py src/opnsense/scripts/OPNsense/Zapret/backend/status_projection.py src/opnsense/scripts/OPNsense/Zapret/backend/status_readonly.py
+          python3.13 -m py_compile scripts/tz6v5-s05a-status-json-native.py src/opnsense/scripts/OPNsense/Zapret/backend/status_projection.py src/opnsense/scripts/OPNsense/Zapret/backend/status_readonly.py src/opnsense/scripts/OPNsense/Zapret/backend/status_error_original.py
           python3.13 scripts/test-tz6v5-s05a-status-json-source.py
+          python3.13 scripts/test-tz6v5-s05b1-original-apply-error.py
           python3.13 scripts/tz6v5-s05a-status-json-native.py --self-test
       - name: Native Common original owner Status on disposable OPNsense hot guest
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235

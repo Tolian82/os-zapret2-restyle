@@ -1181,6 +1181,9 @@ jobs:
       - name: S05a read-only JSON Status projection and strict CLI options
         run: python3.13 scripts/test-tz6v5-s05a-status-json-source.py
 
+      - name: S05b1 original failure journal read-only projection
+        run: python3.13 scripts/test-tz6v5-s05b1-original-apply-error.py
+
       - name: Test S04c disposable physical runner source contract
         run: |
           python3.13 -m py_compile scripts/tz6v5-s04c-opnsense-native-inventory.py
