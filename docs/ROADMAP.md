@@ -1,3 +1,9 @@
+## 23 November 2026 — CURRENT S03c2 actual G05→G03→G08 prestart native acceptance candidate
+
+`main v0.6.5_134` merged `09a8947d`, S03c1 exact-head seven native early refusals PASS. New source-only `_135` [S03c2](architecture/ZAPRET2_TZ6V5_S03C2_AUTH_NATIVE_PRESTART.md) corrects historical G08 composition: `g03.main()` did ordinary Start/Restart via five-list regression; now only original stock configd G03 upstream install/reinstall runs, followed by real authenticated Standard RU + Extended EN Lab, Stage90/99 STOPPED→STOPPED and foreign IPFW/Config invariants. G03 standalone not changed; only disposable OPNsense temporarily builds an official-Mk .pkg (no published testing release, owner `_117` untouched). **Exact-head CI PENDING; whole S03 NO-GO; S04–S20 NOT RUN.**
+
+---
+
 ## 23 November 2026 — CURRENT TZ6v5 S03c1 native prestart Lab refusal
 
 Base `main v0.6.5_133 72027e4b` (S03a six RED and S03b ten real-generator comparisons merged/CI PASS). Candidate `v0.6.5_134`; `os-zapret2-restyle-0.6.5_134.pkg` **NOT BUILT OR PUBLISHED**, owner `_117` unchanged. [S03c1 scope](architecture/ZAPRET2_TZ6V5_S03C_PRESTART_LAB_REFUSAL_NATIVE.md): same disposable OPNsense P2e invokes real unchanged Lab launcher and FreeBSD lockf/jq with **only WAN preflight boundary injected**; seven WAN-first/engine-second refusals, exact RU/EN, no Job/Config/IPFW/ordinary process. CI PENDING; full authenticated native G05→G03→G08 still OPEN, as are force/PID/FD9/real lifecycle locale/Stage90 restore. **Full S03 NO-GO; S04–S20 NOT RUN.** Historical records below are not current release statuses.

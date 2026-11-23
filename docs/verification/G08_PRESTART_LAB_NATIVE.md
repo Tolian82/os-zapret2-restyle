@@ -1,3 +1,9 @@
+## 23 November 2026 — current S03c2 exact-source revalidation (candidate v0.6.5_135)
+
+The historical `_26` native PASS below is **not** proof for today's launcher: G03 standalone later gained `five_hostlist_native_apply()`, which starts/restarts ordinary dvtws2. Calling `g03.main()` from G08 therefore violates "BEFORE FIRST normal Start" even though the old G08 test used to pass. [Current S03c2](../architecture/ZAPRET2_TZ6V5_S03C2_AUTH_NATIVE_PRESTART.md) replaces that test composition only: reuses real `g03.dispatch_and_poll()` for native configd upstream install/reinstall while STOPPED, then requires two HTTP Lab Standard/Extended jobs and Stage90 AND 99 PASS. **Exact-head CI PENDING**. Only a disposable guest temporarily builds/installs the native package; no published release. The new unified V5 launcher must repeat G05/G03/G08 after implementation. Foreign IPFW, Config, FD9 and pre-Start invariants remain mandatory.
+
+---
+
 # G08 — Installed Standard/Extended Lab before first ordinary Start
 
 **Current scope (9 November 2026):** `_26` real OPNsense 26.7 S2 PASS [#42681458370](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42681458370), [PR #1000](https://github.com/Tolian82/os-zapret2-restyle/pull/1000) merged. Both genuine HTTP Lab jobs completed Stage40 TARGET_ACCESSIBLE, Stage50 SKIPPED, Stage90 STOPPED PASS. Not real blocked-target search or owner-live bypass.

@@ -128,7 +128,8 @@ def terminal(result, job, mode, language):
     need(result.get("outcome") == "TARGET_ACCESSIBLE" and
          stage(result, "50").get("status") == "SKIPPED",
          "G08_REAL_BASELINE_NOT_ACCESSIBLE_" + mode.upper())
-    for n in ("00", "10", "20", "30", "40", "90"):
+    # S03c2 requires stage99 terminal evidence as well as Stage90 recovery.
+    for n in ("00", "10", "20", "30", "40", "90", "99"):
         need(stage(result, n).get("status") == "PASS",
              "G08_NATIVE_STAGE_" + n + "_FAILED_" + mode.upper())
     restoration = result.get("restoration")
@@ -148,7 +149,8 @@ def terminal(result, job, mode, language):
          "G08_NATIVE_EXTERNAL_TLS_CONTROL_NOT_QUALIFIED")
     return {"mode": mode, "language": language, "job_id": job,
             "outcome": result["outcome"], "restore": "STOPPED",
-            "stage30": "PASS", "stage40": "PASS", "stage90": "PASS",
+            "stage30": "PASS", "stage40": "PASS",
+            "stage90": "PASS", "stage99": "PASS",
             "stage50_search_performed": False}
 
 
@@ -229,6 +231,8 @@ def self_test():
         {**known, "restoration": {**known["restoration"], "verified": False}},
         {**known, "stages": [{**x, "status": "FAIL"} if x["number"] == "90" else x
                              for x in known["stages"]]},
+        {**known, "stages": [{**x, "status": "FAIL"} if x["number"] == "99" else x
+                             for x in known["stages"]]},
         {**known, "mode": "extended"},
     ):
         try:
@@ -237,6 +241,73 @@ def self_test():
             continue
         raise AssertionError("G08_UNVERIFIED_NATIVE_JOB_ACCEPTED")
     print("G08_PRESTART_NATIVE_SOURCE=PASS")
+
+
+
+def actual_g03_upstream_install_without_ordinary_start(g03):
+    """Reuse G03's stock configd setup/reinstall, never its five-list Start.
+
+    G03.main() intentionally continues with five_hostlist_native_apply(),
+    which starts and restarts dvtws2. An authentic *pre-first-Start* G08
+    must call the same production G03 dispatch/poll functions, but stop at
+    two verified upstream installs without invoking that later test.
+    """
+    need(not ENGINE.exists() and not ENGINE.is_symlink() and
+         not PID.exists() and not JOURNAL.exists(),
+         "S03C2_G03_STARTED_WITH_AN_ORDINARY_OWNER")
+    initial_config = CONFIG.read_bytes()
+    initial_ipfw = observed_rules()
+    before_templates = g03.native_template_snapshot()
+    initial = g03.status()
+    need(initial.get("installed") == "0" and
+         initial.get("busy") == "0",
+         "S03C2_G03_ENGINE_ALREADY_INSTALLED")
+    # Preserve the STOCK G03 bounded, redacted failure witness on this
+    # disposable guest. Native setup failure must never be relabelled
+    # as successful G08 restoration or silently retried under new runtime.
+    try:
+        first = g03.dispatch_and_poll()
+    except g03.Refusal:
+        g03.bounded_disposable_failure_evidence()
+        raise Refusal("S03C2_G03_FIRST_CONFIGD_INSTALL_REFUSED") from None
+    try:
+        second = g03.dispatch_and_poll()
+    except g03.Refusal:
+        g03.bounded_disposable_failure_evidence()
+        raise Refusal("S03C2_G03_SAME_RELEASE_REINSTALL_REFUSED") from None
+    need(second == first and first.get("installed") == "1" and
+         first.get("setup") == "ready" and
+         first.get("service") == "stopped" and
+         first.get("version") == "v1.0.7",
+         "S03C2_G03_INSTALLED_UPSTREAM_NOT_STOPPED")
+    need(ENGINE.is_file() and not ENGINE.is_symlink() and
+         CONFIG.read_bytes() == initial_config and
+         observed_rules() == initial_ipfw and
+         not PID.exists() and not JOURNAL.exists(),
+         "S03C2_G03_INSTALL_CHANGED_CONFIG_IPFW_OR_RUNTIME")
+    release = g03.STATE / "runtime.release"
+    need(release.is_file() and not release.is_symlink() and
+         release.read_text().strip() == "v1.0.7",
+         "S03C2_G03_RELEASE_MARKER_NOT_NATIVE")
+    for name, old_hash in before_templates.items():
+        candidate = g03.ROOT / name
+        need(candidate.is_file() and not candidate.is_symlink() and
+             g03.hashlib.sha256(candidate.read_bytes()).hexdigest() == old_hash,
+             "S03C2_G03_CHANGED_EXISTING_STOCK_TEMPLATE")
+    # Verify the actual selected upstream tag: not just the setup UI label.
+    git = "/usr/local/bin/git"
+    current = command(git, "-C", str(g03.ROOT), "rev-parse", "HEAD")
+    tagged = command(git, "-C", str(g03.ROOT), "rev-parse",
+                     "refs/tags/v1.0.7^{commit}")
+    need(current.returncode == 0 and tagged.returncode == 0 and
+         current.stdout.strip() == tagged.stdout.strip(),
+         "S03C2_G03_NATIVE_TAG_NOT_EXACT")
+    ps = command("/bin/ps", "-ax", "-o", "command=")
+    need(ps.returncode == 0 and
+         not any(line.startswith(str(ENGINE))
+                 for line in ps.stdout.splitlines()),
+         "S03C2_G03_LEFT_ORDINARY_ENGINE_PROCESS")
+    print("S03C2_G03_NATIVE_INSTALL_ONLY_BEFORE_FIRST_START=PASS", flush=True)
 
 
 def execute():
@@ -257,8 +328,10 @@ def execute():
     g05.main()
     need(not ENGINE.exists() and not JOURNAL.exists(),
          "G08_G05_DID_NOT_LEAVE_NEVER_STARTED_RUNTIME")
-    # G03 installs genuine upstream by stock configd, never starts service.
-    g03.main()
+    # G03.main() includes a *separate* legacy five-list Start/Restart
+    # acceptance and cannot be called here. Use the real stock configd
+    # install/reinstall via G03's existing native dispatch/poll functions.
+    actual_g03_upstream_install_without_ordinary_start(g03)
     need(ENGINE.is_file() and not ENGINE.is_symlink() and
          not JOURNAL.exists() and not PID.exists(),
          "G08_G03_ENGINE_NOT_CLEAN_STOPPED_PRESTART")
@@ -267,7 +340,8 @@ def execute():
     need(model is not None and model.findtext("general/enabled") == "0" and
          model.findtext("general/waninterface") == "wan" and
          not (model.findtext("strategy/trafficargs") or "") and
-         not (model.findtext("hostlist/youtubedomains") or ""),
+         not (model.findtext("hostlist/youtubedomains") or "") and
+         not (model.findtext("hostlist/userdomains") or ""),
          "G08_LAB_DOES_NOT_START_WITH_TRULY_EMPTY_STOPPED_CONFIG")
 
     web = voice.GuestHttps()
@@ -296,6 +370,11 @@ def execute():
         "physical_owner_browser_tested": False,
         "IPv6_and_reboot_tested": False,
     }, sort_keys=True))
+    # S03c2 is an authentic installed source-only native baseline with
+    # an ephemeral, unpublished guest-local .pkg; do not call it the new
+    # unified-launcher GREEN or owner-physical acceptance.
+    print("S03C2_AUTHENTIC_G05_G03_G08_BEFORE_FIRST_START=PASS", flush=True)
+    print("S03C2_UNIFIED_LAUNCHER_AND_OWNER_LIVE_NOT_CLAIMED=1", flush=True)
 
 
 def main():
