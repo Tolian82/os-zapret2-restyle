@@ -3572,29 +3572,29 @@ service_with_lifecycle_lock()
 
     # The original FD9 lock inode may be absent immediately after an install.
     # Plain Status MUST NEVER create it just to report a physical state.
-    # In that one exceptional state, the already accepted S04 read-only
-    # status projection may confirm STOPPED (rc1); RUNNING/uncertain status
-    # is refused as INCOMPLETE (rc2), never used as lifecycle authority.
-    # Check again after S04: a concurrent first writer must not be mistaken
-    # for a stable unlocked owner. No nested lock, Config writer or PID claim.
+    # Reuse the EXISTING native plain Status observer, not the Python S04
+    # JSON reader: old script Status also works when Python is unavailable.
+    # Accept only exact original STOPPED (rc1 + fixed message). Any RUNNING,
+    # failed or ambiguous observation without FD9 is INCOMPLETE (rc2);
+    # neither path is lifecycle authority. Recheck absence after observation
+    # to refuse a concurrent first original FD9 writer.
     if [ "${1:-}" = status ] &&
        [ ! -e "${LIFECYCLE_LOCK_FILE}" ] &&
        [ ! -L "${LIFECYCLE_LOCK_FILE}" ]; then
         _plain_missing_fd9_rc=2
-        if [ -r "${BACKEND_DIR}/status_readonly.py" ]; then
-            if PYTHONDONTWRITEBYTECODE=1 "${PYTHON_RUNTIME}" \
-                "${BACKEND_DIR}/status_readonly.py" >/dev/null 2>&1; then
-                _plain_missing_fd9_rc=0
-            else
-                _plain_missing_fd9_rc=$?
-            fi
+        _plain_missing_fd9_text=
+        if _plain_missing_fd9_text=$(shared_apply_status_service 2>/dev/null); then
+            _plain_missing_fd9_rc=0
+        else
+            _plain_missing_fd9_rc=$?
         fi
         if [ -e "${LIFECYCLE_LOCK_FILE}" ] ||
            [ -L "${LIFECYCLE_LOCK_FILE}" ]; then
             echo "zapret is in an incomplete runtime state"
             return 2
         fi
-        if [ "${_plain_missing_fd9_rc}" -eq 1 ]; then
+        if [ "${_plain_missing_fd9_rc}" -eq 1 ] &&
+           [ "${_plain_missing_fd9_text}" = "zapret is not running" ]; then
             echo "zapret is not running"
             return 1
         fi
