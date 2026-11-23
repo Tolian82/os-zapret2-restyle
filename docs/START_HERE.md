@@ -1,4 +1,10 @@
-## 23.11.2026 — CURRENT ТЗ_6v5 S03 RED baseline GO → S04 entry
+## 23.11.2026 — CURRENT TZ6v5 S04a pure neutral component model
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=151`, `v0.6.5_151`; prospective CI-only `os-zapret2-restyle-0.6.5_151.pkg` **NOT published/installable on owner**. Based on merged `main _150 b4e94219`, [formal S03 RED GO](architecture/ZAPRET2_TZ6V5_S03_RED_BASELINE_GO.md). [S04a typed classifier](architecture/ZAPRET2_TZ6V5_S04A_NEUTRAL_COMPONENT_MODEL.md) adds pure source model for five component axes and safe no-authorization classifications; **not yet** a real filesystem/pkg/owner inventory, no S04 GO and no `status --json`. Read-only platform-source/native evidence still required. No new physical service owner, Config/IPFW writer, testing release or operator device action. Exact-head CI PENDING; #1223/#1224/#1225 OPEN; S05–S20 blocked.
+
+---
+
+## 23.11.2026 — HISTORICAL merged `_150` ТЗ_6v5 S03 RED baseline GO → S04 entry
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=150`, `v0.6.5_150`; prospective CI-only `os-zapret2-restyle-0.6.5_150.pkg`, **not published or operator-installable**. Base merged main `_149 20dc89c9`. [S03 seven-point evidence gate](architecture/ZAPRET2_TZ6V5_S03_RED_BASELINE_GO.md) classifies existing actual source/native old-code RED (generator/diff, G05→G08, PID/FD9/CLI/force deficiencies, RU/EN, IPFW bounds, original Auto Lab Stage20 and Stage90) and authorizes **S04 as the next ordered step**. S03 GO means **legacy RED reproducible**, not product Start/Stop/Reload/Force/Lab GREEN. Owner #1223/#1224/#1225 OPEN, unified lifecycle product remains NO-GO, no hardware trial or `.pkg` release. Documentation-only exact-head CI PENDING.
 

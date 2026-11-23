@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_150 S03 RED gate GO; S04 next
+# 23.11.2026 — CURRENT v0.6.5_151 S04a neutral component model
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=151`, `v0.6.5_151`, prospective CI-only `os-zapret2-restyle-0.6.5_151.pkg` (NOT published/installable). Base `main _150 b4e94219`; S03 genuine original RED baseline formal GO. [S04a](architecture/ZAPRET2_TZ6V5_S04A_NEUTRAL_COMPONENT_MODEL.md) adds only neutral five-axis facts classifier, enum validation, read-only/pure tests and central CI integration, without physical Status/Start/Stop or reader of Config/pkg/PID. **S04 remains NO-GO** until native actual probes/matrix and no-write witnesses; S05 not authorized. Owner untouched, no package release, #1223/#1224/#1225 OPEN. Exact-head CI PENDING.
+
+---
+
+# 23.11.2026 — HISTORICAL merged v0.6.5_150 S03 RED gate GO; S04 next
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=150`, `v0.6.5_150`, prospective CI-only `os-zapret2-restyle-0.6.5_150.pkg` (NOT published/installable). Merged main base `_149 20dc89c9`. [S03 RED acceptance matrix](architecture/ZAPRET2_TZ6V5_S03_RED_BASELINE_GO.md): seven original-code criteria have source/native reproducible RED/old-G05→G08 proof; exact evidence links and honest negative boundaries. **S03 GO limited to original-code RED gate**. **S04 authorized next, not implemented**. Current runtime's reload/force, native Auto Found and Stage90/20 defects remain; **overall product NO-GO**, issue #1223/#1224/#1225 OPEN. No new production runtime, owner contact or public pkg. Exact-head docs CI PENDING.
 

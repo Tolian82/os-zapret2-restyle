@@ -124,6 +124,9 @@
 
 ### S04. Независимый inventory компонентов
 
+**S04a partial source implementation (`_151`, 23.11.2026):** [neutral five-axis component classifier and source-level GREEN matrix](ZAPRET2_TZ6V5_S04A_NEUTRAL_COMPONENT_MODEL.md). Pure typed facts from future platform adapter only, no owner attestation, no permission to Start/Stop, no IO/FD9; source CI pending. **This is NOT an installed/native S04 GO**: actual read-only component probes, 5 physical scenarios and no-write native evidence remain mandatory before S05.
+
+
 1. Read-only различать package plugin (вне CLI, если не установлен), binary upstream Zapret2 valid/absent, saved Config initialized/absent/invalid, active sealed manifest valid/missing/stale, runtime RUNNING/STOPPED/INCOMPLETE/FOREIGN.
 2. Протестировать матрицу «нет ни одного компонента», «есть plugin без engine», «есть engine без Config», «есть owner с повреждённым editable Config» и «foreign owner».
 3. Отсутствующий manifest/config не разрешает новый Start или destructive Stop чужого процесса.
