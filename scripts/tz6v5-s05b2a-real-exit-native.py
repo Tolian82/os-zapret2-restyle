@@ -49,7 +49,48 @@ def status_json(label, runtime, code, *, error=False):
     before = s04.snapshot()
     p = s04.run([str(SERVICE), "status", "--json"], timeout=40)
     after = s04.snapshot()
-    s04.need(before == after, "S05B2_JSON_STATUS_WROTE_" + label)
+    if before != after:
+        # Fail hard, but label only resource classes and metadata categories.
+        # Do NOT put private file paths, PID values, kernel rule lines, argv,
+        # user Config or any raw log bytes into a CI diagnostic marker.
+        drift = []
+        for name in ("config", "engine", "process"):
+            if before[name] != after[name]:
+                drift.append(name)
+        for name in ("rules", "tables", "ipfw_module", "ipdivert_module"):
+            if before["kernel"][name] != after["kernel"][name]:
+                drift.append("kernel_" + name)
+        old, new = before["tree"], after["tree"]
+        for category, prefix in (
+            ("pkgdb", "/var/db/pkg/"),
+            ("original", "/var/db/zapret2/"),
+            ("active", "/usr/local/etc/zapret2/runtime-v2/"),
+            ("setup", "/var/db/zapret2-restyle/"),
+            ("backend", "/usr/local/opnsense/scripts/OPNsense/Zapret/backend/"),
+            ("pid", "/var/run/"),
+        ):
+            changed = [k for k in set(old) | set(new)
+                       if k.startswith(prefix) and old.get(k) != new.get(k)]
+            if changed:
+                added = sum(k not in old for k in changed)
+                removed = sum(k not in new for k in changed)
+                fields = set()
+                for k in changed:
+                    a, b = old.get(k), new.get(k)
+                    if isinstance(a, list) and isinstance(b, list):
+                        fields.update(field for i, field in (
+                            (2, "inode"), (7, "size"), (8, "mtime"),
+                            (9, "content")) if i < len(a) and i < len(b)
+                            and a[i] != b[i])
+                    else:
+                        fields.add("type")
+                drift.append("tree_" + category + "_" + str(len(changed)) +
+                             "_new" + str(added) + "_del" + str(removed) +
+                             "_" + "-".join(sorted(fields)))
+        if not drift:
+            drift.append("unclassified")
+        raise s04.Refusal("S05B2_JSON_STATUS_STATE_DRIFT_" + label +
+                         "__" + "_".join(drift[:14]))
     s04.need(p.stdout.count("\n") == 1 and p.returncode == (
         0 if runtime == "RUNNING" else 1 if runtime == "STOPPED" else 2
     ), "S05B2_STATUS_RC_UNVERIFIED_" + label)
