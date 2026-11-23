@@ -825,6 +825,8 @@
             if (!isRussian) return message;
             const translations = {
                 'Select a WAN interface': 'Укажите WAN интерфейс',
+                'Saved WAN preflight is unavailable':
+                    'Предварительная проверка сохранённого WAN недоступна.',
                 'The zapret2 service must be installed': 'Требуется установка службы zapret2',
                 'Selected WAN interface is not assigned or unavailable':
                     'Указанный WAN интерфейс не назначен или недоступен',
@@ -1517,7 +1519,28 @@
                 refreshRuntime();
                 updateServiceControlUI('zapret');
             }).fail(function(xhr) {
-                const message = xhr && xhr.responseJSON && xhr.responseJSON.message;
+                const response = xhr && xhr.responseJSON;
+                // OPNsense native UserException uses errorMessage/errorTitle
+                // (not the legacy "message" key). Accept ONLY three known,
+                // pre-dispatch WAN failures for Start; never echo unexpected
+                // raw PHP/configd errors or reuse Start text for Stop.
+                const nativeStartErrors = {
+                    'Select a WAN interface': 'Select a WAN interface',
+                    'Selected WAN interface is not assigned or unavailable':
+                        'Selected WAN interface is not assigned or unavailable',
+                    'Saved WAN preflight is unavailable':
+                        'Saved WAN preflight is unavailable',
+                    'Укажите WAN интерфейс': 'Select a WAN interface',
+                    'Укажите WAN-интерфейс.': 'Select a WAN interface'
+                };
+                const nativeError = response && response.errorMessage;
+                const knownStartError = action === 'start' &&
+                    typeof nativeError === 'string' &&
+                    Object.prototype.hasOwnProperty.call(nativeStartErrors, nativeError)
+                    ? nativeStartErrors[nativeError] : '';
+                const legacyMessage = response && response.message;
+                const message = typeof legacyMessage === 'string' && legacyMessage
+                    ? legacyMessage : knownStartError;
                 // Do not claim a failed Stop was a failed Start. Preserve the
                 // bounded server gettext mapping and the actual requested verb.
                 const fallback = action === 'stop'
