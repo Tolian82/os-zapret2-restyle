@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_153 S04c physical native inventory candidate
+# 23.11.2026 — CURRENT v0.6.5_154 formal S04 physical GO; S05 next
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=154`, `v0.6.5_154`, prospective documentation-only `os-zapret2-restyle-0.6.5_154.pkg` **NOT published/installable**. Previous merged `main _153 6a71e10e`. [S04 formal physical GO](architecture/ZAPRET2_TZ6V5_S04_NATIVE_INVENTORY_GO.md) closes S04 on real [cold/hot OPNsense native #45215394069](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45215394069): mandatory five states + healthy RUNNING, Config/pkgdb/journal/seal/epoch/PID/IPFW/file-tree no-write PASS, exact-tested head `7f4c6a4f`; [central CI #45215393926](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45215393926) and all other gates PASS. **S05 authorized next, but not yet started/implemented; overall lifecycle product NO-GO**, original #1223/#1224/#1225 OPEN. No second FD9/writer, no owner-device or public package action. Docs-only CI pending.
+
+---
+
+# 23.11.2026 — HISTORICAL v0.6.5_153 S04c physical native inventory candidate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=153`, `v0.6.5_153`, prospective CI-only `os-zapret2-restyle-0.6.5_153.pkg` **not published/installable**. Base merged `main _152 8edaf7a3`. [S04c](architecture/ZAPRET2_TZ6V5_S04C_NATIVE_FIVE_STATE_MATRIX.md) adds true installed native five-case cold/hot disposable OPNsense inventory and strict before/after no-write witnesses. **S04 NO-GO, S05 not started** until actual exact-head native PASS, no second FD9/Config/IPFW/PID writer, no owner hardware action. #1223/#1224/#1225 OPEN.
 
