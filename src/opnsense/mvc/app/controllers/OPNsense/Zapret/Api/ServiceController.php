@@ -71,7 +71,7 @@ class ServiceController extends ApiMutableServiceControllerBase
         }
         $isStop = $action === 'stop';
         if (!$isStop && $action !== 'restart') {
-            throw new \\InvalidArgumentException('Unsupported lifecycle action');
+            throw new \InvalidArgumentException('Unsupported lifecycle action');
         }
         $backendAction = $isStop ? 'zapret stop_verified' : 'zapret restart_verified';
         $expected = $isStop
