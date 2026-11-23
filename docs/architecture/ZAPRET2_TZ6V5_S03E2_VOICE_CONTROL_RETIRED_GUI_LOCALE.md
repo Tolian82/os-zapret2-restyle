@@ -1,6 +1,6 @@
 # ТЗ_6v5 — S03e2: Voice без прямой Start/Stop и action-specific RU/EN ошибки Strategies
 
-**Дата:** 23.11.2026. **Base:** merged `main 9127b9f3`, source-only `0.6.5_137` ([S03e1 #1246](https://github.com/Tolian82/os-zapret2-restyle/pull/1246)). **Кандидат:** `0.6.5_138`, ветка `feat/tz6v5-s03e2-gui-readonly-locale`. `0.6.5_138.pkg` **не собирался, не публиковался и не установлен**. Owner OPNsense не затронута.
+**Дата:** 23.11.2026. **Base:** merged `main 9127b9f3`, source-only `0.6.5_137` ([S03e1 #1246](https://github.com/Tolian82/os-zapret2-restyle/pull/1246)). **Кандидат:** `0.6.5_138`, ветка `feat/tz6v5-s03e2-gui-readonly-locale`. `os-zapret2-restyle-0.6.5_138.pkg` **временно собирался только внутри одноразового native CI**, но публичный/операторский тестовый релиз не публиковался и на owner OPNsense не устанавливался. Owner OPNsense не затронута.
 
 ## Решение владельца (23.11.2026)
 
@@ -19,14 +19,14 @@
 
 ## Приёмка и границы доказательства
 
-| Доказательство | Назначение | Статус до CI |
+| Доказательство | Назначение | Проверенный результат для `7331c0c9` |
 | --- | --- | --- |
-| Source + Node actual extracted event handler RU/EN | Ошибка соответствует Start или Stop, Voice read-only, проверка регрессий shared Apply | **PENDING exact-head CI** |
-| Legacy S03e1 original CLI on disposable OPNsense | Только настоящий старый public CLI, FD9 STATUS/invalid params expected RED; не запускать двигатель | **PENDING exact-head CI** |
-| RU/EN actual OPNsense Chromium with intercepted HTTP 503 | Production GUI click + modal RU/EN and removal of Voice DOM, **without native request** | **PENDING exact-head CI** |
+| Source + Node actual extracted event handler RU/EN | Ошибка соответствует Start или Stop, Voice read-only, проверка регрессий shared Apply | **PASS** ([P2e CI #45131323702](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131323702), Node listener) |
+| Legacy S03e1 original CLI on disposable OPNsense | Только настоящий старый public CLI, FD9 STATUS/invalid params expected RED; не запускать двигатель | **PASS** (ожидаемые RED, FD9, неизменность Config/IPFW; [P2e #45131323702](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131323702)) |
+| RU/EN actual OPNsense Chromium with intercepted HTTP 503 | Production GUI click + modal RU/EN and removal of Voice DOM, **without native request** | **PASS** ([installed Chromium #45131323617](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131323617), EN и RU) |
 | RU/EN GUI with genuine native lifecycle `UserException` producer | Actual backend error→browser delivery, not an intercepted response | **NOT TESTED / NO-GO** |
 | Physical RUNNING→RUNNING / STOPPED→STOPPED Lab, Auto learning, new CLI/force/reload | Независимые требования S03 и последующих этапов | **NOT CLAIMED** |
 
-**GO для S03e2 source-correction** допустим только после exact-head CI и просмотра diff. **Полный S03 остаётся NO-GO**, S04–S20 не начаты. Факт успешной инертной Node-модели нельзя называть успешным реальным GUI кликом; реальный Chromium с перехваченным HTTP нельзя считать проверкой native error producer или физической службы. Установленный владелец `_117.pkg`, системные службы и пользовательские списки/Config/IPFW не изменялись; новый `.pkg` до S19 не выпускать.
+**S03e2 source-correction: GO** на проверенном SHA `7331c0c937c5bd1c5068677c6923075800bb4c0a` (все 8 workflow PASS: [общий CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131323620), [Stage 1](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131323616), [P2e](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131323702), [Chromium RU/EN](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131323617), [P5c](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131323624), [G03](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131323679), PR title [#45131323711](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131323711) и [#45131411183](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45131411183)). Это исторический проверенный SHA: для последующего коммита только документации требуется повторить exact-head CI до merge. **Полный S03 остаётся NO-GO**, S04–S20 не начаты. Факт успешной инертной Node-модели нельзя называть успешным реальным GUI кликом; реальный Chromium с перехваченным HTTP нельзя считать проверкой native error producer или физической службы. Установленный владелец `_117.pkg`, системные службы и пользовательские списки/Config/IPFW не изменялись; новый `.pkg` до S19 не выпускать.
 
 Связанные документы: [ТЗ_6v5](TZ_6v5.md), [план S00–S20](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), [S03e1 native/source RED](ZAPRET2_TZ6V5_S03E_PUBLIC_CLI_LOCALE_RED_NATIVE.md), [задача #1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225).
