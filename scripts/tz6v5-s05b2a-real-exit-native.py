@@ -116,33 +116,19 @@ def real_fault():
              "S05B2_STALE_CALLBACK_NOT_REFUSED_RC_" + str(stale.returncode))
     s04.need(original_record() == original,
              "S05B2_STALE_CALLBACK_CHANGED_ORIGINAL_JOURNAL")
-    if before != after:
-        # Classified evidence only: never print private path/argv/rule bytes.
-        changed = []
-        for key in ("config", "engine", "process"):
-            if before[key] != after[key]:
-                changed.append(key)
-        for key in ("rules", "tables", "ipfw_module", "ipdivert_module"):
-            if before["kernel"][key] != after["kernel"][key]:
-                changed.append("kernel_" + key)
-        if before["tree"] != after["tree"]:
-            keys = set(before["tree"]) | set(after["tree"])
-            groups = (
-                ("lock", "/var/run/zapret2-lifecycle.lock"),
-                ("pkgdb", "/var/db/pkg/"),
-                ("original", "/var/db/zapret2/"),
-                ("runtime", "/usr/local/etc/zapret2/runtime-v2/"),
-                ("pid", "/var/run/"),
-                ("backend", "/usr/local/opnsense/scripts/OPNsense/Zapret/backend/"),
-            )
-            for label, prefix in groups:
-                count = sum(k.startswith(prefix) and
-                            before["tree"].get(k) != after["tree"].get(k)
-                            for k in keys)
-                if count:
-                    changed.append(label + "_" + str(count))
-        s04.need(False, "S05B2_STALE_CALLBACK_STATE_DRIFT_" +
-                 "_".join(changed[:10]))
+    # The legacy mutating callback still enters original FD9, whose sole
+    # fixed lockfile can be touched by lockf. That is NOT a JSON Status call.
+    # Everything else (original journal, Config, PID, kernel, package, runtime)
+    # must remain byte/metadata identical on this refused callback.
+    for key in ("config", "engine", "process"):
+        s04.need(before[key] == after[key],
+                 "S05B2_STALE_CALLBACK_MUTATED_" + key)
+    s04.need(before["kernel"] == after["kernel"],
+             "S05B2_STALE_CALLBACK_MUTATED_KERNEL")
+    changed = {k for k in set(before["tree"]) | set(after["tree"])
+               if before["tree"].get(k) != after["tree"].get(k)}
+    s04.need(changed <= {"/var/run/zapret2-lifecycle.lock"},
+             "S05B2_STALE_CALLBACK_CHANGED_NONFD9_RESOURCE")
     rows.append(status_json("stale-callback-no-effect", "RUNNING",
                             "RUNNING_REQUIRES_ORIGINAL_OWNER_ATTESTATION"))
     # Only now intentionally terminate the genuine installed native child.
