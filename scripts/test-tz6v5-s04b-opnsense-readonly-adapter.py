@@ -99,7 +99,7 @@ class S04BReadOnlyAdapter(unittest.TestCase):
         # read_record is a fixture; ALL integrity and process/Rule checks are
         # delegated to original existing functions in the production path.
         rid = "a" * 32
-        record = {"phase": "committed", "detail": {"id": rid, "page": "strategies",
+        record = {"schema": 1, "phase": "committed", "detail": {"id": rid, "page": "strategies",
                   "base": "b"*64, "candidate": "c"*64, "changed_fields": []}}
         calls = []
         def verify(path, *, owner):
