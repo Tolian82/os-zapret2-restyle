@@ -1,6 +1,6 @@
 # 23.11.2026 — CURRENT v0.6.5_156 S05b1 original Apply error read-only source candidate
 
-**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=156`; based on accepted S05a `main _155 8be9ca9e`. [S05b1 documented boundary](architecture/ZAPRET2_TZ6V5_S05B1_ORIGINAL_APPLY_ERROR.md) projects only genuine `restore-failed/requires-review` from existing original SharedApply durable journal when native S04 reads stale+INCOMPLETE; no second writer, FD9 or invented engine error/exit status. Full native physical negative errors, GUI RU/EN and old plain FD9 no-write **not yet accepted**; S05 NO-GO, later S06–S20 blocked. No public package / owner device action.
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=156`, `v0.6.5_156`, prospective `os-zapret2-restyle-0.6.5_156.pkg` (CI-only, NOT published); based on accepted S05a `main _155 8be9ca9e`. [S05b1 documented boundary](architecture/ZAPRET2_TZ6V5_S05B1_ORIGINAL_APPLY_ERROR.md) projects only genuine `restore-failed/requires-review` from existing original SharedApply durable journal when native S04 reads stale+INCOMPLETE; no second writer, FD9 or invented engine error/exit status. Full native physical negative errors, GUI RU/EN and old plain FD9 no-write **not yet accepted**; S05 NO-GO, later S06–S20 blocked. No public package / owner device action.
 
 ---
 
