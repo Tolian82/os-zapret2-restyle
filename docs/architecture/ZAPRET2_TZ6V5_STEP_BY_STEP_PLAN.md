@@ -141,6 +141,8 @@
 
 ### S05. Read-only status и диагностический конверт
 
+**S05b2a candidate (`_157`, 23.11.2026):** [original supervisor post-ready exit receipt](ZAPRET2_TZ6V5_S05B2A_ORIGINAL_LATE_EXIT.md) uses the existing original FD9+SharedApplyOperation writer, fixed `ENGINE_EXIT_AFTER_READY` with strict original PID/owner/manifest/kernel and real STOPPED proof, no native rc claim; exact-head disposable native fault/negative stale callback/no-write + all existing regressions required. Early exit real rc, setup/Lab/pkg, GUI RU/EN and plain Status FD9 side effect remain for S05b2b/S05c; full S05 NO-GO.
+
 **S05b1 candidate (`_156`, 23.11.2026):** [original SharedApply failure projection](ZAPRET2_TZ6V5_S05B1_ORIGINAL_APPLY_ERROR.md) is additive to S05a and uses only the original root-owned `restore-failed/requires-review` journal as a qualified producer. It never guesses engine rc, timestamp or active generation. Source tests + exact-head native Status no-write remain gates; broader S05b2 original causal engine/supervisor failures and S05c GUI/native errors remain open. Full S05 NO-GO.
 
 **S05a candidate (`_155`, 23.11.2026):** [read-only JSON Status and compatibility gate](ZAPRET2_TZ6V5_S05A_READONLY_JSON_STATUS.md). Strict `status --json` is a pure projection of S04 native evidence; old plain `status` retained. Diagnostics without actual original producer remain explicitly null, never invented. Requires exact-head source CI plus disposable OPNsense no-write tests and truthful error producer/consumer work before complete S05 GO. S06+ blocked.

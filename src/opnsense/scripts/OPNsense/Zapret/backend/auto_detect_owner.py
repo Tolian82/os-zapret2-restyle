@@ -457,7 +457,8 @@ def _valid_map(raw: bytes, owner: dict, argv: bytes) -> tuple[dict, tuple]:
     return data, tuple(frozen)
 
 
-def _exact_common_supervisor_argv(argv: list[str], child_pidfile: Path) -> bool:
+def _exact_common_supervisor_argv(argv: list[str], child_pidfile: Path,
+                                  monitored_pid: int | None = None) -> bool:
     """Match the original daemon-launched script, including FreeBSD shebang.
 
     Native daemon -f may expose either the script itself or its exact /bin/sh
@@ -469,7 +470,11 @@ def _exact_common_supervisor_argv(argv: list[str], child_pidfile: Path) -> bool:
     expected = [MONITOR_EXEC, str(child_pidfile),
                 str(Path(MONITOR_EXEC).with_name("zapret_service.sh")),
                 CHILD_EXEC]
-    return argv == expected or argv == ["/bin/sh", *expected]
+    candidates = (expected, ["/bin/sh", *expected])
+    if type(monitored_pid) is int and monitored_pid > 1:
+        candidates += (expected + [str(monitored_pid)],
+                       ["/bin/sh", *expected, str(monitored_pid)])
+    return argv in candidates
 
 
 def _attest_core(*, journal: Path, work_root: Path, active: Path,
@@ -554,7 +559,7 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
     if command != expected:
         raise GenerationRefused("running_engine_argv_differs_from_sealed_owner")
     _, monitor_command = _snapshot(runner, monitor)
-    if monitor == pid or not _exact_common_supervisor_argv(monitor_command, child_pidfile):
+    if monitor == pid or not _exact_common_supervisor_argv(monitor_command, child_pidfile, pid):
         raise GenerationRefused("missing_common_supervisor")
     census = _run(runner, ["/bin/ps", "-A", "-ww", "-o", "pid=", "-o", "command="])
     actual = []

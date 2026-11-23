@@ -1184,6 +1184,12 @@ jobs:
       - name: S05b1 original failure journal read-only projection
         run: python3.13 scripts/test-tz6v5-s05b1-original-apply-error.py
 
+      - name: S05b2a original durable late-exit witness (source)
+        run: |
+          python3.13 scripts/test-tz6v5-s05b2a-original-late-exit.py
+          sh scripts/test-tz6v5-s05b2a-pinned-monitor.sh
+          sh scripts/test-shared-apply-stop.sh
+
       - name: Test S04c disposable physical runner source contract
         run: |
           python3.13 -m py_compile scripts/tz6v5-s04c-opnsense-native-inventory.py

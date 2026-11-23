@@ -30,7 +30,9 @@ def read_qualified_failure(report: dict, *, reader=None) -> dict | None:
     # A pending/failed journal is already classified as stale+incomplete by
     # the S04 original reader. Foreign IPFW, a healthy RUNNING state and an
     # incomplete state with a DIFFERENT cause cannot authorize this diagnosis.
-    if facts["runtime"] != "INCOMPLETE" or facts["manifest"] != "stale":
+    pending = facts["runtime"] == "INCOMPLETE" and facts["manifest"] == "stale"
+    stopped = facts["runtime"] == "STOPPED" and facts["manifest"] == "valid"
+    if not (pending or stopped):
         return None
     from shared_apply_operation import SharedApplyOperation, _validate_record
     if reader is None:
@@ -40,6 +42,24 @@ def read_qualified_failure(report: dict, *, reader=None) -> dict | None:
         return None
     stable = _validate_record(first)
     phase = stable["phase"]
+    if stopped:
+        if phase != "committed" or "failure" not in stable:
+            return None
+        if reader() != first:
+            raise ValueError("S05B_RACING_ORIGINAL_EXIT_JOURNAL")
+        event = stable["failure"]
+        return {
+            "source": "original-shared-apply-journal",
+            "action": "runtime-failure", "stage": "engine-stop",
+            "code": event["code"],
+            "message": "Original supervisor observed engine exit after ready",
+            "operation_id": event["operation_id"],
+            "timestamp": event["observed_at"],
+            "generation": None, "exit_status": None,
+            "runtime_before": "RUNNING", "runtime_after": "STOPPED",
+            "verification": "uncertain",
+            "stderr_excerpt": None, "log_ref": None,
+        }
     if phase not in _CODES:
         return None
     if reader() != first:

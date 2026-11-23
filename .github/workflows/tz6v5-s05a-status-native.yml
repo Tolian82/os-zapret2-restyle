@@ -7,6 +7,8 @@ on:
       - src/opnsense/scripts/OPNsense/Zapret/backend/status_readonly.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/status_projection.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/status_error_original.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
+      - scripts/test-tz6v5-s05b2a-original-late-exit.py
       - scripts/test-tz6v5-s05b1-original-apply-error.py
       - scripts/tz6v5-s05a-status-json-native.py
       - .github/workflows/tz6v5-s05a-status-native.yml

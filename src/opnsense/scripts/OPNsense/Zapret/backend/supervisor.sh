@@ -79,6 +79,12 @@ supervisor_start()
         return 1
     }
 
+    # Bind the ORIGINAL live child to this monitor's immutable argv while
+    # original FD9 still owns a healthy launcher. daemon(8) removes -p on
+    # exit, so callback-time evidence cannot depend on that file surviving.
+    _supervisor_pinned_child=$(common_pidfile_read "${_supervisor_child_pidfile}") || return 1
+    common_process_matches "${_supervisor_pinned_child}" "${_supervisor_expected_child}" || return 1
+
     supervisor_stop \
         "${_supervisor_daemon_pidfile}" \
         "${_supervisor_monitor_pidfile}"
@@ -92,7 +98,8 @@ supervisor_start()
         -f "${_supervisor_loop}" \
         "${_supervisor_child_pidfile}" \
         "${_supervisor_service_script}" \
-        "${_supervisor_expected_child}" 9>&- || {
+        "${_supervisor_expected_child}" \
+        "${_supervisor_pinned_child}" 9>&- || {
             common_error "failed to start runtime supervisor"
             return 1
         }

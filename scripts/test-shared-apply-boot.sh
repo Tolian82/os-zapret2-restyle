@@ -7,9 +7,27 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # Mock only the read-only qualified-Python preflight; the real launcher and
 # inherited FD9 are checked in their own native contract test.
 PYTHON_RUNTIME="${ROOT}/python-preflight-fixture"
+BACKEND_DIR="${ROOT}/backend"
+MOCK_BACKEND="$BACKEND_DIR"
+MOCK_CLEAR_LOG="${ROOT}/steps.log"
+export MOCK_BACKEND MOCK_CLEAR_LOG
 cat > "${PYTHON_RUNTIME}" <<'MOCKPY'
 #!/bin/sh
-[ "$#" -eq 1 ] && [ "$1" = --check ]
+case "$#" in
+    1) [ "$1" = --check ] ;;
+    3)
+        # Only original FD9's fully verified RUNNING Boot may clear its
+        # own recorded failure; unknown operation and arguments refuse.
+        [ "$1" = "$MOCK_BACKEND/shared_apply_operation.py" ] &&
+        [ "$3" = "$MOCK_EXPECTED_ID" ] || exit 1
+        case "$2" in
+            runtime-exit-clear) printf '%s\n' original-exit-cleared >> "$MOCK_CLEAR_LOG" ;;
+            runtime-exit-record) printf '%s\n' original-exit-recorded >> "$MOCK_CLEAR_LOG" ;;
+            *) exit 1 ;;
+        esac
+        ;;
+    *) exit 1 ;;
+esac
 MOCKPY
 chmod 0700 "${PYTHON_RUNTIME}"
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
@@ -23,6 +41,8 @@ sed -n '/^apply_runtime_observer_previous_preflight()$/,/^}$/p' "$RUNTIME" >> "$
 sh -n "$ROOT/boot.sh" || fail "boot shell syntax"
 . "$ROOT/boot.sh"
 ID=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+MOCK_EXPECTED_ID="$ID"
+export MOCK_EXPECTED_ID
 mkdir -p "$ROOT/work/release" "$ROOT/active"
 ACTIVE_DIR="$ROOT/active"
 # The sealed ordinary release has native argv even if stopped.
@@ -85,7 +105,7 @@ expect() {
   [ "$got" = "$*" ] || fail "boot steps: $got"
 }
 reset
-expect 0 'guard:common-apply seal:verify config:saved wan:require activate commit tree-verify probe:1 '
+expect 0 'guard:common-apply seal:verify config:saved wan:require activate commit tree-verify probe:1 original-exit-cleared '
 grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "boot receipt"
 # This gate must reject a committed owner before attempting activation/IPFW.
 reset; WAN_OK=0
@@ -142,7 +162,7 @@ done
 # Repeated Start/reconfigure on already verified shared Voice ON must not
 # stop, launch or replace the engine; a mismatched release/kernel refuses.
 reset; ENGINE=1; MONITOR=1
-expect 0 'guard:common-apply seal:verify config:saved wan:require tree-verify probe:1 '
+expect 0 'guard:common-apply seal:verify config:saved wan:require tree-verify probe:1 original-exit-cleared '
 grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "idempotent boot receipt"
 reset; ENGINE=1; MONITOR=1; TREE_OK=0
 expect 69 'guard:common-apply seal:verify config:saved wan:require tree-verify '
@@ -214,8 +234,8 @@ shared_apply_recover_activating_parked_service() {
 }
 shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
 shared_apply_stop_service() {
-    if [ "$#" -eq 2 ]; then
-        echo "common-failure-stop:$1:$2" >> "$LOG"
+    if [ "$#" -eq 3 ]; then
+        echo "common-failure-stop:$1:$2:$3" >> "$LOG"
     else
         echo "common-stop:$1" >> "$LOG"
     fi
@@ -267,11 +287,11 @@ check_route 70 restart
 [ "$(cat "$LOG")" = "common-stop:committed $ID voice" ] || fail "failed stop started replacement"
 STOP_OK=0
 OWNER="committed $ID voice"
-check_route 0 runtime-failure "exited" 542
-[ "$(cat "$LOG")" = "common-failure-stop:committed $ID voice:542" ] ||
+check_route 0 runtime-failure "exited" 542 777
+[ "$(tr '\n' ' ' < "$LOG")" = "common-failure-stop:committed $ID voice:542:777 original-exit-recorded " ] ||
     fail "native runtime failure fell through to legacy rule sweep"
 OWNER="activated $ID voice"
-check_route 69 runtime-failure "exited" 542
+check_route 69 runtime-failure "exited" 542 777
 [ ! -s "$LOG" ] || fail "pending native owner was torn down by callback"
 OWNER=restored
 check_route 0 start

@@ -1,0 +1,71 @@
+name: TZ6v5 S05b2a genuine post-ready engine exit original FD9 receipt
+
+on:
+  pull_request:
+    paths:
+      - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+      - src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/supervisor.sh
+      - src/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_owner.py
+      - scripts/test-tz6v5-s05b2a-pinned-monitor.sh
+      - src/opnsense/scripts/OPNsense/Zapret/backend/status_error_original.py
+      - scripts/test-tz6v5-s05b2a-original-late-exit.py
+      - scripts/tz6v5-s05b2a-real-exit-native.py
+      - .github/workflows/tz6v5-s05b2a-native-real-exit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s05b2a-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  original_late_exit:
+    name: S05b2a real post-ready dvtws2 exit + protected original receipt
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Source original journal schema and isolated fault gates
+        run: |
+          python3.13 -m py_compile scripts/test-tz6v5-s05b2a-original-late-exit.py scripts/tz6v5-s05b2a-real-exit-native.py
+          python3.13 scripts/test-tz6v5-s05b2a-original-late-exit.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/supervisor.sh
+          sh scripts/test-tz6v5-s05b2a-pinned-monitor.sh
+          sh scripts/test-shared-apply-stop.sh
+          python3.13 scripts/tz6v5-s05b2a-real-exit-native.py --self-test
+      - name: Native real owner + genuine supervisor callback on disposable OPNsense
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1
+            export ZAPRET2_S04C_DISPOSABLE_NATIVE=1
+            export ZAPRET2_S05A_DISPOSABLE_NATIVE=1
+            export ZAPRET2_S05B2_DISPOSABLE_NATIVE=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="$ZAPRET2_NATIVE_PROJECT_SHA"
+            export PYTHONDONTWRITEBYTECODE=1
+            /usr/local/bin/python3 scripts/tz6v5-s05b2a-real-exit-native.py hot
