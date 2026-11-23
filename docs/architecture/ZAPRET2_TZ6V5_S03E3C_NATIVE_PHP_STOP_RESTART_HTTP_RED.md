@@ -20,6 +20,8 @@
 
 Это **нативный producer→PHP→HTTP→GUI ожидаемый RED**, а не реализация нового lifecycle. Не выполняется Stop/Restart реально работающей службы; callback `restart` до физической ветки не проходит. `Status --json`, `--force`, `reload`, долговечный код/stage, System Services Restart и физический rollback остаются за последующими этапами. Ошибки не копируются в GUI как сырые строки.
 
-**Текущий статус: exact-head native CI PENDING, PR только draft. Full S03 NO-GO; S04–S20 не начинать.** Ни публичного `os-zapret2-restyle-0.6.5_141.pkg`, ни изменений на рабочей OPNsense.
+**Реальный RED PASS, первоначальный источник:** [installed OPNsense Chromium #45142099971](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45142099971): отдельно EN и RU — Stop HTTP 200, Restart HTTP 200, оба PHP `response` = OTHER_REDACTED, сообщение Stop GUI не появляется, original FD9 BUSY доказан и Config/IPFW/engine неизменны. Прежний WAN-only Apply/F5 и P3 EN/RU регрессии PASS. Первоначальный draft #1252 **NO-GO** из-за нарушения GH-014: коммиты `_141` до увеличения `PLUGIN_REVISION`. Исправлено без force-push чистым [PR #1253](https://github.com/Tolian82/os-zapret2-restyle/pull/1253): исходный атомарный commit уже содержит `_141`; его **exact-head CI PENDING**. Это RED исходного HTTP/GUI поведения, **не** GREEN продукта.
+
+**Текущий статус: native RED witness GO, release/merge пока NO-GO, PR только draft. Full S03 NO-GO; S04–S20 не начинать.** Ни публичного `os-zapret2-restyle-0.6.5_141.pkg`, ни изменений на рабочей OPNsense.
 
 [ТЗ_6v5](TZ_6v5.md) · [пошаговый план](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) · [старый FD9 RED](ZAPRET2_TZ6V5_S03E3B_CONFIGD_LOCKED_STOP_RESTART_RED.md) · [Issue #1225](https://github.com/Tolian82/os-zapret2-restyle/issues/1225).
