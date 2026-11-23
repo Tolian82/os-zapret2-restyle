@@ -99,7 +99,17 @@ def probe_engine(*, path: Path = ENGINE, owner: int = 0) -> str:
         return "invalid"
 
 
-def probe_config(*, path: Path = CONFIG, owner: int = 0) -> str:
+def probe_config(*, path: Path = CONFIG, owner: int | None = None) -> str:
+    # OPNsense native AppConfig.globals.owner is "wwwonly:wheel". The
+    # canonical saved config is NOT root-owned; never project an arbitrary
+    # root-only file policy onto the firmware's own Config.
+    if owner is None:
+        try:
+            owner = pwd.getpwnam("wwwonly").pw_uid
+        except (KeyError, OSError):
+            return "unknown"
+        if owner <= 0:
+            return "unknown"
     try:
         path.lstat()
     except FileNotFoundError:

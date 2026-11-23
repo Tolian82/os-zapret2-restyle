@@ -59,6 +59,12 @@ class S04BReadOnlyAdapter(unittest.TestCase):
                                stat.S_IMODE(p.stat().st_mode)) for p in (binary, config)}
             self.assertEqual(sut.probe_engine(path=binary, owner=uid), "valid")
             self.assertEqual(sut.probe_config(path=config, owner=uid), "initialized")
+            class NativeConfigAccount:
+                pw_uid = uid
+            with patch.object(sut.pwd, "getpwnam", return_value=NativeConfigAccount()):
+                self.assertEqual(sut.probe_config(path=config), "initialized")
+            with patch.object(sut.pwd, "getpwnam", side_effect=KeyError("wwwonly")):
+                self.assertEqual(sut.probe_config(path=config), "unknown")
             self.assertEqual(sut.probe_config(path=root / "missing", owner=uid), "absent")
             self.assertEqual(sut.probe_engine(path=root / "missing", owner=uid), "absent")
             self.assertEqual(before, {p.name: (p.read_bytes(), p.stat().st_mtime_ns,
