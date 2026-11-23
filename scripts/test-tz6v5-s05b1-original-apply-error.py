@@ -48,7 +48,7 @@ class NativeOriginalJournalSource(unittest.TestCase):
                     self.assertEqual(event["source"], "original-shared-apply-journal")
                     self.assertEqual(event["operation_id"], values["id"])
                     self.assertEqual(event["action"], "voice-apply" if page == "voice" else "apply")
-                    self.assertEqual(event["code"], "APPLY_ROLLBACK_FAILED" if phase == "restore-failed" else "APPLY_REQUIRES_REVIEW")
+                    self.assertEqual(event["code"], "RESTORE_FAILED" if phase == "restore-failed" else "APPLY_REQUIRES_REVIEW")
                     self.assertIsNone(event["timestamp"])
                     for name in ("generation", "exit_status", "runtime_before",
                                  "stderr_excerpt", "log_ref"):

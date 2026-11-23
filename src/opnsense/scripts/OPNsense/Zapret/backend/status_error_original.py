@@ -10,7 +10,7 @@ from __future__ import annotations
 from component_inventory import classify
 
 _CODES = {
-    "restore-failed": ("APPLY_ROLLBACK_FAILED",
+    "restore-failed": ("RESTORE_FAILED",
                        "Original Apply rollback failed; operator review required"),
     "requires-review": ("APPLY_REQUIRES_REVIEW",
                         "Original Apply requires operator review"),
