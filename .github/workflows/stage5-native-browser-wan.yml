@@ -176,6 +176,49 @@ jobs:
             cat stage5-browser-wan-ci.pub >> /root/.ssh/authorized_keys
             chmod 0600 /root/.ssh/authorized_keys
             # The QEMU guest is disposable; this key never enters the plugin.
+      - name: S03e3d registered installed configd verified actions (read-only, no dispatch)
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 - <<'PY'
+          import configparser
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          if not (sys.platform.startswith('freebsd') and os.geteuid() == 0 and
+                  os.environ.get('GITHUB_ACTIONS') == 'true' and
+                  os.environ.get('ZAPRET2_STAGE5_BROWSER_WAN') == '1'):
+              raise SystemExit('S03E3D_NATIVE_DISPOSABLE_REGISTRY_GATE_REFUSED')
+          source = Path('/usr/local/opnsense/service/conf/actions.d/actions_zapret.conf')
+          if not source.is_file() or source.is_symlink():
+              raise SystemExit('S03E3D_INSTALLED_CONFIGD_ACTION_SOURCE_MISSING')
+          conf = configparser.RawConfigParser()
+          if not conf.read(str(source)):
+              raise SystemExit('S03E3D_INSTALLED_CONFIGD_ACTION_SOURCE_INVALID')
+          base = '/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh'
+          for action in ('stop', 'restart'):
+              name = action + '_verified'
+              if (not conf.has_section(name) or
+                  conf.get(name, 'command', fallback='') !=
+                  base + ' ' + action + ' --configd-receipt' or
+                  conf.get(name, 'type', fallback='') != 'script_output'):
+                  raise SystemExit('S03E3D_INSTALLED_ACTION_SOURCE_CHANGED_' + action)
+          try:
+              result = subprocess.run(
+                  ['/usr/local/sbin/configctl', 'configd', 'actions', 'json'],
+                  check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=25)
+              actions = json.loads(result.stdout) if result.returncode == 0 else None
+          except (OSError, ValueError, subprocess.SubprocessError):
+              raise SystemExit('S03E3D_LIVE_CONFIGD_ACTION_REGISTRY_UNAVAILABLE') from None
+          if not isinstance(actions, dict) or any(
+              'zapret ' + action + '_verified' not in actions
+              for action in ('stop', 'restart')
+          ):
+              raise SystemExit('S03E3D_VERIFIED_ACTION_NOT_REGISTERED_IN_RUNNING_CONFIGD')
+          print('S03E3D_NATIVE_CONFIGD_REGISTERED_VERIFIED_ACTIONS=PASS')
+          PY
       - name: S03e3b original configd Stop and Restart FD9 BUSY RED on clean native guest
         shell: opnsense {0}
         run: |
