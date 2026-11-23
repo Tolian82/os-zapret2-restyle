@@ -3570,7 +3570,55 @@ service_with_lifecycle_lock()
         return 1
     }
 
+    # The original FD9 lock inode may be absent immediately after an install.
+    # Plain Status MUST NEVER create it just to report a physical state.
+    # Reuse the EXISTING native plain Status observer, not the Python S04
+    # JSON reader: old script Status also works when Python is unavailable.
+    # Accept only exact original STOPPED (rc1 + fixed message). Any RUNNING,
+    # failed or ambiguous observation without FD9 is INCOMPLETE (rc2);
+    # neither path is lifecycle authority. Recheck absence after observation
+    # to refuse a concurrent first original FD9 writer.
+    if [ "${1:-}" = status ] &&
+       [ ! -e "${LIFECYCLE_LOCK_FILE}" ] &&
+       [ ! -L "${LIFECYCLE_LOCK_FILE}" ]; then
+        _plain_missing_fd9_rc=2
+        _plain_missing_fd9_text=
+        if _plain_missing_fd9_text=$(shared_apply_status_service 2>/dev/null); then
+            _plain_missing_fd9_rc=0
+        else
+            _plain_missing_fd9_rc=$?
+        fi
+        if [ -e "${LIFECYCLE_LOCK_FILE}" ] ||
+           [ -L "${LIFECYCLE_LOCK_FILE}" ]; then
+            echo "zapret is in an incomplete runtime state"
+            return 2
+        fi
+        if [ "${_plain_missing_fd9_rc}" -eq 1 ] &&
+           [ "${_plain_missing_fd9_text}" = "zapret is not running" ]; then
+            echo "zapret is not running"
+            return 1
+        fi
+        echo "zapret is in an incomplete runtime state"
+        return 2
+    fi
+
     (
+        # Preserve the ONE original FD9 + BSD flock across every public
+        # lifecycle operation. A local FreeBSD original lockf(1) uses
+        # flock(2), which supports an exclusive lock on a read-only FD9.
+        # Opening 9< is strictly noncreating and nontruncating even if the
+        # lockfile disappears after the preflight. Mutators retain 9>.
+        case "${1:-}" in
+            status)
+                if [ -L "${LIFECYCLE_LOCK_FILE}" ] ||
+                   [ ! -f "${LIFECYCLE_LOCK_FILE}" ]; then
+                    echo "zapret is in an incomplete runtime state"
+                    return 2
+                fi
+                exec 9<"${LIFECYCLE_LOCK_FILE}"
+                ;;
+            *) exec 9>"${LIFECYCLE_LOCK_FILE}" ;;
+        esac
         if ! "${LOCKF_BIN}" -s -t "${_service_lock_timeout}" 9; then
             return 75
         fi
@@ -3803,7 +3851,7 @@ service_with_lifecycle_lock()
             return $?
         fi
         return "$_service_dispatch_rc"
-    ) 9>"${LIFECYCLE_LOCK_FILE}"
+    )
 }
 
 case "${1:-}" in

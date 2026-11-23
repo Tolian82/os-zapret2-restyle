@@ -189,15 +189,15 @@ def native_cli() -> dict:
                   not lock.exists(),
                   "S03E_UNSUPPORTED_USAGE_RED_CHANGED_" + "_".join(args))
             assert_foreign_same(before_config, before_ipfw)
-        # Status is genuinely read-only for Config and kernel but still
-        # OPENS/TRUNCATES the private original FD9 lock file in old code.
+        # S05c1 plain Status is read-only also for the PRIVATE original FD9
+        # lock path: old stdout/rc remain, but no file is created or truncated.
         plain = invoke(["status"], env)
         check(plain.returncode == 1 and
-              "zapret is not running" in plain.stdout and lock.exists(),
+              "zapret is not running" in plain.stdout and not lock.exists(),
               "S03E_PLAIN_COLD_STATUS_BASELINE_CHANGED")
         # S05a has intentionally turned the historic S03e JSON RED into
         # a bounded GREEN. Unsupported options are now rejected BEFORE FD9;
-        # unlike new JSON the old *plain* path remains unchanged.
+        # the old plain stdout/rc remain; S05c1 forbids its FD9 write.
         status_invalid = (
             ("--help",), ("--force",), ("--json", "--json"),
             ("--unknown",),

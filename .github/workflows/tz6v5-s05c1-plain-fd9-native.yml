@@ -1,0 +1,104 @@
+name: TZ6v5 S05c1 original plain Status FD9 strict native no-write
+
+on:
+  pull_request:
+    paths:
+      - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+      - scripts/tz6v5-s05c1-plain-fd9-native.py
+      - scripts/test-tz6v5-s05c1-fd9-shell.sh
+      - .github/workflows/tz6v5-s05c1-plain-fd9-native.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s05c1-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  cold:
+    name: S05c1 plain status untouched FD9 cold plugin-only and engine-no-config
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Fail-closed source gate
+        run: |
+          python3.13 -m py_compile scripts/tz6v5-s05c1-plain-fd9-native.py
+          python3.13 scripts/tz6v5-s05c1-plain-fd9-native.py --self-test
+          sh scripts/test-tz6v5-s05c1-fd9-shell.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+      - name: Genuine plain Status on disposable cold OPNsense 26.7
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1
+            export ZAPRET2_S04C_DISPOSABLE_NATIVE=1
+            export ZAPRET2_S05A_DISPOSABLE_NATIVE=1
+            export ZAPRET2_S05C1_DISPOSABLE_NATIVE=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="$ZAPRET2_NATIVE_PROJECT_SHA"
+            export PYTHONDONTWRITEBYTECODE=1
+            /usr/local/bin/python3 scripts/tz6v5-s05c1-plain-fd9-native.py cold
+
+  hot:
+    name: S05c1 plain Status real RUNNING, busy original FD9 and foreign IPFW
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Fail-closed source gate
+        run: |
+          python3.13 -m py_compile scripts/tz6v5-s05c1-plain-fd9-native.py
+          python3.13 scripts/tz6v5-s05c1-plain-fd9-native.py --self-test
+          sh scripts/test-tz6v5-s05c1-fd9-shell.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+      - name: Genuine plain Status on disposable hot OPNsense 26.7
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1
+            export ZAPRET2_S04C_DISPOSABLE_NATIVE=1
+            export ZAPRET2_S05A_DISPOSABLE_NATIVE=1
+            export ZAPRET2_S05C1_DISPOSABLE_NATIVE=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="$ZAPRET2_NATIVE_PROJECT_SHA"
+            export PYTHONDONTWRITEBYTECODE=1
+            /usr/local/bin/python3 scripts/tz6v5-s05c1-plain-fd9-native.py hot
