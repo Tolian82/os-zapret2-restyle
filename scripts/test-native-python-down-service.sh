@@ -22,6 +22,11 @@ wan_first_service() { return 0; }
 mkdir -p "${TMP}/active"
 ACTIVE_DIR="${TMP}/active"
 LIFECYCLE_LOCK_FILE="${TMP}/original-fd9.lock"
+# A physically RUNNING original owner has ALREADY been established through
+# the original mutating FD9 lifecycle. The Python-down Status test is NOT
+# first-install/missing-FD9; S05c1 separately proves no-create on that path.
+# Materialize only this fixture's own original FD9 BEFORE observing RUNNING.
+: > "${LIFECYCLE_LOCK_FILE}"
 LOG="${TMP}/events"
 STATE="${TMP}/state"
 OUT="${TMP}/stdout"
