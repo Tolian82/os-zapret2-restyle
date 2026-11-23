@@ -1,4 +1,12 @@
-## 23.11.2026 — CURRENT TZ6v5 S05b2b2 original early-start readiness receipt candidate
+## 23.11.2026 — CURRENT TZ6v5 S05c1 original plain Status FD9 no-write witness
+
+**Source identity:** candidate `v0.6.5_160`, from accepted `main v0.6.5_159 85167a3d` after merged [PR #1275](https://github.com/Tolian82/os-zapret2-restyle/pull/1275), 14/14 exact-head workflow PASS, main-push CI and Chromium RU/EN PASS. **NOT published or installed**. This scoped candidate adds an installed physical native test of the existing plain `zapret_service.sh status`, distinct from already accepted read-only `status --json`. Original `service_with_lifecycle_lock` currently opens FD9 via `9>"${LIFECYCLE_LOCK_FILE}"`, a truncating shell redirection; preserve original lock ownership, stdout and return codes. Check genuine cold plugin-only, engine-no-config, true RUNNING, BUSY FD9 and FOREIGN IPFW states with full before/after snapshots. **Do not change the product code until an observed RED isolates the FD9 side effect**; testing may fail intentionally as evidence. Opening a missing original FD9 lockfile is a separate possible creation write; never label it read-only without physical proof.
+
+**NEXT:** inspect exact-head native RED classes, implement only a safe non-truncating FD9 solution if real FreeBSD flock/owner and first-install semantics are preserved. Repeat full old-CLI/no-write/Busy and unrelated lifecycle/upgrade exact-head CI. Full S05 remains NO-GO; S06+ blocked. No owner router action or public package.
+
+---
+
+## 23.11.2026 — HISTORICAL TZ6v5 S05b2b2 original early-start readiness receipt candidate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=159`, `v0.6.5_159`; prospective `os-zapret2-restyle-0.6.5_159.pkg` **NOT published or installed**. Base accepted `main _158 332c4080`; [S05b2b1 PR #1274](https://github.com/Tolian82/os-zapret2-restyle/pull/1274) merged after all exact-head CI/native checks and main push CI PASS. This candidate connects *only the two real original launcher failed-readiness observations* to the existing held-FD9 SharedApply `requires-review` journal. It records bounded `ENGINE_START_UNVERIFIED` and a whitelisted cause, NOT `ENGINE_EXIT_EARLY`: no live PID can also be a missing/stale PIDfile, and the current daemon(8) wrapper does not return native child wait status. Event `exit_status=null`, no raw log/argv/IP/token. Existing S04 INCOMPLETE+stale and two identical original journal reads are required for read-only JSON last-error projection. Post-ready `ENGINE_EXIT_AFTER_READY` remains separate and unchanged. Ordinary failure / found WAL / successful run may not create the event. Original rollback and IPFW scope are unchanged.
 

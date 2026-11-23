@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_159 S05b2b2 early readiness cause (source candidate)
+# 23.11.2026 — CURRENT v0.6.5_160 S05c1 plain FD9 Status physical no-write gate
+
+**Identity:** `v0.6.5_160` prospective source-only candidate, base accepted `main _159 85167a3d` with exact-head original early/late engine diagnostics and main push CI/Chromium PASS. New disposable OPNsense 26.7 native cold/hot status source witness asserts full no-write Config/pkg/journal/PID/IPFW/process, exact old plain stdout/rc, original FD9 BUSY serialization, and no foreign cleanup. `status --json` unchanged; original shell `9>` open suspected truncation. Native baseline RED/PASS TBD, do not skip physical proof or claim GO. Full S05 NO-GO, S06+ blocked, no owner device changes or public pkg.
+
+---
+
+# 23.11.2026 — HISTORICAL v0.6.5_159 S05b2b2 early readiness cause (source candidate)
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=159`, `v0.6.5_159`, prospective `os-zapret2-restyle-0.6.5_159.pkg` **NOT published or installed**. From accepted `main _158 332c4080` / merged [#1274](https://github.com/Tolian82/os-zapret2-restyle/pull/1274) (source/native/main CI PASS). First real launcher missing-live-PID or readiness-loss error is preserved across original rollback in shell, then recorded only by the original inherited FD9 writer in the SAME `requires-review` journal with a strict safe `ENGINE_START_UNVERIFIED` cause. `exit_status=null`; neither process exit nor signal is inferred. Read-only S05 Status projects only for original S04 `runtime=INCOMPLETE, manifest=stale`, with two stable journal reads. Other status states, previous post-ready event, found WAL, foreign IPFW and Config are unchanged. Source S0/exact-head and true disposable OPNsense early-fault proof pending. [S05 tracker #1269](https://github.com/Tolian82/os-zapret2-restyle/issues/1269) OPEN; complete S05 NO-GO and S06+ blocked. No owner device action.
 
