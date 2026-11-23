@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_154 formal S04 physical GO; S05 next
+# 23.11.2026 — CURRENT v0.6.5_155 S05a read-only JSON Status source candidate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=155`, `v0.6.5_155`, prospective source-only `os-zapret2-restyle-0.6.5_155.pkg` **NOT published/installable**. Base merged `main _154 67133c88`. [S05a Status model](architecture/ZAPRET2_TZ6V5_S05A_READONLY_JSON_STATUS.md): existing `status` routing unchanged; new `status --json` reads S04 original native owner/Config/pkg/ELF facts without FD9 or writes and fails closed on uncertain status. No claim of real last error until original producer receipt exists. **S05 NO-GO until native/no-write and real diagnostics; S06+ blocked**, related #1223/#1224/#1225 OPEN. No owner device action. CI pending.
+
+---
+
+# 23.11.2026 — HISTORICAL v0.6.5_154 formal S04 physical GO; S05 next
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=154`, `v0.6.5_154`, prospective documentation-only `os-zapret2-restyle-0.6.5_154.pkg` **NOT published/installable**. Previous merged `main _153 6a71e10e`. [S04 formal physical GO](architecture/ZAPRET2_TZ6V5_S04_NATIVE_INVENTORY_GO.md) closes S04 on real [cold/hot OPNsense native #45215394069](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45215394069): mandatory five states + healthy RUNNING, Config/pkgdb/journal/seal/epoch/PID/IPFW/file-tree no-write PASS, exact-tested head `7f4c6a4f`; [central CI #45215393926](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45215393926) and all other gates PASS. **S05 authorized next, but not yet started/implemented; overall lifecycle product NO-GO**, original #1223/#1224/#1225 OPEN. No second FD9/writer, no owner-device or public package action. Docs-only CI pending.
 

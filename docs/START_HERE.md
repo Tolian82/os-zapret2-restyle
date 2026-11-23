@@ -1,4 +1,10 @@
-## 23.11.2026 — CURRENT TZ6v5 S04 complete native GO → ordered S05 entry
+## 23.11.2026 — CURRENT TZ6v5 S05a bounded read-only JSON Status candidate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=155`, `v0.6.5_155`; prospective CI-only `os-zapret2-restyle-0.6.5_155.pkg` **NOT published or installed on operator device**. Base merged `main _154 67133c88` with [formal S04 native GO](architecture/ZAPRET2_TZ6V5_S04_NATIVE_INVENTORY_GO.md). [S05a JSON Status boundary](architecture/ZAPRET2_TZ6V5_S05A_READONLY_JSON_STATUS.md) adds strict `status --json` using S04 original read-only facts; the legacy plain `status` remains byte-for-byte equivalent in routing. No second FD9, Config writer, PID matcher, IPFW or service action. **S05 partial candidate only**, original event producers, bounded diagnostic envelope, RU/EN lifecycle error consumers and exact native no-write evidence pending; overall unified lifecycle NO-GO. #1223/#1224/#1225 OPEN. CI pending; no public package.
+
+---
+
+## 23.11.2026 — HISTORICAL TZ6v5 S04 complete native GO → ordered S05 entry
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=154`, `v0.6.5_154`; prospective documentation-only `os-zapret2-restyle-0.6.5_154.pkg` **NOT published or installed on operator device**. Base merged `main _153 6a71e10e` after [S04c PR #1266](https://github.com/Tolian82/os-zapret2-restyle/pull/1266). [Formal S04 native GO](architecture/ZAPRET2_TZ6V5_S04_NATIVE_INVENTORY_GO.md): **five real physical component states, one healthy RUNNING control and no-write witnesses all PASS**, exact tested head `7f4c6a4f`; [native #45215394069](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45215394069) + [central CI #45215393926](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45215393926) and all other gates SUCCESS. Original FD9/lifecycle untouched by inventory; no owner device action. **S05 is the next ordered step, not yet implemented**. #1223/#1224/#1225 stay OPEN; actual unified lifecycle product remains NO-GO. Doc-only exact-head CI pending.
 
