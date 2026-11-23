@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_156 S05b1 original Apply error read-only source candidate
+# 23.11.2026 — CURRENT v0.6.5_156 S05b2a native RED, _157 unsafe to merge
+
+**Accepted source:** `VERSION=0.6.5`, `PLUGIN_REVISION=156`, `v0.6.5_156`; only prospective, unpublished `os-zapret2-restyle-0.6.5_156.pkg`; `main ddfa341b` S05b1 merged. [Native S05b2a physical RED](architecture/ZAPRET2_TZ6V5_S05B2A_NATIVE_RED.md) shows real original supervisor late-exit does NOT reach a qualified STOPPED/diagnostic receipt, runtime is `FOREIGN_OR_UNVERIFIED` rc2, later PIDfiles absent and manually repeated original FD9 callback rc69. Root cause of first callback unproven: original PID/birth/epoch cannot be bypassed, no unscoped IPFW cleaning. [Issue #1272](https://github.com/Tolian82/os-zapret2-restyle/issues/1272) OPEN and [Draft PR #1271](https://github.com/Tolian82/os-zapret2-restyle/pull/1271) source-only candidate _157 NO-GO. Operator router, release and Config untouched. S05/S06+ blocked.
+
+---
+
+# 23.11.2026 — HISTORICAL v0.6.5_156 S05b1 original Apply error read-only source candidate
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=156`, `v0.6.5_156`, prospective `os-zapret2-restyle-0.6.5_156.pkg` (CI-only, NOT published); based on accepted S05a `main _155 8be9ca9e`. [S05b1 documented boundary](architecture/ZAPRET2_TZ6V5_S05B1_ORIGINAL_APPLY_ERROR.md) projects only genuine `restore-failed/requires-review` from existing original SharedApply durable journal when native S04 reads stale+INCOMPLETE; no second writer, FD9 or invented engine error/exit status. Full native physical negative errors, GUI RU/EN and old plain FD9 no-write **not yet accepted**; S05 NO-GO, later S06–S20 blocked. No public package / owner device action.
 

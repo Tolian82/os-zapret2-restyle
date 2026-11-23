@@ -1,4 +1,10 @@
-## 23.11.2026 — CURRENT TZ6v5 S05b1 original Apply error read-only source candidate
+## 23.11.2026 — CURRENT TZ6v5 S05b2a physical RED, source main remains accepted _156
+
+**Current source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=156`, `v0.6.5_156`, prospective `os-zapret2-restyle-0.6.5_156.pkg` **NOT published/installed on operator appliance**. The accepted `main ddfa341b` contains S05b1 only. [S05b2a real OPNsense RED](architecture/ZAPRET2_TZ6V5_S05B2A_NATIVE_RED.md) and [blocker #1272](https://github.com/Tolian82/os-zapret2-restyle/issues/1272): genuine post-ready engine exit leaves original Common owner `FOREIGN_OR_UNVERIFIED`/rc2, no causal durable event; both engine/monitor PIDfiles absent at later observation and a later manually repeated FD9 callback refuses rc69. The exact cause of the **first** automatic callback is still unknown; never silently remove original PID/foreign IPFW guards. [Draft #1271](https://github.com/Tolian82/os-zapret2-restyle/pull/1271) `_157` is **unmerged/NO-GO**. No S05 GO; S06+ blocked.
+
+---
+
+## 23.11.2026 — HISTORICAL TZ6v5 S05b1 original Apply error read-only source candidate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=156`, `v0.6.5_156`; prospective CI-only `os-zapret2-restyle-0.6.5_156.pkg` **NOT published/installed on operator device**. Base merged `main _155 8be9ca9e` after S05a native/exact-head SUCCESS. [S05b1 source contract](architecture/ZAPRET2_TZ6V5_S05B1_ORIGINAL_APPLY_ERROR.md): read existing original root-owned Apply journal `restore-failed/requires-review` only when S04 reports stale+INCOMPLETE; output bounded fixed code/action/operation ID, never raw Config/domain/IP/argv or invented engine rc. S05a physical Status/rc preserved; diagnostic absent remains unknown. **S05b1 candidate only, full S05 NO-GO; S06+ blocked.** #1269; original #1223/#1224/#1225 open.
 
