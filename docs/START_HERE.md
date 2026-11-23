@@ -1,3 +1,15 @@
+## 23 ноября 2026 — CURRENT: ТЗ_6v5 S03c2 authenticated native G05→G03→G08 candidate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=135`, `v0.6.5_135`, base merged `main v0.6.5_134 09a8947d`, branch `feat/tz6v5-s03c2-auth-native-prestart`. **No published `os-zapret2-restyle-0.6.5_135.pkg`;** the native test may temporarily BUILD/INSTALL this exact package **inside a disposable CI guest only** (official Mk + SHA). Owner `_117.pkg` last installed and untouched.
+
+**S03c1 merged and PASS:** [PR #1243](https://github.com/Tolian82/os-zapret2-restyle/pull/1243), genuine native Lab launcher 7/7 WAN/engine typed early refusals, but injected WAN boundary. **S03c2** now [authentic WAN-only Save and never-started Standard/Extended Lab native witness](architecture/ZAPRET2_TZ6V5_S03C2_AUTH_NATIVE_PRESTART.md): same G05 OPNsense Config/HTTPS via original FD9 → actual G03 configd upstream release installed (but **skip G03 standalone five-list test which starts ordinary Zapret2**) → G08 two real Job, stage90+99 STOPPED restoration, Config/IPFW foreign integrity and empty YouTube/User/Strategy. One guest; exact-head CI PENDING; no production `src/` code changed.
+
+**First exact-head S03c2 disposable native attempt:** [run #45108567546](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45108567546), `2ea72033`: genuine G05 WAN Save/reinstall PASS; first stock G03 upstream setup `G03_SETUP_WORKER_REPORTED_FAILURE`, no Lab jobs yet. New candidate adds existing bounded redacted G03 diagnostics; native CI result PENDING. This is NOT Stage90/99 acceptance.
+
+**S03 overall NO-GO:** pending force/PID/FD9, all-action CLI/Help/Reload & lifecycle RU/EN, #1224 RUNNING Lab restore, #1223 Auto Found ingress, native V5-17. **S04–S20 NOT RUN; no owner actions.**
+
+---
+
 ## 23 ноября 2026 — CURRENT: ТЗ_6v5 S03c1 native Lab WAN/engine-first refusal
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=134`, `v0.6.5_134`, branch `feat/tz6v5-s03c-prestart-lab-refusal-native`, base merged `main v0.6.5_133` (`72027e4b`). Prospective ONLY `os-zapret2-restyle-0.6.5_134.pkg` — **NOT BUILT / NOT PUBLISHED**. Last owner-installed `_117.pkg`, no physical appliance actions.

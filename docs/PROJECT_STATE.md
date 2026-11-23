@@ -1,3 +1,15 @@
+# 23 Nov 2026 — CURRENT: TZ6v5 S03c2 native authenticated pre-first-Start G05→G03→G08
+
+Source identity `VERSION=0.6.5`, `PLUGIN_REVISION=135`, `v0.6.5_135`, candidate branch `feat/tz6v5-s03c2-auth-native-prestart`, from merged `main 09a8947d` / `_134`. The official-Mk `os-zapret2-restyle-0.6.5_135.pkg` is **built only ephemerally by a disposable OPNsense CI runner for genuine installed-native tests**, not published as a release, not installed on owner OPNsense. Owner last-confirmed `_117.pkg` unchanged.
+
+[S03c1 #1243](https://github.com/Tolian82/os-zapret2-restyle/pull/1243) exact-head **7/7 native early refusals PASS** and merged. **[S03c2](architecture/ZAPRET2_TZ6V5_S03C2_AUTH_NATIVE_PRESTART.md) pending native CI:** identified test-composition defect: historical `g08.execute()` called `g03.main()` which now executes a five-list ordinary `Start/Restart` after installing upstream, invalidating G08's **before FIRST Start** claim. S03c2 calls genuine `g03.dispatch_and_poll()` twice instead: original configd upstream install/reinstall, engine exact tag, same stored Config/native IPFW, no ordinary PID/FD9/process, and then two actual cookie/CSRF Lab jobs Standard RU/Extended EN with Stage90 and Stage99 PASS, STOPPED→STOPPED. G03 standalone untouched, only one disposable native guest; product `src/` untouched.
+
+**First S03c2 native attempt [#45108567546](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45108567546) on `2ea72033`: G05 authentic HTTPS WAN-only + empty fields + same-archive reinstall PASS; stock G03 first `setup_install v1.0.7` REFUSED (`G03_SETUP_WORKER_REPORTED_FAILURE`). No Lab Job or Stage90/99 verdict. Root cause not yet proven; G08 now reuses existing G03 bounded redacted setup log/state witness for next exact-head rerun, test-only.**
+
+**CI exact-head PENDING**; a prior G08 PASS on historical `_26` does not establish _135 PASS. Neither the new unified V5 launcher nor S04 is implemented. Remaining whole S03 gates: force/FD9/PID, lifecycle RU/EN, action Help/Reload semantics/strict options, native Lab RUNNING restore and Auto Found #1223; **S03 NO-GO; S04–S20 NOT RUN.**
+
+---
+
 # 23 Nov 2026 — CURRENT TZ6v5 S03c1 native Lab pre-Job refusal candidate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=134`, `v0.6.5_134` on `feat/tz6v5-s03c-prestart-lab-refusal-native`, from accepted `main _133 72027e4b`. Name `os-zapret2-restyle-0.6.5_134.pkg` **prospective only, NOT BUILT/PUBLISHED**; owner last installed `_117.pkg` untouched.
