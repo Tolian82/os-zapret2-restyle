@@ -20,6 +20,7 @@ HERE = Path(__file__).resolve().parent
 CONFIG = Path("/conf/config.xml")
 ENGINE = Path("/usr/local/etc/zapret2/binaries/my/dvtws2")
 INSTALLED = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/backend/component_inventory_opnsense.py")
+SOURCE = HERE.parent / "src/opnsense/scripts/OPNsense/Zapret/backend/component_inventory_opnsense.py"
 ROOTS = tuple(map(Path, ("/var/db/zapret2", "/var/db/pkg",
                          "/usr/local/etc/zapret2/runtime-v2", "/var/db/zapret2-restyle")))
 LIMIT = 8000
@@ -131,9 +132,16 @@ def snapshot():
     }
 
 
-def witness(label, expected):
+def witness(label, expected, *, preinstall=False):
     before = snapshot()
-    p = run(["/usr/local/bin/python3", str(INSTALLED)], timeout=90)
+    # In a genuinely empty installation there can be no installed CLI.
+    # Execute the exact checked-out source adapter against physical native
+    # pkg/Config/engine/journal; after installation prove byte equivalence.
+    reader = SOURCE if preinstall else INSTALLED
+    need(reader.is_file() and not reader.is_symlink(), "S04C_READER_SOURCE_MISSING")
+    if preinstall:
+        need(not INSTALLED.exists(), "S04C_FRESH_READER_WAS_INSTALLED")
+    p = run(["/usr/local/bin/python3", str(reader)], timeout=90)
     after = snapshot()
     need(before == after, "S04C_INVENTORY_WROTE_STATE_" + label)
     need(p.returncode == 0, "S04C_INVENTORY_REFUSED_" + label)
@@ -186,6 +194,8 @@ def install(clean):
     clean.verify_installed_files(archive, manifest)
     need(INSTALLED.is_file() and not INSTALLED.is_symlink(),
          "S04C_INSTALLED_ADAPTER_MISSING")
+    need(INSTALLED.read_bytes() == SOURCE.read_bytes(),
+         "S04C_INSTALLED_READER_SOURCE_BYTES_DIFFER")
 
 
 def upstream():
@@ -246,7 +256,7 @@ def cold():
          not ENGINE.exists(), "S04C_NOT_CLEAN_INITIAL_GUEST")
     rows = [witness("nothing", {"plugin": "absent", "engine": "absent",
              "config": "absent", "manifest": "missing",
-             "classification": "PLUGIN_NOT_INSTALLED"})]
+             "classification": "PLUGIN_NOT_INSTALLED"}, preinstall=True)]
     install(clean)
     need(not ENGINE.exists(), "S04C_PLUGIN_ONLY_HAS_ENGINE")
     rows.append(witness("plugin-no-engine", {"plugin": "installed",
