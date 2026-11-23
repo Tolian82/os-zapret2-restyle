@@ -87,6 +87,108 @@ def qualified_postboot_generation(protected, boot_id):
     return schema, learning, True
 
 
+
+def source_allowed_retirement_labels():
+    """Read-only AST literal check; no native module import or side effect."""
+    import ast
+    source = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_minute.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    wanted = ("_SAFE_LEARNING_RETIRE_GUARDS", "_SAFE_ORIGINAL_LOCK_GUARDS")
+    found = {}
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id in wanted
+                and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Name)
+                and node.value.func.id == "frozenset"
+                and len(node.value.args) == 1 and not node.value.keywords):
+            items = ast.literal_eval(node.value.args[0])
+            need(type(items) is tuple and 0 < len(items) < 128 and
+                 all(type(v) is str and re.fullmatch("[a-z0-9_]{1,80}", v)
+                     for v in items), "PUBLISHED107_UNSAFE_NATIVE_GUARD_LIST")
+            found[node.targets[0].id] = frozenset(items)
+    need(set(found) == set(wanted), "PUBLISHED107_NATIVE_GUARD_LIST_MISSING")
+    return found
+
+
+def safe_retire_categories(stderr):
+    """Only source-declared literal guard labels; no raw stderr logging."""
+    allowed = source_allowed_retirement_labels()
+    names = {
+        "learning_guard": ("auto-detect-retire-guard",
+                           allowed["_SAFE_LEARNING_RETIRE_GUARDS"] | {"unknown"}),
+        "original_guard": ("auto-detect-retire-original-guard",
+                           allowed["_SAFE_ORIGINAL_LOCK_GUARDS"] | {"unknown"}),
+        "failure_class": ("auto-detect-retire-refused",
+                          {"MinuteRefused", "OriginalLockRefused",
+                           "GenerationRefused", "ReceiptRefused",
+                           "OSError", "ValueError", "RuntimeError", "KeyError"}),
+    }
+    answer = {}
+    for key, (prefix, permitted) in names.items():
+        matches = re.findall(r"(?m)^" + re.escape(prefix)
+                             + r"=([a-zA-Z0-9_]{1,80})$", stderr[-8192:])
+        answer[key] = matches[0] if len(matches) == 1 and matches[0] in permitted else "unknown"
+    return answer
+
+
+def boot_if_stop_verified(stopped, retired, service, *, runner=run):
+    """Guard the real Boot dispatch; no replacement on uncertain Stop."""
+    if stopped.returncode == 0 and retired is True:
+        return runner([str(service), "start"], timeout=260)
+    status = runner([str(service), "status"], timeout=40)
+    report = {
+        "stop_rc": stopped.returncode,
+        "retired_source_verified": retired is True,
+        "post_stop_status_rc": status.returncode,
+        "boot_attempted": False,
+        **safe_retire_categories(stopped.stderr),
+    }
+    print("NATIVE_PUBLISHED107_SCHEMA3_STOP_REFUSAL="
+          + json.dumps(report, sort_keys=True), flush=True)
+    raise Refused("PUBLISHED107_UNVERIFIED_AUTO_STOP_NO_BOOT")
+
+
+def self_test():
+    from types import SimpleNamespace
+    valid = safe_retire_categories(
+        "auto-detect-retire-guard=stopped_learning_source_fd_busy\n"
+        "auto-detect-retire-original-guard=original_config_child_rc69\n"
+        "auto-detect-retire-refused=OriginalLockRefused\n")
+    need(valid == {
+        "learning_guard": "stopped_learning_source_fd_busy",
+        "original_guard": "original_config_child_rc69",
+        "failure_class": "OriginalLockRefused",
+    }, "PUBLISHED107_SAFE_GUARD_PARSER_FAILED")
+    bad = safe_retire_categories(
+        "auto-detect-retire-guard=private_domain\n"
+        "auto-detect-retire-original-guard=private_ip\n"
+        "auto-detect-retire-refused=UnsafeError\n")
+    need(set(bad.values()) == {"unknown"},
+         "PUBLISHED107_UNTRUSTED_STDERR_PASSED")
+    for rc, physical in ((70, False), (0, False), (69, True)):
+        called = []
+        def fake(argv, timeout):
+            called.append(argv[1])
+            return SimpleNamespace(returncode=1, stderr="")
+        try:
+            boot_if_stop_verified(SimpleNamespace(returncode=rc, stderr="secret"),
+                                  physical, "/test-only", runner=fake)
+        except Refused:
+            need(called == ["status"], "PUBLISHED107_BOOT_AFTER_BAD_STOP")
+        else:
+            raise Refused("PUBLISHED107_BAD_STOP_ACCEPTED")
+    calls = []
+    def good(argv, timeout):
+        calls.append(argv[1])
+        return SimpleNamespace(returncode=0, stderr="")
+    boot_if_stop_verified(SimpleNamespace(returncode=0, stderr=""),
+                          True, "/test-only", runner=good)
+    need(calls == ["start"], "PUBLISHED107_GOOD_STOP_NOT_BOOTED")
+    print("PUBLISHED107_NATIVE_STOP_GUARD_SELFTEST=PASS")
+
+
 def main():
     gate()
     protected = load("stage5-native-protected-update.py",
@@ -232,7 +334,8 @@ def main():
     stopped = run([str(service), "stop"], timeout=240)
     physical = protected.verified_old_auto_retirement(
         new_id, successor_schema, successor_learning)
-    booted = run([str(service), "start"], timeout=260)
+    # An uncertain Stop never authorizes Boot even on a disposable guest.
+    booted = boot_if_stop_verified(stopped, physical, service)
     bootstate = json.loads(journal.read_bytes())
     boot_id = bootstate.get("detail", {}).get("id", "")
     boot_status = run([str(service), "status"]).returncode
@@ -274,6 +377,9 @@ def main():
 
 if __name__ == "__main__":
     try:
+        if sys.argv[1:] == ["--self-test"]:
+            self_test()
+            sys.exit(0)
         if sys.argv[1:] != []:
             raise Refused("INVALID_NATIVE_TEST_ARGUMENTS")
         main()

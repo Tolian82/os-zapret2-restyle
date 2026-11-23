@@ -40,6 +40,7 @@ jobs:
         run: |
           set -eu
           python3.13 -m py_compile scripts/stage5-native-published107-schema3-upgrade.py
+          python3.13 scripts/stage5-native-published107-schema3-upgrade.py --self-test
           python3.13 -m py_compile scripts/stage5-native-protected-update.py
           if python3.13 scripts/stage5-native-published107-schema3-upgrade.py > /dev/null 2>&1; then
             echo "::error::Published_107 acceptance executed outside disposable FreeBSD"

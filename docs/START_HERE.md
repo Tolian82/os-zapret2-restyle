@@ -1,4 +1,10 @@
-## 23.11.2026 — CURRENT TZ6v5 S03e3f native Legacy positive HTTP Stop/Restart
+## 23.11.2026 — CURRENT TZ6v5 S03e3g Auto verified Stop before Boot
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=145`, `v0.6.5_145`; prospective CI-only `os-zapret2-restyle-0.6.5_145.pkg` (not published or operator-installable). Base main `v0.6.5_144 21602659`. Common native G07 positive PASS [#45160845481](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45160845481), Legacy native positive PASS [#45171380056](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45171380056), PR #1255/#1256 merged. [S03e3g](architecture/ZAPRET2_TZ6V5_S03E3G_AUTO_STOP_NO_BOOT.md) repairs only a published-_107 native test: failed Stop or incomplete retirement MUST NOT issue Boot; only source-defined safe diagnostic categories are printed. Native CI PENDING; Auto #1223 unresolved, Lab #1224 unresolved; S03 full NO-GO, S04 blocked. No production or owner device changes.
+
+---
+
+## 23.11.2026 — HISTORICAL (merged _144) TZ6v5 S03e3f native Legacy positive HTTP Stop/Restart
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=144`, `v0.6.5_144`; source-only prospective CI `os-zapret2-restyle-0.6.5_144.pkg` (NOT published or owner-installable), based on merged `main af4999a4` (`_143`, [PR #1255](https://github.com/Tolian82/os-zapret2-restyle/pull/1255)). Common real native G07 **PASS** on exact `c43e9173` ([#45160845481](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45160845481)); [Legacy S03e3f](architecture/ZAPRET2_TZ6V5_S03E3F_LEGACY_POSITIVE_HTTP.md) tests unmocked installed PHP Stop/Restart against a true RUNNING Legacy owner with no Common journal and physical PID/IPFW/status attestation on separate disposable OPNsense. **Legacy exact-head CI PENDING.** Auto issue #1223 unresolved; full S03 NO-GO, S04–S20 not begun; owner last-confirmed installed `_117` untouched.
 

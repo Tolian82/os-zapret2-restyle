@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_144 S03e3f true Legacy positive HTTP lifecycle
+# 23.11.2026 — CURRENT v0.6.5_145 S03e3g Auto Stop no-Boot fixture
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=145`, `v0.6.5_145`; prospective source-only CI `os-zapret2-restyle-0.6.5_145.pkg` (not public or operator-installable), base main `_144 21602659`. Common original FD9 genuine HTTPS Stop/Restart accepted [#45160845481](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45160845481); separate no-common-journal Legacy native accepted [#45171380056](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45171380056). [S03e3g test-only Auto Stop guard](architecture/ZAPRET2_TZ6V5_S03E3G_AUTO_STOP_NO_BOOT.md) fails closed before any Boot after incomplete original retirement and emits only bounded source-allowlisted diagnostics. Exact-head CI PENDING; Auto issue #1223 root cause not fixed, Lab #1224 OPEN, S03 overall NO-GO and S04–S20 blocked. No new production writer/FD9 behavior, no published pkg or owner actions.
+
+---
+
+# 23.11.2026 — HISTORICAL merged v0.6.5_144 S03e3f true Legacy positive HTTP lifecycle
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=144`, `v0.6.5_144`; prospective CI-only `os-zapret2-restyle-0.6.5_144.pkg` NOT public or operator-installable. Based on merged `main af4999a4` / Common-positive `_143`, whose exact-head G07 original FD9 running-Common HTTP Stop/Restart **PASS** ([#45160845481](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45160845481)). [S03e3f](architecture/ZAPRET2_TZ6V5_S03E3F_LEGACY_POSITIVE_HTTP.md) creates a separate strictly disposable native **Legacy no-common-journal** owner through existing test-only native Config::save and shipped service; checks genuine HTTP `verified` terminal receipts and physical engine/PID/own IPFW. **Legacy native result PENDING**, full S03 NO-GO; no product runtime writer change, no public pkg, no owner gateway action. Auto flakiness #1223 still OPEN; S04–S20 blocked.
 
