@@ -64,12 +64,17 @@ class EarlyOriginal(unittest.TestCase):
                 for secret in (owner["base"], owner["candidate"], "general.enabled"):
                     self.assertNotIn(secret, public)
                 self.assertNotEqual(before, got)
+                # Existing S05b2a MUST inspect the committed journal for
+                # STOPPED/valid; the early requires-review record must still
+                # produce no late-exit event (without modifying the file).
                 for runtime, manifest in (("RUNNING", "stale"),
-                                          ("STOPPED", "valid"),
                                           ("FOREIGN_OR_UNVERIFIED", "stale"),
                                           ("INCOMPLETE", "valid")):
                     self.assertIsNone(read_qualified_failure(
                         facts(runtime, manifest), reader=lambda: self.fail("unsafe journal read")))
+                self.assertIsNone(read_qualified_failure(
+                    facts("STOPPED", "valid"), reader=store.read))
+                self.assertEqual((store.root / "operation.json").read_bytes(), written)
 
     def test_stale_owner_wrong_phase_cause_and_conflict_are_no_write(self):
         with tempfile.TemporaryDirectory() as tmp:
