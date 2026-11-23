@@ -19,9 +19,12 @@ case "$#" in
         # Only original FD9's fully verified RUNNING Boot may clear its
         # own recorded failure; unknown operation and arguments refuse.
         [ "$1" = "$MOCK_BACKEND/shared_apply_operation.py" ] &&
-        [ "$2" = runtime-exit-clear ] &&
         [ "$3" = "$MOCK_EXPECTED_ID" ] || exit 1
-        printf '%s\n' original-exit-cleared >> "$MOCK_CLEAR_LOG"
+        case "$2" in
+            runtime-exit-clear) printf '%s\n' original-exit-cleared >> "$MOCK_CLEAR_LOG" ;;
+            runtime-exit-record) printf '%s\n' original-exit-recorded >> "$MOCK_CLEAR_LOG" ;;
+            *) exit 1 ;;
+        esac
         ;;
     *) exit 1 ;;
 esac
@@ -231,8 +234,8 @@ shared_apply_recover_activating_parked_service() {
 }
 shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
 shared_apply_stop_service() {
-    if [ "$#" -eq 2 ]; then
-        echo "common-failure-stop:$1:$2" >> "$LOG"
+    if [ "$#" -eq 3 ]; then
+        echo "common-failure-stop:$1:$2:$3" >> "$LOG"
     else
         echo "common-stop:$1" >> "$LOG"
     fi
@@ -284,11 +287,11 @@ check_route 70 restart
 [ "$(cat "$LOG")" = "common-stop:committed $ID voice" ] || fail "failed stop started replacement"
 STOP_OK=0
 OWNER="committed $ID voice"
-check_route 0 runtime-failure "exited" 542
-[ "$(cat "$LOG")" = "common-failure-stop:committed $ID voice:542" ] ||
+check_route 0 runtime-failure "exited" 542 777
+[ "$(tr '\n' ' ' < "$LOG")" = "common-failure-stop:committed $ID voice:542:777 original-exit-recorded " ] ||
     fail "native runtime failure fell through to legacy rule sweep"
 OWNER="activated $ID voice"
-check_route 69 runtime-failure "exited" 542
+check_route 69 runtime-failure "exited" 542 777
 [ ! -s "$LOG" ] || fail "pending native owner was torn down by callback"
 OWNER=restored
 check_route 0 start
