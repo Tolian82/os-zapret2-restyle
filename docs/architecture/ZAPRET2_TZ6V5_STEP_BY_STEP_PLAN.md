@@ -61,6 +61,10 @@
 
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
 
+**S03e2 source correction candidate (`_138`, 23.11.2026):** [owner-approved Voice removal and Strategies lifecycle RU/EN action-specific fallback](ZAPRET2_TZ6V5_S03E2_VOICE_CONTROL_RETIRED_GUI_LOCALE.md). The independent Voice `#voiceServiceControl` Start/Stop button and handler are removed, NOT given a new error-display branch; passive runtime/Voice IPFW and shared Apply remain. Real Strategies JS handler is executed under inert RU/EN Node fixtures; source-only evidence is explicitly NOT a real OPNsense GUI click. Exact-head CI PENDING; full S03 stays **NO-GO** pending native GUI proof and remaining force/Lab/Auto evidence; S04 must not start, no new `.pkg`.
+
+**S03e1 merged (`_137`, 23.11.2026):** [PR #1246](https://github.com/Tolian82/os-zapret2-restyle/pull/1246) / `main 9127b9f3`, disposable native CI [#45115119169](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45115119169) PASS for original CLI expected RED. Historical old Voice `.always` route and wrong Strategies Stop fallback are retained in pinned S03e1 evidence. Neither source proof nor S03e2's inert JS fixture is a real RU/EN GUI-click PASS.
+
 **S03e1 candidate (_137, 23.11.2026):** [real original public CLI/strict-option/Status expected RED on disposable OPNsense and separate PHP/Volt/configd lifecycle RU/EN source route](ZAPRET2_TZ6V5_S03E_PUBLIC_CLI_LOCALE_RED_NATIVE.md). Every mutation-capable option checked only while original FD9 is verified BUSY; no engine/Config/IPFW mutation. CI PENDING; neither new parser nor GUI locale native PASS; full S03 NO-GO.
 
 **S03d candidate (_136, 23.11.2026):** [genuine disposable FreeBSD old `common_process_matches/launcher_stop` controlled PID/FD9 and CLI expected RED](ZAPRET2_TZ6V5_S03D_PID_FD9_FORCE_RED_NATIVE.md); one test-owned sleep only, private FD9, no installed engine. Reproduces silent PID cleanup, exe-only matching without sealed owner/birth/epoch, missing help/parser and actual FD9 BUSY refusal. CI pending. This is NOT operator `--force` support or proven force KILL safety; full S03 still NO-GO.
