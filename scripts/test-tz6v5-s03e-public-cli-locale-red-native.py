@@ -67,7 +67,7 @@ def ipfw_snapshot() -> tuple[int, str, str]:
 
 
 def source_routes() -> dict:
-    """Read genuine PHP/Volt/configd paths. SOURCE only, no GUI/native claim."""
+    """Read updated PHP/Volt/configd routes. SOURCE only; old CLI remains RED."""
     files = {name: path.read_text(encoding="utf-8") for name, path in
              (("controller", CONTROLLER), ("general", GENERAL),
               ("voice", VOICE), ("actions", ACTION),
@@ -93,25 +93,27 @@ def source_routes() -> dict:
           "Не удалось запустить Zapret2. Проверьте WAN интерфейс." in g and
           "Zapret2 could not be started. Check the WAN interface." in g,
           "S03E_STRATEGIES_RU_EN_FALLBACK_MISSING")
-    check("$('#voiceServiceControl').on('click'" in v and
-          "url:'/api/zapret/service/' + action" in v and
-          "refreshVoiceHealthSettled().always" in v,
-          "S03E_VOICE_PRODUCER_CONSUMER_CHANGED")
-    # Restrict the observation to the actual Voice service button handler.
-    vstart = v.index("$('#voiceServiceControl').on('click'")
-    vend = v.index("$('#voiceServiceHeader').on('click'", vstart)
-    voice_handler = v[vstart:vend]
-    check(".always(function" in voice_handler and
-          ".fail(function" not in voice_handler and
-          ".done(function" not in voice_handler,
-          "S03E_VOICE_OLD_ALWAYS_HANDLER_RED_CHANGED")
+    # After S03e2 owner approval, Voice no longer advertises lifecycle
+    # Start/Stop. This updates only source observations; the original CLI
+    # RED fixture below still executes unmodified actual shell handlers.
+    check('id="voiceServiceControl"' not in v and
+          "$('#voiceServiceControl').on('click'" not in v and
+          "url:'/api/zapret/service/' + action" not in v and
+          "voiceControlPending" not in v and
+          "voiceServiceState" in v and
+          "voiceIPFWState" in v and
+          "id=\"voiceApply\"" in v,
+          "S03E_VOICE_RETIRED_BUTTON_SOURCE_CONTRACT_FAILED")
     gstart = g.index("$('#zapretServiceControl').off('click').on('click'")
     gend = g.index("$('#zapretReleaseApply').off('click').on('click'", gstart)
     gen_handler = g[gstart:gend]
     check("currentServiceState === 'started' ? 'stop' : 'start'" in gen_handler and
           ".fail(function(xhr)" in gen_handler and
-          "Не удалось запустить Zapret2." in gen_handler,
-          "S03E_STRATEGIES_STOP_FALLBACK_RED_CHANGED")
+          "Не удалось запустить Zapret2." in gen_handler and
+          "Не удалось остановить Zapret2." in gen_handler and
+          "Zapret2 could not be stopped." in gen_handler and
+          "action === 'stop'" in gen_handler,
+          "S03E_STRATEGIES_START_STOP_ACTION_FALLBACK_SOURCE_CHANGED")
     check("case \"\u0024{1:-}\" in" in s and
           "shared_apply_status_service" in s and
           "service_with_lifecycle_lock" in s,
@@ -119,9 +121,9 @@ def source_routes() -> dict:
     results = {
         "configd_start_stop_restart_paths_source": True,
         "strategies_start_stop_ajax_failure_ru_en_source": True,
-        "voice_start_stop_ajax_always_without_failure_source": True,
+        "voice_lifecycle_button_retired_source": True,
         "controller_wan_gettext_to_parent_start_source": True,
-        "strategies_stop_fallback_still_says_start_source_red": True,
+        "strategies_stop_fallback_action_specific_source": True,
         "native_gui_click_or_translation_render_not_claimed": True,
     }
     print("S03E_SOURCE_ONLY_LIFECYCLE_ROUTES=" +

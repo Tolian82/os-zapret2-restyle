@@ -1,3 +1,9 @@
+# 23.11.2026 — CURRENT v0.6.5_138 TZ6v5 S03e2 Voice button retirement and Strategies lifecycle RU/EN
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=138`, `v0.6.5_138` based on merged `main _137 9127b9f3`, S03e1 native original CLI expected RED PASS ([#1246](https://github.com/Tolian82/os-zapret2-restyle/pull/1246)). User-approved Voice Start/Stop button/handler retired; passive status, native Voice/IPFW inspection, draft saving and shared Apply retained. Strategies native handler RU/EN Start/Stop fallback corrected; Node inert listener and real Chromium with intercepted 503 (no physical service Start/Stop) are scoped to GUI consumer only. [S03e2](architecture/ZAPRET2_TZ6V5_S03E2_VOICE_CONTROL_RETIRED_GUI_LOCALE.md). Prospective `os-zapret2-restyle-0.6.5_138.pkg` is not built/published for owner; owner last-installed `_117.pkg` unchanged. Exact-head CI PENDING. Full S03 NO-GO, S04–S20 NOT RUN.
+
+---
+
 # 23.11.2026 — CURRENT v0.6.5_137 TZ6v5 S03e1 public CLI option/Status RED
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=137`, `v0.6.5_137`, prospective `os-zapret2-restyle-0.6.5_137.pkg` **NOT BUILT/PUBLISHED**. Base merged `main v0.6.5_136 aa3e29937515e6238d2014dfa092fb736a463f15`, [#1245](https://github.com/Tolian82/os-zapret2-restyle/pull/1245) real native S03d expected RED exact-head PASS. New source-only candidate `v0.6.5_137` branch `feat/tz6v5-s03e-public-cli-locale-red`: [S03e1](architecture/ZAPRET2_TZ6V5_S03E_PUBLIC_CLI_LOCALE_RED_NATIVE.md) genuine OPNsense native public CLI matrix, correct original private FD9 BUSY and untouched Config/IPFW plus explicit RU/EN PHP/Volt/configd source-level audit. Legacy defects expected, **not** implemented V5-14/16. No changes in product `src/`, no testing `_137.pkg` built/published, owner last physical `_117.pkg` untouched. Native exact-head CI **PENDING**. Whole S03 NO-GO, S04–S20 NOT RUN.
