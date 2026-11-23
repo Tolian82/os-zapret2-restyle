@@ -1,4 +1,10 @@
-## 23.11.2026 — CURRENT TZ6v5 S05a bounded read-only JSON Status candidate
+## 23.11.2026 — CURRENT TZ6v5 S05b1 original Apply error read-only source candidate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=156`, `v0.6.5_156`; prospective CI-only `os-zapret2-restyle-0.6.5_156.pkg` **NOT published/installed on operator device**. Base merged `main _155 8be9ca9e` after S05a native/exact-head SUCCESS. [S05b1 source contract](architecture/ZAPRET2_TZ6V5_S05B1_ORIGINAL_APPLY_ERROR.md): read existing original root-owned Apply journal `restore-failed/requires-review` only when S04 reports stale+INCOMPLETE; output bounded fixed code/action/operation ID, never raw Config/domain/IP/argv or invented engine rc. S05a physical Status/rc preserved; diagnostic absent remains unknown. **S05b1 candidate only, full S05 NO-GO; S06+ blocked.** #1269; original #1223/#1224/#1225 open.
+
+---
+
+## 23.11.2026 — HISTORICAL TZ6v5 S05a bounded read-only JSON Status candidate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=155`, `v0.6.5_155`; prospective CI-only `os-zapret2-restyle-0.6.5_155.pkg` **NOT published or installed on operator device**. Base merged `main _154 67133c88` with [formal S04 native GO](architecture/ZAPRET2_TZ6V5_S04_NATIVE_INVENTORY_GO.md). [S05a JSON Status boundary](architecture/ZAPRET2_TZ6V5_S05A_READONLY_JSON_STATUS.md) adds strict `status --json` using S04 original read-only facts; the legacy plain `status` remains byte-for-byte equivalent in routing. No second FD9, Config writer, PID matcher, IPFW or service action. **S05 partial candidate only**, original event producers, bounded diagnostic envelope, RU/EN lifecycle error consumers and exact native no-write evidence pending; overall unified lifecycle NO-GO. #1223/#1224/#1225 OPEN. CI pending; no public package.
 

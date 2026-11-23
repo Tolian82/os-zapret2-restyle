@@ -66,6 +66,9 @@ def project(report: dict, observed_at: str) -> dict:
         "stage": None, "operation_id": None, "generation": None,
         "exit_status": None, "stderr_excerpt": None, "log_ref": None,
         "requested": None, "effective": None,
+        # Additive S05b1 field: a NULL here means no *qualified* existing
+        # receipt, never proof that the engine experienced no failure.
+        "last_error": None, "diagnostic_state": "not-qualified",
         "authorization": "NONE",
         "physical_transition_allowed": False,
     }
@@ -76,5 +79,6 @@ def unavailable(observed_at: str) -> dict:
              "config": "unknown", "manifest": "unknown", "runtime": "UNKNOWN"}
     report = project(classify(facts), observed_at)
     report["code"] = "STATUS_UNAVAILABLE"
+    report["diagnostic_state"] = "unavailable"
     report["message"] = "Read-only status evidence unavailable"
     return report

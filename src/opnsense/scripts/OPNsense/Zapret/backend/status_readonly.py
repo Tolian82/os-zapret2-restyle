@@ -8,6 +8,7 @@ sys.dont_write_bytecode = True  # MUST precede original S04/FD9 inspector import
 
 from component_inventory_opnsense import collect
 from status_projection import project, timestamp_utc, unavailable
+from status_error_original import read_qualified_failure
 
 
 def main(argv: list[str]) -> int:
@@ -16,7 +17,23 @@ def main(argv: list[str]) -> int:
         return 64
     at = timestamp_utc()
     try:
-        report = project(collect(), at)
+        original = collect()
+        report = project(original, at)
+        # The existing original owner records genuine Apply terminal failures.
+        # The reader has no write path and never changes physical Status rc.
+        try:
+            receipt = read_qualified_failure(original)
+        except (OSError, ValueError, RuntimeError, TypeError, KeyError,
+                AttributeError):
+            # An untrusted, racing or unreadable record is NOT a last error.
+            # Preserve the S04 physical fact and expose the uncertainty.
+            report["diagnostic_state"] = "unavailable"
+        else:
+            if receipt is not None:
+                report["last_error"] = receipt
+                report["diagnostic_state"] = "qualified"
+                report["stage"] = receipt["stage"]
+                report["operation_id"] = receipt["operation_id"]
     except (OSError, ValueError, RuntimeError, TypeError, KeyError,
             AttributeError):
         report = unavailable(at)
