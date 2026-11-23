@@ -1193,6 +1193,15 @@ jobs:
       - name: S05b2b1 early launcher log redaction through production function
         run: sh scripts/test-tz6v5-s05b2b1-early-launcher-redaction.sh
 
+      - name: S05b2b2 original early engine readiness receipt and FD9 producer
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/status_error_original.py
+          python3.13 -m py_compile scripts/test-tz6v5-s05b2b2-early-journal.py
+          python3.13 scripts/test-tz6v5-s05b2b2-early-journal.py
+          sh -n scripts/test-tz6v5-s05b2b2-original-producer.sh
+          sh scripts/test-tz6v5-s05b2b2-original-producer.sh
+
       - name: Test S04c disposable physical runner source contract
         run: |
           python3.13 -m py_compile scripts/tz6v5-s04c-opnsense-native-inventory.py

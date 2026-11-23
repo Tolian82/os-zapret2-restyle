@@ -399,6 +399,25 @@ apply_runtime_restore()
     apply_runtime_clear
 }
 
+# Preserve the *first* genuine launcher failure before original rollback
+# may launch the previous owner and overwrite launcher-global observations.
+# This is only in-memory causality. Original FD9 persists its own receipt.
+apply_runtime_abort_after_launcher_failure()
+{
+    _apply_failed_stage="${LAUNCHER_FAILURE_STAGE:-}"
+    if apply_runtime_abort "$1"; then
+        # A successfully returned abort cannot erase a failed engine Start.
+        _apply_failed_rc=70
+    else
+        _apply_failed_rc=$?
+    fi
+    case "$_apply_failed_stage" in
+        no-live-pid|stability-unverified)
+            APPLY_EARLY_ENGINE_FAILURE="$_apply_failed_stage" ;;
+    esac
+    return "$_apply_failed_rc"
+}
+
 apply_runtime_abort()
 {
     _apply_reason="$1"
@@ -412,6 +431,7 @@ apply_runtime_abort()
 
 apply_runtime_activate()
 {
+    APPLY_EARLY_ENGINE_FAILURE=
     [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || return 64
     # The optional third argument is already recorded in the durable shared
     # Apply journal before this invocation. Keep normal boot/legacy callers
@@ -480,13 +500,13 @@ apply_runtime_activate()
             }
             apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
                 "$CHILD_PIDFILE" "$DVTWS_LOG" 5 "$3" "$4" || {
-                apply_runtime_abort "replacement observer failed"
+                apply_runtime_abort_after_launcher_failure "replacement observer failed"
                 return $?
             }
         else
             apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
                 "$CHILD_PIDFILE" "$DVTWS_LOG" 5 || {
-                apply_runtime_abort "replacement engine failed"
+                apply_runtime_abort_after_launcher_failure "replacement engine failed"
                 return $?
             }
         fi

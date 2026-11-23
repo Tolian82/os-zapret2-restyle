@@ -60,6 +60,27 @@ def read_qualified_failure(report: dict, *, reader=None) -> dict | None:
             "verification": "uncertain",
             "stderr_excerpt": None, "log_ref": None,
         }
+    if phase == "requires-review" and "failure" in stable:
+        # The original launcher attested only a failed readiness check;
+        # absence of a live PID cannot prove child exit or native exit rc.
+        event = stable["failure"]
+        if reader() != first:
+            raise ValueError("S05B_RACING_ORIGINAL_EARLY_JOURNAL")
+        return {
+            "source": "original-shared-apply-journal",
+            "action": "voice-apply" if stable["detail"]["page"] == "voice" else "apply",
+            "stage": "engine-start",
+            "code": event["code"],
+            "message": ("Original engine did not produce a verified live PID"
+                        if event["cause"] == "no-live-pid" else
+                        "Original engine lost verified readiness during startup"),
+            "operation_id": event["operation_id"],
+            "timestamp": event["observed_at"],
+            "generation": None, "exit_status": None,
+            "runtime_before": None, "runtime_after": "INCOMPLETE",
+            "verification": "uncertain",
+            "stderr_excerpt": None, "log_ref": None,
+        }
     if phase not in _CODES:
         return None
     if reader() != first:
