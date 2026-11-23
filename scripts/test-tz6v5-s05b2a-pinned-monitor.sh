@@ -41,4 +41,20 @@ printf '%s\n' 777 > "$SUPERVISOR_MONITOR_PIDFILE"
 mv "$SUPERVISOR_MONITOR_PIDFILE" "$ROOT/original"
 ln -s "$ROOT/original" "$SUPERVISOR_MONITOR_PIDFILE"
 if shared_apply_callback_monitor_service 542 777; then fail symlinked_pidfile_accepted; fi
+# Execute the ACTUAL script once with an extinct child PID, not merely
+# sh -n. The synchronous callback must receive its own numeric monitor PID.
+LOOP="$(dirname "$SERVICE")/supervisor_loop.sh"
+printf '%s\n' 2000000000 > "$ROOT/pinned-child.pid"
+cat > "$ROOT/callback" <<'CALLBACK'
+#!/bin/sh
+[ "$1" = runtime-failure ] && [ "$3" = 2000000000 ] || exit 1
+case "$4" in ""|*[!0-9]*) exit 1 ;; esac
+[ "$4" -gt 1 ] || exit 1
+printf '%s\n' "$4" > "$S05B2A_TEST_CALLBACK_OUTPUT"
+CALLBACK
+chmod 755 "$ROOT/callback"
+S05B2A_TEST_CALLBACK_OUTPUT="$ROOT/callback.result"
+export S05B2A_TEST_CALLBACK_OUTPUT
+/bin/sh "$LOOP" "$ROOT/pinned-child.pid" "$ROOT/callback" /usr/bin/false 2000000000 || fail callback_execution
+[ -s "$ROOT/callback.result" ] || fail no_real_shell_monitor_pid
 echo PASS_S05B2A_PINNED_MONITOR_PROOF
