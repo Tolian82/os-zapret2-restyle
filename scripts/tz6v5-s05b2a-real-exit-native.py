@@ -247,6 +247,28 @@ def real_fault():
     s04.need(restarted.returncode == 0, "S05B2_ORIGINAL_VERIFIED_RESTART_FAILED")
     s04.need("failure" not in original_record(),
              "S05B2_OLD_FAILURE_SURVIVED_VERIFIED_RESTART")
+    # Distinguish ongoing native restart/configd asynchronous writes from
+    # a truly read-only JSON Status. Both checks are read-only physical S04
+    # snapshots; do not weaken or hide a mutation in the Status window.
+    _settle_before = s04.snapshot()
+    time.sleep(2)
+    _settle_after = s04.snapshot()
+    if _settle_before != _settle_after:
+        changed = {name for name in _settle_before["tree"].keys() |
+                   _settle_after["tree"].keys()
+                   if _settle_before["tree"].get(name) != _settle_after["tree"].get(name)}
+        backend = {name for name in changed if
+                   name.startswith("/usr/local/opnsense/scripts/OPNsense/Zapret/backend/")}
+        bytecode = sum(name.endswith(".pyc") or "/__pycache__/" in name
+                       for name in backend)
+        other = [part for part in ("config", "engine", "process")
+                 if _settle_before[part] != _settle_after[part]]
+        if _settle_before["kernel"] != _settle_after["kernel"]:
+            other.append("kernel")
+        s04.need(False, "S05B2_POST_RESTART_BACKGROUND_DRIFT_" +
+                 "backend" + str(len(backend)) + "_bytecode" + str(bytecode) +
+                 "_other" + str(len(changed - backend)) +
+                 "_resource" + "-".join(other or ["none"]))
     rows.append(status_json("verified-running-clears-error", "RUNNING",
                             "RUNNING_REQUIRES_ORIGINAL_OWNER_ATTESTATION"))
     return rows
