@@ -175,7 +175,7 @@ jobs:
         run: |
           set -eu
           GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php en_US
-          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --prepare
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --prepare-en
       - name: S03e3 actual installed Chromium English native PHP WAN UserException
         env:
           ZAPRET2_STAGE5_BROWSER_WAN: '1'
@@ -186,13 +186,13 @@ jobs:
         shell: opnsense {0}
         run: |
           set -eu
-          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --verify
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --verify-en
       - name: S03e3 prepare genuine WAN-required native witness for Russian
         shell: opnsense {0}
         run: |
           set -eu
           GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php ru_RU
-          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --prepare
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --prepare-ru
       - name: S03e3 actual installed Chromium Russian native PHP WAN UserException
         env:
           ZAPRET2_STAGE5_BROWSER_WAN: '1'
@@ -203,7 +203,7 @@ jobs:
         shell: opnsense {0}
         run: |
           set -eu
-          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --verify
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --verify-ru
       - name: S03e3 restore disposable native root locale before WAN Apply
         shell: opnsense {0}
         run: |
