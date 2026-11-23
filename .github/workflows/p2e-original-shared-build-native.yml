@@ -12,6 +12,7 @@ on:
       - scripts/test-tz6v5-s03-effective-diff-baseline.py
       - scripts/test-tz6v5-s03c-prestart-lab-native.py
       - scripts/test-tz6v5-s03d-pid-fd9-force-red-native.py
+      - scripts/test-tz6v5-s03e-public-cli-locale-red-native.py
       - scripts/test-tz6v4-schema3-dryrun.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/validator.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py
@@ -62,6 +63,16 @@ jobs:
           python3 -m py_compile scripts/test-tz6v5-s03-effective-diff-baseline.py
           python3 -m py_compile scripts/test-tz6v5-s03c-prestart-lab-native.py
           python3 -m py_compile scripts/test-tz6v5-s03d-pid-fd9-force-red-native.py
+          python3 -m py_compile scripts/test-tz6v5-s03e-public-cli-locale-red-native.py
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-tz6v5-s03e-public-cli-locale-red-native.py --source-routes
+          # Native side effects are prohibited on host/Linux, before any subprocess.
+          if GITHUB_ACTIONS=true ZAPRET2_S03E_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
+              python3 scripts/test-tz6v5-s03e-public-cli-locale-red-native.py --native \
+              >"${RUNNER_TEMP}/s03e-native-refusal.log" 2>&1; then
+            echo '::error::S03e ran native CLI on Linux rather than refusing'
+            exit 1
+          fi
+          grep -q 'S03E_FAIL=S03E_FREEBSD_ROOT_ONLY' "${RUNNER_TEMP}/s03e-native-refusal.log"
           # Real PID/FD9 probe must abort BEFORE any subprocess on Linux.
           if GITHUB_ACTIONS=true ZAPRET2_S03D_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
               python3 scripts/test-tz6v5-s03d-pid-fd9-force-red-native.py \
@@ -153,6 +164,11 @@ jobs:
             # Expected legacy RED, never a successful operator --force claim.
             ZAPRET2_S03D_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
               /usr/local/bin/python3 scripts/test-tz6v5-s03d-pid-fd9-force-red-native.py
+            # S03e: genuine old public CLI options/status RED on same
+            # cold disposable OPNsense BEFORE any installed upstream engine.
+            # All mutating verb probes are blocked by original private FD9.
+            ZAPRET2_S03E_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
+              /usr/local/bin/python3 scripts/test-tz6v5-s03e-public-cli-locale-red-native.py --native
             # TZ6v5 S03: the SAME actual legacy generator, no installed engine
             # or ordinary Start. Deliberately enforce proof of expected RED.
             ZAPRET2_S03_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 \

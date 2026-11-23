@@ -1,3 +1,13 @@
+## 23.11.2026 — CURRENT: ТЗ_6v5 S03e1 exact old public CLI/Status/FD9 RED + RU/EN source-only routes
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=137`, `v0.6.5_137`,  branch `feat/tz6v5-s03e-public-cli-locale-red`, base merged `main v0.6.5_136 aa3e2993` after [#1245](https://github.com/Tolian82/os-zapret2-restyle/pull/1245) exact native PID/FD9 expected RED PASS. New [S03e1 genuine executable cold FreeBSD CLI/options fixture + separate lifecycle RU/EN source-only audit](architecture/ZAPRET2_TZ6V5_S03E_PUBLIC_CLI_LOCALE_RED_NATIVE.md) runs in existing P2e disposable guest **before upstream install**. No production `src/` changes, `os-zapret2-restyle-0.6.5_137.pkg` **NOT BUILT/PUBLISHED**, owner OPNsense last-confirmed `_117.pkg` untouched.
+
+Expected legacy RED: `status --json` still text/FD9 write; `status --force` and duplicate/invalid args ignored; public `reload` absent; global `--help` rc64; start/stop/restart help/invalid flags reach native FD9 instead of rejecting before it. All mutation-capable probes executed only while real original temp FreeBSD FD9 is proven BUSY, rc75; Config/IPFW/engine untouched. RU/EN actual source paths recorded (Strategies Stop fallback still says Start; Voice click uses settled `.always` only), **not** full GUI native translation proof. Exact-head CI PENDING. **S03 overall NO-GO; S04–S20 NOT RUN**.
+
+**First exact-head native run [#45114745111](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45114745111):** S03e1 source-only/negative Linux gate PASS, S03d native PASS; S03e native preflight **stopped before CLI** at `S03E_IPFW_READ_FAILED`. On cold OPNsense before any engine/module install, `/sbin/ipfw -q list` may return nonzero. Test-only fix stores complete `(rc, stdout, stderr)` before/after and requires exact equality (same approved S03d approach), never requires `rc0`, never loads the IPFW module or mutates rules. This was a fixture NO-GO, not CLI RED/native success. New exact-head CI PENDING.
+
+---
+
 ## 23 ноября 2026 — CURRENT: ТЗ_6v5 S03d native PID/FD9/force expected RED
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=136`, `v0.6.5_136` from accepted merged `main 0.6.5_135 f58c45f4`, branch `feat/tz6v5-s03d-native-force-red`. Prospective `os-zapret2-restyle-0.6.5_136.pkg` **NOT BUILT / NOT PUBLISHED**, owner last-installed `_117.pkg` untouched. No production source changed.

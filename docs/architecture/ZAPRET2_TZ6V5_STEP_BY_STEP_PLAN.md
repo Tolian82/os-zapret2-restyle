@@ -61,6 +61,8 @@
 
 ### S03. Сформировать RED-фикстуры на старом фактическом генераторе
 
+**S03e1 candidate (_137, 23.11.2026):** [real original public CLI/strict-option/Status expected RED on disposable OPNsense and separate PHP/Volt/configd lifecycle RU/EN source route](ZAPRET2_TZ6V5_S03E_PUBLIC_CLI_LOCALE_RED_NATIVE.md). Every mutation-capable option checked only while original FD9 is verified BUSY; no engine/Config/IPFW mutation. CI PENDING; neither new parser nor GUI locale native PASS; full S03 NO-GO.
+
 **S03d candidate (_136, 23.11.2026):** [genuine disposable FreeBSD old `common_process_matches/launcher_stop` controlled PID/FD9 and CLI expected RED](ZAPRET2_TZ6V5_S03D_PID_FD9_FORCE_RED_NATIVE.md); one test-owned sleep only, private FD9, no installed engine. Reproduces silent PID cleanup, exe-only matching without sealed owner/birth/epoch, missing help/parser and actual FD9 BUSY refusal. CI pending. This is NOT operator `--force` support or proven force KILL safety; full S03 still NO-GO.
 
 **S03c2 candidate (`_135`, 23.11.2026):** [genuine native G05 WAN-only saved Config/HTTPS → G03 real configd upstream installed, no ordinary Start → G08 Standard/Extended actual Job Stage90+99 STOPPED restoration](ZAPRET2_TZ6V5_S03C2_AUTH_NATIVE_PRESTART.md). Corrected stale G08 test composition: G03.main's later five-list test starts/rests engine; G08 must use G03's stock configd dispatch/poll only. Exact-head disposable CI PENDING. Temporary .pkg built only inside isolated VM, no testing release before S19 and no owner contact. Historical G08 `_26` PASS not reused as current native acceptance. S03 still NO-GO for force/PID/FD9/Help/Reload/lifecycle RU/EN and #1224/#1223.
