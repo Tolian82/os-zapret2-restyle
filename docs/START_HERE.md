@@ -1,4 +1,10 @@
-## 23.11.2026 — CURRENT TZ6v5 S04b OPNsense read-only adapter candidate
+## 23.11.2026 — CURRENT TZ6v5 S04c real five-state native candidate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=153`, `v0.6.5_153`; prospective CI-only `os-zapret2-restyle-0.6.5_153.pkg` **NOT published/installable for operator**. Base merged `main _152 8edaf7a3`. [S04c physical five-case gate](architecture/ZAPRET2_TZ6V5_S04C_NATIVE_FIVE_STATE_MATRIX.md) runs real cold and hot OPNsense component snapshots with no-write Config/pkgdb/FD9-journal/epoch/process/IPFW/file-tree proof; prevents Python cache writes in the shipped reader. **S04 NO-GO until both native jobs PASS**, S05 remains blocked. No new lifecycle authority and no owner router action. #1223/#1224/#1225 OPEN; CI pending.
+
+---
+
+## 23.11.2026 — HISTORICAL TZ6v5 S04b OPNsense read-only adapter candidate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=152`, `v0.6.5_152`, CI-only prospective `os-zapret2-restyle-0.6.5_152.pkg` **NOT published or installed on operator OPNsense**. Base accepted `main _151 aac77c8a`. [S04b adapter](architecture/ZAPRET2_TZ6V5_S04B_OPNSENSE_READONLY_COMPONENT_ADAPTER.md) reads installed pkg, fixed engine ELF structure, bounded saved XML and reuses existing original Common journal/seal/runtime inspector; neutral output NEVER authorizes lifecycle. **Source tests only; no real five-case native acceptance yet, S04 NO-GO and S05 blocked.** No second FD9/Config/PID/IPFW owner, no operator router action. Exact-head CI PENDING, #1223/#1224/#1225 OPEN.
 

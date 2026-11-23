@@ -17,6 +17,8 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
+sys.dont_write_bytecode = True  # Read-only import: do not create __pycache__.
+
 from component_inventory import classify
 
 PKG = "/usr/local/sbin/pkg"  # Not /usr/sbin/pkg: that bootstrap shim can install pkg!
