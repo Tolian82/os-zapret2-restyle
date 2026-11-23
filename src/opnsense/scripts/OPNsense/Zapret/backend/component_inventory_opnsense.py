@@ -9,6 +9,7 @@ Unknown/racing evidence MUST fail closed, not be repaired by this reader.
 from __future__ import annotations
 
 import json
+import pwd
 import os
 from pathlib import Path
 import stat
@@ -16,6 +17,8 @@ import struct
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+
+sys.dont_write_bytecode = True  # Read-only import: do not create __pycache__.
 
 from component_inventory import classify
 
@@ -55,9 +58,16 @@ def probe_plugin(*, pkg: str = PKG, runner=subprocess.run) -> str:
     if not os.path.isfile(pkg) or not os.access(pkg, os.X_OK):
         return "unknown"
     try:
+        # Stock pkg query must NOT have root permission to modify its SQLite
+        # shared-memory/journal files. It is purely an OS package witness,
+        # not another persistent service or an alternate package database.
+        guest = pwd.getpwnam("nobody")
+        if guest.pw_uid <= 0 or guest.pw_gid <= 0:
+            return "unknown"
         result = runner([pkg, "info", "-e", PACKAGE], capture_output=True,
-                        timeout=6, check=False)
-    except (OSError, subprocess.SubprocessError):
+                        timeout=6, check=False, user=guest.pw_uid,
+                        group=guest.pw_gid, extra_groups=[])
+    except (OSError, subprocess.SubprocessError, KeyError, ValueError):
         return "unknown"
     if result.returncode == 0:
         return "installed"
@@ -89,7 +99,17 @@ def probe_engine(*, path: Path = ENGINE, owner: int = 0) -> str:
         return "invalid"
 
 
-def probe_config(*, path: Path = CONFIG, owner: int = 0) -> str:
+def probe_config(*, path: Path = CONFIG, owner: int | None = None) -> str:
+    # OPNsense native AppConfig.globals.owner is "wwwonly:wheel". The
+    # canonical saved config is NOT root-owned; never project an arbitrary
+    # root-only file policy onto the firmware's own Config.
+    if owner is None:
+        try:
+            owner = pwd.getpwnam("wwwonly").pw_uid
+        except (KeyError, OSError):
+            return "unknown"
+        if owner <= 0:
+            return "unknown"
     try:
         path.lstat()
     except FileNotFoundError:

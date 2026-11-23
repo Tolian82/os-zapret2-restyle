@@ -124,6 +124,8 @@
 
 ### S04. Независимый inventory компонентов
 
+**S04c candidate (`_153`, 23.11.2026):** [two-guest native real five-case no-write gate](ZAPRET2_TZ6V5_S04C_NATIVE_FIVE_STATE_MATRIX.md). No S04 GO until original installed reader and true physical Config/epoch/PID/IPFW/file-tree invariants pass on both exact-head disposable OPNsense guests. S05 blocked.
+
 **S04b candidate (`_152`, 23.11.2026):** [OPNsense read-only component adapter](ZAPRET2_TZ6V5_S04B_OPNSENSE_READONLY_COMPONENT_ADAPTER.md) uses installed pkg, fixed binary/XML and existing original Common seal/manifest/runtime inspector. Source-only bounded tests; still requires five physical native no-write witnesses for full S04 GO. S05 remains blocked.
 
 **S04a partial source implementation (`_151`, 23.11.2026):** [neutral five-axis component classifier and source-level GREEN matrix](ZAPRET2_TZ6V5_S04A_NEUTRAL_COMPONENT_MODEL.md). Pure typed facts from future platform adapter only, no owner attestation, no permission to Start/Stop, no IO/FD9; source CI pending. **This is NOT an installed/native S04 GO**: actual read-only component probes, 5 physical scenarios and no-write native evidence remain mandatory before S05.

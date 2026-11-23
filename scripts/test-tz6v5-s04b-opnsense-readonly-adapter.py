@@ -59,6 +59,12 @@ class S04BReadOnlyAdapter(unittest.TestCase):
                                stat.S_IMODE(p.stat().st_mode)) for p in (binary, config)}
             self.assertEqual(sut.probe_engine(path=binary, owner=uid), "valid")
             self.assertEqual(sut.probe_config(path=config, owner=uid), "initialized")
+            class NativeConfigAccount:
+                pw_uid = uid
+            with patch.object(sut.pwd, "getpwnam", return_value=NativeConfigAccount()):
+                self.assertEqual(sut.probe_config(path=config), "initialized")
+            with patch.object(sut.pwd, "getpwnam", side_effect=KeyError("wwwonly")):
+                self.assertEqual(sut.probe_config(path=config), "unknown")
             self.assertEqual(sut.probe_config(path=root / "missing", owner=uid), "absent")
             self.assertEqual(sut.probe_engine(path=root / "missing", owner=uid), "absent")
             self.assertEqual(before, {p.name: (p.read_bytes(), p.stat().st_mtime_ns,
@@ -91,6 +97,9 @@ class S04BReadOnlyAdapter(unittest.TestCase):
                              ["/usr/local/sbin/pkg", "info", "-e", "os-zapret2-restyle"])
             self.assertTrue(calls[0][1]["capture_output"])
             self.assertFalse(calls[0][1]["check"])
+            self.assertNotEqual(calls[0][1]["user"], 0)
+            self.assertNotEqual(calls[0][1]["group"], 0)
+            self.assertEqual(calls[0][1]["extra_groups"], [])
         with patch.object(sut.os.path, "isfile", return_value=False):
             self.assertEqual(sut.probe_plugin(runner=lambda *a, **k:
                              self.fail("bootstrapped pkg")), "unknown")

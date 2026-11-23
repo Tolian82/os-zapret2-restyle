@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_152 S04b bounded native component reader (candidate)
+# 23.11.2026 — CURRENT v0.6.5_153 S04c physical native inventory candidate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=153`, `v0.6.5_153`, prospective CI-only `os-zapret2-restyle-0.6.5_153.pkg` **not published/installable**. Base merged `main _152 8edaf7a3`. [S04c](architecture/ZAPRET2_TZ6V5_S04C_NATIVE_FIVE_STATE_MATRIX.md) adds true installed native five-case cold/hot disposable OPNsense inventory and strict before/after no-write witnesses. **S04 NO-GO, S05 not started** until actual exact-head native PASS, no second FD9/Config/IPFW/PID writer, no owner hardware action. #1223/#1224/#1225 OPEN.
+
+---
+
+# 23.11.2026 — HISTORICAL v0.6.5_152 S04b bounded native component reader (candidate)
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=152`, `v0.6.5_152`, prospective `os-zapret2-restyle-0.6.5_152.pkg` **not published/installable**. Base `main _151 aac77c8a`. [S04b](architecture/ZAPRET2_TZ6V5_S04B_OPNSENSE_READONLY_COMPONENT_ADAPTER.md) connects neutral five-axis facts to installed pkg, fixed ELF, root-owned Config XML and the already existing original read-only Common seal/manifest/runtime inspector. Source tests only; **real native five-scenario/no-write gate OPEN**. S04 NO-GO, S05 blocked, no owner hardware or lifecycle writer changes. #1223/#1224/#1225 OPEN; CI PENDING.
 

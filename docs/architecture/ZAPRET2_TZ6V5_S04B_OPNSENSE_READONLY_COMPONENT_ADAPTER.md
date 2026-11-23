@@ -8,7 +8,7 @@
 
 * Installed `/usr/local/sbin/pkg info -e os-zapret2-restyle`, never the FreeBSD `/usr/sbin/pkg` bootstrap shim;
 * Fixed native `dvtws2` path, owner/mode/size/64-byte FreeBSD amd64 ELF structure (**not** a functional version or checksum provenance claim);
-* Bounded root-owned `/conf/config.xml`, checking parse and initialized `OPNsense/Zapret/general/enabled`; no `Config::save`;
+* Bounded native OPNsense `wwwonly`-owned `/conf/config.xml`, checking parse and initialized `OPNsense/Zapret/general/enabled`; no `Config::save`;
 * Original `SharedApplyOperation.read()`, existing `shared_apply_seal.verify_seal()` and `voice_ipfw_adapter.shared_release_manifest()`;
 * The existing `voice_live_inspect.examine_shared()` (one Common runtime/PID/IPFW inspector), and its existing conservative cold/no-kernel witness.
 
