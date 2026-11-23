@@ -1,3 +1,9 @@
+# 23.11.2026 — CURRENT v0.6.5_141: S03e3c genuine installed Stop/Restart PHP+GUI FD9 BUSY RED
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=141`, `v0.6.5_141` from accepted `main 2dcd0a45` (`_140`). Prospective disposable-only `os-zapret2-restyle-0.6.5_141.pkg` is not released/published. [Native S03e3c contract](architecture/ZAPRET2_TZ6V5_S03E3C_NATIVE_PHP_STOP_RESTART_HTTP_RED.md): real installed Strategies browser Stop + authenticated API Restart EN/RU against PHP/configd under proven held FD9, no upstream engine, no mutation response interception, exact before/after Config/IPFW/processes. Native CI **PENDING**. Full S03 NO-GO, S04–S20 not started, owner `_117.pkg` untouched.
+
+---
+
 # 23.11.2026 — CURRENT v0.6.5_140 S03e3b genuine installed configd Stop/Restart FD9 BUSY RED
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=140`, `v0.6.5_140`; expected build filename `os-zapret2-restyle-0.6.5_140.pkg` is **prospective only**, NOT a published or operator-installable artifact.
