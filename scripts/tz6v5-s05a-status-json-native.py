@@ -46,7 +46,48 @@ def status_witness(label, expected, *, preinstall=False):
     before = s04.snapshot()
     p = s04.run(argv, timeout=90)
     after = s04.snapshot()
-    s04.need(before == after, "S05A_JSON_STATUS_MUTATED_STATE_" + label)
+    if before != after:
+        # Report fixed resource classes only, never Config values, file paths,
+        # IPFW rules, executable argv, PID values or untrusted log bytes.
+        classes = []
+        for name in ("config", "engine", "process"):
+            if before[name] != after[name]:
+                classes.append(name)
+        for name in ("rules", "tables", "ipfw_module", "ipdivert_module"):
+            if before["kernel"][name] != after["kernel"][name]:
+                classes.append("kernel_" + name)
+        original, current = before["tree"], after["tree"]
+        if original != current:
+            keys = set(original) | set(current)
+            for category, prefix in (
+                ("pkgdb", "/var/db/pkg/"),
+                ("shared", "/var/db/zapret2/"),
+                ("active", "/usr/local/etc/zapret2/runtime-v2/"),
+                ("setup", "/var/db/zapret2-restyle/"),
+                ("backend", str(BACKEND) + "/"),
+                ("pid", "/var/run/"),
+            ):
+                changed = [k for k in keys if k.startswith(prefix)
+                           and original.get(k) != current.get(k)]
+                if changed:
+                    added = sum(k not in original for k in changed)
+                    removed = sum(k not in current for k in changed)
+                    fields = set()
+                    for k in changed:
+                        a, b = original.get(k), current.get(k)
+                        if isinstance(a, list) and isinstance(b, list):
+                            fields.update(n for i, n in ((2, "inode"), (7, "size"),
+                                                          (8, "mtime"), (9, "content"))
+                                          if i < len(a) and i < len(b) and a[i] != b[i])
+                        else:
+                            fields.add("type")
+                    classes.append("tree_" + category + "_" + str(len(changed)) +
+                                   "_new" + str(added) + "_del" + str(removed) +
+                                   "_" + "-".join(sorted(fields)))
+            if not any(s.startswith("tree_") for s in classes):
+                classes.append("tree_root")
+        raise s04.Refusal("S05A_JSON_STATUS_STATE_DRIFT_" + label + "__" +
+                          "_".join(classes[:12]))
     try:
         row = json.loads(p.stdout)
     except ValueError:
