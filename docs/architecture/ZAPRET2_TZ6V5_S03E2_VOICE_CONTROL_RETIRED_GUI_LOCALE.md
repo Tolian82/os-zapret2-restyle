@@ -1,6 +1,6 @@
 # ТЗ_6v5 — S03e2: Voice без прямой Start/Stop и action-specific RU/EN ошибки Strategies
 
-**Дата:** 23.11.2026. **Base:** merged `main 9127b9f3`, source-only `0.6.5_137` ([S03e1 #1246](https://github.com/Tolian82/os-zapret2-restyle/pull/1246)). **Кандидат:** `0.6.5_138`, ветка `fix/tz6v5-s03e2-voice-readonly-lifecycle-locale`. `0.6.5_138.pkg` **не собирался, не публиковался и не установлен**. Owner OPNsense не затронута.
+**Дата:** 23.11.2026. **Base:** merged `main 9127b9f3`, source-only `0.6.5_137` ([S03e1 #1246](https://github.com/Tolian82/os-zapret2-restyle/pull/1246)). **Кандидат:** `0.6.5_138`, ветка `feat/tz6v5-s03e2-gui-readonly-locale`. `0.6.5_138.pkg` **не собирался, не публиковался и не установлен**. Owner OPNsense не затронута.
 
 ## Решение владельца (23.11.2026)
 
