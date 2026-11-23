@@ -102,6 +102,164 @@ def native_wan_start_error_browser(mode):
             browser.close()
     print('S03E3_GENUINE_NATIVE_START_USEREXCEPTION_BROWSER_' + mode.upper() + '=PASS')
 
+
+def s03e3c_native_stop_restart_http_red(mode):
+    """Actual installed PHP POST Stop + Restart while SSH guest holds original FD9.
+
+    The only browser mocks are read-only runtime and resources display,
+    needed to show the Stop control without an installed upstream engine.
+    Mutation HTTP is never intercepted. This records original RED, not a fix.
+    """
+    import select
+    import subprocess
+    from playwright.sync_api import sync_playwright
+
+    need(mode in ('en', 'ru') and os.environ.get('GITHUB_ACTIONS') == 'true' and
+         os.environ.get('ZAPRET2_STAGE5_BROWSER_WAN') == '1',
+         'S03E3C_DISPOSABLE_NATIVE_BROWSER_ONLY')
+    root = Path(os.environ['RUNNER_TEMP']) / 'zapret2-browser-ssh'
+    key = root / 'key'
+    known = root / 'known_hosts'
+    need(key.is_file() and known.is_file(),
+         'S03E3C_EPHEMERAL_DISPOSABLE_SSH_IDENTITY_MISSING')
+
+    ssh = [
+        'ssh', '-T', '-i', str(key), '-p', '32222',
+        '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20',
+        '-o', 'StrictHostKeyChecking=accept-new',
+        '-o', 'UserKnownHostsFile=' + str(known),
+        '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=6',
+        'root@127.0.0.1',
+        'env', 'GITHUB_ACTIONS=true', 'ZAPRET2_STAGE5_BROWSER_WAN=1',
+        '/usr/local/bin/python3', '/root/s03e3c-native-http-fd9-hold.py', '--hold',
+    ]
+    holder = subprocess.Popen(ssh, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=True, bufsize=1)
+    passed = False
+    observed = {}
+    try:
+        ready, _, _ = select.select([holder.stdout], [], [], 45)
+        need(bool(ready) and holder.stdout.readline().strip() ==
+             'S03E3C_ORIGINAL_FD9_BUSY_READY' and holder.poll() is None,
+             'S03E3C_NATIVE_ORIGINAL_FD9_NOT_PROVEN_BUSY')
+        origin = 'https://127.0.0.1:18443'
+        with sync_playwright() as pw:
+            options = {'executable_path': os.environ['STAGE5_LOCAL_CHROMIUM']} if os.environ.get('STAGE5_LOCAL_CHROMIUM') else {}
+            browser = pw.chromium.launch(headless=True, **options)
+            try:
+                context = browser.new_context(ignore_https_errors=True)
+                page = context.new_page()
+                mutating_calls = []
+                def runtime_display(route):
+                    route.fulfill(status=200, content_type='application/json',
+                                  body=json.dumps({'status':'ok','installed':True,'busy':False,
+                                                   'version':'v1.0.7','setup':'ready',
+                                                   'service':'started'}))
+                def resources_display(route):
+                    route.fulfill(status=200, content_type='application/json',
+                                  body=json.dumps({'status':'ok','installed':False,
+                                                   'busy':False,'phase':'not_installed'}))
+                page.route('**/api/zapret/service/runtime', runtime_display)
+                page.route('**/api/zapret/service/resourcesStatus', resources_display)
+                page.on('request', lambda req:
+                    mutating_calls.append(req.url.split('?')[0].rsplit('/', 1)[-1])
+                    if req.method == 'POST' and
+                       req.url.split('?')[0].endswith(('/api/zapret/service/stop',
+                                                      '/api/zapret/service/restart',
+                                                      '/api/zapret/service/start'))
+                    else None)
+                page.goto(origin + '/index.php', wait_until='domcontentloaded',
+                          timeout=45000)
+                page.locator('input[name="usernamefld"]').fill('root')
+                page.locator('input[name="passwordfld"]').fill('opnsense')
+                submits = page.locator('button[type="submit"],input[type="submit"]')
+                if submits.count():
+                    submits.first.click()
+                else:
+                    page.locator('input[name="passwordfld"]').press('Enter')
+                with page.expect_response(
+                    lambda r: '/api/zapret/settings/get' in r.url and r.status == 200,
+                    timeout=45000):
+                    page.goto(origin + '/ui/zapret',
+                              wait_until='domcontentloaded', timeout=45000)
+                need(page.evaluate("document.documentElement.lang || ''").lower().startswith(mode),
+                     'S03E3C_ACTUAL_INSTALLED_BROWSER_LOCALE_WRONG_' + mode)
+                page.locator('form#frm_GeneralSettings').wait_for(timeout=45000)
+                page.wait_for_function(
+                    "() => {let b=document.querySelector('#zapretServiceControl');"
+                    "return !!b && !b.disabled && b.offsetWidth>0 &&"
+                    "b.textContent.trim().length>0;}", timeout=25000)
+                need(page.locator('#zapretServiceControl').inner_text().strip().lower() in
+                     ('stop', 'остановить', 'стоп'),
+                     'S03E3C_NATIVE_STRATEGIES_CONTROL_NOT_STOP')
+                with page.expect_response(
+                    lambda r: r.request.method == 'POST' and
+                    r.url.split('?')[0].endswith('/api/zapret/service/stop'),
+                    timeout=110000) as stop_result:
+                    page.locator('#zapretServiceControl').click(timeout=20000)
+                stop = stop_result.value
+                # Restart has no separate Strategies button. Invoke installed
+                # OPNsense's real restartAction through authenticated jQuery.
+                with page.expect_response(
+                    lambda r: r.request.method == 'POST' and
+                    r.url.split('?')[0].endswith('/api/zapret/service/restart'),
+                    timeout=110000) as restart_result:
+                    page.evaluate("""() => {
+                      $.ajax({type:'POST',
+                              url:'/api/zapret/service/restart',
+                              dataType:'json', timeout:100000});
+                    }""")
+                restart = restart_result.value
+                need(stop.status == 200 and restart.status == 200,
+                     'S03E3C_OLD_NATIVE_API_HTTP_STATUS_CHANGED')
+                for label, response in (('stop',stop),('restart',restart)):
+                    payload = response.json()
+                    need(isinstance(payload, dict) and
+                         isinstance(payload.get('response'), str),
+                         'S03E3C_INHERITED_PHP_RESPONSE_SHAPE_CHANGED_' + label)
+                    text_response = payload['response'].strip()
+                    observed[label] = ('EMPTY' if not text_response else
+                                       'OK' if text_response == 'OK' else
+                                       'OTHER_REDACTED')
+                page.wait_for_timeout(400)
+                error_title = ('Ошибка управления службой' if mode == 'ru'
+                               else 'Service operation failed')
+                need(page.get_by_text(error_title, exact=False).count() == 0,
+                     'S03E3C_OLD_GUI_ALREADY_DISPLAYS_STOP_FAILURE')
+                need(mutating_calls == ['stop', 'restart'],
+                     'S03E3C_UNEXPECTED_NATIVE_MUTATING_HTTP_ROUTE')
+                context.close()
+            finally:
+                browser.close()
+        passed = True
+    finally:
+        if holder.stdin and not holder.stdin.closed:
+            try:
+                holder.stdin.write('VERIFY\n' if passed else 'ABORT\n')
+                holder.stdin.flush()
+                holder.stdin.close()
+                holder.stdin = None
+            except (BrokenPipeError, OSError):
+                pass
+        try:
+            output, _ = holder.communicate(timeout=165)
+        except subprocess.TimeoutExpired:
+            # Remote guest is already disposable. Abort rather than claim
+            # success; the native holder's own bounded drain still owns FD9.
+            raise Refusal('S03E3C_NATIVE_HOLDER_TIMEOUT') from None
+        if passed:
+            need(holder.returncode == 0 and
+                 'S03E3C_NATIVE_HTTP_CONFIG_IPFW_ENGINE_UNCHANGED=PASS' in output,
+                 'S03E3C_NATIVE_POST_HTTP_WITNESS_NOT_CONFIRMED')
+    print('S03E3C_GENUINE_PHP_STOP_RESTART_HTTP_RED_' + mode.upper() + '=' +
+          json.dumps({'http_stop':200, 'http_restart':200,
+                      'inherited_response_class':observed,
+                      'old_gui_stop_failure_visible':False,
+                      'original_fd9_busy':True,
+                      'native_config_ipfw_engine_unchanged':True,
+                      'physical_stop_restart_executed':False}, sort_keys=True))
+
+
 def real_browser():
     from playwright.sync_api import sync_playwright
     need(os.environ.get('GITHUB_ACTIONS') == 'true' and
@@ -229,6 +387,8 @@ def main():
             self_test()
         elif sys.argv[1:] in (['--s03e3-en-browser'], ['--s03e3-ru-browser']):
             native_wan_start_error_browser('en' if 'en' in sys.argv[1] else 'ru')
+        elif sys.argv[1:] in (['--s03e3c-en-browser'], ['--s03e3c-ru-browser']):
+            s03e3c_native_stop_restart_http_red('en' if 'en' in sys.argv[1] else 'ru')
         elif sys.argv[1:] == ['--browser']:
             need(not RESULT.exists() and not RESULT.is_symlink(), 'RECEIPT_PREEXISTS')
             result = real_browser()
