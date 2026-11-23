@@ -3752,11 +3752,29 @@ case "${1:-}" in
         exit $?
         ;;
     status)
-        # Status may inspect the persisted shared-Apply journal, whose
-        # read-only Python owner validates the ORIGINAL held FD9. Previous
-        # direct dispatch omitted it, falsely classifying restored/common
-        # owners as "incomplete" even when engine, supervisor and IPFW pass.
-        service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
+        # Preserve the original plain status stdout, rc and FD9 semantics.
+        # JSON is a distinct strictly read-only S05a view of the qualified
+        # S04 inventory, no FD9 acquisition and no lifecycle dispatch.
+        # Reject extra/unsupported options BEFORE lock or filesystem mutation.
+        case "$#" in
+            1) service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@" ;;
+            2)
+                [ "$2" = --json ] || {
+                    echo "ERROR: INVALID_ARGUMENT" >&2
+                    exit 64
+                }
+                [ -r "${BACKEND_DIR}/status_readonly.py" ] || {
+                    echo "ERROR: STATUS_UNAVAILABLE" >&2
+                    exit 69
+                }
+                PYTHONDONTWRITEBYTECODE=1 "${PYTHON_RUNTIME}" "${BACKEND_DIR}/status_readonly.py"
+                exit $?
+                ;;
+            *)
+                echo "ERROR: INVALID_ARGUMENT" >&2
+                exit 64
+                ;;
+        esac
         ;;
     strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start|extra-resources-native-build-saved|extra-resources-native-trial|extra-resources-native-previous-owner|extra-resources-native-recover-prepared|extra-resources-native-restore-previous)
         strategy_lab_internal_dispatch "$@"

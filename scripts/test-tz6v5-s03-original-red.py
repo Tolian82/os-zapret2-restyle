@@ -40,10 +40,10 @@ EXPECTED_RED = (
     "CLI_RELOAD_HELP_UNIMPLEMENTED",
     "REFERENCE_MANIFEST_UNAVAILABLE",
 )
-NATIVE_EXPECTED_RED = (
-    "STATUS_READONLY_FD9_SIDE_EFFECT",
-    "STATUS_JSON_UNIMPLEMENTED",
-)
+# S05a has turned the original native status JSON/FD9 RED into physically
+# checked GREEN. Retain the live native probes; unexpected status regression
+# is now a failure rather than an artificially expected RED.
+NATIVE_EXPECTED_RED = ()
 EXPECTED_LIST = ["youtube", "youtube", "user"]
 STRATEGY = (
     "--filter-tcp=443\n--filter-l7=tls\n"
@@ -216,7 +216,7 @@ def help_probe(argv: list[str]) -> dict:
 def disposable_native_status() -> dict:
     """Native source CLI on a DISPOSABLE engine-absent OPNsense, never owner.
 
-    This read-only *test intent* observes the old Status lockfile mutation
+    This read-only *test intent* verifies S05a avoids the old Status lockfile mutation
     under a private path; no original FD9, kernel rules or installed engine
     are controlled. Requires explicit CI, FreeBSD root and environment opt-in.
     """
@@ -248,8 +248,14 @@ def disposable_native_status() -> dict:
             "private_fd9_created": fd9.exists() or fd9.is_symlink(),
             "json_status_valid": (
                 isinstance(response, dict)
-                and response.get("state") in
-                ("RUNNING", "STOPPED", "INCOMPLETE", "FOREIGN_OR_UNVERIFIED")
+                and result.returncode == 1
+                and response.get("schema") == 1
+                and response.get("runtime_state") == "STOPPED"
+                and response.get("status_exit_code") == 1
+                and response.get("authorization") == "NONE"
+                and response.get("physical_transition_allowed") is False
+                and response.get("stage") is None
+                and response.get("generation") is None
             ),
             "stdout_bytes": len(result.stdout.encode()),
             "stderr_bytes": len(result.stderr.encode()),
@@ -322,6 +328,8 @@ def capture(*, native_status: bool = False) -> dict:
         got_red.append("REFERENCE_MANIFEST_UNAVAILABLE")
     native = disposable_native_status() if native_status else None
     if native is not None:
+        # These are no longer *expected* RED. They remain probes that fail
+        # exact expected_red equality if S05a regresses.
         if native["private_fd9_created"]:
             got_red.append("STATUS_READONLY_FD9_SIDE_EFFECT")
         if not native["json_status_valid"]:

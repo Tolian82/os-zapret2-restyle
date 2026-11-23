@@ -141,6 +141,8 @@
 
 ### S05. Read-only status и диагностический конверт
 
+**S05a candidate (`_155`, 23.11.2026):** [read-only JSON Status and compatibility gate](ZAPRET2_TZ6V5_S05A_READONLY_JSON_STATUS.md). Strict `status --json` is a pure projection of S04 native evidence; old plain `status` retained. Diagnostics without actual original producer remain explicitly null, never invented. Requires exact-head source CI plus disposable OPNsense no-write tests and truthful error producer/consumer work before complete S05 GO. S06+ blocked.
+
 1. Реализовать `status --json` с прежним совместимым plain `status` и собственным верифицированным runtime/epoch/IPFW census; status **не** компилирует, не Apply, не стартует, не сохраняет.
 2. Кодировать `timestamp/stage/code/operation_id/generation/exit_status/runtime_state/message/stderr_excerpt/log_ref`. Подключить реальные `dvtws2`, supervisor, setup, configd, IPFW, P2, Apply, Lab errors в существующее защищённое, ограниченное, ротируемое хранилище.
 3. RED→GREEN для `ENGINE_NOT_INSTALLED`, `CONFIG_UNINITIALIZED`, `MANIFEST_UNAVAILABLE`, `MANIFEST_INVALID`, `ENGINE_EXIT_EARLY`, `WAN_UNAVAILABLE`, `IPFW_ATTACH_FAILED`, `LAB_RESTORE_FAILED`; ограничить/очистить stderr, секреты/домены/IP/args не раскрывать.
