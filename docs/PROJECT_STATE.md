@@ -1,4 +1,10 @@
-# 23.11.2026 — CURRENT v0.6.5_149 S03e3k read existing Lab timing
+# 23.11.2026 — CURRENT v0.6.5_150 S03 RED gate GO; S04 next
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=150`, `v0.6.5_150`, prospective CI-only `os-zapret2-restyle-0.6.5_150.pkg` (NOT published/installable). Merged main base `_149 20dc89c9`. [S03 RED acceptance matrix](architecture/ZAPRET2_TZ6V5_S03_RED_BASELINE_GO.md): seven original-code criteria have source/native reproducible RED/old-G05→G08 proof; exact evidence links and honest negative boundaries. **S03 GO limited to original-code RED gate**. **S04 authorized next, not implemented**. Current runtime's reload/force, native Auto Found and Stage90/20 defects remain; **overall product NO-GO**, issue #1223/#1224/#1225 OPEN. No new production runtime, owner contact or public pkg. Exact-head docs CI PENDING.
+
+---
+
+# 23.11.2026 — HISTORICAL merged v0.6.5_149 S03e3k read existing Lab timing
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=149`, `v0.6.5_149`, prospective CI-only `os-zapret2-restyle-0.6.5_149.pkg` (not published or operator-installable). Merged main `_148 52ff38ca` accepted Stage20 native RED twice. Current [S03e3k](architecture/ZAPRET2_TZ6V5_S03E3J_STAGE20_NATIVE_SAMPLING.md) adds **only read-only original job timing telemetry consumption** to the existing native S03e3j fixture, one true Auto/Lab run; no product code changes or additional CI workflow. Original Stage20 adapter duration is not the nested `strategy-lab-stop` exact time, no child rc or timeout claim. Original native Stage20 `duration_ms=4313` (adapter PASS) [native #45196553041](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45196553041) at SHA `6ae67428`; existing read-only timing works, and Stage90 product expected RED remains. Failing Stage20 exact duration/child rc unknown. Consolidated exact-head CI PENDING, #1224/#1223 OPEN, full S03 NO-GO/S04 blocked. No owner hardware or public package.
 

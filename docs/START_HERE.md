@@ -1,4 +1,10 @@
-## 23.11.2026 — CURRENT TZ6v5 S03e3k original Lab monotonic timing
+## 23.11.2026 — CURRENT ТЗ_6v5 S03 RED baseline GO → S04 entry
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=150`, `v0.6.5_150`; prospective CI-only `os-zapret2-restyle-0.6.5_150.pkg`, **not published or operator-installable**. Base merged main `_149 20dc89c9`. [S03 seven-point evidence gate](architecture/ZAPRET2_TZ6V5_S03_RED_BASELINE_GO.md) classifies existing actual source/native old-code RED (generator/diff, G05→G08, PID/FD9/CLI/force deficiencies, RU/EN, IPFW bounds, original Auto Lab Stage20 and Stage90) and authorizes **S04 as the next ordered step**. S03 GO means **legacy RED reproducible**, not product Start/Stop/Reload/Force/Lab GREEN. Owner #1223/#1224/#1225 OPEN, unified lifecycle product remains NO-GO, no hardware trial or `.pkg` release. Documentation-only exact-head CI PENDING.
+
+---
+
+## 23.11.2026 — HISTORICAL merged `_149` TZ6v5 S03e3k original Lab monotonic timing
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=149`, `v0.6.5_149`, CI-only provisional `os-zapret2-restyle-0.6.5_149.pkg` (not published/installable by operator). Base main `_148 52ff38ca`. [S03e3k](architecture/ZAPRET2_TZ6V5_S03E3J_STAGE20_NATIVE_SAMPLING.md) reuses the existing S03e3j native workflow with **one genuine Auto Lab**, reading the original root-owned `timing-telemetry.json` Stage20 monotonic duration and exact existing `stage_adapter` outcome. No new logger, no product `src/` change, no Stop/Start/PID/IPFW/FD9 or timeout mutation. Previously native Stage20 FAIL twice ([#45192186695](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45192186695), [#45193300026](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45193300026)); original nested Stop rc remains unrecorded. Actual original native one-Lab timing PASS [native #45196553041](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45196553041) on SHA `6ae67428`: original adapter `duration_ms=4313`, Stage20 PASS, source outcome `pass`, physically Auto/epoch/Config/IPFW restored, original Stage90 false `RESTORE_FAILED` unchanged. This is a success measurement only; original Stage20 FAIL timing/rc remain unknown. Consolidated exact-head CI PENDING. Lab #1224, Auto #1223 OPEN, complete S03 NO-GO, S04 blocked, owner router untouched.
 
