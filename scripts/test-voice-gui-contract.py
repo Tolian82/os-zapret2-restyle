@@ -298,8 +298,15 @@ for(const [locale,words] of [
     check("function indexAction()" in controller and "getForm('voice')" in controller and
           "OPNsense/Zapret/voice" in controller, "Voice UI controller/form entry missing")
     for marker in ("base_form", "frm_VoiceSettings", "/api/zapret/voice/load",
-                   "voiceServiceState", "voiceServiceControl", "voiceImplementationNotice"):
+                   "voiceServiceState", "voiceIPFWState", "voiceImplementationNotice"):
         check(marker in view, f"Voice view missing {marker}")
+    # Voice has no independent lifecycle button, only passive status/IPFW + Apply.
+    check('id="voiceServiceControl"' not in view and
+          "voiceControlPending" not in view and
+          "$('#voiceServiceControl')" not in view and
+          "url:'/api/zapret/service/' + action" not in view and
+          "voiceRuntimeAligned()" in view,
+          "Voice duplicate Start/Stop control must not return")
     menu_runtime = (MENU.parent / "Menu.php").read_text(encoding="utf-8")
     check("'Voice' => 'Передача голоса'" in menu_runtime and
           menu.find("./Services/Zapret/Voice").get("VisibleName") == "Voice Transmission",
@@ -555,7 +562,7 @@ for(const [locale,words] of [
         )
         check(mutation_gate is not None, "Voice Config mutation gate missing")
         gate_script = (
-            "let voiceMutationPending=false,voiceControlPending=false,"
+            "let voiceMutationPending=false,"
             "voiceApplyNeedsReview=false,token='a'.repeat(64),disabled=true;\n"
             + "const voiceSnapshot={val:()=>token};\n"
             + "function $(selector) {if(selector!=='#voiceSaveDraft,#voiceApply')"
@@ -566,10 +573,7 @@ for(const [locale,words] of [
             + "reconcileVoiceMutationControls();check(!disabled,'clean form blocked');\n"
             + "voiceMutationPending=true;reconcileVoiceMutationControls();"
               "check(disabled,'parallel Apply/Save Draft permitted');\n"
-            + "voiceMutationPending=false;voiceControlPending=true;"
-              "reconcileVoiceMutationControls();"
-              "check(disabled,'service action permitted Config write');\n"
-            + "voiceControlPending=false;voiceApplyNeedsReview=true;"
+            + "voiceMutationPending=false;voiceApplyNeedsReview=true;"
               "reconcileVoiceMutationControls();"
               "check(disabled,'unknown Apply permitted draft overwrite');\n"
             + "voiceApplyNeedsReview=false;token='';"
@@ -596,7 +600,7 @@ for(const [locale,words] of [
         )
         check(failure_helper is not None, "Global Voice errors must remain visible")
         save_script = (
-            "let click,calls,voiceMutationPending=false,voiceControlPending=false,"
+            "let click,calls,voiceMutationPending=false,"
               "voiceApplyNeedsReview=false;\n"
             + "const text={loading:'loading',draftSaved:'saved',"
               "draftFailed:'failed',draftReview:'review'};\n"
@@ -619,7 +623,7 @@ for(const [locale,words] of [
               "function handleFormValidation(){}"
               "function localizeVoiceErrors(x){return x;}\n"
             + "function reconcileVoiceServiceStatus(){"
-              "button.disabled=voiceMutationPending||voiceControlPending||"
+              "button.disabled=voiceMutationPending||"
               "voiceApplyNeedsReview;}\n"
             + failure_helper.group(0) + "\n"
             + save_handler.group(0) + "\n"
@@ -755,31 +759,24 @@ for(const [locale,words] of [
         check(presenter is not None, "Voice service status presenter missing")
         badge_script = (
             "let runtimeInstalled=true,runtimeState='started',"
-            "runtimeBusy=false,voiceInspectionState=null,"
-            "voiceMutationPending=false,voiceControlPending=false,"
+            "voiceInspectionState=null,voiceMutationPending=false,"
             "voiceApplyNeedsReview=false;\n"
             "const text={running:'Запущена',stopped:'Остановлена',error:'Ошибка',"
             "incomplete:'Неизвестно',runningUnverified:'Запущена · Voice не подтверждён',"
-            "stoppedUnverified:'Остановлена · Voice не подтверждён',"
-            "start:'Запустить',stop:'Остановить'};\n"
+            "stoppedUnverified:'Остановлена · Voice не подтверждён'};\n"
             "const badge={classes:'',value:'',removeClass(){this.classes='';return this;},"
             "addClass(value){this.classes=value;return this;},"
             "text(value){this.value=value;return this;}};\n"
-            "const control={value:'',shown:false,toggle(value){this.shown=value;return this;},"
-            "text(value){this.value=value;return this;}};\n"
-            "function $(key){return key==='#voiceServiceState'?badge:"
-            "key==='#voiceServiceControl'?control: (()=>{throw Error(key)})();}\n"
+            "function $(key){if(key!=='#voiceServiceState')throw Error(key);return badge;}\n"
             "function voiceRuntimeAligned(){return runtimeInstalled && ("
             "(runtimeState==='started' && voiceInspectionState==='ready') ||"
             "(runtimeState==='stopped' && voiceInspectionState==='stopped'));}\n"
-            "function setServiceControlsBusy(){control.disabled=!voiceRuntimeAligned();}\n"
             "function reconcileVoiceMutationControls(){}\n"
             + presenter.group(0) + "\n"
             "function assert(ok,msg){if(!ok)throw Error(msg)};\n"
             "reconcileVoiceServiceStatus();"
             "assert(badge.value===text.runningUnverified &&"
             "badge.classes==='label-warning','uninitialized Voice hid started Zapret2');"
-            "assert(control.disabled,'unverified Voice unlocked Start/Stop');\n"
             "voiceInspectionState='ready';reconcileVoiceServiceStatus();"
             "assert(badge.value===text.running&&badge.classes==='label-success',"
             "'verified owner not shown green');\n"
@@ -801,7 +798,7 @@ for(const [locale,words] of [
     else:
         print("SKIP: Node.js is unavailable; browser JavaScript syntax was not checked")
     check("if (button.prop('disabled') || voiceMutationPending ||" in view and
-          view.count("voiceControlPending || voiceApplyNeedsReview) return;") == 2 and
+          view.count("voiceApplyNeedsReview) return;") == 2 and
           "voiceMutationPending = false;\n            reconcileVoiceServiceStatus();" in view and
           "reconcileVoiceMutationControls();" in view,
           "Both Voice Config writers must share pending/review exclusion")
@@ -809,12 +806,12 @@ for(const [locale,words] of [
           "!voiceProfilesVerified(reply)" in view and
           "unverified ? 'unverified-profiles' : reportedState" in view and
           "showVoiceProfileObservations(unverified ? null : reply)" in view and
-          "voiceControlPending = true" in view and
+          "voiceControlPending" not in view and
           "voiceInspectionState = null" in view and
           "voiceMutationPending = true" in view and
           "refreshVoiceHealthSettled().always(function ()" in view and
           "reconcileVoiceServiceStatus()" in view,
-          "Voice Start/Stop and Apply must share the two-witness gate")
+          "Voice Apply preserves its two-witness health gate")
     # Both read-only inspector and GUI must expose the same verified,
     # per-profile IPFW rule identity. Counters may be unavailable on FreeBSD
     # but must never be fabricated or rounded in browser JavaScript.
