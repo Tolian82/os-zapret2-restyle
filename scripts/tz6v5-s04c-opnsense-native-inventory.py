@@ -143,7 +143,37 @@ def witness(label, expected, *, preinstall=False):
         need(not INSTALLED.exists(), "S04C_FRESH_READER_WAS_INSTALLED")
     p = run(["/usr/local/bin/python3", str(reader)], timeout=90)
     after = snapshot()
-    need(before == after, "S04C_INVENTORY_WROTE_STATE_" + label)
+    if before != after:
+        # Bounded RED diagnosis by resource class, never print Config, argv,
+        # a PID, IPFW rule text, an address or any filesystem path.
+        changed = []
+        for section in ("config", "engine", "process"):
+            if before[section] != after[section]:
+                changed.append(section)
+        for section in ("rules", "tables", "ipfw_module", "ipdivert_module"):
+            if before["kernel"][section] != after["kernel"][section]:
+                changed.append("kernel_" + section)
+        old_tree, new_tree = before["tree"], after["tree"]
+        if old_tree != new_tree:
+            for category, prefix in (
+                ("shared", "/var/db/zapret2/"),
+                ("pkgdb", "/var/db/pkg/"),
+                ("active", "/usr/local/etc/zapret2/runtime-v2/"),
+                ("setup", "/var/db/zapret2-restyle/"),
+                ("pid", "/var/run/"),
+            ):
+                keys = set(old_tree) | set(new_tree)
+                altered = [k for k in keys if k.startswith(prefix) and
+                           old_tree.get(k) != new_tree.get(k)]
+                if altered:
+                    added = sum(k not in old_tree for k in altered)
+                    removed = sum(k not in new_tree for k in altered)
+                    changed.append("tree_" + category + "_" + str(len(altered))
+                                   + "_new" + str(added) + "_del" + str(removed))
+            if not any(s.startswith("tree_") for s in changed):
+                changed.append("tree_root")
+        raise Refusal("S04C_INVENTORY_STATE_DRIFT_" + label + "__" +
+                      "_".join(changed[:12]))
     need(p.returncode == 0, "S04C_INVENTORY_REFUSED_" + label)
     try:
         record = json.loads(p.stdout)
