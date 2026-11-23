@@ -1,3 +1,11 @@
+# 23.11.2026 — CURRENT v0.6.5_137 TZ6v5 S03e1 public CLI option/Status RED
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=137`, `v0.6.5_137`, prospective `os-zapret2-restyle-0.6.5_137.pkg` **NOT BUILT/PUBLISHED**. Base merged `main v0.6.5_136 aa3e29937515e6238d2014dfa092fb736a463f15`, [#1245](https://github.com/Tolian82/os-zapret2-restyle/pull/1245) real native S03d expected RED exact-head PASS. New source-only candidate `v0.6.5_137` branch `feat/tz6v5-s03e-public-cli-locale-red`: [S03e1](architecture/ZAPRET2_TZ6V5_S03E_PUBLIC_CLI_LOCALE_RED_NATIVE.md) genuine OPNsense native public CLI matrix, correct original private FD9 BUSY and untouched Config/IPFW plus explicit RU/EN PHP/Volt/configd source-level audit. Legacy defects expected, **not** implemented V5-14/16. No changes in product `src/`, no testing `_137.pkg` built/published, owner last physical `_117.pkg` untouched. Native exact-head CI **PENDING**. Whole S03 NO-GO, S04–S20 NOT RUN.
+
+**First exact-head native run [#45114745111](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45114745111):** S03e1 source-only/negative Linux gate PASS, S03d native PASS; S03e native preflight **stopped before CLI** at `S03E_IPFW_READ_FAILED`. On cold OPNsense before any engine/module install, `/sbin/ipfw -q list` may return nonzero. Test-only fix stores complete `(rc, stdout, stderr)` before/after and requires exact equality (same approved S03d approach), never requires `rc0`, never loads the IPFW module or mutates rules. This was a fixture NO-GO, not CLI RED/native success. New exact-head CI PENDING.
+
+---
+
 # 23 Nov 2026 — CURRENT TZ6v5 S03d PID/FD9/force actual legacy expected RED
 
 Current source `VERSION=0.6.5`, `PLUGIN_REVISION=136`, `v0.6.5_136` branch `feat/tz6v5-s03d-native-force-red`; base accepted `main _135 f58c45f4`. Prospective `os-zapret2-restyle-0.6.5_136.pkg` **NOT BUILT/PUBLISHED**; owner OPNsense last installed `_117.pkg` untouched. Product `src/` unchanged.

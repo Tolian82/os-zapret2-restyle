@@ -1,3 +1,9 @@
+## 23.11.2026 — TZ6v5 S03e1 actual CLI strict-options expected RED
+
+Candidate `v0.6.5_137` on merged `main _136 aa3e2993` after native S03d [#1245](https://github.com/Tolian82/os-zapret2-restyle/pull/1245). New [actual service CLI options/status/FD9 native expected RED + separately marked RU/EN GUI source-path audit](architecture/ZAPRET2_TZ6V5_S03E_PUBLIC_CLI_LOCALE_RED_NATIVE.md). Source-only changes, tests/CI/docs and revision; no engine/PID/IPFW/Config mutations, no `_137.pkg` published, owner untouched. Exact-head native CI PENDING. Full S03 NO-GO, G1 S04–S20 NOT RUN.
+
+---
+
 ## 23 November 2026 — TZ6v5 S03d native PID/FD9/force legacy expected RED
 
 Current candidate `v0.6.5_136` from `main _135 f58c45f4` after [#1244](https://github.com/Tolian82/os-zapret2-restyle/pull/1244) native real G05→G03→G08 PASS. New [S03d true source-run RED](architecture/ZAPRET2_TZ6V5_S03D_PID_FD9_FORCE_RED_NATIVE.md) reads original launcher/CLI and runs only test-owned `/bin/sleep` + private FreeBSD FD9 on disposable guest, never actual router PID or running engine. CI PENDING, no production `src/` changes, `os-zapret2-restyle-0.6.5_136.pkg` NOT built/published, owner `_117` untouched. S03 still NO-GO: V5-15 implementation, CLI Help/Reload/locale and #1223/#1224 remain. S04–S20 NOT RUN.
