@@ -1,0 +1,74 @@
+name: TZ6v5 S03e3i installed Auto schema3 RUNNING Lab restoration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/test-tz6v5-s03e3i-auto-learning-lab.py
+      - .github/workflows/tz6v5-s03e3i-auto-learning-lab.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fast:
+    name: S03e3i strict real Auto schema3 Lab physical receipt contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Verify test only, negative receipts and Linux refusal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile scripts/test-tz6v5-s03e3i-auto-learning-lab.py
+          python3.13 scripts/test-tz6v5-s03e3i-auto-learning-lab.py --self-test
+          if GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_S03E3I_DISPOSABLE_NATIVE=1 \
+             python3.13 scripts/test-tz6v5-s03e3i-auto-learning-lab.py run > /tmp/s03e3i-refusal.txt 2>&1; then
+            echo '::error::CI native gate accepted Linux'
+            exit 1
+          fi
+          grep -q S03E3I_DISPOSABLE_OPNSENSE_ONLY /tmp/s03e3i-refusal.txt
+
+  native:
+    needs: fast
+    name: Genuine installed Common Auto schema3 learning and standard Lab
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: True OPNsense 26.7 official Mk package, HTTPS Apply, dvtws2 and Lab
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1
+            export ZAPRET2_S03E3I_DISPOSABLE_NATIVE=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
+            /usr/local/bin/python3 scripts/test-tz6v5-s03e3i-auto-learning-lab.py run
