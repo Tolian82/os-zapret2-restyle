@@ -1146,6 +1146,10 @@ shared_apply_boot_service()
         # Reuse the authoritative non-mutating Apply probe for engine
         # census, mapped native argv and exact installed IPFW ownership.
         apply_runtime_probe "$_shared_boot_dir/release" 1 || return 69
+        # Only a VERIFIED new RUNNING owner may retire the original
+        # delayed-exit diagnostic; never clear on a failed activation.
+        "$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
+            runtime-exit-clear "$_shared_boot_id" >/dev/null || return 70
         printf "native-common-boot=%s\n" "$_shared_boot_id"
         return 0
     fi
@@ -1259,6 +1263,10 @@ shared_apply_boot_service()
         # rollback or print a successful boot receipt after uncertain state.
         common_error "native common boot: committed runtime or IPFW not verified"
         return 70
+    fi
+    if [ "$_shared_boot_mode" = 1 ]; then
+        "$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
+            runtime-exit-clear "$_shared_boot_id" >/dev/null || return 70
     fi
     printf "native-common-boot=%s\n" "$_shared_boot_id"
 }
@@ -3674,8 +3682,13 @@ service_with_lifecycle_lock()
                     case "$_shared_owner" in
                         committed\ *)
                             [ "$#" -eq 3 ] || return 69
-                            shared_apply_stop_service "$_shared_owner" "$3"
-                            return $?
+                            # Stop verifies exact monitored PID and original
+                            # seal/Config/kernel before any notification.
+                            shared_apply_stop_service "$_shared_owner" "$3" || return $?
+                            _exit_owner_id=$(printf '%s\n' "$_shared_owner" | cut -d ' ' -f 2)
+                            "$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
+                                runtime-exit-record "$_exit_owner_id" >/dev/null || return 70
+                            return 0
                             ;;
                         none|restored) ;;
                         *) return 69 ;;

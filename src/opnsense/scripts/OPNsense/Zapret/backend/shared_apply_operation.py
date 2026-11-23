@@ -13,6 +13,7 @@ directories for fault tests; never pass an arbitrary root via production CLI.
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -233,13 +234,21 @@ def _validate_record(record: object) -> dict:
     # Existing unextended records remain readable; a new transaction can
     # retain precisely ONE predecessor inside the SAME durable journal.
     # No external previous-owner database or second lifecycle is introduced.
-    if not isinstance(record, dict) or set(record) not in (
+    # Failure metadata is optional only on a formerly committed owner.
+    # Every original schema-1 record without it remains byte-compatible.
+    keys = set(record) if type(record) is dict else set()
+    allowed = (
         {"schema", "phase", "detail"},
         {"schema", "phase", "detail", "previous"},
         {"schema", "phase", "detail", "found"},
         {"schema", "phase", "detail", "previous", "found"},
-    ) or type(record["schema"]) is not int or record["schema"] != SCHEMA \
-            or record["phase"] not in PHASES:
+    )
+    if (type(record) is not dict or
+            (keys - {"failure"}) not in allowed or
+            ("failure" in record and (record.get("phase") != "committed" or
+                                      "found" in record)) or
+            type(record["schema"]) is not int or record["schema"] != SCHEMA or
+            record["phase"] not in PHASES):
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
     # No old Voice/Strategies record may invent protected physical or
@@ -252,6 +261,25 @@ def _validate_record(record: object) -> dict:
         _validate_detail(record["previous"])
         if record["previous"]["id"] == record["detail"]["id"]:
             raise SharedOperationError("common Apply predecessor ID reused")
+    if "failure" in record:
+        failure = record["failure"]
+        if (record["phase"] != "committed" or type(failure) is not dict or
+                set(failure) != {"schema", "code", "action", "operation_id",
+                                 "observed_at", "exit_status"} or
+                type(failure["schema"]) is not int or failure["schema"] != 1 or
+                failure["code"] != "ENGINE_EXIT_AFTER_READY" or
+                failure["action"] != "runtime-failure" or
+                failure["operation_id"] != record["detail"]["id"] or
+                failure["exit_status"] is not None or
+                type(failure["observed_at"]) is not str or
+                len(failure["observed_at"]) != 20):
+            raise SharedOperationError("untrusted original runtime failure receipt")
+        try:
+            at = datetime.strptime(failure["observed_at"], "%Y-%m-%dT%H:%M:%SZ")
+            if at.strftime("%Y-%m-%dT%H:%M:%SZ") != failure["observed_at"]:
+                raise ValueError("noncanonical")
+        except ValueError as exc:
+            raise SharedOperationError("untrusted original runtime failure time") from exc
     return record
 
 
@@ -621,6 +649,45 @@ class SharedApplyOperation:
             raise SharedOperationError("common Apply owner changed during Remove rollback")
         restored = dict(before)
         restored["phase"] = "restored"
+        return self._persist_record(restored)
+
+    def record_runtime_exit(self, operation_id: str) -> dict:
+        """Original FD9 owner only: persist a *verified post-ready absence*.
+
+        Caller already proved exact old PID, sealed release, scoped IPFW
+        ownership, and completed the original Stop before this commit.
+        The journal cannot infer a signal, engine exit code or raw stderr.
+        """
+        if type(operation_id) is not str or not OP_ID.fullmatch(operation_id):
+            raise SharedOperationError("invalid original runtime failure ID")
+        before = self.read()
+        if (before is None or before["phase"] != "committed" or
+                before["detail"]["id"] != operation_id):
+            raise SharedOperationError("original runtime failure owner changed")
+        if "failure" in before:
+            return before  # duplicate callback never overwrites the first event
+        at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        event = {"schema": 1, "code": "ENGINE_EXIT_AFTER_READY",
+                 "action": "runtime-failure", "operation_id": operation_id,
+                 "observed_at": at, "exit_status": None}
+        if self.read() != before:
+            raise SharedOperationError("original runtime failure journal raced")
+        return self._persist_record({**before, "failure": event})
+
+    def clear_runtime_exit(self, operation_id: str) -> dict:
+        """Only after original FD9 boot has verified the new RUNNING owner."""
+        if type(operation_id) is not str or not OP_ID.fullmatch(operation_id):
+            raise SharedOperationError("invalid original running owner ID")
+        before = self.read()
+        if (before is None or before["phase"] != "committed" or
+                before["detail"]["id"] != operation_id):
+            raise SharedOperationError("original runtime success owner changed")
+        if "failure" not in before:
+            return before
+        if self.read() != before:
+            raise SharedOperationError("original runtime success journal raced")
+        restored = dict(before)
+        del restored["failure"]
         return self._persist_record(restored)
 
     def _persist_record(self, record: dict) -> dict:
@@ -1080,6 +1147,10 @@ def main(argv: list[str]) -> int:
     finish_review_native = (len(argv) == 3 and argv[1] == "finish-reviewed-native" and
                             bool(OP_ID.fullmatch(argv[2])))
     finish_review = len(argv) == 3 and argv[1] == "finish-reviewed-legacy" and bool(OP_ID.fullmatch(argv[2]))
+    runtime_record = (len(argv) == 3 and argv[1] == "runtime-exit-record" and
+                      bool(OP_ID.fullmatch(argv[2])))
+    runtime_clear = (len(argv) == 3 and argv[1] == "runtime-exit-clear" and
+                     bool(OP_ID.fullmatch(argv[2])))
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
     finish = len(argv) == 3 and argv[1] == "finish-saved" and bool(OP_ID.fullmatch(argv[2]))
@@ -1089,14 +1160,35 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or recovery or finish or pristine or cold_restore or native_gate_request):
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or runtime_record or runtime_clear or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
     try:
         from voice_ipfw_adapter import require_lifecycle_lock
         require_lifecycle_lock()
-        if found_pending:
+        if runtime_record or runtime_clear:
+            # The original FD9 alone is insufficient to invent an event.
+            # Reuse the existing sealed Common/kernel/process inspector
+            # immediately before the original journal writer. No PID matcher.
+            from voice_live_inspect import examine_shared
+            store = SharedApplyOperation(owner=0)
+            original = store.read()
+            observed = examine_shared(original)
+            expected = "stopped" if runtime_record else "ready"
+            if (original is None or original["phase"] != "committed" or
+                    original["detail"]["id"] != argv[2] or
+                    type(observed) is not dict or
+                    observed.get("source") != "native-common" or
+                    observed.get("state") != expected):
+                raise SharedOperationError("original runtime receipt missing live owner proof")
+            if runtime_record:
+                store.record_runtime_exit(argv[2])
+                print("original-runtime-exit=recorded")
+            else:
+                store.clear_runtime_exit(argv[2])
+                print("original-runtime-exit=cleared")
+        elif found_pending:
             record = SharedApplyOperation().read()
             if record is not None and "found" in record:
                 print(record["detail"]["id"])

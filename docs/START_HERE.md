@@ -1,4 +1,10 @@
-## 23.11.2026 — CURRENT TZ6v5 S05b1 original Apply error read-only source candidate
+## 23.11.2026 — CURRENT TZ6v5 S05b2a original post-ready engine exit candidate
+
+**Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=157`, `v0.6.5_157`; prospective CI-only `os-zapret2-restyle-0.6.5_157.pkg` **NOT published or installed on operator device**. Base merged `main _156 ddfa341b` after S05b1. [S05b2a contract](architecture/ZAPRET2_TZ6V5_S05B2A_ORIGINAL_LATE_EXIT.md) adds one bounded original FD9-protected post-ready `dvtws2` exit receipt to the SAME root-owned shared Apply journal, only after original Stop+manifest+IPFW proof; original verified RUNNING boot clears the receipt. No second writer, no guessed exit code, no raw stderr. Source+disposable native exact-head acceptance mandatory. **Full S05 remains NO-GO; S06+ blocked.** Related #1269/#1223/#1224/#1225 OPEN, no public package.
+
+---
+
+## 23.11.2026 — HISTORICAL TZ6v5 S05b1 original Apply error read-only source candidate
 
 **Source identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=156`, `v0.6.5_156`; prospective CI-only `os-zapret2-restyle-0.6.5_156.pkg` **NOT published/installed on operator device**. Base merged `main _155 8be9ca9e` after S05a native/exact-head SUCCESS. [S05b1 source contract](architecture/ZAPRET2_TZ6V5_S05B1_ORIGINAL_APPLY_ERROR.md): read existing original root-owned Apply journal `restore-failed/requires-review` only when S04 reports stale+INCOMPLETE; output bounded fixed code/action/operation ID, never raw Config/domain/IP/argv or invented engine rc. S05a physical Status/rc preserved; diagnostic absent remains unknown. **S05b1 candidate only, full S05 NO-GO; S06+ blocked.** #1269; original #1223/#1224/#1225 open.
 
