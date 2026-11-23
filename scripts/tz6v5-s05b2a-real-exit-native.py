@@ -143,11 +143,48 @@ def real_fault():
         if "failure" in row:
             final = row
             break
-    s04.need(final is not None and final["detail"]["id"] == owner_id and
+    if final is None:
+        # Actual supervisor delivery must pass WITHOUT manual intervention.
+        # This is a diagnostic-only original FD9 callback AFTER the failed
+        # native acceptance; success here does NOT turn the native gate green.
+        before_direct = original_record()
+        live = s04.run([str(SERVICE), "status", "--json"], timeout=40)
+        try:
+            observed = json.loads(live.stdout)
+            runtime = observed.get("runtime_state", "unknown")
+            if runtime not in ("RUNNING", "STOPPED", "INCOMPLETE",
+                               "FOREIGN_OR_UNVERIFIED", "UNKNOWN"):
+                runtime = "unknown"
+        except ValueError:
+            runtime = "invalid"
+        monitor = Path("/var/run/zapret2-supervisor-monitor.pid").exists()
+        child = PID.exists()
+        stagefile = Path("/var/run/zapret2-execution.status")
+        stage = "absent"
+        if stagefile.exists() and stagefile.is_file():
+            # Only expose a bounded enumerated stage state; never the
+            # original stage message, argv, Config or IPFW.
+            items = stagefile.read_text(errors="replace")[:2048].split("|")
+            if len(items) >= 4 and items[3] in ("running", "ok", "failed", "stopped"):
+                stage = items[3]
+            else:
+                stage = "unqualified"
+        direct = s04.run([str(SERVICE), "runtime-failure",
+                          "dvtws2 exited after the service reached ready state",
+                          source_pid], timeout=125)
+        now = original_record()
+        result = "recorded" if "failure" in now else "absent"
+        s04.need(False, "S05B2_SUPERVISOR_CALLBACK_UNCONFIRMED_" +
+                 runtime + "_status" + str(live.returncode) +
+                 "_monitor" + str(int(monitor)) +
+                 "_pidfile" + str(int(child)) +
+                 "_stage" + stage +
+                 "_direct" + str(direct.returncode) + "_" + result)
+    s04.need(final["detail"]["id"] == owner_id and
              final["failure"].get("operation_id") == owner_id and
              final["failure"].get("code") == "ENGINE_EXIT_AFTER_READY" and
              final["failure"].get("exit_status") is None,
-             "S05B2_ORIGINAL_SUPERVISOR_RECEIPT_ABSENT")
+             "S05B2_ORIGINAL_SUPERVISOR_RECEIPT_INVALID")
     rows.append(status_json("real-post-ready-exit", "STOPPED",
                             "COMPONENTS_PRESENT_REQUIRES_PREFLIGHT", error=True))
     # Native common Start is allowed to clear only after full sealed owner,
