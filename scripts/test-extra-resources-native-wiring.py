@@ -125,10 +125,10 @@ require("remove-test-commit-interrupt" in preflight_branch.rstrip(")").split("|"
 # Match ONLY a top-level fallback arm: an embedded 'case "$#" in' in the
 # S05 Status parser also has an indented '*)' and must not be mistaken for
 # the unlocked service fallback. Do not weaken R4's negative-route proof.
-outer_fallbacks = list(re.finditer(r"(?m)^    \\*\\)$", outer_case))
+outer_fallbacks = list(re.finditer(r"(?m)^    \*\)$", outer_case))
 require(len(outer_fallbacks) == 1,
         "original top-level unlocked fallback is missing or ambiguous")
-unlocked_fallback = outer_case[outer_fallbacks[0].end():].split("\\n        ;;", 1)[0]
+unlocked_fallback = outer_case[outer_fallbacks[0].end():].split("\n        ;;", 1)[0]
 require('service_dispatch "$@"' in unlocked_fallback and
         "remove-test-commit-interrupt" not in unlocked_fallback and
         "extra-resources-remove" not in unlocked_fallback,
