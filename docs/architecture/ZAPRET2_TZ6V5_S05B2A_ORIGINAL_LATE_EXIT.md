@@ -23,3 +23,7 @@ A **new dedicated disposable native OPNsense 26.7 VM** installs the exact PR pac
 ## Still outside this bounded step
 
 An engine killed by a deliberate signal is a genuine exit **after ready**, but the original daemon/supervisor wrapper does not return the upstream process's actual exit code. Consequently S05b2a cannot claim `ENGINE_EXIT_EARLY`, a precise native exit rc or causal raw stderr. These remain **NO-GO** until an authentic original producer/attestation can carry them. Setup/pkg/Lab and general Start/Stop/Restart errors, original plain Status historical FD9 side effect, GUI RU/EN and full S05 native acceptance remain later S05b2b/S05c work. No public `_157.pkg`, no operator-device change and no full S05 GO.
+
+## Later bounded S05b2b2 compatibility boundary (source candidate `_159`)
+
+The S05b2a `committed`-only runtime `failure` restriction remains exact **for post-ready events**. S05b2b2 extends the SAME schema-1 original journal to allow a different, strictly validated `ENGINE_START_UNVERIFIED` receipt only while the new Apply is already `requires-review` and no Found intent is present; never reinterpret an unverified PID as process exit. The original `ENGINE_EXIT_AFTER_READY` writer/reader and all fixed native post-ready guarantees remain unchanged. Only genuine failed readiness causes `no-live-pid`/`stability-unverified` are allowed with null native exit status. Full S05 and physical early event GO remain pending. See the current [ordered plan](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).

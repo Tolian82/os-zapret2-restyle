@@ -91,6 +91,8 @@ launcher_start_once()
     _launcher_once_pidfile="$3"
     _launcher_once_log="$4"
     _launcher_once_stability="${5:-5}"
+    # Readiness is all this launcher can attest; no native wait(2) rc.
+    LAUNCHER_FAILURE_STAGE=
     _launcher_once_daemon="${LAUNCHER_DAEMON_BIN:-/usr/sbin/daemon}"
     _launcher_once_argv=$(mktemp /tmp/zapret-launcher-argv.XXXXXX) ||
         return 1
@@ -163,6 +165,7 @@ launcher_start_once()
     done
 
     launcher_is_running "${_launcher_once_pidfile}" || {
+        LAUNCHER_FAILURE_STAGE=no-live-pid
         common_error "dvtws2 did not create a live PID"
         return 1
     }
@@ -170,6 +173,7 @@ launcher_start_once()
     _launcher_once_stable=0
     while [ "${_launcher_once_stable}" -lt "${_launcher_once_stability}" ]; do
         launcher_is_running "${_launcher_once_pidfile}" || {
+            LAUNCHER_FAILURE_STAGE=stability-unverified
             common_error "dvtws2 exited during startup stability window"
             launcher_stop "${_launcher_once_pidfile}" 1
             return 1

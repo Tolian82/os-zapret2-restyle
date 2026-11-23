@@ -42,9 +42,18 @@ for MODE in missing stable; do
             return 1
         }
         sleep() { :; }  # accelerate the existing 10 readiness polls
-        launcher_start_once "$ROOT/mock-engine" "$ROOT/args" \
-            "$ROOT/child.pid" "$ROOT/engine.log" 1
+        if launcher_start_once "$ROOT/mock-engine" "$ROOT/args" \
+            "$ROOT/child.pid" "$ROOT/engine.log" 1; then
+            exit 0
+        else
+            printf '%s\n' "$LAUNCHER_FAILURE_STAGE" > "$ROOT/stage-$MODE"
+            exit 1
+        fi
     ) > "$ROOT/out-$MODE" 2>&1 && fail "$MODE accepted engine without verified readiness"
+    case "$MODE" in
+        missing) [ "$(cat "$ROOT/stage-$MODE")" = no-live-pid ] || fail "missing PID stage not original" ;;
+        stable) [ "$(cat "$ROOT/stage-$MODE")" = stability-unverified ] || fail "stability stage not original" ;;
+    esac
     case "$MODE" in
         missing) grep -Fq 'dvtws2 did not create a live PID' "$ROOT/out-$MODE" || fail 'missing fixed reason' ;;
         stable) grep -Fq 'dvtws2 exited during startup stability window' "$ROOT/out-$MODE" || fail 'missing fixed reason' ;;

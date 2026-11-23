@@ -1530,6 +1530,18 @@ shared_apply_activate_and_commit_service()
         # because a shell status is zero or APPLY_PHASE was reset.
         shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        # The verified original launcher failed to confirm readiness.
+        # Persist only its fixed reason in THIS FD9 operation; no guessed
+        # child exit status, second writer, or raw stderr. Found has its own WAL.
+        if [ "${_shared_found_scope:-}" = ordinary ]; then
+            case "${APPLY_EARLY_ENGINE_FAILURE:-}" in
+                no-live-pid|stability-unverified)
+                    "$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
+                        record-early-start "$_shared_apply_id" \
+                        "$APPLY_EARLY_ENGINE_FAILURE" >/dev/null || return 70
+                    ;;
+            esac
+        fi
         printf '%s\n' 'shared-apply-guard=activate' >&2
         return 70
     fi
