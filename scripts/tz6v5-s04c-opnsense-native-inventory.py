@@ -4,6 +4,7 @@ Fixtures mutate only test VMs BEFORE observation. The inventory never mutates.
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
@@ -290,8 +291,12 @@ def hot():
 
 def main(argv):
     if argv == ["--self-test"]:
-        need("os.kill(" not in Path(__file__).read_text() and
-             "shutil.rmtree(" not in Path(__file__).read_text(),
+        tree = ast.parse(Path(__file__).read_text())
+        unsafe = {"kill", "rmtree", "unlink", "remove", "replace", "rename"}
+        need(not any(isinstance(node, ast.Call) and
+                     isinstance(node.func, ast.Attribute) and
+                     node.func.attr in unsafe
+                     for node in ast.walk(tree)),
              "S04C_TEST_RUNNER_UNSAFE")
         print("PASS_S04C_SOURCE_GATE")
         return 0
