@@ -103,12 +103,12 @@ def native_wan_start_error_browser(mode):
     print('S03E3_GENUINE_NATIVE_START_USEREXCEPTION_BROWSER_' + mode.upper() + '=PASS')
 
 
-def s03e3c_native_stop_restart_http_red(mode):
+def s03e3c_native_stop_restart_http_red(mode, green=False):
     """Actual installed PHP POST Stop + Restart while SSH guest holds original FD9.
 
     The only browser mocks are read-only runtime and resources display,
     needed to show the Stop control without an installed upstream engine.
-    Mutation HTTP is never intercepted. This records original RED, not a fix.
+    Mutation HTTP is never intercepted. RED and GREEN are separate explicit modes.
     """
     import select
     import subprocess
@@ -210,22 +210,47 @@ def s03e3c_native_stop_restart_http_red(mode):
                               dataType:'json', timeout:100000});
                     }""")
                 restart = restart_result.value
-                need(stop.status == 200 and restart.status == 200,
-                     'S03E3C_OLD_NATIVE_API_HTTP_STATUS_CHANGED')
-                for label, response in (('stop',stop),('restart',restart)):
-                    payload = response.json()
-                    need(isinstance(payload, dict) and
-                         isinstance(payload.get('response'), str),
-                         'S03E3C_INHERITED_PHP_RESPONSE_SHAPE_CHANGED_' + label)
-                    text_response = payload['response'].strip()
-                    observed[label] = ('EMPTY' if not text_response else
-                                       'OK' if text_response == 'OK' else
-                                       'OTHER_REDACTED')
-                page.wait_for_timeout(400)
                 error_title = ('Ошибка управления службой' if mode == 'ru'
                                else 'Service operation failed')
-                need(page.get_by_text(error_title, exact=False).count() == 0,
-                     'S03E3C_OLD_GUI_ALREADY_DISPLAYS_STOP_FAILURE')
+                if green:
+                    # A genuine UserException from installed PHP must surface
+                    # as HTTP failure, not a fake 200 or intercepted fixture.
+                    for label, response in (('stop', stop), ('restart', restart)):
+                        need(400 <= response.status < 600,
+                             'S03E3D_NATIVE_HTTP_DID_NOT_REFUSE_' + label)
+                        payload = response.json()
+                        need(isinstance(payload, dict) and
+                             isinstance(payload.get('errorMessage'), str) and
+                             len(payload['errorMessage']) > 10 and
+                             isinstance(payload.get('errorTitle'), str) and
+                             bool(payload['errorTitle']),
+                             'S03E3D_INSTALLED_USEREXCEPTION_NOT_DELIVERED_' + label)
+                        need(payload['errorMessage'] not in
+                             ('zapret-api-lifecycle-v1:stop:stopped',
+                              'zapret-api-lifecycle-v1:restart:running'),
+                             'S03E3D_RAW_TERMINAL_RECEIPT_LEAK')
+                        observed[label] = 'NATIVE_ERROR'
+                    page.get_by_text(error_title, exact=False).first.wait_for(
+                        state='visible', timeout=15000)
+                    stop_message = ('Не удалось остановить Zapret2.' if mode == 'ru'
+                                    else 'Zapret2 could not be stopped.')
+                    page.get_by_text(stop_message, exact=False).first.wait_for(
+                        state='visible', timeout=15000)
+                else:
+                    need(stop.status == 200 and restart.status == 200,
+                         'S03E3C_OLD_NATIVE_API_HTTP_STATUS_CHANGED')
+                    for label, response in (('stop',stop),('restart',restart)):
+                        payload = response.json()
+                        need(isinstance(payload, dict) and
+                             isinstance(payload.get('response'), str),
+                             'S03E3C_INHERITED_PHP_RESPONSE_SHAPE_CHANGED_' + label)
+                        text_response = payload['response'].strip()
+                        observed[label] = ('EMPTY' if not text_response else
+                                           'OK' if text_response == 'OK' else
+                                           'OTHER_REDACTED')
+                    page.wait_for_timeout(400)
+                    need(page.get_by_text(error_title, exact=False).count() == 0,
+                         'S03E3C_OLD_GUI_ALREADY_DISPLAYS_STOP_FAILURE')
                 need(mutating_calls == ['stop', 'restart'],
                      'S03E3C_UNEXPECTED_NATIVE_MUTATING_HTTP_ROUTE')
                 context.close()
@@ -251,13 +276,23 @@ def s03e3c_native_stop_restart_http_red(mode):
             need(holder.returncode == 0 and
                  'S03E3C_NATIVE_HTTP_CONFIG_IPFW_ENGINE_UNCHANGED=PASS' in output,
                  'S03E3C_NATIVE_POST_HTTP_WITNESS_NOT_CONFIRMED')
-    print('S03E3C_GENUINE_PHP_STOP_RESTART_HTTP_RED_' + mode.upper() + '=' +
-          json.dumps({'http_stop':200, 'http_restart':200,
-                      'inherited_response_class':observed,
-                      'old_gui_stop_failure_visible':False,
-                      'original_fd9_busy':True,
-                      'native_config_ipfw_engine_unchanged':True,
-                      'physical_stop_restart_executed':False}, sort_keys=True))
+    if green:
+        print('S03E3D_GENUINE_NATIVE_PHP_STOP_RESTART_HTTP_GREEN_' + mode.upper() + '=' +
+              json.dumps({'real_http_stop':stop.status,
+                          'real_http_restart':restart.status,
+                          'backend_response':observed,
+                          'localized_stop_failure_visible':True,
+                          'original_fd9_busy':True,
+                          'native_config_ipfw_engine_unchanged':True,
+                          'physical_stop_restart_executed':False}, sort_keys=True))
+    else:
+        print('S03E3C_GENUINE_PHP_STOP_RESTART_HTTP_RED_' + mode.upper() + '=' +
+              json.dumps({'http_stop':200, 'http_restart':200,
+                          'inherited_response_class':observed,
+                          'old_gui_stop_failure_visible':False,
+                          'original_fd9_busy':True,
+                          'native_config_ipfw_engine_unchanged':True,
+                          'physical_stop_restart_executed':False}, sort_keys=True))
 
 
 def real_browser():
@@ -389,6 +424,8 @@ def main():
             native_wan_start_error_browser('en' if 'en' in sys.argv[1] else 'ru')
         elif sys.argv[1:] in (['--s03e3c-en-browser'], ['--s03e3c-ru-browser']):
             s03e3c_native_stop_restart_http_red('en' if 'en' in sys.argv[1] else 'ru')
+        elif sys.argv[1:] in (['--s03e3d-en-browser'], ['--s03e3d-ru-browser']):
+            s03e3c_native_stop_restart_http_red('en' if 'en' in sys.argv[1] else 'ru', green=True)
         elif sys.argv[1:] == ['--browser']:
             need(not RESULT.exists() and not RESULT.is_symlink(), 'RECEIPT_PREEXISTS')
             result = real_browser()
