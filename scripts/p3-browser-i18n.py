@@ -655,6 +655,15 @@ def check_lab_guidance(page, mode: str) -> bool:
 def check_voice(page, mode: str) -> tuple[dict[str, str], bool]:
     wait_native_load(page, "/api/zapret/voice/load", "/ui/zapret/voice", "frm_VoiceSettings")
     wait_locale(page, mode)
+    # S03e2: true installed Chromium DOM in both EN/RU, never a source-only
+    # assertion. Voice has no independent Start/Stop entrypoint or service.
+    need(page.locator("#voiceServiceControl").count() == 0 and
+         page.locator("#voiceServiceControlSlot").count() == 0,
+         "S03E2_VOICE_DUPLICATE_LIFECYCLE_BUTTON_" + mode)
+    need(page.locator("#voiceServiceState").count() == 1 and
+         page.locator("#voiceIPFWState").count() == 1 and
+         page.locator("#voiceApply").count() == 1,
+         "S03E2_VOICE_READONLY_STATUS_OR_SHARED_APPLY_MISSING_" + mode)
     labels = (
         ("Telegram — параметры", "Параметры передачи голоса", "Проверить")
         if mode == "ru" else
