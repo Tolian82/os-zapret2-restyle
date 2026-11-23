@@ -42,7 +42,7 @@ jobs:
 
   native:
     needs: fast
-    name: Three genuine Auto Lab sessions, no retry after failed stage20
+    name: One genuine Lab, original Stage20 monotonic timing read-only
     runs-on: ubuntu-latest
     timeout-minutes: 85
     steps:

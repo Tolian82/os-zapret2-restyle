@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """TZ6v5 S03e3j: real Auto Lab Stage20 refusal sampling (S03, NOT a fix).
 
-Run three complete un-cancelled Standard Lab jobs only if each earlier job
-returned the original service to a verified RUNNING state. Stop the sampling
+Run exactly one genuine un-cancelled Standard Lab job. Read its already-
+persisted original Python timing telemetry without any runtime instrumentation. Stop the sampling
 immediately on any physical uncertainty. No custom Stop/Start, no guest
 instrumentation of the native worker, no fabricated delay or forced recovery.
 """
@@ -23,7 +23,7 @@ JOURNAL = Path("/var/db/zapret2/shared-apply/operation.json")
 ENGINE = Path("/usr/local/etc/zapret2/binaries/my/dvtws2")
 SERVICE = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh")
 LAB = "/api/zapret/strategy_lab/"
-SESSIONS = 3
+SESSIONS = 1
 SHA = re.compile(r"[a-f0-9]{40}\Z")
 STAGES = frozenset(("00", "10", "20", "30", "40", "50", "60",
                     "70", "80", "85", "90", "99"))
@@ -68,6 +68,47 @@ def bounded_stop_window(observed):
     seconds = max(0.0, min(after[0] - starts[0], 30.0))
     return "0-5s" if seconds < 5 else "5-9s" if seconds < 9 else "9-12s" if seconds < 12 else "12s+"
 
+
+
+def stage20_original_telemetry(document):
+    """Validate the actual Python-owned monotonic Stage20 adapter measurement.
+
+    No source wrapper, no guessed child exit code. The duration spans the
+    adapter invocation; it is not the nested native Stop duration.
+    """
+    need(type(document) is dict and document.get("schema") == 1 and
+         type(document.get("events")) is list and
+         len(document["events"]) <= 128,
+         "S03E3K_TELEMETRY_SCHEMA_UNVERIFIED")
+    matches = [x for x in document["events"] if type(x) is dict
+               and x.get("phase") == "stage_adapter" and
+               x.get("stage") == "20"]
+    need(len(matches) == 1, "S03E3K_STAGE20_TIMING_NOT_UNIQUE")
+    event = matches[0]
+    millis = event.get("duration_ms")
+    details = event.get("details")
+    need(type(millis) is int and 0 <= millis <= 120000 and
+         event.get("outcome") in ("pass", "error", "timeout") and
+         type(details) is dict and details.get("action") == "20" and
+         details.get("operation_timeout_seconds") is None,
+         "S03E3K_STAGE20_TIMING_INVALID")
+    return {"duration_ms": millis,
+            "adapter_outcome": event["outcome"],
+            "source": "original_monotonic_stage_adapter",
+            "native_stop_rc": "not_recorded"}
+
+
+def read_original_stage20_telemetry(job):
+    """Root-owned original Lab data, bounded read-only, zero data disclosure."""
+    need(type(job) is str and re.fullmatch(r"job\.[A-Za-z0-9]{4,40}", job),
+         "S03E3K_JOB_ID_UNVERIFIED")
+    path = Path("/var/run/zapret2-restyle/strategy-lab/jobs") / job / "timing-telemetry.json"
+    stat = path.lstat()
+    need(path.is_file() and not path.is_symlink() and stat.st_uid == 0 and
+         stat.st_nlink == 1 and 8 <= stat.st_size <= 262144,
+         "S03E3K_SOURCE_TIMING_FILE_UNTRUSTED")
+    data = json.loads(path.read_bytes())
+    return stage20_original_telemetry(data)
 
 def classify_stage20(summary, physical_good, active_auto, *, original_rc=None):
     """Bounded outcome only. No observed original rc is allowed or implied."""
@@ -114,6 +155,40 @@ def self_test():
     need(bounded_stop_window([("20", 1.0), ("30", 12.0)]) == "9-12s" and
          bounded_stop_window([]) == "unknown",
          "S03E3J_STOP_WINDOW_CLASSIFICATION_INVALID")
+    original = {
+        "schema": 1, "events": [
+            {"phase": "stage_adapter", "stage": "10",
+             "outcome": "pass", "duration_ms": 20,
+             "details": {"action": "10", "operation_timeout_seconds": None}},
+            {"phase": "stage_adapter", "stage": "20",
+             "outcome": "error", "duration_ms": 7312,
+             "details": {"action": "20", "operation_timeout_seconds": None}},
+        ],
+    }
+    verified = stage20_original_telemetry(original)
+    need(verified == {
+        "duration_ms": 7312, "adapter_outcome": "error",
+        "source": "original_monotonic_stage_adapter",
+        "native_stop_rc": "not_recorded",
+    }, "S03E3K_VALID_NATIVE_MONOTONIC_RECEIPT_REJECTED")
+    for forged in (
+        {**original, "schema": 2},
+        {**original, "events": []},
+        {**original, "events": original["events"] + [original["events"][1]]},
+        {**original, "events": [original["events"][0],
+            {**original["events"][1], "duration_ms": "7312"}]},
+        {**original, "events": [original["events"][0],
+            {**original["events"][1], "duration_ms": True}]},
+        {**original, "events": [original["events"][0],
+            {**original["events"][1], "details":
+             {"action": "20", "operation_timeout_seconds": 10}}]},
+    ):
+        try:
+            stage20_original_telemetry(forged)
+        except Refused:
+            pass
+        else:
+            raise Refused("S03E3K_FORGED_NATIVE_TIMING_ACCEPTED")
     print("S03E3J_STOP_SAMPLE_FAST=PASS", flush=True)
 
 
@@ -239,10 +314,19 @@ def execute():
                            summary, report, extra, drift, hashed, h) or
                        (h.acceptance(terminal) and hashed.get("args_equal") is True)))
         stage20 = classify_stage20(summary, safe, acceptable)
+        timing = read_original_stage20_telemetry(job)
+        need((stage20["stage20"] == "FAIL" and
+              timing["adapter_outcome"] == "error") or
+             (stage20["stage20"] == "PASS" and
+              timing["adapter_outcome"] == "pass"),
+             "S03E3K_TIMING_OUTCOME_AND_STAGE20_MISMATCH")
         log = {
             "sample": iteration, "exact_sha": sha,
             "stage20": stage20["stage20"],
             "stage20_http_observed_window": time_bin,
+            "stage20_actual_adapter_duration_ms": timing["duration_ms"],
+            "stage20_actual_adapter_outcome": timing["adapter_outcome"],
+            "stage20_timing_source": timing["source"],
             "native_stop_rc": stage20["original_stop_rc"],
             "native_stop_timeout_proven": stage20["stop_timeout_proven"],
             "final_stage90": summary.get("stage90", "unknown"),
