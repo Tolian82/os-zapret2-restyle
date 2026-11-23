@@ -170,6 +170,26 @@ def witness(label, expected, *, preinstall=False):
                     removed = sum(k not in new_tree for k in altered)
                     changed.append("tree_" + category + "_" + str(len(altered))
                                    + "_new" + str(added) + "_del" + str(removed))
+                    if category == "pkgdb":
+                        # Only fixed generic SQLite file classes/field names.
+                        # No pathname, database content or absolute argv.
+                        for key in sorted(altered)[:2]:
+                            filename = Path(key).name
+                            kind = ("shm" if filename.endswith("-shm") else
+                                    "wal" if filename.endswith("-wal") else
+                                    "sqlite" if filename.endswith(".sqlite") else
+                                    "other")
+                            before_row, after_row = old_tree.get(key), new_tree.get(key)
+                            fields = []
+                            if isinstance(before_row, list) and isinstance(after_row, list):
+                                for index, field in ((2, "inode"), (7, "size"),
+                                                     (8, "mtime"), (9, "content")):
+                                    if len(before_row) > index and len(after_row) > index and before_row[index] != after_row[index]:
+                                        fields.append(field)
+                            else:
+                                fields.append("type")
+                            changed.append("pkgdb_" + kind + "_" +
+                                           ("-".join(fields) if fields else "unspecified"))
             if not any(s.startswith("tree_") for s in changed):
                 changed.append("tree_root")
         raise Refusal("S04C_INVENTORY_STATE_DRIFT_" + label + "__" +
