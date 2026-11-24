@@ -1,8 +1,10 @@
-## Current priority — TZ6v5 S10b1 original FD9 journal pin → S10b2/c physical transition and rollback
+## Current priority — TZ6v5 S10b2a original native fence → S10b2b bound transition → S10c crash recovery
 
-**Accepted baseline:** S09 formally GO and S10a [PR #1320](https://github.com/Tolian82/os-zapret2-restyle/pull/1320) merged to main `v0.6.5_199 a7544ab9` (main CI #45505005089, release classifier #45505005230 success). Current S10b1 source candidate `v0.6.5_200` (`VERSION=0.6.5`, `PLUGIN_REVISION=200`), [contract](architecture/ZAPRET2_TZ6V5_S10B1_ORIGINAL_JOURNAL_ROOT.md), [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) remains open. Same journal schema-1 PREPARED binds exact root/old seal/Config digest, checked under original FD9. Never second journal/seal. **S10b1 cannot activate**; next S10b2 must re-attest before ordinary physical transition. Source-only `os-zapret2-restyle-0.6.5_200.pkg` not public.
+**GO baseline:** S09, S10a and S10b1 accepted; current main `v0.6.5_200 f4d317b4`, original FD9 journal SHA pin integrated in [PR #1321](https://github.com/Tolian82/os-zapret2-restyle/pull/1321) with CI #45507746507 and release classifier #45507746498 SUCCESS. [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN. S10b2a source proposal `v0.6.5_201` (`VERSION=0.6.5`, `PLUGIN_REVISION=201`), [native original unbound fence/read-only bound proof](architecture/ZAPRET2_TZ6V5_S10B2A_NATIVE_UNBOUND_FENCE.md). No user/public `os-zapret2-restyle-0.6.5_201.pkg`.
 
-**Later S10c and S11:** power-cut after PREPARED/ACTIVATING/Config-save, semantic rollback, exact previous live owner/IPFW/P1-CAS, no guessed COMMITTED; then separate S11 original authoritative physical lifecycle. WAN-only Save and prestart Lab independent.
+**Safety:** Existing original `zapret_service.sh` must never select unbound legacy activation when sibling/pending or double root exists. Three read-only barriers before/at PREPARED/ACTIVATING preserve the original owner and prevent false success. No new Config, writer, FD or daemon. Proof returns NO authority until source/natively attested S10b2b physical gate. AUTO schema3 promotion must not borrow the old P2e argv witness.
+
+**Future:** S10b2b positive native bind/transition, then S10c multi-file semantic rollback, Config-save uncertainty and P1 CAS/ACK; S11 actual Start/Stop/Reload later. WAN-only Save and prestart Lab are independent.
 
 ---
 

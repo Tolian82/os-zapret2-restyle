@@ -1362,6 +1362,27 @@ shared_apply_bundle_service()
     [ -x "${PYTHON_RUNTIME}" ] || return 69
     "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_seal.py" "$1" "$2"
 }
+# Original FD9 legacy Apply has no S10 source attestation or bound root
+# handoff. A sibling/pending root or second sealed release root must NEVER
+# fall through its unbound PREPARED -> ACTIVATING path. This check does not
+# open, fix, delete, promote or interpret the proposed manifest. S10b2b must
+# add its separate positively attested bound transition before using a root.
+shared_apply_unbound_root_preflight_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    [ -d "$1" ] && [ ! -L "$1" ] &&
+    [ -d "$1/release" ] && [ ! -L "$1/release" ] || return 69
+    for _shared_root_fence in \
+        "$1/manifest.json" "$1/.manifest.json.pending" \
+        "$1/release/manifest.json" "$1/release/.manifest.json.pending"; do
+        # -L also detects a dangling symlink. Nothing can be silently
+        # unlinked, overwritten or misclassified as an absent candidate.
+        if [ -e "$_shared_root_fence" ] || [ -L "$_shared_root_fence" ]; then
+            return 69
+        fi
+    done
+    return 0
+}
 shared_apply_execute_service()
 {
     [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && [ "$3" = after-retirement ]; } || return 64
@@ -1376,6 +1397,13 @@ shared_apply_execute_service()
     [ -d "$_shared_apply_root/release" ] &&
     [ -f "$_shared_apply_root/candidate.xml" ] &&
     [ -f "$_shared_apply_root/plan.json" ] || return 69
+    # A root proposal is NOT an activation permit. Check before any
+    # original journal or Config/P1/kernel mutation (and again at the last
+    # PREPARED boundary); original legacy candidates remain unchanged.
+    if ! shared_apply_unbound_root_preflight_service "$_shared_apply_root"; then
+        printf '%s\n' preflight-rejected=manifest-unbound
+        return 0
+    fi
     # These gates run before the first durable Apply record and mutate
     # neither Config nor runtime/IPFW. Report their exact bounded stage
     # instead of mislabelling them as uncertain post-activation results.
@@ -1528,6 +1556,12 @@ shared_apply_execute_service()
             shared_apply_json_field '.result | select(.=="created" or .=="existing")') || return 69
         case "$_shared_owned_state" in created|existing) ;; *) return 69 ;; esac
     fi
+    # External root staging between the first preflight and the durable
+    # PREPARED/Found save MUST NOT inherit an unbound legacy activation.
+    if ! shared_apply_unbound_root_preflight_service "$_shared_apply_root"; then
+        printf '%s\n' preflight-rejected=manifest-unbound
+        return 0
+    fi
     if [ "$_shared_found_scope" = found ]; then
         if ! shared_apply_native_config found-save "$_shared_apply_id" \
             strategies "$_shared_apply_mode" >/dev/null; then
@@ -1562,6 +1596,13 @@ shared_apply_record_current_service()
 
 shared_apply_activate_and_commit_service()
 {
+    # Last no-mutation fence. If an immutable root appeared AFTER PREPARED
+    # (or after a Found-file save), retain the original uncertain journal
+    # rather than executing the old unbound launcher. Do not auto-clean it.
+    if ! shared_apply_unbound_root_preflight_service "$_shared_apply_root"; then
+        common_error "shared Apply: unbound root at PREPARED transition"
+        return 70
+    fi
     shared_apply_record_current_service activating "$_shared_apply_id" "$_shared_apply_page" \
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
     if ! apply_runtime_activate "$_shared_apply_root/release" "$_shared_apply_mode" "$_shared_apply_id" "$_shared_apply_candidate"; then

@@ -601,6 +601,12 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b1-original-journal-binding.py
+      - name: S10b2a original FD9 unbound root fence and read-only bound proof
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2a-original-unbound-fence.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          sh scripts/test-shared-apply-execute.sh
       - name: Validate fast path routing and strict private-curl source mismatch
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test
