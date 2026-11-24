@@ -1,10 +1,10 @@
-## Current priority — TZ6v5 S10b2a original native fence → S10b2b bound transition → S10c crash recovery
+## Current priority — TZ6v5 S10b2b1 schema3 original two-SHA witness → S10b2b2 bound FD9 gate → S10c crash recovery
 
-**GO baseline:** S09, S10a and S10b1 accepted; current main `v0.6.5_200 f4d317b4`, original FD9 journal SHA pin integrated in [PR #1321](https://github.com/Tolian82/os-zapret2-restyle/pull/1321) with CI #45507746507 and release classifier #45507746498 SUCCESS. [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN. S10b2a source proposal `v0.6.5_201` (`VERSION=0.6.5`, `PLUGIN_REVISION=201`), [native original unbound fence/read-only bound proof](architecture/ZAPRET2_TZ6V5_S10B2A_NATIVE_UNBOUND_FENCE.md). No user/public `os-zapret2-restyle-0.6.5_201.pkg`.
+**GO baseline:** main `v0.6.5_201 23dd4953`, accepted S10a/S10b1/S10b2a; [PR #1322](https://github.com/Tolian82/os-zapret2-restyle/pull/1322) 15/15 workflows SUCCESS, main CI #45510870065 and Chromium #45510870195 SUCCESS. [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN. **Candidate** `v0.6.5_202`, `VERSION=0.6.5`, `PLUGIN_REVISION=202`, prospective unpublished `os-zapret2-restyle-0.6.5_202.pkg`.
 
-**Safety:** Existing original `zapret_service.sh` must never select unbound legacy activation when sibling/pending or double root exists. Three read-only barriers before/at PREPARED/ACTIVATING preserve the original owner and prevent false success. No new Config, writer, FD or daemon. Proof returns NO authority until source/natively attested S10b2b physical gate. AUTO schema3 promotion must not borrow the old P2e argv witness.
+**S10b2b1:** [S10b2b1 original schema3 source bridge](architecture/ZAPRET2_TZ6V5_S10B2B1_SCHEMA3_ORIGINAL_SOURCE_BRIDGE.md). Genuine original P2e prepromotion source + postpromotion native schema3 must be independently paired by SHA and original source map, original sealed release, same PHP logical PREPARED journal; no inventing Auto final argv or giving detached proof runtime authority. Existing S10b2a native unbound-root fence remains mandatory and prevents legacy physical bypass.
 
-**Future:** S10b2b positive native bind/transition, then S10c multi-file semantic rollback, Config-save uncertainty and P1 CAS/ACK; S11 actual Start/Stop/Reload later. WAN-only Save and prestart Lab are independent.
+**S10b2b2:** qualify truthfully postpromotion final effective semantics/root schema3 and actual original FD9 POSITIVE gate for bound PREPARED only with saved WAN, Config/IPFW/engine predecessor preimages and original rollback. **S10c:** crash/uncertain Config::save, list-only P1 CAS/ACK, semantic restore and cold recovery. **S11:** single physical Start/Stop/Reload after S10 GO. WAN-only Save and prestart Lab unaffected.
 
 ---
 
