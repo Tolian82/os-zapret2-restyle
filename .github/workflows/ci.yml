@@ -555,6 +555,11 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+      - name: S05m execute actual reconfigure API fail-closed and positive path
+        run: |
+          php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php
+          php -l scripts/test-g07-runtime-api.php
+          php scripts/test-g07-runtime-api.php
       - name: S05l execute real Strategies Start Stop error handler and RU/EN localizer
         run: |
           python3.13 -m py_compile scripts/test-tz6v5-s03e2-gui-lifecycle-handler.py

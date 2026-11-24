@@ -704,17 +704,15 @@ class ServiceController extends ApiMutableServiceControllerBase
                 );
             }
         } catch (\Throwable $exception) {
-            $message = gettext('The new configuration could not be applied. The previous runtime was kept or restored.');
-            $stageFile = '/var/run/zapret2-execution.status';
-            if (is_readable($stageFile)) {
-                $record = trim((string)file_get_contents($stageFile));
-                $parts = explode('|', $record, 6);
-                if (count($parts) === 6 && $parts[3] === 'failed' && trim($parts[5]) !== '') {
-                    $message = trim($parts[5]);
-                }
-            }
+            // The legacy stage record has no action or operation ID.
+            // It can belong to a previous Start, Stop, or Apply and may
+            // contain an unsanitized last log line. A failed configd
+            // transport cannot correlate it with THIS reconfigure.
+            // Keep the protected native stage available for diagnosis;
+            // never promote its raw text or an unverified rollback claim
+            // into an HTTP UserException.
             throw new UserException(
-                $message,
+                gettext('Zapret2 reconfigure was not confirmed. Check service status and recovery before retrying.'),
                 gettext('Zapret configuration error')
             );
         }
