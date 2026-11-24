@@ -607,6 +607,11 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2a-original-unbound-fence.py
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
           sh scripts/test-shared-apply-execute.sh
+      - name: S10b2b1 genuine original P2e schema3 preimage and promoted SHA source bridge
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_source_bridge.py scripts/test-tz6v5-s10b2b1-original-schema3-preimage.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2b1-original-schema3-preimage.py
       - name: Validate fast path routing and strict private-curl source mismatch
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test
