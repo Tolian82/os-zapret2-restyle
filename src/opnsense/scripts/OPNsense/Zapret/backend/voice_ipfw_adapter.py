@@ -54,6 +54,11 @@ class IPFWAdapterError(VoiceFirewallError):
     pass
 
 
+class IPFWRuleAddRejected(IPFWAdapterError):
+    """An admitted native IPFW rule-add command returned nonzero."""
+    pass
+
+
 def require_lifecycle_lock() -> None:
     """Attest the existing common FD9; never acquire a separate lock."""
     if platform.system() != "FreeBSD" or os.geteuid() != 0:
@@ -210,6 +215,10 @@ class FreeBSDIPFWAdapter:
                     "ipfw: failed to request table info: No such process"
                 ):
                     return None
+            # Distinguish only a real rejected native rule-add command.
+            # Never forward child stderr, argv, addresses or an inferred engine rc.
+            if modifying and len(args) >= 3 and args[:2] == ("-qf", "add"):
+                raise IPFWRuleAddRejected("IPFW rule add command refused")
             raise IPFWAdapterError("IPFW command failed: operation not completed")
         return result.stdout
 
@@ -807,6 +816,15 @@ def main(argv: list[str]) -> int:
         else:
             shared_firewall_action(adapter, argv[2], previous, desired)
     except Exception as error:
+        # The original reversible install must have verified rollback.
+        # Foreign owners, preflight failures and partial restoration never
+        # receive a specific IPFW_ATTACH_FAILED receipt.
+        if (type(error) is VoiceFirewallError and
+                str(error) == "Voice IPFW activation failed; previous owned state restored" and
+                isinstance(error.__cause__, IPFWRuleAddRejected)):
+            print("ipfw-attach-failure=rule-add-rejected")
+            print("ERROR: IPFW_ATTACH_FAILED", file=sys.stderr)
+            return 1
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
     return 0
