@@ -240,7 +240,7 @@
 2. Отделить platform XML/WAN/configd/pkg adapters от общего компилятора, для будущей pfSense оставить **интерфейс**, не добавлять неподтверждённый порт.
 3. Проверить enum, отсутствующие поля/невалидные значения, прежний native WAN resolver (`wan_preflight`/`config_resolve_interface()` с допустимыми назначенными TUN/OPT, в том числе без IPv4), registered list IDs и лимиты. Не использовать stale `zapret.conf` для Lab WAN device.
 
-**S07a source-only candidate 24.11.2026, `_190`:** [strict typed saved-XML + registry import-only projection](ZAPRET2_TZ6V5_S07A_SOURCE_PROJECTION.md). Local 7/7 source S0; no Config writer or new lifecycle. Native installed OPNsense unchanged-byte/FD9/pkgdb/engine/IPFW and real OPT/TUN original resolver still **PENDING**. Formal S07 GO is not claimed. Do not advance to S08 until that gate.
+**FORMAL S07 GO (24.11.2026, `main v0.6.5_190 717d37dd`):** [formal native XML/neutral projection proof](ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md), [source PR #1308](https://github.com/Tolian82/os-zapret2-restyle/pull/1308) with all exact-head workflows successful. Real G05 [#45476671951](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45476671951) returned `S07_G05_REAL_INSTALLED_READONLY_PROJECTION_NO_WRITE=PASS` after original S06 preserved reinstall; strict actual OPNsense `BaseModel` metadata accepted, before/after Config/FD9/pkgdb/PID/engine/IPFW unchanged. The original assigned IPv4-less OPT/TUN resolver is unchanged and previously native-qualified. Main CI/classifier SUCCESS; no public package or owner router change. **S08 NEXT:** pure compiler, real native first-match/argv parity and non-mutating planner.
 
 **GO:** neutral model корректен и deterministic; Config ни разу не изменён.
 

@@ -1,5 +1,7 @@
 # G05 / LC-06 — независимо сохраняемый WAN (native OPNsense)
 
+**S07 original native XML projection GO (24.11.2026; merged `main v0.6.5_190 717d37dd`):** [formal proof](../architecture/ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md). On the **existing same disposable G05 OPNsense guest** after real S06 ordinary delete→same archive reinstall, the installed S07 typed saved-XML reader was qualified against original S04 before/after Config/FD9/pkgdb/PID/engine/IPFW snapshots with **no mutation**; original WAN `wan_preflight.sh device` qualified, IPv4-less OPT/TUN mapping unchanged and already separately native accepted. [Native #45476671951](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45476671951) SUCCESS with `S07_G05_REAL_INSTALLED_READONLY_PROJECTION_NO_WRITE=PASS`; no new guest, public package or owner-router change.
+
 **S06 native GO (24.11.2026; accepted v0.6.5_188):** [formal native proof](../architecture/ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md). One original G05 disposable guest first proves saved-empty WAN-only authenticated HTTP/F5 and forced reinstall, then seeds real native Config User/Exclude/IPSet/Voice and test-owned Found files **before** real ordinary pkg delete→same SHA install; exact no data loss, unchanged PID/IPFW and authenticated GUI. [PR #1305](https://github.com/Tolian82/os-zapret2-restyle/pull/1305) 4/4 workflows SUCCESS; [native G05 #45469609769](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45469609769) verified. No owner click/full purge/public .pkg claim.
 
 
