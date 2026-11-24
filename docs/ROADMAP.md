@@ -1,8 +1,8 @@
-## Current priority — TZ6v5 S09b qualification → S10 original FD9 staging
+## Current priority — TZ6v5 S10a PREPARED root → S10b/c original physical commit
 
-**Accepted entry:** [S09a PR #1317](https://github.com/Tolian82/os-zapret2-restyle/pull/1317), `main v0.6.5_197 7967dec2`; source-only next candidate `v0.6.5_198`. S09b [original sealed-native reference attestation](architecture/ZAPRET2_TZ6V5_S09B_SEALED_ORIGINAL_REFS.md) completes true owner/mode/hash/generation/race and original S08c/P2e parity, with no engine, Config, FD9, IPFW or active manifest side effect. Full S09 GO is decided from exact-head CI and recorded in [#1316](https://github.com/Tolian82/os-zapret2-restyle/issues/1316).
+**Accepted S09:** [issue #1316](https://github.com/Tolian82/os-zapret2-restyle/issues/1316) closed, main `v0.6.5_198 b71724c9`, original sealed refs/SourceMap/S08c+S08d all GO. [S10 issue #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) remains open. S10a source candidate `v0.6.5_199` [design](architecture/ZAPRET2_TZ6V5_S10A_ORIGINAL_PREPARED_ROOT.md): original full seal covers `candidate.xml/plan.json/release`; immutable `manifest.json` placed as a **same-work sibling** to avoid cyclic seal dependency, written only by existing FD9 owner at PREPARED, then full original read-only attestation, no Start/Config/IPFW or alternative journal. No public `_199.pkg`.
 
-**Next S10:** stage the one immutable root under the **same original FD9 shared Apply operation**, qualify exact physical seal/refs again and address seal-digest/root-reference cycle without new mutable Config or journal; atomic promotion/recovery and preserved P1/CAS/ACK. No public `os-zapret2-restyle-0.6.5_198.pkg` or appliance install.
+**Next S10b/c:** route this validated existing-root artifact through original `zapret_service.sh` under its one FD9; atomic promotion/readback with exact previous owner, Config-save ambiguity and crash/rollback, P1 CAS/ACK, WAN-only Save/prestart Lab preserved. **S10 GO not yet established**, and S11+ are separate ordered physical lifecycle stages.
 
 ---
 
