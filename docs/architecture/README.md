@@ -4,7 +4,7 @@
 
 ## Active work and retained long-term design
 
-- **Current S08:** [S07 native read-only XML GO](ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md), [S08a Target Mode GO](ZAPRET2_TZ6V5_S08A_TARGET_POLICY_PARITY.md), [S08b resource/Voice GO](ZAPRET2_TZ6V5_S08B_RESOURCE_VOICE_PARITY.md), [S08c real original native first-match GO](ZAPRET2_TZ6V5_S08C_ORIGINAL_NATIVE_PARITY.md), current [S08d semantic fingerprint/diff source candidate](ZAPRET2_TZ6V5_S08D_EFFECTIVE_DIFF_PLANNER.md); formal full S08 GO pending, S09 later.
+- **Current transition:** [S08 formally GO — pure read-only compiler + actual native parity/semantic planner](ZAPRET2_TZ6V5_S08_PURE_COMPILER_NATIVE_GO.md) on accepted `v0.6.5_195`, following [S07 native XML GO](ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md); **next [S09 root immutable JSON and verified reference sealing](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md)**, within [declarative architecture](ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md). S08 did not install a runtime consumer, write Config/FD9/IPFW or authorize actual reload; S10–S20 remain separate.
 
 - **MANDATORY UPSTREAM CANON:** [официальный manual.en.md](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) → [правило DEV-069: не проверять описанное поведение движка](ZAPRET2_UPSTREAM_MANUAL_CANON.md).
 - **CLI Emergency Contract:** [ТЗ_6v5 §5.5–5.6: guarded `--force` и read-only `--help`](TZ_6v5.md), [DEV-070](../PROJECT_PRINCIPLES.md); новая регрессия V5-15/16 в [S00–S20](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
