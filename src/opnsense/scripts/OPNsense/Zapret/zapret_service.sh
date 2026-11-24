@@ -3244,11 +3244,17 @@ pkg_update_finish_service()
                 *) return 69 ;;
             esac
         else
-            start_service || return 70
+            start_service || {
+                # Only this original failed Start action may identify the stage.
+                echo "pkg-update-finish-failed=start" >&2
+                return 70
+            }
         fi
         shared_apply_status_service >/dev/null 2>&1
         [ "$?" -eq 0 ] || {
             echo "ERROR: successor did not reach verified RUNNING" >&2
+            # No claim about process exit, actual engine state or child rc.
+            echo "pkg-update-finish-failed=verify" >&2
             return 70
         }
     fi

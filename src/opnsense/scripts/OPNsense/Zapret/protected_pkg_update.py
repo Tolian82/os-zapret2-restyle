@@ -300,10 +300,12 @@ def stage_archive(path: Path, *, continuation: bool = False) -> tuple[Path, str,
 def restore_finish_evidence(finished: subprocess.CompletedProcess) -> str:
     """Bounded, non-authorizing reason; never echo child stdout/stderr or Config."""
     rc = str(finished.returncode) if finished.returncode in (0, 69, 70) else "other"
-    if "pkg-update-finish-failed=boot" in (finished.stderr or ""):
-        stage = "boot"
-    else:
-        stage = "unknown"
+    # Trust only one exact, original stage marker on a refused finish.
+    # Do not classify text embedded in foreign child stderr or an rc0/69.
+    markers = (re.findall(
+        r"(?m)^pkg-update-finish-failed=(boot|start|verify)$",
+        finished.stderr or "") if finished.returncode == 70 else [])
+    stage = markers[0] if len(markers) == 1 else "unknown"
     guard = re.search(
         r"(?m)^shared-apply-guard=(activate|activated-journal|activated-bundle|"
         r"activated-probe|config-save|epoch-journal|saved-readback|"

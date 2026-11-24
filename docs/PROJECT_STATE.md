@@ -1,12 +1,15 @@
-## 24.11.2026 — CURRENT S05f1 conservative read-only reload --check
+## 24.11.2026 — CURRENT S05 original producer diagnostics
 
-**Accepted base:** `main ce169f79c88c6ccc18a2f4c08dc1833dc27ef507` = source `v0.6.5_172`, [S05e2 #1288 MERGED](https://github.com/Tolian82/os-zapret2-restyle/pull/1288), exact-head PR 16/16 SUCCESS and postmerge CI/Release trigger/Chromium RU/EN SUCCESS. Candidate `v0.6.5_173` (`VERSION=0.6.5`, `PLUGIN_REVISION=173`), prospective CI-only `os-zapret2-restyle-0.6.5_173.pkg`: not published and not owner-installed. Original qualified IPFW refusal is in one FD9 journal; injected installed HTTP IPFW error has not been witnessed.
+**Accepted source:** `main 391d9f68cd6db997e5de5f6a41a5a8078e2d5e24`, `v0.6.5_173`, S05f1 [#1289](https://github.com/Tolian82/os-zapret2-restyle/pull/1289) merged with 15 exact-head successful workflows, original cold/hot read-only `reload --check` physical no-write acceptance. Bare reload does not start or restart; real semantic reload is NOT implemented. `_173.pkg` is not publicly published. Candidate `v0.6.5_174` (`VERSION=0.6.5`, `PLUGIN_REVISION=174`) source-only, prospective `os-zapret2-restyle-0.6.5_174.pkg` not published/owner-installed.
 
-**Next original user path:** absent `reload --check [--json]` currently refuses unsupported CLI; direct `reload` must never restart. Add an observational preflight using the accepted S04 inventory + S05 pure projection, with two **proven** outcomes: verified STOPPED → `NOT_RUNNING`, RUNNING and all incomplete/foreign/unverified states → `REFUSE`. The S08 semantic compiler/S09 sealed refs are unavailable: no fabricated `RELOAD_SAFE`, `RESTART_REQUIRED`, active generation, semantic equivalence or argv shortcut. Strict options rc64 before FD9; bare `reload` refuses rc69. There is no FD9, process signal, restart, Config/pkg/IPFW mutation or new writer in the reader.
+**S05g1 evidence:** unchanged original Lab producer and job-query/controller blobs since genuine [#45186404328](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45186404328) running-Auto native RESTORE_FAILED: per-job Stage90/99 FAIL with physically restored RUNNING, source-map-qualified inbox path drift only. The job result is the diagnostic source, NOT current unrelated Common Status. [Exact current-source audit](https://github.com/Tolian82/os-zapret2-restyle/issues/1269#issuecomment-7132109592). Owner-specific job `job.iDvhRh` physical after-state still not attested; #1224 OPEN.
 
-**Acceptance:** targeted RED→GREEN source/hostile diagnostics/strict flags, plus the **existing** S05a cold+hot native OPNsense guests with unchanged physical snapshots and plain/JSON outputs, covering missing engine, missing Config, healthy RUNNING, invalid Config and foreign IPFW. Exact-head CI+native required before merge. This is a partial S05 command boundary only, **not actual live reload and not full S05 GO**. Next after verification: remaining original Lab/pkg failure producer evidence, then semantic reload eligibility in S08/S09. S06–S20 remain blocked.
+**S05g2 candidate:** classify only three original `pkg-update-finish` failure origins from the protected FD9 action: inherited Common `boot`, direct ordinary `start`, or post-start `RUNNING` verification `verify`. All marker parsing exact full-line and rc70; no raw stderr, guessed child rc, historical pending-operation promotion, second journal or Config/FD9/IPFW writer. Return `RUNTIME_RESTORE_REQUIRES_REVIEW` and retained protected operation unchanged; native injected negative not yet attested. This diagnostic candidate is not equivalent to a safe physical restore.
+
+**Full S05 remains NO-GO** pending remaining original Lab/pkg/GUI producer/consumer evidence; S06–S20 blocked, no new public package, no owner router changes. Next is exact-head acceptance of this narrow pkg cause binding, not architectural workarounds.
 
 ---
+
 
 
 
