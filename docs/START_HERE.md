@@ -1,4 +1,14 @@
-## 24.11.2026 — CURRENT S05d1 existing setup release-list refusal to RU/EN
+## 24.11.2026 — CURRENT S05d2 actual first-install last failure
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=167`, candidate `v0.6.5_167`, prospective `.pkg` NOT published/owner-installed. Accepted `main _166 291e90f9e220` [#1282](https://github.com/Tolian82/os-zapret2-restyle/pull/1282) 10/10 exact-head workflows, 22 PASS/7 path-skipped; signed curl requalified; postmerge CI and installed payload PASS, native Chromium and same-archive Voice still in progress at branch preparation.
+
+**S05d2 narrow first-install scope:** [G03 first attempt #45352815966](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45352815966) actual unavailable release-list/no-cache failure returned rc69 with `setup.status=failed`, no runtime, staging or intent; unchanged retry passed. `setup.sh` private first-install resolver failure only writes an intermediate fixed cause into the EXISTING `setup.status` under original setup.lock + FD9. Existing parent first records generic failed, proves staging/intent cleanup, then publishes the fixed last cause in the same file. No new store/lock, no inference from arbitrary rc69, no log scraping; update/rollback path unchanged except explicitly disabling this first-install marker. Next admitted transaction clears prior specific cause under existing locks. Read-only adapter emits optional `lastsetupfailure=release-list-unavailable` ONLY with absent runtime, idle and exact terminal record. Existing five fields remain; strict PHP and missing-runtime Apply accept only this coherent additive field. RU/EN detail is explicitly LAST recorded first-install cause, never current-click receipt; current generic failure/progress/review logic remains. No specific cause claimed for rollback or pre-lock failures.
+
+**Gates:** existing G03 source fixture now executes actual resolver and actual transaction wrapper with isolated unavailable external fetch, exact cause and cleanup, then unrelated rc69 and retry. Existing passive shell/PHP/JS/G11 tests cover strict projection and stale history. Normal affected exact-head CI/native gates only, no separate VM matrix. Historical G03 native failure is RED evidence, source fixture is NOT installed HTTP failure proof. Full S05 NO-GO, S06+ blocked.
+
+---
+
+## 24.11.2026 — HISTORICAL S05d1 candidate before merge
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=166`, candidate `v0.6.5_166`; prospective `os-zapret2-restyle-0.6.5_166.pkg` **NOT published or owner-installed**. Accepted `main _165 4d75e6c32367` [S05c3b #1281](https://github.com/Tolian82/os-zapret2-restyle/pull/1281): 17 workflows SUCCESS, 34 successful/7 path-skipped checks, genuine installed Legacy stage13 exact HTTP refusal with unchanged Config/IPFW/engine and positive lifecycle; main-push CI/release classifier/[Chromium](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45331289056) all SUCCESS.
 
