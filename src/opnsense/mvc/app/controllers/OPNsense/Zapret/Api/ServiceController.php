@@ -42,6 +42,12 @@ class ServiceController extends ApiMutableServiceControllerBase
     /** Localized GUI guard; original FD9 repeats the native WAN-first test. */
     public function startAction(): array
     {
+        // Match Stop/Restart's POST-only lifecycle entrypoint BEFORE the
+        // WAN preflight. A GET must not dispatch even a read-only configd
+        // command, nor turn a non-mutating request into a WAN error.
+        if (!$this->request->isPost()) {
+            return ['response' => []];
+        }
         try {
             $result = trim((string)(new Backend())->configdRun('zapret wan_preflight', false, 20));
         } catch (\Throwable $exception) {
