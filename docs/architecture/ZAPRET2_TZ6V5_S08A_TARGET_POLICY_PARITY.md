@@ -18,3 +18,7 @@ S0 local executed: Python syntax and four synthetic policy/parser unit cases PAS
 This does NOT implement full S08: storage/Found/Exclude readiness, Voice OFF-draft/ON-invalid, actual two-tier learning/known User first-match source map, genuine native `dvtws.args`/Voice/IPFW parity, structural fingerprint or semantic planner still remain. Next implement them against current original `registry.sh`, `storage.sh`, `auto_detect_origin_map.py`, Voice producers and accepted S03 ten-case baseline; do not create a second runtime writer or change original physical behavior. S08 GO only after all ordered tests, with native first-match unchanged. S09–S20 remain separate.
 
 **Never:** call a shell, create Config/FD9/journal/manifest, change dvtws2/PID/IPFW, infer selected OPT/TUN device, claim engine reload success, publish a testing .pkg or act on the owner's firewall in this substep.
+
+## S08a accepted after original-source checks
+
+[PR #1311](https://github.com/Tolian82/os-zapret2-restyle/pull/1311) exact head 54198753 merged to main c6c1670b; original shell 12-case [CI #45482139242](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45482139242), native protected _107 [#45482139342](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45482139342), postmerge main [CI #45483216982](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45483216982) and [classifier #45483216934](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45483216934) SUCCESS. S08a GO, full S08 OPEN; [S08b next](ZAPRET2_TZ6V5_S08B_RESOURCE_VOICE_PARITY.md).
