@@ -106,6 +106,9 @@ ensure_runtime_components()
     if [ "${_service_receipt_action:-}" = start ] &&
        [ ! -e "${DVTWS_BIN}" ] && [ ! -L "${DVTWS_BIN}" ]; then
         printf '%s\n' 'zapret-api-lifecycle-v1:start:refused:engine-not-installed'
+    elif [ "${_service_receipt_action:-}" = restart ] &&
+         [ ! -e "${DVTWS_BIN}" ] && [ ! -L "${DVTWS_BIN}" ]; then
+        printf '%s\n' 'zapret-api-lifecycle-v1:restart:refused:engine-not-installed'
     fi
 
     echo "ERROR: zapret2 runtime is not installed or installation is incomplete" >&2
@@ -124,6 +127,9 @@ refresh_generated_configuration()
             if [ "${_service_receipt_action:-}" = start ]; then
                 printf '%s\n' \
                     'zapret-api-lifecycle-v1:start:refused:template-generation-failed'
+            elif [ "${_service_receipt_action:-}" = restart ]; then
+                printf '%s\n' \
+                    'zapret-api-lifecycle-v1:restart:refused:template-generation-failed'
             fi
         fi
         return 1

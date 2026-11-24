@@ -10,6 +10,7 @@ S = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text(
 P = (ROOT / "src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php").read_text()
 G = (ROOT / "src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt").read_text()
 FIXED = "zapret-api-lifecycle-v1:start:refused:engine-not-installed"
+RESTART_FIXED = "zapret-api-lifecycle-v1:restart:refused:engine-not-installed"
 
 def need(ok, why):
     if not ok:
@@ -28,6 +29,9 @@ need(P.count(FIXED) == 1 and "trim($raw) === '" + FIXED + "'" in P and
 need("Zapret2 Start refused: engine is not installed." in G and
      "Движок Zapret2 не установлен." in G and
      "receipt.verified !== true" in G, "RU_EN_STRICT_GUI")
+need(S.count(RESTART_FIXED) == 1 and P.count(RESTART_FIXED) == 1 and
+     "trim($raw) === '" + RESTART_FIXED + "'" in P and
+     "Zapret2 Restart refused: engine is not installed." in P, "RESTART_HTTP_BOUND")
 need("service_api_terminal_receipt()" in S and
      "service_with_lifecycle_lock()" in S, "ORIGINAL_FD9_UNCHANGED")
 
@@ -42,8 +46,9 @@ with tempfile.TemporaryDirectory() as tmp:
     for name, binary, action, rc, stdout in (
         ("private-absent", absent, "start", 1, FIXED + "\n"),
         ("public-absent", absent, "", 1, ""),
-        ("restart-absent", absent, "restart", 1, ""),
+        ("restart-absent", absent, "restart", 1, RESTART_FIXED + "\n"),
         ("foreign-symlink", dangling, "start", 1, ""),
+        ("foreign-symlink-restart", dangling, "restart", 1, ""),
         ("present-executable", executable, "start", 0, ""),
     ):
         script = (original + "\nDVTWS_BIN=" + shlex.quote(str(binary)) +

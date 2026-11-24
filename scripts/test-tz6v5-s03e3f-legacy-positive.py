@@ -287,6 +287,41 @@ def s05c3_template_refusal(web, core, saved_config, engine_sha, foreign_before):
             after_owned, after_foreign = inventory()
             need(after_owned in (None, []) and after_foreign == foreign_before,
                  "S05C3A_IPFW_CHANGED")
+            # Original installed invalid template, same Legacy guest and FD9.
+            # Restart is a separate actual HTTP refusal, not a Start replay.
+            req = urllib.request.Request(
+                core.ORIGIN + "/api/zapret/service/restart", data=b"",
+                method="POST", headers={"X-CSRFToken": web.csrf_token,
+                    "Referer": core.ORIGIN + "/ui/zapret/voice",
+                    "Accept": "application/json"})
+            try:
+                with web.client.open(req, timeout=45):
+                    raise Refusal("S05K_FALSE_RESTART_SUCCESS")
+            except urllib.error.HTTPError as error:
+                need(error.code == 500, "S05K_HTTP_NOT_500")
+                raw = error.read(8193)
+                need(len(raw) <= 8192, "S05K_HTTP_UNBOUNDED")
+                try:
+                    refusal = json.loads(raw)
+                except (ValueError, UnicodeDecodeError):
+                    raise Refusal("S05K_HTTP_BAD_JSON") from None
+                need(type(refusal) is dict and
+                     refusal.get("errorMessage") ==
+                       "Zapret2 Restart refused: configuration template generation failed." and
+                     isinstance(refusal.get("errorTitle"), str) and
+                     bool(refusal["errorTitle"]), "S05K_HTTP_WRONG_CAUSE")
+            need(stage.is_file() and not stage.is_symlink() and
+                 re.fullmatch(
+                    r"1\|13\|config\|failed\|[^|\r\n]{1,64}\|template generation failed\n?",
+                    stage.read_text()) is not None, "S05K_WRONG_STAGE")
+            need(CONFIG.read_bytes() == saved_config and
+                 hashlib.sha256(ENGINE.read_bytes()).hexdigest() == engine_sha and
+                 not PID.exists() and not MONITOR.exists() and not ACTIVE.exists() and
+                 not census(), "S05K_MUTATED_CONFIG_OR_ENGINE")
+            owned, foreign = inventory()
+            need(owned in (None, []) and foreign == foreign_before,
+                 "S05K_MUTATED_IPFW")
+            print("S05K_REAL_STAGE13_RESTART_HTTP_CAUSE=PASS")
         finally:
             f.seek(0)
             f.write(old)
@@ -317,7 +352,8 @@ def self_test():
          OWNED.match("65534 allow") is None,
          "S03E3F_IPFW_RANGE_SCOPE_REGRESSION")
     need("S05C3A_INVALID_JINJA_TAG" in Path(__file__).read_text() and
-         "S05C3B_REAL_STAGE13_HTTP_QUALIFIED_CAUSE=PASS" in Path(__file__).read_text(),
+         "S05C3B_REAL_STAGE13_HTTP_QUALIFIED_CAUSE=PASS" in Path(__file__).read_text() and
+         "S05K_REAL_STAGE13_RESTART_HTTP_CAUSE=PASS" in Path(__file__).read_text(),
          "S05C3A_SOURCE_GUARD_MISSING")
     print("S03E3F_LEGACY_FAST=PASS")
 
