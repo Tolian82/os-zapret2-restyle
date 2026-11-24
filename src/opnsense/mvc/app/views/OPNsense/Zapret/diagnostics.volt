@@ -73,7 +73,7 @@ $(document).ready(function () {
         circularTitle:'Временная циклическая проверка', circularHelp:'Только для 3–5 подтверждённых TLS 1.3 стратегий: до 5 минут временно чередует тестовые варианты для проверки сайта в браузере. Запускает отдельный dvtws2 и IPFW-перехват для целевых адресов, что может затронуть другие устройства сети. Настройки Стратегий не сохраняются; после завершения выполняется восстановление Zapret2.',
         savedJobLabel:'Сохранённое задание', openSavedJob:'Открыть результат', savedJobInvalid:'Укажите ID вида job.XXXX.', savedJobUnavailable:'Сохранённый результат не найден или задание не завершено.',
         unverifiedReplay:'не подтверждено', savedProfiles:'Сохранённые профили (финальное воспроизведение не подтверждено)', unverifiedScope:'без подтверждённого финального воспроизведения',
-        progress:'Прогресс', restorationPass:'Успешно', requestFailed:'Ошибка запроса: ',
+        progress:'Прогресс', restorationPass:'Успешно', restorationUnconfirmed:'Восстановление не подтверждено', requestFailed:'Ошибка запроса: ',
         statusRetry:'Статус Strategy Lab временно недоступен. Повторная попытка…', statusFailed:'Не удалось получить актуальный статус Strategy Lab.',
         testDomainTitle:'Тестирование соединения с доменом', testDomainHelp:'Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.',
         testAction:'Проверка', strategyLabTitle:'Лаборатория стратегий', blockedDomain:'Заблокированный домен / IP', serviceHostLabel:'Host / SNI (опционально)',
@@ -98,7 +98,7 @@ $(document).ready(function () {
         circularTitle:'Temporary circular validation', circularHelp:'Only for 3–5 verified TLS 1.3 strategies: temporarily cycles test profiles for up to 5 minutes to check the site in a browser. Runs a separate dvtws2 and IPFW interception for target addresses, potentially affecting other network clients. Saved Traffic Strategies are not changed; Zapret2 is restored afterward.',
         savedJobLabel:'Saved job', openSavedJob:'Open result', savedJobInvalid:'Enter a valid job ID such as job.XXXX.', savedJobUnavailable:'Saved result not found or job is not completed.',
         unverifiedReplay:'not verified', savedProfiles:'Saved profiles (final replay not verified)', unverifiedScope:'without verified final replay',
-        progress:'Progress', restorationPass:'Pass', requestFailed:'Request failed: ',
+        progress:'Progress', restorationPass:'Pass', restorationUnconfirmed:'Restoration not verified', requestFailed:'Request failed: ',
         statusRetry:'Strategy Lab status is temporarily unavailable. Retrying…', statusFailed:'The current Strategy Lab status could not be read.',
         testDomainTitle:'Test Domain Connectivity', testDomainHelp:'Enter a domain and click Test to check HTTPS connectivity.',
         testAction:'Test', strategyLabTitle:'Strategy Lab', blockedDomain:'Blocked Domain / IP', serviceHostLabel:'Host / SNI (optional)',
@@ -391,7 +391,16 @@ $(document).ready(function () {
         $('#strategyLabResultTarget').text(data.target || '—');
         $('#strategyLabResultMode').text(label(modeLabels, data.mode) + ' / IPv6 ' + (data.ipv6_enabled === true ? (isRussian ? 'вкл.' : 'on') : (isRussian ? 'выкл.' : 'off')));
         $('#strategyLabResultOutcome').text(label(outcomeLabels, data.outcome || data.state));
-        $('#strategyLabResultRestoration').text(data.restoration && data.restoration.verified === true ? ui.restorationPass : '—');
+        var restoration = data.restoration;
+        var restorationText = '—';
+        if (data.outcome === 'RESTORE_FAILED') {
+            restorationText = ui.restorationUnconfirmed;
+        } else if (restoration && restoration.verified === true) {
+            restorationText = ui.restorationPass;
+        } else if (restoration && restoration.verified === false) {
+            restorationText = ui.restorationUnconfirmed;
+        }
+        $('#strategyLabResultRestoration').text(restorationText);
     }
     function renderProtocolScope(data, items) {
         var notice = $('#strategyLabProtocolScope');

@@ -652,6 +652,46 @@ def check_lab_guidance(page, mode: str) -> bool:
     return True
 
 
+def check_s05s_lab_restoration_summary(page, mode: str) -> None:
+    """Installed Lab DOM, historical result read mocked; never run/stop Lab."""
+    from urllib.parse import parse_qs
+
+    job_id = 'job.S05SFixture'
+    expected = ('Восстановление не подтверждено' if mode == 'ru' else
+                'Restoration not verified')
+    # Shape from the accepted real same-job RESTORE_FAILED evidence. No raw
+    # logs, IPs, persisted fixtures, or new physical failure injection.
+    response = {'job_id': job_id, 'state': 'error', 'outcome': 'RESTORE_FAILED',
+                'mode': 'standard', 'current_stage': '99', 'stages': [],
+                'restoration': {'verified': False, 'strategy_unchanged': False}}
+    calls = []
+    pattern = '**/api/zapret/strategy_lab/result'
+
+    def result_read(route):
+        request = route.request
+        fields = parse_qs(request.post_data or '')
+        calls.append((request.method, fields.get('job_id')))
+        if request.method != 'POST' or fields.get('job_id') != [job_id]:
+            route.abort()
+            return
+        route.fulfill(status=200, content_type='application/json',
+                      body=json.dumps(response))
+
+    page.route(pattern, result_read)
+    try:
+        field = page.locator('#strategyLabSavedJobInput')
+        field.fill(job_id)
+        page.locator('#strategyLabOpenSavedJob').click()
+        summary = page.locator('#strategyLabResultRestoration')
+        page.locator('#strategyLabResultBox').wait_for(state='visible', timeout=10000)
+        need(summary.inner_text() == expected, 'S05S_LAB_RESTORATION_SUMMARY_' + mode)
+        need(calls == [('POST', [job_id])], 'S05S_LAB_RESULT_READ_ID_' + mode)
+    finally:
+        page.unroute(pattern, result_read)
+        page.evaluate("sessionStorage.removeItem('zapret2.strategyLab.selectedSavedJob')")
+    print('S05S_INSTALLED_LAB_SUMMARY_MOCKED_RESULT_' + mode.upper() + '=PASS')
+
+
 def check_s03e2_lifecycle_failure_browser(context, mode: str) -> None:
     """Real logged-in Chromium + real Strategies listener; mocked HTTP 503.
 
@@ -831,6 +871,7 @@ def browser_run(mode: str) -> None:
             check_s03e2_lifecycle_failure_browser(context, mode)
             voice, validated = check_voice(page, mode)
             lab_guidance = check_lab_guidance(page, mode)
+            check_s05s_lab_restoration_summary(page, mode)
             context.close()
         finally:
             browser.close()
@@ -859,6 +900,7 @@ def browser_run(mode: str) -> None:
         "s03e2_http503_intercepted_no_physical_service_transition": True,
         "s03e2_native_lifecycle_error_producer_tested": False,
         "strategy_lab_p4_guidance_checked": lab_guidance,
+        "s05s_installed_lab_summary_mocked_result_checked": True,
         "strategies_p4_native_full_help_checked": True,
         "tz6v2_five_editors_read_only_gui_checked": True,
         "tz6v2_five_editor_status": p4_editor_status,
