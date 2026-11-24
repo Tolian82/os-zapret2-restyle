@@ -597,6 +597,10 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10a-root-stage.py
+      - name: S10b1 original FD9 single PREPARED journal root SHA pin and fail-closed activation
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b1-original-journal-binding.py
       - name: Validate fast path routing and strict private-curl source mismatch
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test
