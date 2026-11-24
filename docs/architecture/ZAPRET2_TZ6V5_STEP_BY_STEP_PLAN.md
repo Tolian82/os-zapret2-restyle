@@ -218,6 +218,9 @@
 
 ### S06. Первый install и повторный install
 
+**S06a (`v0.6.5_188`, test-only candidate):** one real original G05 no-engine OPNsense guest already qualifies clean WAN Save/F5 and same-archive forced reinstall. The uncovered case is ordinary `pkg delete -y` (not purge) followed by `pkg add` of **identical physical package SHA**, after native Config model saves populated User/Exclude/IPSet/Voice fields while Youtube/Strategy remain deliberately empty, and test-owned original Found file bytes are present. Check exact before/after native Config subtree, private files, daemon/PID/kernel, installed GUI/F5 and original hooks. New native function is appended only to the existing G05 witness; no new VM or product changes. Local AST and mocked success/data-loss refusal PASS; genuine native pending. S05 formal GO accepted [#1303](https://github.com/Tolian82/os-zapret2-restyle/pull/1303); S06 GO not yet claimed.
+
+
 1. На пустой fixture GUI/status доступны без engine/сохранённого профиля/manifest; ни скрытого install upstream, ни Start.
 2. Единожды, **только при доказанном first-install**, штатным existing Config writer установить безопасный service OFF и утверждённые YouTube Domains + TCP/QUIC baseline. Разрешить впоследствии пустую Strategy.
 3. Reinstall с сохранёнными пользовательскими YouTube/User/Found/IPSet/Exclude/Voice/WAN/Strategy обязан сохранить их без изменений; ordinary uninstall сохраняет, purge требует отдельного явного действия.

@@ -273,6 +273,88 @@ def _wan_first_saved_no_engine_matrix(web, ipfw_baseline):
     return True
 
 
+def verify_s06_ordinary_remove_reinstall(web, package, archive_sha, ipfw_before):
+    """One real no-engine guest; verify pkg delete is not a purge."""
+    save = r"""require_once('script/load_phalcon.php');
+$c = \OPNsense\Core\Config::getInstance();
+$c->lock();
+try {
+  $m = new \OPNsense\Zapret\Zapret();
+  $values = [
+    'hostlist.userdomains' => "s06-manual-user.example.org\n",
+    'hostlist.excludedomains' => "s06-excluded.example.org\n",
+    'hostlist.excludeipset' => "198.51.100.0/24\n",
+    'hostlist.telegramips' => "192.0.2.0/24\n",
+    'voice.telegram.args' => "--filter-udp=443\n--filter-l7=stun\n"
+  ];
+  foreach ($values as $ref => $value) {
+    if ($m->setNodeByReference($ref, $value) !== true) exit(71);
+  }
+  if (count($m->performValidation(false)) !== 0 ||
+      !$m->serializeToConfig(false, true)) exit(72);
+  $c->save(['description'=>'S06 disposable saved-user data before normal removal']);
+} finally {
+  $c->unlock();
+}"""
+    saved = run(["/usr/local/bin/php", "-r", save], timeout=45)
+    need(saved.returncode == 0, "S06_USER_CONFIG_MODEL_SAVE_REFUSED")
+    expected = ET.tostring(node(), encoding="utf-8")
+    n = node()
+    need(n.findtext("general/enabled", "0") == "0" and
+         n.findtext("general/waninterface", "") == "wan" and
+         (n.findtext("strategy/trafficargs") or "") == "" and
+         (n.findtext("hostlist/youtubedomains") or "") == "" and
+         n.findtext("hostlist/userdomains") == "s06-manual-user.example.org\n" and
+         n.findtext("hostlist/excludedomains") == "s06-excluded.example.org\n" and
+         n.findtext("hostlist/excludeipset") == "198.51.100.0/24\n" and
+         n.findtext("hostlist/telegramips") == "192.0.2.0/24\n",
+         "S06_SAVED_MODEL_USER_AND_EMPTY_FIELDS_NOT_ATTESTED")
+    files = {
+        Path("/var/db/zapret2/auto-detect-owned/youtube.txt"): b"s06-youtube-found.example.org\n",
+        Path("/var/db/zapret2/auto-detect-owned/user.txt"): b"s06-user-found.example.org\n",
+        Path("/usr/local/etc/zapret2/ipset/auto-domains.txt"): b"s06-shared-found.example.org\n",
+    }
+    for path, content in files.items():
+        need(not path.exists() and not path.is_symlink(),
+             "S06_NOT_A_CLEAN_FOUND_FILE_FIXTURE")
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        need(path.parent.is_dir() and not path.parent.is_symlink(),
+             "S06_FOUND_PARENT_UNSAFE")
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+    def assert_preserved(reason):
+        need(ET.tostring(node(), encoding="utf-8") == expected,
+             "S06_SAVED_CONFIG_CHANGED_" + reason)
+        for path, content in files.items():
+            need(path.is_file() and not path.is_symlink() and
+                 path.read_bytes() == content,
+                 "S06_FOUND_DATA_CHANGED_" + reason)
+        no_runtime_mutation(False, ipfw_before)
+    assert_preserved("BEFORE_DELETE")
+    deleted = run(["/usr/sbin/pkg", "delete", "-y", PKGNAME], timeout=240)
+    need(deleted.returncode == 0 and
+         run(["/usr/sbin/pkg", "info", "-e", PKGNAME]).returncode == 1 and
+         not Path("/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").exists(),
+         "S06_REAL_ORDINARY_UNINSTALL_NOT_CONFIRMED")
+    assert_preserved("AFTER_DELETE")
+    installed = run(["/usr/sbin/pkg", "-o", "REPO_AUTOUPDATE=false",
+                     "add", "-f", str(package)], timeout=240)
+    need(installed.returncode == 0 and
+         "zapret-config=preserved" in installed.stdout and
+         run(["/usr/sbin/pkg", "info", "-e", PKGNAME]).returncode == 0 and
+         hashlib.sha256(package.read_bytes()).hexdigest() == archive_sha,
+         "S06_REAL_IDENTICAL_ARCHIVE_REINSTALL_NOT_CONFIRMED")
+    assert_preserved("AFTER_REINSTALL")
+    page = web.request("GET", "/ui/zapret")
+    need("frm_GeneralSettings" in page and gui_wan(web)[0] == "wan",
+         "S06_REINSTALLED_SAVED_WAN_NOT_VISIBLE_IN_GUI")
+    print("S06_G05_REAL_PKG_DELETE_REINSTALL_PRESERVES_USER_AND_FOUND=PASS", flush=True)
+    return True
+
+
 def main():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1" and
@@ -359,6 +441,9 @@ def main():
     need(hashlib.sha256(package.read_bytes()).hexdigest() == sha and
          ET.tostring(node(), encoding="utf-8") == previous,
          "G05_REINSTALL_MODIFIED_USER_WAN_OR_EMPTY_FIELDS")
+    # S06: same genuine G05 guest and same native package, ordinary delete,
+    # not a force reinstall; preserve saved Config and all three Found files.
+    s06_preserved = verify_s06_ordinary_remove_reinstall(web, package, sha, ipfw_before)
     print("G05_NATIVE=" + json.dumps({
         "status": "PASS_G05_COLD_NO_ENGINE_WAN_ONLY_HTTPS_CONFIG_AND_REINSTALL",
         "first_api_authenticated": True,
@@ -369,6 +454,7 @@ def main():
         "wan_get_after_f5": True,
         "no_dvtws_or_ipfw_mutation": True,
         "same_archive_sha256": sha,
+        "s06_ordinary_remove_reinstall_saved_fields": s06_preserved,
         "owner_browser_tested": False,
         "running_wan_rollback_tested": False,
     }, sort_keys=True))
