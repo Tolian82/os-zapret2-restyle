@@ -386,6 +386,95 @@ def read_pid_if_present(path: Path) -> str:
         return "missing"
 
 
+def native_injected_original_boot_refusal(product, old_id, learning,
+                                          digest, version, config_sha):
+    """Genuine installed original-FD9 finish rc70; disposable guest ONLY.
+
+    Temporarily withhold one exact installed package-owned PHP bridge AFTER
+    native pkg POST_INSTALL; restore the SAME inode before normal finish.
+    A sealed-member fault would fail the preceding Status guard (correctly).
+    No mocked native command, pkg hook interception, Config/IPFW writer,
+    extra VM, or owner appliance.
+    """
+    need(os.environ.get("GITHUB_ACTIONS") == "true" and
+         os.environ.get("ZAPRET2_PROTECTED_PKG_NATIVE_TEST") == "1" and
+         os.geteuid() == 0 and os.uname().sysname == "FreeBSD",
+         "INJECTED_FINISH_NOT_DISPOSABLE_NATIVE")
+    need(re.fullmatch(r"[a-f0-9]{32}", old_id) is not None and
+         ACTIVE.is_file() and not ACTIVE.is_symlink() and
+         json.loads(ACTIVE.read_bytes()).get("phase") == "postinstall-attested" and
+         MARKER.is_file() and installed_version() == version and
+         run([str(SERVICE), "status"]).returncode == 1 and
+         verified_old_auto_retirement(old_id, 3, learning),
+         "INJECTED_FINISH_GUARDED_BASELINE_NOT_ATTESTED")
+    # The stopped Status independently verifies the entire immutable sealed
+    # bundle; altering a sealed member must refuse BEFORE boot (correct rc69).
+    # Instead, fault only this newly installed, package-owned PHP bridge used
+    # by original Common Boot saved-unchanged AFTER stopped verification.
+    member = SERVICE.parent / "shared_apply_request.php"
+    source = ROOT / "src/opnsense/scripts/OPNsense/Zapret/shared_apply_request.php"
+    held = member.with_name(".s05i-held-shared-apply-request.php")
+    st = member.lstat()
+    need(stat.S_ISREG(st.st_mode) and st.st_uid == 0 and st.st_nlink == 1 and
+         not (st.st_mode & 0o022) and
+         not held.exists() and not held.is_symlink() and
+         source.is_file() and sha(member) == sha(source),
+         "INJECTED_FINISH_INSTALLED_BRIDGE_NOT_ATTESTED")
+    original_sha = sha(member)
+    record = ACTIVE.read_bytes()
+    journal = JOURNAL.read_bytes()
+    firewall_before = run(["/sbin/ipfw", "-q", "list"], timeout=25)
+    need(firewall_before.returncode == 0 and
+         sha(CONFIG) == config_sha and
+         not Path("/var/run/dvtws2.pid").exists(),
+         "INJECTED_FINISH_STOPPED_STATE_UNQUALIFIED")
+    member.rename(held)
+    try:
+        # This critical precondition stays genuinely STOPPED while the
+        # request bridge is unavailable; the original Boot then fails later.
+        status_with_fault = run([str(SERVICE), "status"], timeout=30).returncode
+        refused = run([str(SERVICE), "pkg-update-finish", digest, version],
+                      timeout=95)
+        record_during = ACTIVE.is_file() and ACTIVE.read_bytes() == record
+        journal_during = JOURNAL.is_file() and JOURNAL.read_bytes() == journal
+        pid_absent_during = not Path("/var/run/dvtws2.pid").exists()
+    finally:
+        held.rename(member)
+    restored = (member.is_file() and not member.is_symlink() and
+                member.stat().st_ino == st.st_ino and
+                member.stat().st_dev == st.st_dev and
+                sha(member) == original_sha and not held.exists())
+    firewall_after = run(["/sbin/ipfw", "-q", "list"], timeout=25)
+    evidence = {
+        "native_status_stopped_before_boot": status_with_fault == 1,
+        "original_finish_rc70": refused.returncode == 70,
+        "exact_boot_marker":
+            refused.stderr.splitlines().count("pkg-update-finish-failed=boot") == 1,
+        "original_boot_saved_candidate_guard":
+            refused.stderr.splitlines().count("native-common-boot-guard=saved-candidate") == 1,
+        "bounded_coordinator_classifier":
+            product.restore_finish_evidence(refused) == "rc:70,stage:boot,guard:unknown",
+        "record_identical": record_during and ACTIVE.read_bytes() == record,
+        "committed_journal_identical":
+            journal_during and JOURNAL.read_bytes() == journal,
+        "engine_stopped":
+            pid_absent_during and run([str(SERVICE), "status"]).returncode == 1,
+        "installed_bridge_inode_and_digest_restored": restored,
+        "config_unchanged": sha(CONFIG) == config_sha,
+        "ipfw_unchanged":
+            firewall_after.returncode == firewall_before.returncode and
+            firewall_after.stdout == firewall_before.stdout,
+        "package_identity_intact": installed_version() == version,
+        "marker_retained": MARKER.is_file(),
+        "native_auto_epoch_retired": verified_old_auto_retirement(old_id, 3, learning),
+    }
+    print("NATIVE_PROTECTED_INJECTED_FINISH=" +
+          json.dumps({"checks": evidence, "owner_appliance_modified": False},
+                     sort_keys=True), flush=True)
+    need(all(evidence.values()), "ORIGINAL_PROTECTED_FINISH_NOT_FAIL_CLOSED")
+    print("NATIVE_PROTECTED_INJECTED_FINISH=PASS_RC70_BOOT_REVIEW", flush=True)
+
+
 def native_interrupted_handoff(archive, version, digest):
     """A real *inter-process* incomplete handoff, never owner recovery.
 
@@ -478,6 +567,12 @@ def native_interrupted_handoff(archive, version, digest):
          "INTERRUPT_POST_PKG_UNAUTHORISED_START_OR_PKG")
     print("NATIVE_PROTECTED_INTERRUPTED_AFTER_PKG=PASS_GUARDED_STOPPED",
           flush=True)
+
+    # One genuine failed original finish on this already installed successor.
+    # The test-only sealed-member fault is fully restored before this positive
+    # current-owner finish; no separate VM or additional package install.
+    native_injected_original_boot_refusal(
+        product, old_id, old_learning, staged_sha, stage_version, before_config)
 
     finish = run([str(SERVICE), "pkg-update-finish", staged_sha, stage_version],
                  timeout=150)
