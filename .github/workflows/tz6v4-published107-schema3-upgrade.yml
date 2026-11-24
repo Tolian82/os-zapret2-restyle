@@ -7,6 +7,8 @@ on:
       - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
       - src/opnsense/scripts/OPNsense/Zapret/protected_pkg_update.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/**
+      # Pure neutral projections do not change the protected legacy pkg lifecycle.
+      - '!src/opnsense/scripts/OPNsense/Zapret/backend/neutral_*.py'
       - src/opnsense/scripts/OPNsense/Zapret/shared_apply_request.php
       - pkg/+PRE_INSTALL
       - pkg/+POST_INSTALL
@@ -14,7 +16,6 @@ on:
       - scripts/stage5-native-protected-update.py
       - scripts/test-own70-native-package-handoff.py
       - scripts/p5b2b-native-witness.py
-      - .github/workflows/tz6v4-published107-schema3-upgrade.yml
   workflow_dispatch:
 
 concurrency:
