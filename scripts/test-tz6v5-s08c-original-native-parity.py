@@ -158,8 +158,14 @@ class RealNativeSourceParity(unittest.TestCase):
         self.assertEqual(proof.learning_native_count, 0)
         self.assertEqual(proof.proposed_args_sha256, proof.original_args_sha256)
         self.assertEqual(proof.ordinary_native_count, 3)
+        # Original Target Mode appends HOSTLIST youtube + IPSET telegram +
+        # HOSTLIST user in ONE sourced profile, so source_has_ipset is true
+        # for every normalized native copy. The source-map owner refuses to
+        # infer known HOSTLIST attribution from a mixed default expansion.
         self.assertEqual([r.status for r in proof.working_profiles],
-                         ["known-hostlist", "excluded-ipset", "known-hostlist"])
+                         ["excluded-ipset"] * 3)
+        self.assertEqual([r.hostlist for r in proof.working_profiles],
+                         [None] * 3)
         self.assertEqual([r.source_number for r in proof.working_profiles], [1, 1, 1])
         self.assertEqual(proof.learning_profiles, ())
 
