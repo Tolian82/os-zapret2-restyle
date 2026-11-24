@@ -21,7 +21,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
-from neutral_effective_diff import EffectiveSnapshot
+from neutral_effective_diff import EffectiveSnapshot, snapshot
 from neutral_native_parity import NativeParity
 from neutral_root_manifest import compile_candidate
 from neutral_root_refs import attest_sealed_original, SealedRefsRefused
@@ -236,9 +236,35 @@ class GenuineOriginalBuilder(unittest.TestCase):
                     mapping = (fixture.release / "auto-detect-source-map.json").read_bytes()
                 else:
                     mapping = None
-                # Physical bytes are bound to real S08c native source parity.
-                # S08d's original structural test runs separately in CI.
-                eff = effective(args)
+                # Take the S08d fingerprint from the SAME real original
+                # source inputs; a synthetic dataclass would not establish
+                # genuine cross-attestation of structural identity.
+                managed = fixture.release / "managed"
+                managed_hashes = {
+                    p.name: sha(p.read_bytes()) for p in managed.iterdir()
+                    if p.is_file() and re.fullmatch(
+                        r"(?:hostlist|ipset)-[a-z][a-z0-9-]{0,63}[.]txt", p.name)
+                }
+                original_map_rows = None if kw["source_map"] is None else [
+                    [r["role"], r["status"], r.get("selector"),
+                     r.get("hostlist"), r.get("native_number")]
+                    for r in kw["source_map"]["profiles"]
+                ]
+                eff = snapshot(
+                    original_native_args=args, target_mode=mode,
+                    original_source_rows=original_map_rows,
+                    authored_selectors=tuple(
+                        tuple(f"<{kind}:{key}>" for kind, key in p.authored)
+                        for p in kw["targets"].profiles),
+                    saved_wan=kw["requested"].saved_wan,
+                    resolved_wan=kw["voice_plan"]["capture"]["wan"],
+                    engine_version="v1.0.7",
+                    original_capture=kw["voice_plan"]["capture"],
+                    original_tcp=(fixture.release / "tcp-ports.txt").read_bytes(),
+                    original_udp=(fixture.release / "udp-ports.txt").read_bytes(),
+                    managed_sha256=managed_hashes)
+                self.assertEqual(eff.external_ref_count, 0)
+
                 (fixture.work / "plan.json").write_bytes(b"{}\n")
                 create_seal(fixture.work, owner=os.geteuid())
                 seal_digest = sha((fixture.work / "bundle-seal.json").read_bytes())

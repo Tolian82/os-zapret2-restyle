@@ -18,7 +18,7 @@
 - строгие положительные sealed `list`/`auto`, совпадение root/seal/original argv SHA, отсутствие каких-либо записей при read-only проверке;
 - missing, overwritten, oversized, wrong mode, symlink/cycle, hardlink, wrong owner, symlink release, stale generation, mutated root, wrong native parity;
 - целенаправленная замена inode между первой и второй проверкой, обязанная закончиться отказом;
-- **реальная интеграция** исходного S08c → P2e `orchestrator_build_release` для `list` и `auto`, затем оригинальный `create_seal`/`verify_seal` и аттестация точных физически записанных файлов. Проверки S08d на структурную идентичность исполняются отдельной уже существующей проверкой CI.
+- **реальная интеграция** исходного S08c → P2e `orchestrator_build_release` для `list` и `auto`, затем оригинальный `create_seal`/`verify_seal` и аттестация точных физически записанных файлов. S08d `snapshot()` вычисляет structural fingerprint **на тех же настоящих original argv/SourceMap/ordered selectors/WAN/Voice-capture/ports/managed-ресурсах**, без подмены готовым синтетическим digest; самостоятельная S08d CI-матрица также сохраняется.
 
 Исходный seal в тестах создаётся **до** detached JSON-корня. Это свидетельство исходного поколения; оно не доказывает, что JSON уже стал частью активного sealed release. S10 должен решить размещение и атомарную стыковку root с original owner **без циклической зависимости seal SHA → root → seal**, а затем повторить аттестацию под original FD9 перед активацией/rollback. Нельзя интерпретировать S09b как доказательство будущей физической транзакции.
 
