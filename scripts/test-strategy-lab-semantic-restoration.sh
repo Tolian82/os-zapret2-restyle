@@ -228,5 +228,9 @@ grep -Fq 'strategy_lab_set_json_field' "${MODULE_DIR}/lifecycle.sh" || fail 'lif
 sh -n "${MODULE_DIR}/state.sh"
 sh -n "${MODULE_DIR}/lifecycle.sh"
 sh -n "${SERVICE_SOURCE}"
+# Original worker lifecycle -> actual Stage20 adapter -> Python-owned job message.
+# Do not register a new VM/workflow or create a second status writer.
+"${STRATEGY_LAB_PYTHON_BIN}" "${ROOT_DIR}/scripts/test-tz6v5-s05h-lab-stop-receipt.py" ||
+    fail 'Original Stage20 Stop result was not preserved by the adapter'
 
 echo 'PASS: Strategy Lab captures and verifies semantic Zapret2 restoration evidence through the Python-owned automated-job state adapter'

@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - scripts/test-tz6v5-s03e3j-auto-stage20-sample.py
+      - src/opnsense/scripts/OPNsense/Zapret/strategy_lab/lifecycle.sh
+      - src/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage_adapter.sh
       - .github/workflows/tz6v5-s03e3j-auto-stage20-sample.yml
   workflow_dispatch:
 
