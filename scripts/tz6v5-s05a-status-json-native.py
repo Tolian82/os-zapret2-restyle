@@ -31,7 +31,7 @@ def existing():
 s04 = existing()
 
 
-def status_witness(label, expected, *, preinstall=False):
+def status_witness(label, expected, *, preinstall=False, setup_refused=False):
     # Also retain the S04 real physical native classification witness.
     s04.witness(label, expected, preinstall=preinstall)
     reader = SOURCE if preinstall else SERVICE
@@ -109,8 +109,22 @@ def status_witness(label, expected, *, preinstall=False):
              "S05A_JSON_GRANTED_AUTHORITY_" + label)
     for name in ("stage", "operation_id", "generation", "exit_status",
                  "stderr_excerpt", "log_ref", "requested", "effective"):
-        s04.need(name in row and row[name] is None,
+        value = "install" if setup_refused and name == "stage" else None
+        s04.need(name in row and row[name] == value,
                  "S05A_JSON_INVENTED_DIAGNOSTIC_" + name)
+    event = row.get("last_error")
+    if setup_refused:
+        s04.need(row.get("diagnostic_state") == "qualified" and
+                 isinstance(event, dict) and
+                 event.get("source") == "original-setup-status" and
+                 event.get("code") == "SETUP_RELEASE_LIST_UNAVAILABLE" and
+                 event.get("verification") == "refused" and
+                 all(name in event and event[name] is None for name in
+                     ("timestamp", "operation_id", "generation", "exit_status",
+                      "runtime_before", "runtime_after", "stderr_excerpt", "log_ref")),
+                 "S05D3_ORIGINAL_FIRST_INSTALL_STATUS_MISSING")
+    elif expected.get("engine") == "absent" or label == "engine-no-config":
+        s04.need(event is None, "S05D3_UNEXPECTED_FIRST_INSTALL_DIAGNOSTIC")
     s04.need(not any(secret in p.stdout for secret in
                      ("pid", "argv", "/conf/", "secret", "password", "token")),
              "S05A_JSON_LEAK")
@@ -145,6 +159,32 @@ def plain_legacy(expected):
              "S05A_PLAIN_STATUS_COMPATIBILITY_FAILED")
 
 
+def setup_failure_witness(expected):
+    state = Path("/var/db/zapret2-restyle")
+    empty_cache = state / ".s05-no-release-cache"
+    installed_setup = SERVICE.with_name("setup_transaction.sh")
+    s04.need(not empty_cache.exists() and not empty_cache.is_symlink(),
+             "S05D3_EXPECTED_EMPTY_PRIVATE_RELEASE_CACHE")
+    before = s04.snapshot()
+    result = s04.run(["/usr/bin/env", "FETCH_BIN=/usr/bin/false",
+                      f"RELEASE_CACHE={empty_cache}", str(installed_setup),
+                      "install", "v1.0.7"], timeout=90)
+    after = s04.snapshot()
+    s04.need(result.returncode == 69 and
+             (state / "setup.status").read_bytes() ==
+             b"failed\ncause=release-list-unavailable\n",
+             "S05D3_ORIGINAL_FIRST_INSTALL_REFUSAL_NOT_RECORDED")
+    s04.need(not (state / "first-install.intent").exists() and
+             not Path("/usr/local/etc/zapret2.first-install").exists() and
+             not (state / "runtime.release").exists() and
+             not empty_cache.exists() and
+             all(before[key] == after[key] for key in
+                 ("config", "engine", "process", "kernel")),
+             "S05D3_FIRST_INSTALL_REFUSAL_LEFT_RUNTIME_CHANGES")
+    return status_witness("first-install-release-list-refused", expected,
+                          setup_refused=True)
+
+
 def cold():
     clean = s04.load("s05a_cold_clean", "stage2-opnsense-real-native-clean-install.py")
     clean.preflight()
@@ -161,6 +201,7 @@ def cold():
     plain_legacy(installed)
     invalid_options()
     cases.append(status_witness("plugin-no-engine", installed))
+    cases.append(setup_failure_witness(installed))
     s04.upstream()
     s04.drop_config()
     cases.append(status_witness("engine-no-config", {

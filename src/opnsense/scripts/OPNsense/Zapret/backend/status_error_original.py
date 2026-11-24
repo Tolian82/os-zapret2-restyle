@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""TZ6v5 S05b1: one read-only qualified error from original SharedApply journal.
-
-No independent writer, PID match, file discovery, FD9 or invented dvtws2 rc.
-The original SharedApplyOperation validates the *root-owned* fixed journal.
-Only explicit terminal failure phases are errors: PREPARED is not failure.
-"""
+"""Read qualified terminal failures from the original lifecycle owners."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from component_inventory import classify
+from component_inventory_opnsense import _read_fixed, probe_engine
 
 _CODES = {
     "restore-failed": ("RESTORE_FAILED",
@@ -15,6 +13,53 @@ _CODES = {
     "requires-review": ("APPLY_REQUIRES_REVIEW",
                         "Original Apply requires operator review"),
 }
+
+
+_SETUP_RELEASE_LIST_FAILURE = b"failed\ncause=release-list-unavailable\n"
+SETUP_STATUS = Path("/var/db/zapret2-restyle/setup.status")
+SETUP_PID = Path("/var/run/zapret2-restyle/setup.pid")
+
+
+def _setup_worker_absent() -> bool:
+    # Treat any launcher PID file as potentially active. Status does not
+    # inspect its contents, match a process or repair a stale file.
+    try:
+        SETUP_PID.lstat()
+    except FileNotFoundError:
+        return True
+    return False
+
+
+def _read_setup_failure(facts: dict) -> dict | None:
+    if (facts["plugin"], facts["engine"], facts["manifest"], facts["runtime"]) != (
+            "installed", "absent", "missing", "STOPPED"):
+        return None
+    if not _setup_worker_absent():
+        return None
+    try:
+        before = SETUP_STATUS.lstat()
+        record = _read_fixed(SETUP_STATUS, 128, 0)
+    except FileNotFoundError:
+        return None
+    if record != _SETUP_RELEASE_LIST_FAILURE:
+        return None
+    if _read_fixed(SETUP_STATUS, 128, 0) != record:
+        raise ValueError("RACING_ORIGINAL_SETUP_STATUS")
+    after = SETUP_STATUS.lstat()
+    if (before.st_dev, before.st_ino, before.st_mtime_ns, before.st_ctime_ns) != (
+            after.st_dev, after.st_ino, after.st_mtime_ns, after.st_ctime_ns):
+        raise ValueError("RACING_ORIGINAL_SETUP_STATUS")
+    if not _setup_worker_absent() or probe_engine() != "absent":
+        return None
+    return {
+        "source": "original-setup-status",
+        "action": "setup-install", "stage": "install",
+        "code": "SETUP_RELEASE_LIST_UNAVAILABLE",
+        "message": "Last recorded first install could not obtain the stable release list",
+        "operation_id": None, "timestamp": None, "generation": None,
+        "exit_status": None, "runtime_before": None, "runtime_after": None,
+        "verification": "refused", "stderr_excerpt": None, "log_ref": None,
+    }
 
 
 def read_qualified_failure(report: dict, *, reader=None) -> dict | None:
@@ -33,7 +78,7 @@ def read_qualified_failure(report: dict, *, reader=None) -> dict | None:
     pending = facts["runtime"] == "INCOMPLETE" and facts["manifest"] == "stale"
     stopped = facts["runtime"] == "STOPPED" and facts["manifest"] == "valid"
     if not (pending or stopped):
-        return None
+        return _read_setup_failure(facts)
     from shared_apply_operation import SharedApplyOperation, _validate_record
     if reader is None:
         reader = lambda: SharedApplyOperation(owner=0).read()

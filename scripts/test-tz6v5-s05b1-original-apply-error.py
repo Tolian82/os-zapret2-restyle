@@ -15,6 +15,7 @@ BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 
 from component_inventory import classify
+from component_inventory_opnsense import _read_fixed as read_fixed
 from shared_apply_operation import SharedApplyOperation, SharedOperationError
 import status_error_original as reader
 import status_readonly as cli
@@ -146,6 +147,64 @@ class NativeOriginalJournalSource(unittest.TestCase):
         self.assertNotIn("secret", raw)
         self.assertNotIn("1.2.3.4", raw)
         self.assertNotIn("domain.example", raw)
+
+    def test_json_cli_reads_only_the_original_idle_first_install_failure(self):
+        current = classify({"plugin": "installed", "engine": "absent",
+                            "config": "initialized", "manifest": "missing",
+                            "runtime": "STOPPED"})
+        exact = b"failed\ncause=release-list-unavailable\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            status_path = directory / "setup.status"
+            pid_path = directory / "setup.pid"
+
+            def read_setup(path, limit, owner):
+                return read_fixed(path, limit, os.geteuid())
+
+            def status():
+                with patch("builtins.print") as printer:
+                    self.assertEqual(cli.main(["status_readonly.py"]), 1)
+                return json.loads(printer.call_args.args[0])
+
+            with patch.multiple(reader, SETUP_STATUS=status_path, SETUP_PID=pid_path,
+                                _read_fixed=read_setup, create=True), \
+                 patch.object(cli, "collect", return_value=current), \
+                 patch.object(reader, "probe_engine", return_value="absent", create=True):
+                self.assertIsNone(status()["last_error"])
+                status_path.write_bytes(exact)
+                before = status_path.stat()
+                row = status()
+                after = status_path.stat()
+                self.assertEqual(row["code"], "ENGINE_NOT_INSTALLED")
+                self.assertEqual(row["diagnostic_state"], "qualified")
+                self.assertEqual(row["stage"], "install")
+                self.assertEqual(row["last_error"]["code"], "SETUP_RELEASE_LIST_UNAVAILABLE")
+                self.assertEqual(row["last_error"]["source"], "original-setup-status")
+                self.assertEqual(row["last_error"]["verification"], "refused")
+                for name in ("operation_id", "timestamp", "generation", "exit_status",
+                             "runtime_before", "runtime_after", "stderr_excerpt", "log_ref"):
+                    self.assertIsNone(row["last_error"][name])
+                self.assertEqual(status_path.read_bytes(), exact)
+                self.assertEqual((before.st_ino, before.st_mtime_ns, before.st_ctime_ns),
+                                 (after.st_ino, after.st_mtime_ns, after.st_ctime_ns))
+
+                pid_path.touch()
+                self.assertIsNone(status()["last_error"])
+                pid_path.unlink()
+                for record in (b"failed\n", b"ready\n", b"installing\n" + exact.split(b"\n", 1)[1],
+                               exact + b"secret=private\n"):
+                    status_path.write_bytes(record)
+                    result = status()
+                    self.assertIsNone(result["last_error"])
+                    self.assertNotIn("private", json.dumps(result))
+
+                status_path.write_bytes(exact)
+                with patch.object(reader, "probe_engine", return_value="valid"):
+                    self.assertIsNone(status()["last_error"])
+                with patch.object(reader, "_read_fixed", side_effect=[exact, b"failed\n"]):
+                    result = status()
+                    self.assertIsNone(result["last_error"])
+                    self.assertEqual(result["diagnostic_state"], "unavailable")
 
     def test_no_independent_reader_writer_in_product(self):
         for path in (reader.__file__, cli.__file__):
