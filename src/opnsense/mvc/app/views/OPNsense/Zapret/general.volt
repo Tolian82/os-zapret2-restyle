@@ -1517,14 +1517,19 @@
                 timeout: 600000
             }).done(function() {
                 const receipt = arguments[0];
-                if (action === 'stop' && (!receipt || receipt.status !== 'ok' ||
-                    receipt.action !== 'stop' || receipt.state !== 'stopped' ||
+                if ((!receipt || receipt.status !== 'ok' ||
+                    receipt.action !== action ||
+                    receipt.state !== (action === 'stop' ? 'stopped' : 'started') ||
                     receipt.verified !== true)) {
                     // A 200 without a native terminal receipt is uncertainty,
                     // not success. Never echo untrusted response contents.
-                    showRuntimeError(runtimeText.serviceError, isRussian
-                        ? 'Остановка Zapret2 не подтверждена. Проверьте состояние службы и журнал.'
-                        : 'Zapret2 Stop was not confirmed. Check the service status and log.');
+                    showRuntimeError(runtimeText.serviceError, action === 'stop'
+                        ? (isRussian
+                            ? 'Остановка Zapret2 не подтверждена. Проверьте состояние службы и журнал.'
+                            : 'Zapret2 Stop was not confirmed. Check the service status and log.')
+                        : (isRussian
+                            ? 'Запуск Zapret2 не подтверждён. Проверьте состояние службы и журнал.'
+                            : 'Zapret2 Start was not confirmed. Check the service status and log.'));
                     refreshRuntime();
                     return;
                 }
@@ -1560,6 +1565,8 @@
                 // FD9 lockf timeout. Never show raw configd/errorMessage.
                 const fd9BusyStop = action === 'stop' &&
                     nativeError === 'Zapret2 Stop refused: original lifecycle lock is busy.';
+                const fd9BusyStart = action === 'start' &&
+                    nativeError === 'Zapret2 Start refused: original lifecycle lock is busy.';
                 // Do not claim a failed Stop was a failed Start. Preserve the
                 // bounded server gettext mapping and the actual requested verb.
                 const fallback = action === 'stop'
@@ -1574,8 +1581,12 @@
                         ? (isRussian
                             ? 'Остановка Zapret2 отклонена: другая операция удерживает блокировку службы.'
                             : 'Zapret2 Stop refused: original lifecycle lock is busy.')
-                        : (typeof message === 'string' && message
-                            ? localizeStrategiesApplyError(message) : fallback));
+                        : (fd9BusyStart
+                            ? (isRussian
+                                ? 'Запуск Zapret2 отклонён: другая операция удерживает блокировку службы.'
+                                : 'Zapret2 Start refused: original lifecycle lock is busy.')
+                            : (typeof message === 'string' && message
+                                ? localizeStrategiesApplyError(message) : fallback)));
                 refreshRuntime();
             });
         });

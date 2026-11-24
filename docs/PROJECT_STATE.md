@@ -1,8 +1,9 @@
-# 24.11.2026 — CURRENT v0.6.5_161 S05c2a fixed original FD9 refusal → GUI
+# 24.11.2026 — CURRENT S05c2b Start verified receipt
 
-**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=161`, `v0.6.5_161`; prospective `os-zapret2-restyle-0.6.5_161.pkg` not published/installed. Accepted base `main _160 31d3d4bd` post-merge CI and RU/EN Chromium PASS. S05c2a candidate: real native original FD9 lockf rc75 can emit a safe private verb-specific refusal (not a terminal receipt); exact PHP parser fails closed, and Strategies Stop displays safe RU/EN reason. Original ordinary Start/Stop/Restart FD9, Config, kernel, journal and all success receipts unchanged. Native installed held-FD9 HTTP EN/RU and full exact-head CI pending; S05 full NO-GO, S06+ blocked.
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=162`, `v0.6.5_162`, `os-zapret2-restyle-0.6.5_162.pkg` NOT published or installed; accepted base `main _161 aee02fc81`. [PR #1277](https://github.com/Tolian82/os-zapret2-restyle/pull/1277) confirmed real FD9_BUSY Stop/Restart EN/RU and all 17 exact-head CI, main CI/release PASS; independent main-push Chromium cancelled, not a PASS. S05c2b private Start receipt now covers original FD9 legacy and Common/Recovery early returns with the original read-only RUNNING witness; unchanged WAN-first; PHP/GUI fail closed. Real G07 Common, saved-WAN FD9 BUSY negative and S03e3f Legacy native proof pending. Full S05 NO-GO, S06+ blocked.
 
 ---
+
 
 # 23.11.2026 — HISTORICAL v0.6.5_160 S05c1 plain FD9 Status physical no-write gate
 

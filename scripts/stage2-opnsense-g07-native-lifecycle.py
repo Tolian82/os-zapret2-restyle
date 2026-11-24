@@ -7,6 +7,8 @@ actions mutate runtime; no test-specific Config, IPFW or daemon owner.
 """
 from __future__ import annotations
 
+import fcntl
+import stat
 import hashlib
 import json
 import os
@@ -88,8 +90,11 @@ def self_test():
             "action": "stop", "state": "stopped"}
     restart = {"response": "OK", "status": "ok", "verified": True,
                "action": "restart", "state": "started"}
+    start = {"response": "OK", "status": "ok", "verified": True,
+             "action": "start", "state": "started"}
     need(verified_lifecycle_response("stop", stop) and
-         verified_lifecycle_response("restart", restart),
+         verified_lifecycle_response("restart", restart) and
+         verified_lifecycle_response("start", start),
          "G07_FAST_VALID_TERMINAL_RECEIPT_REJECTED")
     for name, candidate in (
         ("stop", {**stop, "verified": False}),
@@ -100,6 +105,10 @@ def self_test():
         ("restart", {**restart, "state": "stopped"}),
         ("restart", {**restart, "action": "stop"}),
         ("restart", {"response": "OK"}),
+        ("start", {**start, "verified": False}),
+        ("start", {**start, "state": "stopped"}),
+        ("start", {**start, "action": "restart"}),
+        ("start", {"response": "OK"}),
     ):
         need(not verified_lifecycle_response(name, candidate),
              "G07_FAST_FALSE_TERMINAL_PROOF_ACCEPTED")
@@ -150,7 +159,7 @@ def verified_lifecycle_response(name, payload):
     unmocked installed HTTPS response and independently checks real process,
     generation, scoped IPFW and stopped/running state after the request.
     """
-    if name not in ("stop", "restart") or not isinstance(payload, dict):
+    if name not in ("start", "stop", "restart") or not isinstance(payload, dict):
         return False
     state = "stopped" if name == "stop" else "started"
     return (payload.get("response") == "OK" and
@@ -165,7 +174,7 @@ def action(web, name):
     # Actual installed authenticated HTTP, no mocked mutation route.
     response = web.api("POST", "/api/zapret/service/" + name)
     need(isinstance(response, dict), "G07_SERVICE_ACTION_NOT_JSON")
-    if name in ("stop", "restart"):
+    if name in ("start", "stop", "restart"):
         need(verified_lifecycle_response(name, response),
              "G07_REAL_COMMON_" + name.upper() + "_TERMINAL_RECEIPT_MISSING")
     return response
@@ -227,6 +236,42 @@ def execute():
     need(not rules and unchanged == foreign and not g06.PID.exists(),
          "G07_GUI_STOP_LEFT_NATIVE_PID_OR_IPFW")
 
+    # S05c2b: WAN is saved, owner is STOPPED, engine is installed. Hold
+    # precisely the ORIGINAL FD9, then send an unmocked authenticated HTTP
+    # Start and require the real bounded lockf rc75 refusal, no side effects.
+    lock = Path("/var/run/zapret2-lifecycle.lock")
+    marker = lock.lstat()
+    need(stat.S_ISREG(marker.st_mode) and marker.st_uid == 0 and
+         marker.st_nlink == 1 and not (marker.st_mode & 0o022),
+         "G07_ORIGINAL_FD9_UNQUALIFIED")
+    before_busy = g06.CONFIG.read_bytes()
+    with lock.open("r+b", buffering=0) as holder:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            req = urllib.request.Request(
+                core.ORIGIN + "/api/zapret/service/start",
+                data=b"", method="POST",
+                headers={"X-CSRFToken": web.csrf_token,
+                         "Accept": "application/json",
+                         "Referer": core.ORIGIN + "/ui/zapret"})
+            try:
+                with web.client.open(req, timeout=90):
+                    raise Refusal("G07_FD9_BUSY_START_FALSE_HTTP_200")
+            except urllib.error.HTTPError as error:
+                try:
+                    result = json.loads(error.read(8192))
+                except ValueError:
+                    raise Refusal("G07_FD9_BUSY_START_NOT_JSON") from None
+                need(400 <= error.code < 600 and isinstance(result, dict)
+                     and result.get("errorMessage") ==
+                     "Zapret2 Start refused: original lifecycle lock is busy.",
+                     "G07_FD9_BUSY_START_CAUSE_NOT_DELIVERED")
+        finally:
+            fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+    need(g06.CONFIG.read_bytes() == before_busy and
+         g06.rule_sets() == ([], foreign) and not g06.PID.exists(),
+         "G07_FD9_BUSY_START_MUTATED_CONFIG_IPFW_ENGINE")
+
     action(web, "start")
     again = g06.running(engine_sha, foreign, voice=0, ordinary=0,
                         page="strategies")
@@ -281,7 +326,8 @@ def execute():
         "disabled_wan_save_preserves_stopped_state": True,
         "first_https_lower_apply_real_process": True,
         "https_stop_start_restart_real_one_engine": True,
-        "common_real_http_stop_restart_terminal_receipts": True,
+        "common_real_http_start_stop_restart_terminal_receipts": True,
+        "real_wan_ready_held_original_fd9_start_refusal": True,
         "lower_apply_ordinary_add_remove_exact_ipfw": True,
         "invalid_profile_apply_refused_unchanged": True,
         "saved_wan_and_foreign_config_ipfw_preserved": True,

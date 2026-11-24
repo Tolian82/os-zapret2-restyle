@@ -193,7 +193,7 @@ def lifecycle_http(web, name, g07):
     need(name in ("start", "stop", "restart"), "S03E3F_BAD_VERB")
     result = web.api("POST", "/api/zapret/service/" + name)
     need(isinstance(result, dict), "S03E3F_LIFECYCLE_HTTP_NOT_JSON")
-    if name in ("stop", "restart"):
+    if name in ("start", "stop", "restart"):
         need(g07.verified_lifecycle_response(name, result),
              "S03E3F_REAL_LEGACY_" + name.upper() + "_TERMINAL_RECEIPT_MISSING")
     return True
@@ -201,7 +201,7 @@ def lifecycle_http(web, name, g07):
 
 def self_test():
     g07 = load("stage2-opnsense-g07-native-lifecycle.py")
-    for name, state in (("stop", "stopped"), ("restart", "started")):
+    for name, state in (("stop", "stopped"), ("restart", "started"), ("start", "started")):
         good = {"response": "OK", "status": "ok", "verified": True,
                 "action": name, "state": state}
         need(g07.verified_lifecycle_response(name, good),
@@ -314,7 +314,7 @@ def execute():
         "real_engine_sha256": engine_sha,
         "original_fd9_legacy_no_shared_apply_journal": True,
         "real_https_start_restart_stop": True,
-        "real_http_restart_verified_running": True,
+        "real_http_start_restart_verified_running": True,
         "real_http_stop_verified_stopped": True,
         "one_engine_pid_rotated": True,
         "original_saved_config_retained_during_lifecycle": True,
