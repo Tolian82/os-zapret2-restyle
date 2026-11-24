@@ -218,6 +218,9 @@
 
 ### S06. Первый install и повторный install
 
+**FORMAL S06 GO (24.11.2026, native source main _188):** [native first-install, original Config one-time seed, preserved same-archive force and ordinary delete→reinstall, WAN-only no-engine Apply/F5](ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md). [S06a #1305](https://github.com/Tolian82/os-zapret2-restyle/pull/1305) 4/4 workflows SUCCESS, real G05 `S06_G05_REAL_PKG_DELETE_REINSTALL_PRESERVES_USER_AND_FOUND=PASS`, main CI/classifier SUCCESS. Earlier S06a candidate note below is historical; no physical owner GUI click, no public package. **S07 next:** original OPNsense XML adapter → strict neutral typed read-only model, no second writer.
+
+
 **S06a (`v0.6.5_188`, test-only candidate):** one real original G05 no-engine OPNsense guest already qualifies clean WAN Save/F5 and same-archive forced reinstall. The uncovered case is ordinary `pkg delete -y` (not purge) followed by `pkg add` of **identical physical package SHA**, after native Config model saves populated User/Exclude/IPSet/Voice fields while Youtube/Strategy remain deliberately empty, and test-owned original Found file bytes are present. Check exact before/after native Config subtree, private files, daemon/PID/kernel, installed GUI/F5 and original hooks. New native function is appended only to the existing G05 witness; no new VM or product changes. Local AST and mocked success/data-loss refusal PASS; genuine native pending. S05 formal GO accepted [#1303](https://github.com/Tolian82/os-zapret2-restyle/pull/1303); S06 GO not yet claimed.
 
 
@@ -229,6 +232,9 @@
 **GO:** empty→seed once→reinstall **и G05 WAN-only Save** PASS, no engine is safe. **NO-GO:** повторная установка перезаписывает текст или WAN требует обычного Start/манифеста.
 
 ### S07. XML OPNsense adapter → neutral model
+
+**Next after formal S06 GO:** [S06 proof](ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md). Implement a source-proven neutral, immutable, typed projection of existing model/registered source IDs and saved WAN via real read-only OPNsense adapter; negative/missing/unknown fail-closed, no new Config writer, no shell process/FD9/start/stop, no pfSense implementation yet.
+
 
 1. Из текущей модели `OPNsense/Zapret` получить read-only валидный typed projection, без второго Config writer и shell execution.
 2. Отделить platform XML/WAN/configd/pkg adapters от общего компилятора, для будущей pfSense оставить **интерфейс**, не добавлять неподтверждённый порт.

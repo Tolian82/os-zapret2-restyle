@@ -1,6 +1,6 @@
-## Current priority — ТЗ_6v5 S06
+## Current priority — ТЗ_6v5 S07
 
-**Текущий приоритет ТЗ_6v5:** [S05 Status/diagnostics formal GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md). **S06 next** — first install one-time seed, saved/empty reinstall and WAN-only Save. Unified Reload/Force and semantic Lab repair remain S08–S15. [Order S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+**Текущий приоритет ТЗ_6v5:** [S05 Status/diagnostics GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md) and [S06 native first-install/reinstall/WAN-only GO](architecture/ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md). **S07 next** — one strict read-only OPNsense XML → neutral typed model, existing WAN/list sources, no Config writer. Reload/Force and Lab semantic fix remain S08–S15. [Order S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
 
 ## 23.11.2026 — TZ6v5 S03e1 actual CLI strict-options expected RED
 
