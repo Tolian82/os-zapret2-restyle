@@ -18,7 +18,7 @@ Read through EOF in this order:
 
 ## Level 2 — active work and current contracts
 
-**Текущая очередь:** [утверждённая ТЗ_6v4](architecture/TZ_6v4.md), [актуальный STEP0–6 / P0–P5 план](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md), [сохранённый ТЗ_6v3 GUI/API](architecture/TZ_6v3.md) и [Strategies List API v1](architecture/STRATEGIES_LIST_API_V1.md). **Будущее:** [Future design](architecture/STRATEGIES_LIST_FUTURE.md) / [Features #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192) — отдельно, не входит в ТЗ_6v3.
+**Текущая очередь:** [ТЗ_6v5](architecture/TZ_6v5.md) → [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), [formal S05 diagnostics GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md) → S06 first install/reinstall. ТЗ_6v4 и STEP0–6/P0–P5 — прежние контракты/история, не активная очередь. [Future design](architecture/STRATEGIES_LIST_FUTURE.md) отдельно.
 
 | Need | Primary document |
 |---|---|
