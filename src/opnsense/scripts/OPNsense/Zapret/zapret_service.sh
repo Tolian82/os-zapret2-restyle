@@ -3538,6 +3538,10 @@ service_api_terminal_receipt()
             printf '%s\n' zapret-api-lifecycle-v1:restart:running
             return 0
             ;;
+        start:0)
+            printf '%s\n' zapret-api-lifecycle-v1:start:running
+            return 0
+            ;;
         *)
             # rc=0 from a dispatcher is NOT a terminal runtime witness.
             return 70
@@ -3547,17 +3551,31 @@ service_api_terminal_receipt()
 
 service_with_lifecycle_lock()
 {
+    # Local completion is defined WITHIN the original extracted FD9 function,
+    # so cold/status and shell-source witnesses remain self-contained.
+    # It is used only from already-existing Common/Recovery Start returns.
+    service_api_complete()
+    {
+        [ "$#" -eq 1 ] || return 64
+        _service_complete_rc="$1"
+        if [ -n "$_service_receipt_action" ]; then
+            service_api_terminal_receipt "$_service_receipt_action" "$_service_complete_rc"
+            return $?
+        fi
+        return "$_service_complete_rc"
+    }
+
     # This function is also sourced alone by native fail-closed shell tests.
     : "${PKG_UPDATE_RECORD:=/var/db/zapret2/pkg-update/operation.json}"
     _service_lock_timeout="$1"
     shift
     # The GUI transport is an optional parameter to the EXISTING original
-    # Stop/Restart dispatcher, not an independent lifecycle implementation.
+    # Start/Stop/Restart dispatcher, not an independent lifecycle implementation.
     # The private parameter is stripped before any normal guarded operation.
     _service_receipt_action=
     if [ "$#" -eq 2 ] && [ "$2" = "--configd-receipt" ]; then
         case "$1" in
-            stop|restart)
+            start|stop|restart)
                 _service_receipt_action="$1"
                 set -- "$1"
                 ;;
@@ -3687,7 +3705,11 @@ service_with_lifecycle_lock()
                     if [ -n "$_found_pending" ]; then
                         _found_reconciled=$(shared_apply_recover_found_service "$_found_pending") || return 70
                         case "$(printf '%s\n' "$_found_reconciled" | tail -n 1)" in
-                            applied-id=*) printf '%s\n' "$_found_reconciled"; return 0 ;;
+                            applied-id=*)
+                                printf '%s\n' "$_found_reconciled"
+                                service_api_complete 0
+                                return $?
+                                ;;
                             apply-restored=*) ;;
                             *) return 70 ;;
                         esac
@@ -3696,6 +3718,7 @@ service_with_lifecycle_lock()
                     case "$_shared_owner" in
                         committed\ *)
                             shared_apply_boot_service "$_shared_owner"
+                            service_api_complete "$?"
                             return $?
                             ;;
                         config-saved\ *)
@@ -3703,6 +3726,7 @@ service_with_lifecycle_lock()
                             # the kernel contains NO active Zapret2 owner.
                             # Never invoke legacy start after native save.
                             shared_apply_recover_saved_service "$_shared_owner"
+                            service_api_complete "$?"
                             return $?
                             ;;
                         activated\ *)
@@ -3711,6 +3735,7 @@ service_with_lifecycle_lock()
                             case "$_shared_owner" in
                                 committed\ *)
                                     shared_apply_boot_service "$_shared_owner"
+                                    service_api_complete "$?"
                                     return $?
                                     ;;
                                 *) return 69 ;;
@@ -3731,6 +3756,7 @@ service_with_lifecycle_lock()
                             case "$_shared_owner" in
                                 committed\ *)
                                     shared_apply_boot_service "$_shared_owner"
+                                    service_api_complete "$?"
                                     return $?
                                     ;;
                                 restored) ;;
@@ -3747,6 +3773,7 @@ service_with_lifecycle_lock()
                             case "$_shared_owner" in
                                 committed\ *)
                                     shared_apply_boot_service "$_shared_owner"
+                                    service_api_complete "$?"
                                     return $?
                                     ;;
                                 restored) ;;

@@ -1,14 +1,13 @@
-## 24.11.2026 — CURRENT TZ6v5 S05c2a genuine FD9_BUSY refusal → RU/EN consumer (source candidate)
+## 24.11.2026 — CURRENT S05c2b verified Start under original FD9
 
-**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=161`, `v0.6.5_161`, prospective `os-zapret2-restyle-0.6.5_161.pkg` **NOT published/installed**. Base accepted `main v0.6.5_160 31d3d4bd`; main-push CI, release trigger and Chromium RU/EN PASS.
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=162`, source candidate `v0.6.5_162`, prospective `os-zapret2-restyle-0.6.5_162.pkg` **NOT published/installed**. Base `main _161 aee02fc81`, [#1277](https://github.com/Tolian82/os-zapret2-restyle/pull/1277) accepted with 17/17 exact-head CI and real original-FD9-busy EN/RU Chromium. Post-merge main CI and release passed; additional main-push Chromium was CANCELLED, not PASS.
 
-**Scope:** the real original FD9 `lockf -s -t ... 9` timeout rc75 when the fixed private `stop_verified`/`restart_verified` configd action has requested `--configd-receipt`. Only this exact native refusal emits `zapret-api-lifecycle-v1:<verb>:refused:fd9-busy` on stdout, while retaining shell rc75. This is **not terminal success**, not a second journal/owner, and does not affect public CLI stdout/rc. The existing PHP bridge recognizes only the exact bounded fixed marker and raises a safe verb-specific `UserException`, with raw configd output excluded. Strategies GUI recognizes only its fixed Stop message and shows the true cause in RU and EN. No separate GUI Restart button is invented.
+**Immediate bounded user path:** saved WAN → native PHP WAN-first → authenticated Start → PRIVATE `start_verified` configd action → same original FD9 Start (legacy, Common and Recovery early returns) → original read-only `shared_apply_status_service` witnesses RUNNING before releasing FD9 → fixed terminal `zapret-api-lifecycle-v1:start:running` → strict PHP → GUI Start requires `verified=true,action=start,state=started`. Real FD9 busy, STOPPED/INCOMPLETE, nonzero Start or missing marker are HTTP failures, not fictitious success. Public Start/Stop/Restart CLI, original journal and Config/IPFW unchanged.
 
-**Stock configd transport caveat:** OPNsense's standard `script_output` uses `subprocess.run(check=not disable_errors)`; for rc75 its default path returns `Execute error`, and `Backend::configdRun()` discards that error. Therefore ONLY the existing private `stop_verified`/`restart_verified` actions set `errors:no` so a fixed refusal can traverse configd while the shell keeps genuine rc75. The PHP exact marker parser is the ONLY API success/refusal arbiter and rejects empty, mixed or arbitrary output; legacy public actions retain their old configd behavior. Installed native verification still mandatory.
-
-**Physical acceptance:** the original disposable OPNsense 26.7 CI holds the **actual FD9 inode**, checks genuine installed HTTP Stop/Restart under EN and RU Chromium with no intercepted POST, enforces the specific bounded cause, visible localized Stop and no Config/IPFW/engine mutation. Exact-head source/negative matrix and all native lifecycle/upgrade regressions are required. If configd suppresses stdout on rc75, this is RED until a verified correction; do not infer success from a mocked response. Full S05 NO-GO; S06+ blocked, no operator device access or testing .pkg.
+**Required exact-head native proof:** real installed G07 Common Start success and saved-WAN genuine held-FD9 Start refusal with no Config/IPFW/engine mutation; S03e3f Legacy Start success; existing Chromium RU/EN WAN-first/Stop plus source negative matrix and CI. No owner router action, no public package. Full S05 NO-GO; S06+ blocked.
 
 ---
+
 
 ## 23.11.2026 — HISTORICAL TZ6v5 S05c1 original plain Status FD9 no-write witness
 

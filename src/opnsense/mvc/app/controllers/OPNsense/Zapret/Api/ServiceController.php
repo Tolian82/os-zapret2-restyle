@@ -55,28 +55,32 @@ class ServiceController extends ApiMutableServiceControllerBase
             throw new UserException(gettext('Saved WAN preflight is unavailable'),
                 gettext('Zapret configuration error'));
         }
-        return parent::startAction();
+        // Stock parent returns transport acceptance without terminal RUNNING.
+        return $this->verifiedLifecycleAction('start');
     }
 
     /**
      * Require a trusted terminal receipt from the SAME original FD9 holder.
      * configd type:script can return HTTP 200 even after a shell rc75. A
      * transport success, an empty output, and arbitrary upstream stdout are
-     * NEVER evidence of a completed Stop or Restart.
+     * NEVER evidence of a completed Start, Stop or Restart.
      */
     private function verifiedLifecycleAction(string $action): array
     {
         if (!$this->request->isPost()) {
             return ['response' => []];
         }
+        $isStart = $action === 'start';
         $isStop = $action === 'stop';
-        if (!$isStop && $action !== 'restart') {
+        if (!$isStart && !$isStop && $action !== 'restart') {
             throw new \InvalidArgumentException('Unsupported lifecycle action');
         }
-        $backendAction = $isStop ? 'zapret stop_verified' : 'zapret restart_verified';
-        $expected = $isStop
-            ? 'zapret-api-lifecycle-v1:stop:stopped'
-            : 'zapret-api-lifecycle-v1:restart:running';
+        $backendAction = $isStart ? 'zapret start_verified'
+            : ($isStop ? 'zapret stop_verified' : 'zapret restart_verified');
+        $expected = $isStart ? 'zapret-api-lifecycle-v1:start:running'
+            : ($isStop
+                ? 'zapret-api-lifecycle-v1:stop:stopped'
+                : 'zapret-api-lifecycle-v1:restart:running');
         $state = $isStop ? 'stopped' : 'started';
         $raw = (string)(new Backend())->configdRun(
             $backendAction, false, $isStop ? 120 : 600
@@ -89,9 +93,11 @@ class ServiceController extends ApiMutableServiceControllerBase
         $fd9Refusal = 'zapret-api-lifecycle-v1:' . $action . ':refused:fd9-busy';
         if (strlen($raw) <= 128 && trim($raw) === $fd9Refusal) {
             throw new UserException(
-                $isStop
-                    ? 'Zapret2 Stop refused: original lifecycle lock is busy.'
-                    : 'Zapret2 Restart refused: original lifecycle lock is busy.',
+                $isStart
+                    ? 'Zapret2 Start refused: original lifecycle lock is busy.'
+                    : ($isStop
+                        ? 'Zapret2 Stop refused: original lifecycle lock is busy.'
+                        : 'Zapret2 Restart refused: original lifecycle lock is busy.'),
                 gettext('Service operation failed')
             );
         }
@@ -100,9 +106,11 @@ class ServiceController extends ApiMutableServiceControllerBase
             preg_match('/(?:\\A|\\n)' . preg_quote($expected, '/') . '\\z/D', trim($raw)) === 1;
         if (!$valid) {
             throw new UserException(
-                $isStop
-                    ? gettext('Zapret2 Stop was not confirmed. Check the service status and log.')
-                    : gettext('Zapret2 Restart was not confirmed. Check the service status and log.'),
+                $isStart
+                    ? gettext('Zapret2 Start was not confirmed. Check the service status and log.')
+                    : ($isStop
+                        ? gettext('Zapret2 Stop was not confirmed. Check the service status and log.')
+                        : gettext('Zapret2 Restart was not confirmed. Check the service status and log.')),
                 gettext('Service operation failed')
             );
         }

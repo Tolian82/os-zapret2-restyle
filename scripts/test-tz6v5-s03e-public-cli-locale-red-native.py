@@ -78,10 +78,14 @@ def source_routes() -> dict:
         check(("[{verb}]".format(verb=verb)) in a and
               ("/zapret_service.sh " + verb) in a,
               "S03E_CONFIGD_ROUTE_MISSING_" + verb)
+    # S05c2b: retained WAN-first preflight, but inherited parent's configd
+    # transport-only Start is replaced with original FD9 terminal receipt.
     check("public function startAction(): array" in c and
           "configdRun('zapret wan_preflight'" in c and
-          "return parent::startAction();" in c,
-          "S03E_CONTROLLER_START_ROUTE_CHANGED")
+          "return $this->verifiedLifecycleAction('start');" in c and
+          "[start_verified]" in a and
+          "zapret_service.sh start --configd-receipt" in a,
+          "S03E_CONTROLLER_START_VERIFIED_ROUTE_CHANGED")
     check("gettext('Select a WAN interface')" in c and
           "gettext('Selected WAN interface is not assigned or unavailable')" in c,
           "S03E_CONTROLLER_WAN_GETTEXT_CHANGED")
@@ -122,7 +126,7 @@ def source_routes() -> dict:
         "configd_start_stop_restart_paths_source": True,
         "strategies_start_stop_ajax_failure_ru_en_source": True,
         "voice_lifecycle_button_retired_source": True,
-        "controller_wan_gettext_to_parent_start_source": True,
+        "controller_wan_gettext_to_verified_original_fd9_start_source": True,
         "strategies_stop_fallback_action_specific_source": True,
         "native_gui_click_or_translation_render_not_claimed": True,
     }
