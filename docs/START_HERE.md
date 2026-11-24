@@ -1,6 +1,6 @@
 ## 24.11.2026 — CURRENT S05c2c original missing-engine Start refusal candidate
 
-**Identity:** accepted `main v0.6.5_162 / 0bbc3c13` after [PR #1278](https://github.com/Tolian82/os-zapret2-restyle/pull/1278) with 18/18 exact-head workflows SUCCESS and native Common/Legacy/FD9 proof; new source-only candidate `v0.6.5_163`, no published/installed `os-zapret2-restyle-0.6.5_163.pkg`, owner router untouched.
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=163`, current source candidate `v0.6.5_163`; accepted `main v0.6.5_162 / 0bbc3c13` after [PR #1278](https://github.com/Tolian82/os-zapret2-restyle/pull/1278) with 18/18 exact-head workflows SUCCESS and native Common/Legacy/FD9 proof; new source-only candidate `v0.6.5_163`, no published/installed `os-zapret2-restyle-0.6.5_163.pkg`, owner router untouched.
 
 **One causal scenario:** saved WAN passes existing GUI PHP WAN-first preflight; original `start_service` detects an actually **absent** `dvtws2` at `ensure_runtime_components()` before firewall/engine. Only under the existing original private `start --configd-receipt` and held FD9 is a fixed `zapret-api-lifecycle-v1:start:refused:engine-not-installed` emitted; unchanged public CLI rc/stdout/stderr, existing configd `script_output,errors:no`, strict PHP `UserException` and bounded Strategies RU/EN mapping. Dangling symlink, invalid engine, foreign owner, pending package or other failures stay generic/UNKNOWN and may not be mislabeled as engine absent. Existing verified RUNNING Start remains mandatory for success.
 
