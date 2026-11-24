@@ -59,11 +59,21 @@ def xml_snapshot(raw: bytes) -> dict[str, object]:
     if len(models) != 1:
         raise NativeProjectionError("ZAPRET_MODEL_MISSING_OR_DUPLICATE")
     model = models[0]
-    # The native OPNsense Model stores an optional version attribute, e.g.
-    # <Zapret version="2.0.0">. It is metadata, never a second config source.
-    version = model.attrib.get("version")
-    if set(model.attrib) - {"version"} or (version is not None and
-            not re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,3}){0,2}", version)):
+    # Native OPNsense BaseModel::serializeToConfig() writes exactly these
+    # model-root metadata attributes: version, persisted_at and description.
+    # They are NOT user-controlled source selectors or an alternate Config.
+    # Validate and discard them, never echo them into a runtime manifest.
+    model_attributes = model.attrib
+    version = model_attributes.get("version")
+    persisted_at = model_attributes.get("persisted_at")
+    description = model_attributes.get("description")
+    if (set(model_attributes) - {"version", "persisted_at", "description"} or
+            (version is not None and
+             not re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,3}){0,2}", version)) or
+            (persisted_at is not None and
+             not re.fullmatch(r"[0-9]{9,12}\.[0-9]{2}", persisted_at)) or
+            (description is not None and
+             description != "Zapret2 DPI Bypass Configuration")):
         raise NativeProjectionError("INVALID_MODEL_ATTRIBUTES")
     top: dict[str, ET.Element] = {}
     allowed_top = ("general", "hostlist", "voice", "strategy", "strategylab")

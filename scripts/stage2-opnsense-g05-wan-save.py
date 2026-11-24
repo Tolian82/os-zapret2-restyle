@@ -377,75 +377,7 @@ def verify_s07_installed_readonly_projection():
     sys.path.insert(0, str(backend))
     try:
         import config_projection_opnsense as opnsense_projector
-        try:
-            model = opnsense_projector.read_saved()
-        except opnsense_projector.NativeProjectionError:
-            # A read-only native failure is a real NO-GO. Reuse only trusted
-            # readers to classify which stage refused, never disclose XML
-            # fields, user values, source content or native error strings.
-            import pwd
-            from component_inventory_opnsense import _read_fixed
-            from neutral_config_model import project as strict_project
-            allowed = frozenset((
-                "UNTRUSTED_READONLY_COMPONENT", "RACING_READONLY_COMPONENT",
-                "INVALID_XML_INPUT", "INVALID_XML", "INVALID_XML_ROOT",
-                "OPNSENSE_MODEL_MISSING_OR_DUPLICATE",
-                "ZAPRET_MODEL_MISSING_OR_DUPLICATE",
-                "INVALID_MODEL_ATTRIBUTES", "INVALID_MODEL_BRANCH",
-                "INVALID_OR_DUPLICATE_XML_NODE", "INVALID_VOICE_MODEL",
-                "INVALID_LEGACY_VOICE_WAN", "INVALID_REGISTRY_SOURCE",
-                "UNKNOWN_REGISTRY_DECLARATION", "INVALID_REGISTRY_OPTION",
-                "INVALID_REGISTRY_STORAGE", "INVALID_REGISTRY_MEMBERS",
-                "INVALID_MODEL_SECTION", "INVALID_MODEL_SCALAR",
-                "INVALID_BOOLEAN", "INVALID_ENUM", "INVALID_PORT",
-                "INVALID_PORTS", "INVALID_WAN_SELECTION",
-                "INVALID_REGISTRY", "INVALID_MODEL_KEYS", "INVALID_VOICE_KEYS",
-                "UNQUALIFIED_CONFIG_OWNER",
-            ))
-            def qualified(stage, action):
-                try:
-                    return action()
-                except (OSError, ValueError, KeyError) as error:
-                    code = str(error)
-                    if code not in allowed:
-                        code = type(error).__name__
-                    raise Refusal("S07_NATIVE_READ_" + stage + "_" + code) from None
-            uid = qualified("OWNER", lambda: pwd.getpwnam("wwwonly").pw_uid)
-            config_raw = qualified(
-                "CONFIG_BYTES", lambda: _read_fixed(CONF, 16777216, uid))
-            # Observe only bounded attribute SHAPE when genuine native
-            # OPNsense XML has a model attribute not in our source policy.
-            # Never print an attribute name/value, saved WAN or Config bytes.
-            try:
-                tree = opnsense_projector.xml_snapshot(config_raw)
-            except opnsense_projector.NativeProjectionError as error:
-                if str(error) == "INVALID_MODEL_ATTRIBUTES":
-                    parsed = ET.fromstring(config_raw)
-                    model_node = parsed.find("./OPNsense/Zapret")
-                    attrs = model_node.attrib if model_node is not None else {}
-                    version_value = attrs.get("version", "")
-                    shape = ("N" if not version_value else
-                             "NUM_DOTS" if all(ch.isdigit() or ch == "."
-                                               for ch in version_value) else
-                             "OTHER")
-                    raise Refusal(
-                        "S07_NATIVE_XML_MODEL_ATTR_SHAPE:"
-                        "count=" + str(min(len(attrs), 99)) +
-                        ":has_version=" + str("version" in attrs) +
-                        ":other_keys=" + str(bool(set(attrs) - {"version"})) +
-                        ":version_kind=" + shape +
-                        ":version_len=" + str(min(len(version_value), 99))
-                    ) from None
-                qualified("XML_SHAPE", lambda: opnsense_projector.xml_snapshot(config_raw))
-                raise Refusal("S07_NATIVE_READ_XML_SHAPE_UNQUALIFIED") from None
-            registry_raw = qualified(
-                "REGISTRY_BYTES",
-                lambda: _read_fixed(backend / "registry.sh", 131072, 0))
-            refs = qualified(
-                "REGISTRY_SHAPE",
-                lambda: opnsense_projector.registered_ids(registry_raw))
-            qualified("TYPED_PROJECT", lambda: strict_project(tree, refs))
-            raise Refusal("S07_NATIVE_READ_ORIGINAL_ADAPTER_UNQUALIFIED")
+        model = opnsense_projector.read_saved()
     finally:
         sys.path.remove(str(backend))
     need(model.schema == 1 and model.authorization == "NONE" and

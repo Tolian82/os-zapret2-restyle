@@ -54,12 +54,16 @@ class S07Pure(unittest.TestCase):
     def test_real_native_version_attribute_and_strict_lab_boolean(self):
         for version in ("2.0.0", "2", "1.0.0"):
             original = xml(lab='<enablequic>1</enablequic>')
-            real = original.replace(b'<Zapret>', f'<Zapret version="{version}">'.encode())
+            metadata = (f'<Zapret version="{version}" persisted_at="1795548700.00" '
+                        'description="Zapret2 DPI Bypass Configuration">')
+            real = original.replace(b'<Zapret>', metadata.encode())
             self.assertIs(self.source(real).lab_enablequic, True)
         self.assertIsNone(self.source().lab_enablequic)
         for invalid in (xml(lab='<enablequic>yes</enablequic>'),
                         xml(lab='<enablequic>0</enablequic><enablequic>1</enablequic>'),
                         xml().replace(b'<Zapret>', b'<Zapret version="untrusted">'),
+                        xml().replace(b'<Zapret>', b'<Zapret persisted_at="not-time">'),
+                        xml().replace(b'<Zapret>', b'<Zapret description="foreign">'),
                         xml().replace(b'<Zapret>', b'<Zapret foreign="1">')):
             with self.subTest(invalid=invalid[:90]):
                 with self.assertRaises((ConfigModelError, NativeProjectionError)):
