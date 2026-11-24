@@ -106,7 +106,18 @@ namespace {
     refusedInstall($installing);
     refusedInstall("installed=1\nservice=error\nversion=v1.0.7\nsetup=ready\nbusy=0");
 
+    $knownFailure = str_replace('setup=unknown', 'setup=failed', $clean) .
+        "\nlastsetupfailure=release-list-unavailable";
+    $known = status($knownFailure);
+    assertion($known['status'] === 'ok' && $known['setup'] === 'failed' &&
+        $known['lastsetupfailure'] === 'release-list-unavailable',
+        'qualified last failure missing');
     $malformed = [
+        $clean . "\nlastsetupfailure=release-list-unavailable",
+        $running . "\nlastsetupfailure=release-list-unavailable",
+        $installing . "\nlastsetupfailure=release-list-unavailable",
+        $knownFailure . "\nlastsetupfailure=release-list-unavailable",
+        str_replace('release-list-unavailable', 'arbitrary', $knownFailure),
         '',
         "installed=0\nservice=error\nsetup=unknown\nbusy=0",
         "installed=0\nservice=error\nversion=\nsetup=unknown",

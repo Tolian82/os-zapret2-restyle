@@ -127,6 +127,14 @@ show_status()
     printf 'version=%s\n' "${_version}"
     printf 'setup=%s\n' "${_setup}"
     printf 'busy=%s\n' "${_busy}"
+    # Optional exact historical detail, never an arbitrary log or rc.
+    if [ "${_installed}" -eq 0 ] && [ "${_busy}" -eq 0 ] &&
+       [ "${_setup}" = failed ] &&
+       [ -f "${SETUP_STATUS}" ] && [ ! -L "${SETUP_STATUS}" ] &&
+       printf '%s\n' failed 'cause=release-list-unavailable' |
+           cmp -s "${SETUP_STATUS}" - && ! setup_pid_running; then
+        printf '%s\n' 'lastsetupfailure=release-list-unavailable'
+    fi
 }
 
 launch_install()

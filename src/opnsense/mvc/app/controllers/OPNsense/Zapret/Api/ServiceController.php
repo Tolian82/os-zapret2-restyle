@@ -189,6 +189,7 @@ class ServiceController extends ApiMutableServiceControllerBase
         ];
         $state = $unavailable;
         unset($state['reason']);
+        $state['lastsetupfailure'] = null;
         $seen = [];
 
         foreach (preg_split('/\\R/u', $response) as $line) {
@@ -221,6 +222,12 @@ class ServiceController extends ApiMutableServiceControllerBase
                     }
                     $state[$field] = $value;
                     break;
+                case 'lastsetupfailure':
+                    if ($value !== 'release-list-unavailable') {
+                        return $unavailable;
+                    }
+                    $state[$field] = $value;
+                    break;
                 case 'setup':
                     if (!in_array($value, ['ready', 'installing', 'failed', 'unknown'], true)) {
                         return $unavailable;
@@ -230,8 +237,16 @@ class ServiceController extends ApiMutableServiceControllerBase
             }
         }
 
-        if (count($seen) !== 5) {
+        if (count($seen) !== (isset($seen['lastsetupfailure']) ? 6 : 5)) {
             return $unavailable;
+        }
+        if (isset($seen['lastsetupfailure'])) {
+            if ($state['installed'] || $state['busy'] || $state['setup'] !== 'failed' ||
+                $state['service'] !== 'error' || $state['version'] !== '') {
+                return $unavailable;
+            }
+        } else {
+            unset($state['lastsetupfailure']);
         }
         // A live setup always has BOTH native busy=1 and setup=installing.
         if ($state['busy'] !== ($state['setup'] === 'installing')) {

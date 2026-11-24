@@ -81,3 +81,19 @@ for (const isRussian of [false, true]) {
 }
 assert.match(view, /finishReleaseOperation\(true, releaseInstallFailureMessage\(xhr\)\);/);
 console.log('PASS: S05d1 known release-list refusal RU/EN, unknown transport review unchanged');
+
+// S05d2: last confirmed first-install cause, never current-click proof.
+const lastStart = view.indexOf('        function lastSetupFailureDetail(data) {');
+const lastEnd = view.indexOf('\n        function renderRuntime(data) {', lastStart);
+assert(lastStart >= 0 && lastEnd > lastStart);
+const lastSource = '(' + view.slice(lastStart, lastEnd).trim() + ')';
+const lastKnown = {status: 'ok', installed: false, service: 'error', version: '', setup: 'failed', busy: false, lastsetupfailure: 'release-list-unavailable'};
+for (const isRussian of [false, true]) {
+    const detail = vm.runInNewContext(lastSource, {isRussian});
+    assert.match(detail(lastKnown), isRussian ? /^Последняя зафиксированная причина первой установки:/ : /^Last recorded first-install failure:/);
+    for (const bad of [null, {}, {...lastKnown, busy: true}, {...lastKnown, installed: true}, {...lastKnown, status: 'unavailable'}, {...lastKnown, setup: 'installing'}, {...lastKnown, lastsetupfailure: 'unknown'}]) {
+        assert.equal(detail(bad), '');
+    }
+}
+assert.equal(classifier(lastKnown, 'v1.0.7', 'Not installed', 'error', false), 'pending', 'historical cause cannot finish new click');
+console.log('PASS: S05d2 bounded last first-install reason, no new-click success/failure inference');

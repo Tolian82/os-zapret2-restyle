@@ -566,8 +566,21 @@ main()
                 return 75
             }
             [ "$#" -le 2 ] || return 64
-            _zapret_ref=$(resolve_release "${2:-}") || return $?
-            install_runtime "${_zapret_ref}"
+            if _zapret_ref=$(resolve_release "${2:-}"); then
+                install_runtime "${_zapret_ref}"
+            else
+                _resolve_rc=$?
+                # Only the admitted first-install resolver, never a generic
+                # worker rc69. Parent publishes after confirmed cleanup.
+                if [ "${_resolve_rc}" -eq 69 ] &&
+                   [ "${SETUP_FIRST_INSTALL_DIAGNOSTIC:-0}" = 1 ] &&
+                   [ -f "${SETUP_STATUS}" ] && [ ! -L "${SETUP_STATUS}" ] &&
+                   printf '%s\n' installing | cmp -s "${SETUP_STATUS}" -; then
+                    status_write 'installing
+cause=release-list-unavailable' || true
+                fi
+                return "${_resolve_rc}"
+            fi
             ;;
         install-locked)
             extra_resources_require_transaction || return $?

@@ -15,9 +15,10 @@ const controller = fs.readFileSync(
     'utf8'
 );
 const start = view.indexOf('        function classifyRuntimeStatus(data) {');
-const end = view.indexOf('\n        function renderRuntime(data) {', start);
+const close = '\n        }';
+const end = view.indexOf(close, start);
 assert(start >= 0 && end > start, 'missing real LC-09 classification function');
-const classify = vm.runInNewContext('(' + view.slice(start, end).trim() + ')');
+const classify = vm.runInNewContext('(' + view.slice(start, end + close.length).trim() + ')');
 
 const base = {status: 'ok', installed: false, busy: false,
               setup: 'unknown', service: 'error', version: ''};
@@ -35,6 +36,8 @@ check({...base, installed: true, setup: 'unknown', service: 'started',
        version: 'v1.0.7'}, 'started',
       'installed real service can have no setup status on a direct expert install');
 check({...base, setup: 'failed'}, 'error', 'failed initial installation is Error');
+check({...base, setup: 'failed', lastsetupfailure: 'release-list-unavailable'}, 'error',
+      'historical first-install cause does not create a new status category');
 
 const reject = [
     null, undefined, {}, {status: 'failed'}, {...base, status: 'unavailable'},
@@ -66,7 +69,7 @@ assert.match(view, /data && data.reason === 'status-unavailable'/);
 assert.match(view, /releaseNeedsReview = true;[\s\S]{0,130}currentRuntimeInstalled = installed;/);
 assert.match(controller, /'installed' => null/);
 assert.match(controller, /'reason' => 'status-unavailable'/);
-assert.match(controller, /count\(\$seen\) !== 5/);
+assert.match(controller, /count\(\$seen\) !== \(isset\(\$seen\['lastsetupfailure'\]\) \? 6 : 5\)/);
 assert.match(controller, /isset\(\$seen\[\$field\]\)/);
 assert.match(controller, /isset\(\$runtime\['reason'\]\)/);
 assert.match(controller, /\$status = isset\(\$state\['reason'\]\) \? 'unavailable' : 'ok'/);

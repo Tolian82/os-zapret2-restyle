@@ -27,6 +27,7 @@ cat > "$ROOT/setup" <<'EOF'
 [ "$UPSTREAM_RUNTIME_LIFECYCLE_OWNER" = 1 ] || exit 75
 [ "$STRATEGY_LAB_LIFECYCLE_OWNER" = 1 ] || exit 75
 printf '%s\n' setup >> "$TEST_INSTALL_CALLS"
+[ "$TEST_BUILD_FAIL" != 2 ] || exit 69
 mkdir -p "$ZAPRET_DIR/.git" "$ZAPRET_DIR/binaries/my"
 printf '#!/bin/sh\nexit 0\n' > "$ZAPRET_DIR/binaries/my/dvtws2"
 chmod 0755 "$ZAPRET_DIR/binaries/my/dvtws2"
@@ -67,7 +68,9 @@ chmod 0755 "$ROOT/service" "$ROOT/setup" "$ROOT/git" "$ROOT/extra" "$ROOT/config
 run() {
   TEST_BUILD_FAIL="$1" TEST_UNSAFE_LINK="${2:-0}" \
   TEST_SETUP_STATUS="$STATUS" TEST_INSTALL_CALLS="$ROOT/install.calls" \
-  SETUP_SCRIPT="$ROOT/setup" SERVICE_SCRIPT="$ROOT/service" \
+  SETUP_SCRIPT="${TEST_SETUP_SCRIPT:-$ROOT/setup}" SERVICE_SCRIPT="$ROOT/service" \
+  FETCH_BIN="$ROOT/fetch-unavailable" LOCKF_BIN="$ROOT/lockf" RUN_DIR="$ROOT/run" \
+  RELEASE_CACHE="$STATE/releases.cache" \
   CONFIGCTL="$ROOT/configctl" GIT_BIN="$ROOT/git" \
   ZAPRET_DIR="$RUNTIME" STATE_DIR="$STATE" \
   SETUP_STATUS="$STATUS" ACTIVE_RELEASE_FILE="$MARKER" \
@@ -78,6 +81,25 @@ run() {
   STRATEGY_LAB_LIFECYCLE_OWNER=1 \
   sh "$TRANSACTION" install-under-native-lock v1.0.7 9>"$ROOT/fd9"
 }
+# Real resolver + real first-install wrapper, isolated unavailable fetch.
+printf '#!/bin/sh\nexit 1\n' > "$ROOT/fetch-unavailable"
+cat > "$ROOT/lockf" <<'EOF_LOCK'
+#!/bin/sh
+[ "$1" = -s ] && [ "$2" = -t ] || exit 75
+shift 4
+exec "$@"
+EOF_LOCK
+chmod 0755 "$ROOT/fetch-unavailable" "$ROOT/lockf"
+TEST_SETUP_SCRIPT="$ROOT_DIR/src/opnsense/scripts/OPNsense/Zapret/setup.sh"
+if run 0 >/dev/null 2>&1; then fail "unavailable releases accepted"; else rc=$?; fi
+[ "$rc" -eq 69 ] || fail "resolver rc changed"
+printf '%s\n' failed 'cause=release-list-unavailable' | cmp -s "$STATUS" - ||
+  fail "actual resolver cause lost after first-install cleanup"
+[ ! -e "$RUNTIME" ] && [ ! -e "$MARKER" ] && [ ! -e "$STAGE" ] && [ ! -e "$INTENT" ] ||
+  fail "release-list failure leaked staged runtime"
+unset TEST_SETUP_SCRIPT
+if run 2 >/dev/null 2>&1; then fail "unrelated rc69 accepted"; fi
+[ "$(cat "$STATUS")" = failed ] || fail "unrelated rc69 inherited stale cause"
 run 0 || fail "clean setup failed"
 [ "$(cat "$MARKER")" = v1.0.7 ] || fail "no release marker"
 [ "$(cat "$STATUS")" = ready ] || fail "not ready"
