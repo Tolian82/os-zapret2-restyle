@@ -1,8 +1,8 @@
-## Current priority — TZ6v5 S09b verified original sealed references
+## Current priority — TZ6v5 S09b qualification → S10 original FD9 staging
 
-**Completed prerequisite:** S08 formal pure compiler/native GO is recorded in [its decision](architecture/ZAPRET2_TZ6V5_S08_PURE_COMPILER_NATIVE_GO.md). [S08 #1310](https://github.com/Tolian82/os-zapret2-restyle/issues/1310) is closed; prior accepted [main `v0.6.5_196 9bfed7c5`](https://github.com/Tolian82/os-zapret2-restyle/commit/9bfed7c52ae48a5af1b8fd3188b40a4bff6e0711).
+**Accepted entry:** [S09a PR #1317](https://github.com/Tolian82/os-zapret2-restyle/pull/1317), `main v0.6.5_197 7967dec2`; source-only next candidate `v0.6.5_198`. S09b [original sealed-native reference attestation](architecture/ZAPRET2_TZ6V5_S09B_SEALED_ORIGINAL_REFS.md) completes true owner/mode/hash/generation/race and original S08c/P2e parity, with no engine, Config, FD9, IPFW or active manifest side effect. Full S09 GO is decided from exact-head CI and recorded in [#1316](https://github.com/Tolian82/os-zapret2-restyle/issues/1316).
 
-**Current S09a source candidate:** `v0.6.5_197` contains [a pure bounded immutable root candidate and strict structural rejection](architecture/ZAPRET2_TZ6V5_S09A_ROOT_SCHEMA.md), not an active root or native seal attester. Next is **S09b** within active [issue #1316](https://github.com/Tolian82/os-zapret2-restyle/issues/1316): exact original generator/source-map against sealed file descriptors, owner/mode/size/SHA/generation/race proof, preserving mutable P1/CAS/ACK. The single original FD9/Config owner remains unchanged; S10 promotion and S11–S14 physical lifecycle remain later. There is **no public `_197.pkg` or owner-appliance action**.
+**Next S10:** stage the one immutable root under the **same original FD9 shared Apply operation**, qualify exact physical seal/refs again and address seal-digest/root-reference cycle without new mutable Config or journal; atomic promotion/recovery and preserved P1/CAS/ACK. No public `os-zapret2-restyle-0.6.5_198.pkg` or appliance install.
 
 ---
 
