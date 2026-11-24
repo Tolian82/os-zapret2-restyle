@@ -11,7 +11,7 @@ import re
 import tarfile
 from io import BytesIO
 import unittest
-from contextlib import ExitStack, redirect_stdout
+from contextlib import ExitStack, redirect_stdout, redirect_stderr
 from io import StringIO
 from unittest import mock
 
@@ -655,6 +655,76 @@ class RecoveryPackageStaging(unittest.TestCase):
                     self.stage(root, archive, "0" * 64)
                 native.assert_not_called()
             self.assertEqual(list(root.iterdir()), [archive])
+
+
+class ContinuationDiagnostics(unittest.TestCase):
+    evidence = "pkg-update-restore-evidence=rc:70,stage:boot,guard:epoch-attest"
+    refusal = "pkg-update-refused=RUNTIME_RESTORE_REQUIRES_REVIEW"
+    private = "private /conf/config.xml secret.example"
+
+    def test_direct_continuation_preserves_bounded_finish_failure(self):
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            base = Path(tmp)
+            active, old, stage, target = (base / name for name in
+                ("operation.json", "old.pkg", "next.pkg", "target.pkg"))
+            for path in (old, stage, target):
+                path.write_bytes(b"retained archive")
+            data = {"phase": "postinstall-attested", "stage": str(old),
+                    "sha256": "a" * 64, "to_version": "0.6.5_109"}
+            active.write_text(json.dumps(data))
+            before = active.read_bytes()
+            stack.enter_context(mock.patch.object(m, "ACTIVE", active))
+            stack.enter_context(mock.patch.object(m, "root_and_private_base"))
+            stack.enter_context(mock.patch.object(m, "read_active", side_effect=
+                lambda: json.loads(active.read_bytes())))
+            stack.enter_context(mock.patch.object(m, "validated_stage", return_value=old))
+            stack.enter_context(mock.patch.object(m, "inspect_regular"))
+            stack.enter_context(mock.patch.object(m, "stage_archive", return_value=
+                (stage, "b" * 64, "0.6.5_111")))
+            stack.enter_context(mock.patch.object(m, "installed_version", return_value="0.6.5_111"))
+            native = stack.enter_context(mock.patch.object(m, "native_command", side_effect=[
+                result([], stdout="zapret-pkg-update-continue=finish\n"),
+                result([], 70, stderr="pkg-update-finish-failed=boot\n"
+                       "shared-apply-guard=epoch-attest\n" + self.private)]))
+            err = StringIO()
+            with redirect_stderr(err), self.assertRaisesRegex(
+                    m.Refused, "^RUNTIME_RESTORE_REQUIRES_REVIEW$"):
+                m.continue_postinstall(target, hashlib.sha256(before).hexdigest())
+            self.assertEqual(err.getvalue(), self.evidence + "\n")
+            self.assertEqual(active.read_bytes(), before)
+            self.assertTrue(all(path.is_file() for path in (old, stage, target)))
+            self.assertEqual(native.call_count, 2)
+            self.assertEqual(native.call_args_list[-1].args[0][1], "pkg-update-finish")
+
+    def test_bootstrap_only_forwards_one_qualified_child_refusal(self):
+        good = self.evidence + "\n" + self.refusal + "\n"
+        cases = ((69, good + self.private, True),
+                 (0, good, False), (70, good, False),
+                 (69, self.evidence, False),
+                 (69, good + self.evidence, False),
+                 (69, good.replace("guard:epoch-attest", "guard:private"), False),
+                 (69, good.replace("rc:70", "rc:0"), False),
+                 (69, good.replace("stage:boot,", "stage:boot,secret:"), False),
+                 (69, good + self.refusal, False))
+        for rc, stderr, forwarded in cases:
+            with self.subTest(rc=rc, forwarded=forwarded), \
+                 mock.patch.object(m, "stage_recovery_code", return_value=Path("/test-only")), \
+                 mock.patch.object(m, "native_command", return_value=result([], rc, stderr=stderr)):
+                err = StringIO()
+                with redirect_stderr(err), self.assertRaisesRegex(
+                        m.Refused, "^STAGED_CONTINUATION_REQUIRES_REVIEW$"):
+                    m.bootstrap_continuation(Path("/carrier.pkg"), "b" * 64,
+                                             Path("/target.pkg"), "c" * 64)
+                self.assertEqual(err.getvalue(), self.evidence + "\n" if forwarded else "")
+        with mock.patch.object(m, "stage_recovery_code", return_value=Path("/test-only")), \
+             mock.patch.object(m, "native_command", return_value=result([], 0,
+                 stdout="pkg-update=verified-continued-and-restored\n")):
+            out, err = StringIO(), StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                m.bootstrap_continuation(Path("/carrier.pkg"), "b" * 64,
+                                         Path("/target.pkg"), "c" * 64)
+            self.assertEqual(out.getvalue(), "pkg-recovery=verified-installed-and-restored\n")
+            self.assertEqual(err.getvalue(), "")
 
 
 if __name__ == "__main__":
