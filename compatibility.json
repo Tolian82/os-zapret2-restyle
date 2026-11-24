@@ -27,8 +27,8 @@
     "repository_url": "pkg+https://pkg.FreeBSD.org/${ABI}/latest",
     "abi": "FreeBSD:15:amd64",
     "version": "2.3.2",
-    "source_pkg_sha256": "9a99c70fb73a5ba90385e8048a6def0fe8961a0b67f1c249862ad1ea6dc80e97",
-    "elf_sha256": "aabb3b5e7c1e03395b37b02e3d93fb1c36580a38172311bd79201c49ee48b929",
+    "source_pkg_sha256": "e9a9d8c4626b566976ce332181cf13666aeaec3467e5add50a910095c0fb67d5",
+    "elf_sha256": "5b40bdeee4c9e3bdcb04e28cccf12feb7e16649f7edf2c72d5cc3e799931f3d0",
     "chrome_profile": "chrome152"
   }
 }
