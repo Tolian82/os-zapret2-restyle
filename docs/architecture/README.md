@@ -4,7 +4,7 @@
 
 ## Active work and retained long-term design
 
-- **Current S08:** [S07 native XML GO](ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md), [S08a original Target Mode GO](ZAPRET2_TZ6V5_S08A_TARGET_POLICY_PARITY.md), [S08b original resources/Voice GO](ZAPRET2_TZ6V5_S08B_RESOURCE_VOICE_PARITY.md), [S08c original dvtws.args/Voice/IPFW/source-map/first-match candidate](ZAPRET2_TZ6V5_S08C_ORIGINAL_NATIVE_PARITY.md); S08d pure semantic planner required for S08 GO; S09+ separate.
+- **Current S08:** [S07 native read-only XML GO](ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md), [S08a Target Mode GO](ZAPRET2_TZ6V5_S08A_TARGET_POLICY_PARITY.md), [S08b resource/Voice GO](ZAPRET2_TZ6V5_S08B_RESOURCE_VOICE_PARITY.md), [S08c real original native first-match GO](ZAPRET2_TZ6V5_S08C_ORIGINAL_NATIVE_PARITY.md), current [S08d semantic fingerprint/diff source candidate](ZAPRET2_TZ6V5_S08D_EFFECTIVE_DIFF_PLANNER.md); formal full S08 GO pending, S09 later.
 
 - **MANDATORY UPSTREAM CANON:** [официальный manual.en.md](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) → [правило DEV-069: не проверять описанное поведение движка](ZAPRET2_UPSTREAM_MANUAL_CANON.md).
 - **CLI Emergency Contract:** [ТЗ_6v5 §5.5–5.6: guarded `--force` и read-only `--help`](TZ_6v5.md), [DEV-070](../PROJECT_PRINCIPLES.md); новая регрессия V5-15/16 в [S00–S20](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
