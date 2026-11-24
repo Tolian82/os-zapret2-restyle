@@ -564,6 +564,10 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/test-tz6v5-s03e2-gui-lifecycle-handler.py
           python3.13 scripts/test-tz6v5-s03e2-gui-lifecycle-handler.py
+      - name: S07a strict native XML source projection — pure, bounded and no-write
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s07a-neutral-config-projection.py
       - name: Validate fast path routing and strict private-curl source mismatch
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test
