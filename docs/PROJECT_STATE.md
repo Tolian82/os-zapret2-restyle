@@ -1,10 +1,10 @@
-# 24.11.2026 — CURRENT S05d4 first-install release refusal through installed Chromium
+# 24.11.2026 — CURRENT S05d5 correlate fast first-install refusal to its click
 
-**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=169`, candidate `v0.6.5_169`. The prospective `os-zapret2-restyle-0.6.5_169.pkg` is for CI qualification. Accepted base is `main _168 303f7341b5cb` ([S05d3 PR #1284](https://github.com/Tolian82/os-zapret2-restyle/pull/1284)).
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=170`, candidate `v0.6.5_170`. The prospective `os-zapret2-restyle-0.6.5_170.pkg` is for CI qualification. Accepted base is `main _169 3c7336c954e5` ([S05d4 PR #1285](https://github.com/Tolian82/os-zapret2-restyle/pull/1285)).
 
-**Accepted S05d3:** On OPNsense 26.7, the original first-install transaction recorded the unavailable release list. The installed `status --json` exposed it without writes. A subsequent successful first install cleared the message. Hot Status, protected update from `_107` and main checks passed. [S05d3 PR #1284](https://github.com/Tolian82/os-zapret2-restyle/pull/1284) · [cold and hot native Status](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45361379023).
+**Accepted S05d4:** The actual Install Version click showed the pre-dispatch release-list refusal in both locales on OPNsense 26.7, preserved review lock and retained the previous setup cause as history. PR and main Chromium passed. [S05d4 PR #1285](https://github.com/Tolian82/os-zapret2-restyle/pull/1285) · [main Chromium RU/EN](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45365666926).
 
-**S05d4 acceptance candidate:** The existing disposable OPNsense Chromium job uses the actual Install Version button in English and Russian. It proves that the previous worker refusal appears as historical detail, then confirms the live pre-dispatch release-list error, original PHP HTTP response, review lock and unchanged Config, IPFW and worker state. Only the external fetch is controlled, using the original resolver and a temporary test cache. The test restores the installed setup script byte for byte. Product sources are unchanged. Native Chromium results are pending.
+**S05d5 candidate:** The authenticated setup acknowledgement returns an operation ID passed to the existing worker under setup.lock and FD9. The original parent records that ID only with the qualified first-install release-list refusal after cleanup. An exact match completes the same GUI click with the localized terminal error even if its first runtime read misses busy. An older or different record remains historical. The fixed original Status reader preserves the ID if available. Native qualification is pending.
 
 ---
 

@@ -16,6 +16,7 @@ ACTIVE_RELEASE_FILE="${ACTIVE_RELEASE_FILE:-${STATE_DIR}/runtime.release}"
 ROLLBACK_DIR="${ROLLBACK_DIR:-${STATE_DIR}/runtime-rollback}"
 MODE="${1:-install}"
 VERSION="${2:-}"
+SETUP_OPERATION_ID="${ZAPRET_SETUP_OPERATION_ID:-}"
 FIRST_INSTALL_STAGE="${FIRST_INSTALL_STAGE:-${ZAPRET_DIR}.first-install}"
 FIRST_INSTALL_MARKER="${FIRST_INSTALL_MARKER:-${STATE_DIR}/first-install.intent}"
 RUN_DIR="${RUN_DIR:-/var/run/zapret2-restyle}"
@@ -915,11 +916,16 @@ install_first_runtime()
         [ "${_fresh_rc}" -ne 0 ] || _fresh_rc=69
         first_install_cleanup_stage || return 69
         rm -f "${FIRST_INSTALL_MARKER}" || return 69
-        # Last recorded cause, not a receipt for a subsequent GUI click.
         if [ "${_fresh_release_list_failed}" -eq 1 ] &&
            [ -f "${SETUP_STATUS}" ] && [ ! -L "${SETUP_STATUS}" ]; then
-            status_write 'failed
-cause=release-list-unavailable' || status_write failed || true
+            # Bind only this qualified terminal failure after cleanup.
+            _fresh_failure='failed
+cause=release-list-unavailable'
+            if [ -n "${SETUP_OPERATION_ID}" ]; then
+                _fresh_failure="${_fresh_failure}
+operation=${SETUP_OPERATION_ID}"
+            fi
+            status_write "${_fresh_failure}" || status_write failed || true
         fi
         return "${_fresh_rc}"
     fi
@@ -977,10 +983,15 @@ install_transaction()
         echo "ERROR: upstream install requires setup.lock and inherited native FD9" >&2
         return 75
     fi
+    case "${SETUP_OPERATION_ID}" in
+        '') ;;
+        *[!0123456789abcdef]*) return 64 ;;
+        *) [ "${#SETUP_OPERATION_ID}" -eq 32 ] || return 64 ;;
+    esac
     # Clear historical detail only inside the original admitted owner.
     if [ -f "${SETUP_STATUS}" ] && [ ! -L "${SETUP_STATUS}" ] &&
-       printf '%s\n' failed 'cause=release-list-unavailable' |
-           cmp -s "${SETUP_STATUS}" -; then
+       [ "$(head -c 128 "${SETUP_STATUS}" | sed -n '1,2p')" = 'failed
+cause=release-list-unavailable' ]; then
         status_write failed || return 1
     fi
     [ -x "${SETUP_SCRIPT}" ] || {
