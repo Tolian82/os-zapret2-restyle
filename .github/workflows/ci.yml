@@ -1138,6 +1138,11 @@ jobs:
       - name: Test Python-down native service Status Stop under FD9
         run: sh scripts/test-native-python-down-service.sh
 
+      - name: Test S05c2a real original FD9 refusal and strict HTTP consumer source
+        run: |
+          python3.13 scripts/test-tz6v5-s05c2a-http-reason.py
+          sh scripts/test-tz6v5-s05c2a-fd9-refusal.sh
+
       - name: Test Strategy Lab Python foundation
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-foundation.sh
 

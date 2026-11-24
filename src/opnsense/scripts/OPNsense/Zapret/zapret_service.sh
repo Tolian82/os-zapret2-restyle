@@ -3619,7 +3619,19 @@ service_with_lifecycle_lock()
                 ;;
             *) exec 9>"${LIFECYCLE_LOCK_FILE}" ;;
         esac
-        if ! "${LOCKF_BIN}" -s -t "${_service_lock_timeout}" 9; then
+        if "${LOCKF_BIN}" -s -t "${_service_lock_timeout}" 9; then
+            :
+        else
+            _service_fd9_refusal_rc=$?
+            # S05c2a: only an actual native lockf timeout (rc75) may
+            # produce a bounded refusal for the private configd bridge.
+            # This is NOT a terminal receipt, success or durable journal.
+            # Public lifecycle stdout and rc are unchanged.
+            if [ "${_service_fd9_refusal_rc}" -eq 75 ] &&
+               [ -n "${_service_receipt_action}" ]; then
+                printf 'zapret-api-lifecycle-v1:%s:refused:fd9-busy\n' \
+                    "${_service_receipt_action}"
+            fi
             return 75
         fi
         # The original FD9 owns the durable guarded-package state.

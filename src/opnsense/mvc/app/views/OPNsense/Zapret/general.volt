@@ -1556,6 +1556,10 @@
                 const message = action === 'stop' ? '' :
                     (typeof legacyMessage === 'string' && legacyMessage
                         ? legacyMessage : knownStartError);
+                // S05c2a: accept only a fixed, safe PHP mapping of a genuine
+                // FD9 lockf timeout. Never show raw configd/errorMessage.
+                const fd9BusyStop = action === 'stop' &&
+                    nativeError === 'Zapret2 Stop refused: original lifecycle lock is busy.';
                 // Do not claim a failed Stop was a failed Start. Preserve the
                 // bounded server gettext mapping and the actual requested verb.
                 const fallback = action === 'stop'
@@ -1566,8 +1570,12 @@
                         ? 'Не удалось запустить Zapret2. Проверьте WAN интерфейс.'
                         : 'Zapret2 could not be started. Check the WAN interface.');
                 showRuntimeError(runtimeText.serviceError,
-                    typeof message === 'string' && message
-                        ? localizeStrategiesApplyError(message) : fallback);
+                    fd9BusyStop
+                        ? (isRussian
+                            ? 'Остановка Zapret2 отклонена: другая операция удерживает блокировку службы.'
+                            : 'Zapret2 Stop refused: original lifecycle lock is busy.')
+                        : (typeof message === 'string' && message
+                            ? localizeStrategiesApplyError(message) : fallback));
                 refreshRuntime();
             });
         });

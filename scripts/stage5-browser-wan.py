@@ -229,11 +229,20 @@ def s03e3c_native_stop_restart_http_red(mode, green=False):
                              ('zapret-api-lifecycle-v1:stop:stopped',
                               'zapret-api-lifecycle-v1:restart:running'),
                              'S03E3D_RAW_TERMINAL_RECEIPT_LEAK')
-                        observed[label] = 'NATIVE_ERROR'
+                        # S05c2a: genuine held original FD9, not a mocked
+                        # HTTP failure. Both verb-specific fixed refusals
+                        # must survive shell -> configd -> PHP exactly.
+                        expected_fd9 = ('Zapret2 Stop refused: original lifecycle lock is busy.'
+                                        if label == 'stop' else
+                                        'Zapret2 Restart refused: original lifecycle lock is busy.')
+                        need(payload['errorMessage'] == expected_fd9,
+                             'S05C2A_REAL_NATIVE_FD9_CAUSE_NOT_DELIVERED_' + label)
+                        observed[label] = 'FD9_BUSY_VERIFIED'
                     page.get_by_text(error_title, exact=False).first.wait_for(
                         state='visible', timeout=15000)
-                    stop_message = ('Не удалось остановить Zapret2.' if mode == 'ru'
-                                    else 'Zapret2 could not be stopped.')
+                    stop_message = ('Остановка Zapret2 отклонена: другая операция удерживает блокировку службы.'
+                                    if mode == 'ru' else
+                                    'Zapret2 Stop refused: original lifecycle lock is busy.')
                     page.get_by_text(stop_message, exact=False).first.wait_for(
                         state='visible', timeout=15000)
                 else:
@@ -282,6 +291,7 @@ def s03e3c_native_stop_restart_http_red(mode, green=False):
                           'real_http_restart':restart.status,
                           'backend_response':observed,
                           'localized_stop_failure_visible':True,
+                          'verified_fd9_busy_cause_visible':True,
                           'original_fd9_busy':True,
                           'native_config_ipfw_engine_unchanged':True,
                           'physical_stop_restart_executed':False}, sort_keys=True))
