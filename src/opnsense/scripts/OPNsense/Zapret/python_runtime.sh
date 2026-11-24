@@ -3,6 +3,12 @@
 # process: the same PID/FD9 and argv proceed through exec after validation.
 set -eu
 
+# Keep imports of package-owned backend modules observational even when
+# configd or a private Python caller did not set its own no-bytecode flag.
+# Do not change the original qualified interpreter or its process argv.
+PYTHONDONTWRITEBYTECODE=1
+export PYTHONDONTWRITEBYTECODE
+
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PYTHON_BIN="${ZAPRET_PYTHON_BIN:-/usr/local/bin/python3}"
 PYTHON_POLICY="${ZAPRET_PYTHON_POLICY:-/usr/local/share/zapret2-restyle/compatibility.json}"

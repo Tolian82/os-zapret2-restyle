@@ -3929,6 +3929,32 @@ case "${1:-}" in
         "${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py" replace "$2"
         exit $?
         ;;
+    reload)
+        # S05f1: observational only. S08/S09 semantic diff and sealed refs
+        # are not available yet: never infer RELOAD_SAFE or perform a restart.
+        if [ "$#" -eq 1 ]; then
+            echo 'ERROR: RELOAD_NOT_SUPPORTED' >&2
+            exit 69
+        fi
+        if [ "$#" -eq 2 ] && [ "$2" = --check ]; then
+            _reload_format=plain
+        elif [ "$#" -eq 3 ] && [ "$2" = --check ] && [ "$3" = --json ]; then
+            _reload_format=json
+        else
+            echo 'ERROR: INVALID_ARGUMENT' >&2
+            exit 64
+        fi
+        [ -r "${BACKEND_DIR}/reload_check_readonly.py" ] || {
+            echo 'ERROR: RELOAD_CHECK_UNAVAILABLE' >&2
+            exit 69
+        }
+        if [ "$_reload_format" = json ]; then
+            PYTHONDONTWRITEBYTECODE=1 "${PYTHON_RUNTIME}" "${BACKEND_DIR}/reload_check_readonly.py" --json
+        else
+            PYTHONDONTWRITEBYTECODE=1 "${PYTHON_RUNTIME}" "${BACKEND_DIR}/reload_check_readonly.py"
+        fi
+        exit $?
+        ;;
     status)
         # Preserve the original plain status stdout, rc and FD9 semantics.
         # JSON is a distinct strictly read-only S05a view of the qualified
