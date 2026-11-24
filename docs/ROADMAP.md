@@ -1,8 +1,8 @@
-## Current priority — TZ6v5 S10a PREPARED root → S10b/c original physical commit
+## Current priority — TZ6v5 S10b1 original FD9 journal pin → S10b2/c physical transition and rollback
 
-**Accepted S09:** [issue #1316](https://github.com/Tolian82/os-zapret2-restyle/issues/1316) closed, main `v0.6.5_198 b71724c9`, original sealed refs/SourceMap/S08c+S08d all GO. [S10 issue #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) remains open. S10a source candidate `v0.6.5_199` (`VERSION=0.6.5`, `PLUGIN_REVISION=199`) [design](architecture/ZAPRET2_TZ6V5_S10A_ORIGINAL_PREPARED_ROOT.md): original full seal covers `candidate.xml/plan.json/release`; immutable `manifest.json` placed as a **same-work sibling** to avoid cyclic seal dependency, written only by existing FD9 owner at PREPARED, then full original read-only attestation, no Start/Config/IPFW or alternative journal. No public `_199.pkg`.
+**Accepted baseline:** S09 formally GO and S10a [PR #1320](https://github.com/Tolian82/os-zapret2-restyle/pull/1320) merged to main `v0.6.5_199 a7544ab9` (main CI #45505005089, release classifier #45505005230 success). Current S10b1 source candidate `v0.6.5_200` (`VERSION=0.6.5`, `PLUGIN_REVISION=200`), [contract](architecture/ZAPRET2_TZ6V5_S10B1_ORIGINAL_JOURNAL_ROOT.md), [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) remains open. Same journal schema-1 PREPARED binds exact root/old seal/Config digest, checked under original FD9. Never second journal/seal. **S10b1 cannot activate**; next S10b2 must re-attest before ordinary physical transition. Source-only `os-zapret2-restyle-0.6.5_200.pkg` not public.
 
-**Next S10b/c:** route this validated existing-root artifact through original `zapret_service.sh` under its one FD9; atomic promotion/readback with exact previous owner, Config-save ambiguity and crash/rollback, P1 CAS/ACK, WAN-only Save/prestart Lab preserved. **S10 GO not yet established**, and S11+ are separate ordered physical lifecycle stages.
+**Later S10c and S11:** power-cut after PREPARED/ACTIVATING/Config-save, semantic rollback, exact previous live owner/IPFW/P1-CAS, no guessed COMMITTED; then separate S11 original authoritative physical lifecycle. WAN-only Save and prestart Lab independent.
 
 ---
 

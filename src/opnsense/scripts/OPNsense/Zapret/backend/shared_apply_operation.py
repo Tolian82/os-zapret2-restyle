@@ -128,6 +128,27 @@ def _validate_detail(detail: object) -> dict:
 
 
 
+def _validate_manifest_binding(binding: object, detail: dict) -> dict:
+    """One S10 immutable root pin in the EXISTING original durable journal.
+
+    This field commits the exact sibling manifest SHA without putting it in
+    the original release inventory, avoiding root -> seal -> root recursion.
+    It NEVER authorizes activation or mutates a service. Only an original
+    PREPARED operation may first attach it after physical S09b/S10a proof.
+    """
+    if (type(binding) is not dict or
+            set(binding) != {"schema", "generation", "root_sha256",
+                             "seal_sha256", "candidate_sha256"} or
+            type(binding["schema"]) is not int or binding["schema"] != 1 or
+            type(binding["generation"]) is not str or
+            binding["generation"] != detail["id"] or
+            any(type(binding[key]) is not str or not DIGEST.fullmatch(binding[key])
+                for key in ("root_sha256", "seal_sha256", "candidate_sha256")) or
+            binding["candidate_sha256"] != detail["candidate"]):
+        raise SharedOperationError("untrusted original immutable-root binding")
+    return binding
+
+
 def _validate_found_intent(found: object, detail: dict, phase: str) -> dict:
     """Minimal original-journal binding, not a destination writer/validator.
 
@@ -246,7 +267,7 @@ def _validate_record(record: object) -> dict:
         {"schema", "phase", "detail", "previous", "found"},
     )
     if (type(record) is not dict or
-            (keys - {"failure"}) not in allowed or
+            (keys - {"failure", "manifest"}) not in allowed or
             ("failure" in record and (record.get("phase") not in
                                       ("committed", "requires-review") or
                                       "found" in record)) or
@@ -254,6 +275,10 @@ def _validate_record(record: object) -> dict:
             record["phase"] not in PHASES):
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
+    if "manifest" in record:
+        if "found" in record:
+            raise SharedOperationError("found transaction cannot attach immutable root")
+        _validate_manifest_binding(record["manifest"], record["detail"])
     # No old Voice/Strategies record may invent protected physical or
     # Config-save uncertainty checkpoints without this exact found intent.
     if record["phase"] in FOUND_FILE_PHASES | FOUND_CONFIG_PHASES | {FOUND_RESTORING} and "found" not in record:
@@ -630,13 +655,86 @@ class SharedApplyOperation:
                 raise SharedOperationError("found files require original durable transaction")
             if phase not in NEXT.get(before["phase"], frozenset()):
                 raise SharedOperationError("illegal common Apply phase transition")
+            # S10b1 never calls the launcher: a bound root must be freshly
+            # attested by the actual S10b2 original owner BEFORE activating.
+            # Ordinary legacy unbound Apply retains its established path.
+            if phase == "activating" and "manifest" in before:
+                raise SharedOperationError("immutable root preactivation gate not implemented")
             previous = before.get("previous")
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
         if previous is not None:
             record["previous"] = previous
         if before is not None and "found" in before:
             record["found"] = before["found"]
+        if phase != "prepared" and before is not None and "manifest" in before:
+            record["manifest"] = before["manifest"]
         return self._persist_record(record)
+
+    def bind_prepared_manifest(self, generation: str, *,
+                               effective, native, mode: str, enabled: bool,
+                               shared_work_parent: Path | None = None) -> dict:
+        """Pin S10a's already-staged root in THIS fsynced original FD9 WAL.
+
+        No alternate journal/seal/config/launcher, no phase advance and no
+        physical privilege. Genuine original S08/S09 inputs are required.
+        Fixed production parent is shared_apply_seal.WORK; caller-supplied
+        parent exists only for disposable protected unit/native fixtures.
+        """
+        from shared_apply_seal import WORK
+        from voice_ipfw_adapter import require_lifecycle_lock
+        from neutral_root_stage import (attest_staged_candidate,
+                                        PreparedRootReceipt, RootStageRefused)
+        try:
+            require_lifecycle_lock()  # attests existing FreeBSD root FD9
+        except (OSError, RuntimeError, ValueError):
+            raise SharedOperationError("original FD9 required for root binding") from None
+        if type(generation) is not str or not OP_ID.fullmatch(generation):
+            raise SharedOperationError("invalid original root generation")
+        work_parent = (WORK if shared_work_parent is None else shared_work_parent)
+        if not isinstance(work_parent, Path):
+            raise SharedOperationError("original shared-work parent required")
+        before = self.read()
+        if (before is None or before["phase"] != "prepared" or
+                before["detail"]["id"] != generation or
+                "found" in before or "manifest" in before):
+            raise SharedOperationError("original PREPARED unbound journal required")
+        args = dict(generation=generation, effective=effective, native=native,
+                    mode=mode, enabled=enabled, parent=work_parent,
+                    journal_root=self.root, owner_uid=self.owner)
+        try:
+            receipt = attest_staged_candidate(**args)
+        except (RootStageRefused, OSError, ValueError):
+            raise SharedOperationError("original staged root cannot be attested") from None
+        if (type(receipt) is not PreparedRootReceipt or
+                receipt.generation != generation or
+                receipt.original_candidate_sha256 != before["detail"]["candidate"] or
+                receipt.status != "ORIGINAL_PREPARED_ROOT_STAGED_ONLY" or
+                receipt.authorization != "NONE" or
+                receipt.physical_transition_allowed or receipt.promotion_allowed or
+                receipt.reattest_under_original_fd9 is not True or
+                any(type(value) is not str or not DIGEST.fullmatch(value)
+                    for value in (receipt.root_sha256, receipt.original_seal_sha256))):
+            raise SharedOperationError("original S10 root receipt refused")
+        if self.read() != before:
+            raise SharedOperationError("original journal changed during root binding")
+        root = {"schema": 1, "generation": generation,
+                "root_sha256": receipt.root_sha256,
+                "seal_sha256": receipt.original_seal_sha256,
+                "candidate_sha256": receipt.original_candidate_sha256}
+        _validate_manifest_binding(root, before["detail"])
+        result = dict(before)
+        result["manifest"] = root
+        # The ONE original fsynced atomic operation.json writer. If fsync
+        # succeeds but postread fails, leave PREPARED bound, NEVER roll back
+        # or mark a physical generation COMMITTED here.
+        self._persist_record(result)
+        try:
+            rechecked = attest_staged_candidate(**args)
+        except (RootStageRefused, OSError, ValueError):
+            raise SharedOperationError("post-bind S10 root reattestation refused") from None
+        if rechecked != receipt or self.read() != result:
+            raise SharedOperationError("original immutable root changed after binding")
+        return result
 
     def revert_committed_remove(self, trial_id: str, old_id: str, attest) -> dict:
         """Return to the EXACT saved predecessor after a committed Remove trial.
