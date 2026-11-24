@@ -593,6 +593,10 @@ jobs:
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s09b-sealed-root-refs.py
           sh -n src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh
+      - name: S10a original PREPARED FD9 sibling root, atomic stage and crash refusal
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10a-root-stage.py
       - name: Validate fast path routing and strict private-curl source mismatch
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test
