@@ -374,5 +374,66 @@ class IPFWAdapterTests(unittest.TestCase):
         with self.assertRaises(IPFWAdapterError):
             adapter.list_rules(19000,19010)
 
+    def test_rule_add_rejection_is_typed_only_for_real_admitted_add(self):
+        from voice_ipfw_adapter import IPFWRuleAddRejected
+        secret = "private-native-stderr-ip-and-argv"
+        def rejected(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 75, stdout="", stderr=secret)
+        adapter = FreeBSDIPFWAdapter(19000, 19010, allow_mutations=True, runner=rejected)
+        with self.assertRaises(IPFWRuleAddRejected) as caught:
+            adapter.add_rule(19000, VOICE)
+        self.assertNotIn(secret, str(caught.exception))
+        with self.assertRaisesRegex(IPFWAdapterError, "command failed"):
+            adapter.delete_rule(19000)
+        with self.assertRaisesRegex(IPFWAdapterError, "command failed"):
+            adapter.list_rules(19000, 19010)
+
+    def test_original_cli_requires_typed_add_and_completed_rollback(self):
+        import io
+        from contextlib import redirect_stdout, redirect_stderr
+        import voice_ipfw_adapter as module
+        from voice_firewall_transaction import VoiceFirewallError
+        from voice_ipfw_adapter import IPFWRuleAddRejected
+        manifest = {"rule_base": 19000, "rule_max": 19010,
+                    "rules": {19000: VOICE}, "tables": {}}
+        argv = ["voice_ipfw_adapter.py", "shared", "install",
+                "/test/native-prev", "/test/native-next"]
+
+        def rejected(*_):
+            try:
+                raise IPFWRuleAddRejected("IPFW rule add command refused")
+            except IPFWRuleAddRejected as original:
+                raise VoiceFirewallError(
+                    "Voice IPFW activation failed; previous owned state restored"
+                ) from original
+
+        def run(action):
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with patch.object(module, "require_lifecycle_lock"), \
+                 patch.object(Path, "stat", return_value=SimpleNamespace(st_uid=0)), \
+                 patch.object(Path, "is_file", return_value=True), \
+                 patch.object(module, "shared_release_manifest", return_value=manifest), \
+                 patch.object(module, "FreeBSDIPFWAdapter"), \
+                 patch.object(module, "shared_firewall_action", side_effect=action), \
+                 redirect_stdout(stdout), redirect_stderr(stderr):
+                rc = module.main(argv)
+            return rc, stdout.getvalue(), stderr.getvalue()
+
+        rc, out, err = run(rejected)
+        self.assertEqual(1, rc)
+        self.assertEqual("ipfw-attach-failure=rule-add-rejected\n", out)
+        self.assertEqual("ERROR: IPFW_ATTACH_FAILED\n", err)
+        for failure in (
+            VoiceFirewallError("Voice IPFW activation failed; previous owned state restored"),
+            VoiceFirewallError("Voice IPFW activation failed; rollback incomplete; appliance inspection required"),
+            IPFWRuleAddRejected("IPFW rule add command refused"),
+        ):
+            def unrelated(*_):
+                raise failure
+            rc, out, err = run(unrelated)
+            self.assertEqual(1, rc)
+            self.assertEqual("", out)
+            self.assertNotIn("IPFW_ATTACH_FAILED", err)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

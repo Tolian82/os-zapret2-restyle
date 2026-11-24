@@ -100,6 +100,21 @@ class BudgetContracts(unittest.TestCase):
             self.assertNotIn("needs.changes.outputs.package == 'true'", gate, name)
             self.assertIn("github.event_name == 'workflow_dispatch'", gate, name)
 
+    def test_native_ipfw_producer_routes_to_existing_real_kernel_witness(self):
+        """An adapter error-code change cannot silently skip the native fault test."""
+        body = (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+        gate = body.split('          native_wan_process=false\n', 1)[1].split(
+            '          stage0_private_elf=false\n', 1)[0]
+        self.assertIn(
+            'src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter[.]py',
+            gate,
+        )
+        self.assertIn('native_wan_process=true', gate)
+        self.assertIn(
+            "needs.changes.outputs.native_wan_process == 'true'",
+            body.split('  native-ipfw-table:\n', 1)[1].split('    steps:\n', 1)[0],
+        )
+
     def test_ci_only_edit_never_requires_expensive_plugin_package(self):
         body = (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
         classifier = body.split('          package=false\n', 1)[1].split(

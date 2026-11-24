@@ -1,12 +1,13 @@
-# 24.11.2026 — CURRENT S05d5 correlate fast first-install refusal to its click
+## 24.11.2026 — CURRENT S05e1 native IPFW rule-add failure producer
 
-**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=170`, candidate `v0.6.5_170`. The prospective `os-zapret2-restyle-0.6.5_170.pkg` is for CI qualification. Accepted base is `main _169 3c7336c954e5` ([S05d4 PR #1285](https://github.com/Tolian82/os-zapret2-restyle/pull/1285)).
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=171`, source candidate `v0.6.5_171`. Prospective `os-zapret2-restyle-0.6.5_171.pkg` is CI-only and NOT published. Accepted base [main _170](https://github.com/Tolian82/os-zapret2-restyle/commit/562588522d7fb9baa92271958270b02b7231e47d), [S05d5 PR #1286](https://github.com/Tolian82/os-zapret2-restyle/pull/1286). Actual installed Chromium first-install failure without an observed busy poll passed in RU/EN; no public package.
 
-**Accepted S05d4:** The actual Install Version click showed the pre-dispatch release-list refusal in both locales on OPNsense 26.7, preserved review lock and retained the previous setup cause as history. PR and main Chromium passed. [S05d4 PR #1285](https://github.com/Tolian82/os-zapret2-restyle/pull/1285) · [main Chromium RU/EN](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45365666926).
+**S05e1 boundary:** The existing original FreeBSD IPFW adapter marks only a nonzero result of an already admitted native `-qf add` as a typed rejection. The original `apply_transaction` remains unchanged and already re-attests the prior IPFW rules/tables after rollback. Only its exact successful-rollback exception and that typed original cause produce the bounded CLI `IPFW_ATTACH_FAILED` and `ipfw-attach-failure=rule-add-rejected`. No argv, addresses, native stderr, foreign-owner adoption, extra writer or FD9 mutation. All other errors remain generic; partial rollback never claims verified restoration.
 
-**S05d5 candidate:** The authenticated setup acknowledgement returns an operation ID passed to the existing worker under setup.lock and FD9. The original parent records that ID only with the qualified first-install release-list refusal after cleanup. An exact match completes the same GUI click with the localized terminal error even if its first runtime read misses busy. An older or different record remains historical. The fixed original Status reader preserves the ID if available. Native qualification is pending.
+**Next:** Run existing Python/transaction S0 source tests plus affected CI and the already existing FreeBSD kernel rule-add fault/rollback witness on exact head. Then connect this qualified fixed producer to the existing original FD9/journal and real GUI consumer in a separate bounded continuation; no guessed engine rc. This candidate is **not** an S05 diagnostic envelope/GUI PASS, does not implement `reload --check` and cannot unlock S06–S20. No public `.pkg` or operator hardware action.
 
 ---
+
 
 # 24.11.2026 — HISTORICAL S05d1 candidate before merge
 

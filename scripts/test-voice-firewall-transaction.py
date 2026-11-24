@@ -212,6 +212,23 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         shared_firewall_action(clean, "verify", previous, desired)
 
 
+    def test_rejected_native_rule_add_retains_first_typed_cause_after_rollback(self):
+        from voice_ipfw_adapter import IPFWRuleAddRejected
+        class RejectFirstAdd(FakeIPFW):
+            def add_rule(self, number, argv):
+                if not self.failed:
+                    self.failed = True
+                    raise IPFWRuleAddRejected("IPFW rule add command refused")
+                return super().add_rule(number, argv)
+        previous = fixture()
+        desired = fixture(("telegram", "91.108.0.0/16"))
+        adapter = RejectFirstAdd(previous["rules"], previous["tables"])
+        with self.assertRaisesRegex(transaction.VoiceFirewallError,
+                                    "previous owned state restored") as caught:
+            transaction.apply_transaction(adapter, previous, desired)
+        self.assertIsInstance(caught.exception.__cause__, IPFWRuleAddRejected)
+        transaction.verify_prior_state(adapter, previous, previous)
+
     def test_successful_noop_install_is_detected_and_previous_state_restored(self):
         class NoopFirstAdd(FakeIPFW):
             def add_rule(self, number, argv):
