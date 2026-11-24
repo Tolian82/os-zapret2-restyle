@@ -68,6 +68,7 @@ chmod 0755 "$ROOT/service" "$ROOT/setup" "$ROOT/git" "$ROOT/extra" "$ROOT/config
 run() {
   TEST_BUILD_FAIL="$1" TEST_UNSAFE_LINK="${2:-0}" \
   TEST_SETUP_STATUS="$STATUS" TEST_INSTALL_CALLS="$ROOT/install.calls" \
+  ZAPRET_SETUP_OPERATION_ID="${TEST_SETUP_OPERATION:-}" \
   SETUP_SCRIPT="${TEST_SETUP_SCRIPT:-$ROOT/setup}" SERVICE_SCRIPT="$ROOT/service" \
   FETCH_BIN="$ROOT/fetch-unavailable" LOCKF_BIN="$ROOT/lockf" RUN_DIR="$ROOT/run" \
   RELEASE_CACHE="$STATE/releases.cache" \
@@ -97,6 +98,13 @@ printf '%s\n' failed 'cause=release-list-unavailable' | cmp -s "$STATUS" - ||
   fail "actual resolver cause lost after first-install cleanup"
 [ ! -e "$RUNTIME" ] && [ ! -e "$MARKER" ] && [ ! -e "$STAGE" ] && [ ! -e "$INTENT" ] ||
   fail "release-list failure leaked staged runtime"
+TEST_SETUP_OPERATION=2983ba1c2983ba1c2983ba1c2983ba1c
+if run 0 >/dev/null 2>&1; then fail "correlated unavailable releases accepted"; else rc=$?; fi
+[ "$rc" -eq 69 ] || fail "correlated resolver rc changed"
+printf '%s\n' failed 'cause=release-list-unavailable' "operation=$TEST_SETUP_OPERATION" |
+  cmp -s "$STATUS" - || fail "original resolver lost the admitted operation ID"
+[ ! -e "$STAGE" ] && [ ! -e "$INTENT" ] || fail "terminal record preceded first-install cleanup"
+unset TEST_SETUP_OPERATION
 unset TEST_SETUP_SCRIPT
 if run 2 >/dev/null 2>&1; then fail "unrelated rc69 accepted"; fi
 [ "$(cat "$STATUS")" = failed ] || fail "unrelated rc69 inherited stale cause"

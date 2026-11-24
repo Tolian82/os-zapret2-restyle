@@ -38,10 +38,16 @@ foreach (['unknown', 'failed', 'ready'] as $setup) {
     chk(SettingsApply::isVerifiedMissingUpstream($receipt),
         'real installed=0 with an old setup receipt was rejected');
 }
-chk(SettingsApply::isVerifiedMissingUpstream(
-    str_replace('setup=unknown', 'setup=failed', $clean) . "\nlastsetupfailure=release-list-unavailable"),
+$historical = str_replace('setup=unknown', 'setup=failed', $clean) . "\nlastsetupfailure=release-list-unavailable";
+$operationField = "\nlastsetupoperation=" . str_repeat('a', 32);
+chk(SettingsApply::isVerifiedMissingUpstream($historical),
     'qualified last setup cause must not break no-runtime Apply');
+chk(SettingsApply::isVerifiedMissingUpstream($historical . $operationField),
+    'correlated terminal setup cause must not break no-runtime Apply');
 foreach ([
+    $clean . $operationField,
+    $historical . $operationField . $operationField,
+    $historical . "\nlastsetupoperation=invalid",
     $clean . "\nlastsetupfailure=release-list-unavailable",
     str_replace('setup=unknown', 'setup=failed', $clean) . "\nlastsetupfailure=arbitrary",
     '', "installed=0\nservice=error\nversion=\nsetup=unknown",

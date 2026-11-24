@@ -98,10 +98,14 @@ namespace {
     // The clean documented release path still allows exactly one native install.
     Backend::$receipt = $clean;
     $result = controller()->installAction();
-    assertion($result === ['status' => 'ok', 'version' => 'v1.0.7'],
+    $operation = $result['operationid'] ?? '';
+    assertion($result === ['status' => 'ok', 'version' => 'v1.0.7', 'operationid' => $operation] &&
+              preg_match('/^[0-9a-f]{32}$/D', $operation),
               'genuine first install denied');
-    assertion(Backend::$mutations === [['zapret setup_install', ['v1.0.7']]],
+    assertion(Backend::$mutations === [['zapret setup_install_verified', ['v1.0.7', $operation]]],
               'unexpected configd mutation identity');
+    assertion(controller()->installAction()['operationid'] !== $operation,
+              'consecutive clicks reused an operation ID');
     Backend::$mutations = [];
     refusedInstall($installing);
     refusedInstall("installed=1\nservice=error\nversion=v1.0.7\nsetup=ready\nbusy=0");
@@ -110,9 +114,16 @@ namespace {
         "\nlastsetupfailure=release-list-unavailable";
     $known = status($knownFailure);
     assertion($known['status'] === 'ok' && $known['setup'] === 'failed' &&
-        $known['lastsetupfailure'] === 'release-list-unavailable',
+        $known['lastsetupfailure'] === 'release-list-unavailable' && !isset($known['lastsetupoperation']),
         'qualified last failure missing');
+    $operationField = "\nlastsetupoperation=" . $operation;
+    $correlated = status($knownFailure . $operationField);
+    assertion($correlated['status'] === 'ok' && $correlated['lastsetupoperation'] === $operation,
+              'qualified operation was not preserved');
     $malformed = [
+        $clean . $operationField,
+        $knownFailure . "\nlastsetupoperation=invalid",
+        $knownFailure . $operationField . $operationField,
         $clean . "\nlastsetupfailure=release-list-unavailable",
         $running . "\nlastsetupfailure=release-list-unavailable",
         $installing . "\nlastsetupfailure=release-list-unavailable",

@@ -152,6 +152,7 @@ class ServiceController extends ApiMutableServiceControllerBase
     }
 
     private const RELEASE_PATTERN = '/^v[0-9]+(?:\\.[0-9]+)+$/D';
+    private const SETUP_OPERATION_PATTERN = '/^[0-9a-f]{32}$/D';
 
     private function getReleaseList(Backend $backend): array
     {
@@ -190,6 +191,7 @@ class ServiceController extends ApiMutableServiceControllerBase
         $state = $unavailable;
         unset($state['reason']);
         $state['lastsetupfailure'] = null;
+        $state['lastsetupoperation'] = null;
         $seen = [];
 
         foreach (preg_split('/\\R/u', $response) as $line) {
@@ -228,6 +230,12 @@ class ServiceController extends ApiMutableServiceControllerBase
                     }
                     $state[$field] = $value;
                     break;
+                case 'lastsetupoperation':
+                    if (!preg_match(self::SETUP_OPERATION_PATTERN, $value)) {
+                        return $unavailable;
+                    }
+                    $state[$field] = $value;
+                    break;
                 case 'setup':
                     if (!in_array($value, ['ready', 'installing', 'failed', 'unknown'], true)) {
                         return $unavailable;
@@ -237,7 +245,8 @@ class ServiceController extends ApiMutableServiceControllerBase
             }
         }
 
-        if (count($seen) !== (isset($seen['lastsetupfailure']) ? 6 : 5)) {
+        if (array_diff(['installed', 'service', 'version', 'setup', 'busy'], array_keys($seen)) ||
+            (isset($seen['lastsetupoperation']) && !isset($seen['lastsetupfailure']))) {
             return $unavailable;
         }
         if (isset($seen['lastsetupfailure'])) {
@@ -245,8 +254,6 @@ class ServiceController extends ApiMutableServiceControllerBase
                 $state['service'] !== 'error' || $state['version'] !== '') {
                 return $unavailable;
             }
-        } else {
-            unset($state['lastsetupfailure']);
         }
         // A live setup always has BOTH native busy=1 and setup=installing.
         if ($state['busy'] !== ($state['setup'] === 'installing')) {
@@ -257,7 +264,7 @@ class ServiceController extends ApiMutableServiceControllerBase
             ($state['service'] !== 'error' || $state['version'] !== '')) {
             return $unavailable;
         }
-        return $state;
+        return array_intersect_key($state, $seen);
     }
 
     /**
@@ -628,9 +635,10 @@ class ServiceController extends ApiMutableServiceControllerBase
             );
         }
 
+        $operation = bin2hex(random_bytes(16));
         $response = trim((string)$backend->configdpRun(
-            'zapret setup_install',
-            [$version],
+            'zapret setup_install_verified',
+            [$version, $operation],
             false,
             30
         ));
@@ -644,6 +652,7 @@ class ServiceController extends ApiMutableServiceControllerBase
         return [
             'status' => 'ok',
             'version' => $version,
+            'operationid' => $operation,
         ];
     }
 

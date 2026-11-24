@@ -188,6 +188,16 @@ class NativeOriginalJournalSource(unittest.TestCase):
                 self.assertEqual((before.st_ino, before.st_mtime_ns, before.st_ctime_ns),
                                  (after.st_ino, after.st_mtime_ns, after.st_ctime_ns))
 
+                operation = "a" * 32
+                status_path.write_bytes(exact + b"operation=" + operation.encode("ascii") + b"\n")
+                correlated = status()
+                self.assertEqual(correlated["operation_id"], operation)
+                self.assertEqual(correlated["last_error"]["operation_id"], operation)
+                for suffix in (b"operation=invalid\n", b"operation=" + b"a" * 32):
+                    status_path.write_bytes(exact + suffix)
+                    self.assertIsNone(status()["last_error"])
+                status_path.write_bytes(exact)
+
                 pid_path.touch()
                 self.assertIsNone(status()["last_error"])
                 pid_path.unlink()

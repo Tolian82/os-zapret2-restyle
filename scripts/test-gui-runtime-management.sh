@@ -104,6 +104,16 @@ printf '%s\n' failed 'cause=release-list-unavailable' > "${STATE_DIR}/setup.stat
 STATUS_OUTPUT=$(runtime_status 0)
 printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'lastsetupfailure=release-list-unavailable' ||
     fail "qualified last setup cause lost"
+OPERATION=2983ba1c2983ba1c2983ba1c2983ba1c
+printf '%s\n' failed 'cause=release-list-unavailable' "operation=${OPERATION}" > "${STATE_DIR}/setup.status"
+STATUS_OUTPUT=$(runtime_status 0)
+printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx "lastsetupoperation=${OPERATION}" ||
+    fail "qualified operation ID missing"
+printf '%s\n' failed 'cause=release-list-unavailable' 'operation=invalid' > "${STATE_DIR}/setup.status"
+STATUS_OUTPUT=$(runtime_status 0)
+if printf '%s\n' "${STATUS_OUTPUT}" | grep -q '^lastsetup'; then
+    fail "malformed setup operation reflected"
+fi
 printf '%s\n' failed 'cause=release-list-unavailable' extra > "${STATE_DIR}/setup.status"
 STATUS_OUTPUT=$(runtime_status 0)
 if printf '%s\n' "${STATUS_OUTPUT}" | grep -q '^lastsetupfailure='; then
@@ -125,8 +135,10 @@ if grep -Fq '[setup]' "${ACTIONS}"; then
 fi
 
 grep -Fq 'configdpRun(' "${CONTROLLER}" || fail "parameterized configd launch is missing"
-grep -Fq "'zapret setup_install'" "${CONTROLLER}" || fail "dedicated selected-release action is not used"
-grep -Fq '[$version]' "${CONTROLLER}" || fail "selected release is not passed as the only parameter"
+grep -Fq "'zapret setup_install_verified'" "${CONTROLLER}" || fail "correlated selected-release action is not used"
+grep -Fq '[$version, $operation]' "${CONTROLLER}" || fail "selected release and operation were not passed"
+[ "$(awk '/^\[setup_install_verified\]$/{inside=1;next} /^\[/{inside=0} inside && /^parameters:/{print}' "${ACTIONS}")" = 'parameters:%s %s' ] ||
+    fail "correlated action must accept exactly two parameters"
 grep -Fq 'false,' "${CONTROLLER}" || fail "launcher acceptance is not read synchronously"
 grep -Fq "\$response !== 'OK'" "${CONTROLLER}" || fail "launcher acceptance does not require exact OK"
 # Limit the historical setup contract check to the upstream release handler.

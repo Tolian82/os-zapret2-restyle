@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 from component_inventory import classify
 from component_inventory_opnsense import _read_fixed, probe_engine
@@ -15,7 +16,9 @@ _CODES = {
 }
 
 
-_SETUP_RELEASE_LIST_FAILURE = b"failed\ncause=release-list-unavailable\n"
+_SETUP_RELEASE_LIST_FAILURE = re.compile(
+    rb"failed\ncause=release-list-unavailable\n(?:operation=([0-9a-f]{32})\n)?"
+)
 SETUP_STATUS = Path("/var/db/zapret2-restyle/setup.status")
 SETUP_PID = Path("/var/run/zapret2-restyle/setup.pid")
 
@@ -41,7 +44,8 @@ def _read_setup_failure(facts: dict) -> dict | None:
         record = _read_fixed(SETUP_STATUS, 128, 0)
     except FileNotFoundError:
         return None
-    if record != _SETUP_RELEASE_LIST_FAILURE:
+    matched = _SETUP_RELEASE_LIST_FAILURE.fullmatch(record)
+    if matched is None:
         return None
     if _read_fixed(SETUP_STATUS, 128, 0) != record:
         raise ValueError("RACING_ORIGINAL_SETUP_STATUS")
@@ -56,7 +60,8 @@ def _read_setup_failure(facts: dict) -> dict | None:
         "action": "setup-install", "stage": "install",
         "code": "SETUP_RELEASE_LIST_UNAVAILABLE",
         "message": "Last recorded first install could not obtain the stable release list",
-        "operation_id": None, "timestamp": None, "generation": None,
+        "operation_id": matched[1].decode("ascii") if matched[1] is not None else None,
+        "timestamp": None, "generation": None,
         "exit_status": None, "runtime_before": None, "runtime_after": None,
         "verification": "refused", "stderr_excerpt": None, "log_ref": None,
     }

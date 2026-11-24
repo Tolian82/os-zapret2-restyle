@@ -97,3 +97,17 @@ for (const isRussian of [false, true]) {
 }
 assert.equal(classifier(lastKnown, 'v1.0.7', 'Not installed', 'error', false), 'pending', 'historical cause cannot finish new click');
 console.log('PASS: S05d2 bounded last first-install reason, no new-click success/failure inference');
+
+const operation = 'a'.repeat(32);
+const fastFailure = {...lastKnown, lastsetupoperation: operation};
+assert.equal(classifier(fastFailure, 'v1.0.7', '', 'error', false, operation),
+    'release-list-failed', 'the matching terminal failure must finish a click even when busy was missed');
+for (const unrelated of ['', 'b'.repeat(32), 'invalid']) {
+    assert.equal(classifier(fastFailure, 'v1.0.7', '', 'error', false, unrelated),
+        'pending', 'a different operation cannot finish this click');
+}
+assert.equal(classifier(lastKnown, 'v1.0.7', '', 'error', false, operation),
+    'pending', 'a legacy historical record has no operation receipt');
+assert.equal(classifier({...fastFailure, status: 'unavailable'}, 'v1.0.7', '', 'error', false, operation),
+    'pending', 'an unqualified status cannot finish this click');
+console.log('PASS: S05d5 a fast qualified refusal completes only its own click');

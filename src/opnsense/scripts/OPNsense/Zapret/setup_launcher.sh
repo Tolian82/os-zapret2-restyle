@@ -27,13 +27,19 @@ umask 022
 usage_error()
 {
     echo "ERROR: $1" >&2
-    echo "Usage: setup_launcher.sh {install [VERSION]|status}" >&2
+    echo "Usage: setup_launcher.sh {install [VERSION]|install-verified VERSION OPERATION|status}" >&2
     exit 64
 }
 
 release_tag_valid()
 {
     printf '%s\n' "$1" | grep -Eq '^v[0-9]+(\.[0-9]+)+$'
+}
+
+setup_operation_valid()
+{
+    [ "${#1}" -eq 32 ] || return 1
+    case "$1" in *[!0123456789abcdef]*) return 1 ;; esac
 }
 
 setup_pid_running()
@@ -127,20 +133,24 @@ show_status()
     printf 'version=%s\n' "${_version}"
     printf 'setup=%s\n' "${_setup}"
     printf 'busy=%s\n' "${_busy}"
-    # Optional exact historical detail, never an arbitrary log or rc.
+    # Report only the exact completed first-install record.
     if [ "${_installed}" -eq 0 ] && [ "${_busy}" -eq 0 ] &&
        [ "${_setup}" = failed ] &&
-       [ -f "${SETUP_STATUS}" ] && [ ! -L "${SETUP_STATUS}" ] &&
-       printf '%s\n' failed 'cause=release-list-unavailable' |
-           cmp -s "${SETUP_STATUS}" - && ! setup_pid_running; then
-        printf '%s\n' 'lastsetupfailure=release-list-unavailable'
+       [ -f "${SETUP_STATUS}" ] && [ ! -L "${SETUP_STATUS}" ]; then
+        _setup_operation=$(head -c 128 "${SETUP_STATUS}" | sed -n '3s/^operation=//p')
+        if setup_operation_valid "${_setup_operation}" &&
+           printf '%s\n' failed 'cause=release-list-unavailable' "operation=${_setup_operation}" |
+                cmp -s "${SETUP_STATUS}" - && ! setup_pid_running; then
+            printf '%s\n' 'lastsetupfailure=release-list-unavailable' "lastsetupoperation=${_setup_operation}"
+        elif printf '%s\n' failed 'cause=release-list-unavailable' |
+             cmp -s "${SETUP_STATUS}" - && ! setup_pid_running; then
+            printf '%s\n' 'lastsetupfailure=release-list-unavailable'
+        fi
     fi
 }
 
 launch_install()
 {
-    [ "$#" -le 2 ] || usage_error "install accepts at most one VERSION argument"
-
     if [ -n "${VERSION}" ] && ! release_tag_valid "${VERSION}"; then
         usage_error "invalid release version: ${VERSION}"
     fi
@@ -179,7 +189,15 @@ launch_install()
 
 case "${MODE}" in
     install)
-        launch_install "$@"
+        [ "$#" -le 2 ] || usage_error "install accepts at most one VERSION argument"
+        export ZAPRET_SETUP_OPERATION_ID=
+        launch_install
+        ;;
+    install-verified)
+        [ "$#" -eq 3 ] && [ -n "${VERSION}" ] && setup_operation_valid "$3" ||
+            usage_error "install-verified requires a version and a valid operation ID"
+        export ZAPRET_SETUP_OPERATION_ID="$3"
+        launch_install
         ;;
     status)
         [ "$#" -eq 1 ] || usage_error "status accepts no arguments"

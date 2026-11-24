@@ -4,9 +4,9 @@
 
 ## User contract
 
-On a truly clean OPNsense 26.7 with the plugin installed, no upstream Git HEAD, runtime.release or executable, the Zapret2 Service upper Apply installs selected upstream release v1.0.7 by POST /api/zapret/service/install. The existing controller invokes configd setup_install, setup_launcher.sh, setup_transaction.sh and setup.sh. No manual shell prerequisite, no runtime compiler in pkg hooks, and no Strategies Apply required.
+On a truly clean OPNsense 26.7 with the plugin installed, no upstream Git HEAD, runtime.release or executable, the Zapret2 Service upper Apply installs selected upstream release v1.0.7 by POST /api/zapret/service/install. The authenticated controller passes a per-click operation ID through `setup_install_verified` to the original setup launcher, transaction and resolver. The native G03 compatibility fixture uses the existing one-parameter `setup_install` action. No manual shell prerequisite, no runtime compiler in pkg hooks, and no Strategies Apply required.
 
-Correct terminal state: installed=1, version=v1.0.7, setup=ready, service=stopped, busy=0. The GUI must distinguish this first-install STOPPED result from its prior error/absent engine state. If the build fails and observed worker progress establishes a new result, show failed even if installed=0. Transient API failures or uncertain prior receipts still require review instead of optimistic replay.
+Correct terminal state: installed=1, version=v1.0.7, setup=ready, service=stopped, busy=0. The GUI must distinguish this first-install STOPPED result from its prior error/absent engine state. If the build fails after observed worker progress, show failure even if installed=0. For the qualified release-list failure, the matching terminal operation ID also finishes that click when the first status read occurs after the worker has exited. Transient API failures or uncertain prior receipts still require review instead of optimistic replay.
 
 ## Lifecycle and failure boundaries
 

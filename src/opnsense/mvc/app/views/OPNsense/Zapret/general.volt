@@ -125,6 +125,7 @@
         let runtimeStatusInFlight = false;
         let releaseNeedsReview = false;
         let releaseExpectedVersion = '';
+        let releaseOperationId = '';
         let releaseOriginalVersion = '';
         let releaseOriginalService = '';
         let releaseObservedBusy = false;
@@ -951,8 +952,15 @@
         // can transiently fail while native FD9 is held. Correlate the desired
         // release with a real busy observation OR a changed committed version.
         // An unchanged-version replay with no busy evidence remains uncertain.
-        function releaseTerminalOutcome(data, target, previous, service, observedBusy) {
+        function releaseTerminalOutcome(data, target, previous, service, observedBusy, operationId) {
             if (!data || data.busy) return 'pending';
+            if (typeof operationId === 'string' && /^[0-9a-f]{32}$/.test(operationId) &&
+                data.lastsetupoperation === operationId && data.status === 'ok' &&
+                data.installed === false && data.busy === false && data.service === 'error' &&
+                data.version === '' && data.setup === 'failed' &&
+                data.lastsetupfailure === 'release-list-unavailable') {
+                return 'release-list-failed';
+            }
             const progressed = observedBusy || (previous !== target && data.version === target);
             if (!progressed) return 'pending';
             // A failed initial setup can correctly leave installed=0.
@@ -984,6 +992,7 @@
             releaseApplyPending = false;
             releaseNeedsReview = releaseNeedsReview || !!needsReview;
             releaseExpectedVersion = '';
+            releaseOperationId = '';
             releaseOriginalVersion = '';
             releaseOriginalService = '';
             releaseObservedBusy = false;
@@ -1015,7 +1024,7 @@
                 ? data.service : 'error';
         }
 
-        // Historical detail must never be treated as a current-click receipt.
+        // Explicitly historical unless the outcome has matched the operation ID.
         function lastSetupFailureDetail(data) {
             if (data && data.status === 'ok' && data.installed === false &&
                 data.busy === false && data.setup === 'failed' &&
@@ -1045,14 +1054,18 @@
             }
             if (releaseApplyPending) {
                 const outcome = releaseTerminalOutcome(data, releaseExpectedVersion,
-                    releaseOriginalVersion, releaseOriginalService, releaseObservedBusy);
+                    releaseOriginalVersion, releaseOriginalService, releaseObservedBusy,
+                    releaseOperationId);
                 if (outcome === 'success') {
                     finishReleaseOperation(false, '');
                     helpInventoryLoaded = false;
                     requestResourceHelpInventory(true);
-                } else if (outcome === 'failed') {
+                } else if (outcome === 'failed' || outcome === 'release-list-failed') {
                     failureReported = true;
-                    const detail = lastSetupFailureDetail(data);
+                    const detail = outcome === 'release-list-failed'
+                        ? (isRussian ? 'Не удалось получить список стабильных версий Zapret2.'
+                            : 'Could not obtain the list of stable Zapret2 releases.')
+                        : lastSetupFailureDetail(data);
                     finishReleaseOperation(false, runtimeText.operationFailed + (detail ? ' ' + detail : ''));
                 }
             }
@@ -1646,6 +1659,7 @@
                 releaseNeedsReview) return;
             releaseApplyPending = true;
             releaseExpectedVersion = version;
+            releaseOperationId = '';
             releaseOriginalVersion = $('#zapretRuntimeVersion').text();
             releaseOriginalService = currentServiceState;
             releaseObservedBusy = false;
@@ -1658,6 +1672,10 @@
                 dataType: 'json',
                 timeout: 30000
             }).done(function(data) {
+                if (data && data.status === 'ok' && data.version === version &&
+                    typeof data.operationid === 'string' && /^[0-9a-f]{32}$/.test(data.operationid)) {
+                    releaseOperationId = data.operationid;
+                }
                 // Start polling independently of whether the first status
                 // response actually catches busy=1.
                 ensureRuntimePolling(false);
