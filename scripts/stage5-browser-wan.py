@@ -426,6 +426,60 @@ def self_test():
             browser.close()
     print('PASS_STAGE5_BROWSER_OFFLINE_HARNESS_ONLY')
 
+
+def s05c2c_missing_engine_http():
+    """Real authenticated API under saved WAN, no GUI click or route mocking."""
+    from playwright.sync_api import sync_playwright
+    need(os.environ.get('GITHUB_ACTIONS') == 'true' and
+         os.environ.get('ZAPRET2_STAGE5_BROWSER_WAN') == '1',
+         'S05C2C_DISPOSABLE_CHROMIUM_ONLY')
+    origin = 'https://127.0.0.1:18443'
+    with sync_playwright() as pw:
+        options = {'executable_path': os.environ['STAGE5_LOCAL_CHROMIUM']} if os.environ.get('STAGE5_LOCAL_CHROMIUM') else {}
+        browser = pw.chromium.launch(headless=True, **options)
+        try:
+            context = browser.new_context(ignore_https_errors=True)
+            page = context.new_page()
+            page.goto(origin + '/index.php', wait_until='domcontentloaded', timeout=45000)
+            page.locator('input[name="usernamefld"]').fill('root')
+            page.locator('input[name="passwordfld"]').fill('opnsense')
+            submit = page.locator('button[type="submit"],input[type="submit"]')
+            if submit.count():
+                submit.first.click()
+            else:
+                page.locator('input[name="passwordfld"]').press('Enter')
+            with page.expect_response(
+                    lambda r: '/api/zapret/settings/get' in r.url and r.status == 200,
+                    timeout=45000):
+                page.goto(origin + '/ui/zapret', wait_until='domcontentloaded', timeout=45000)
+            page.locator('form#frm_GeneralSettings').wait_for(timeout=45000)
+            # Service GUI control is intentionally DISABLED without upstream:
+            # send one authenticated direct POST using the page's real AJAX
+            # CSRF handling. Never intercept a mutation or claim a GUI click.
+            result = page.evaluate("""async () => new Promise(resolve => {
+                jQuery.ajax({
+                    type:'POST', url:'/api/zapret/service/start',
+                    dataType:'json', timeout:90000
+                }).done((body, _text, xhr) =>
+                    resolve({status:xhr.status,body:body}))
+                  .fail(xhr =>
+                    resolve({status:xhr.status,body:xhr.responseJSON||null}));
+            })""")
+            need(isinstance(result, dict) and
+                 400 <= result.get('status', 0) < 600,
+                 'S05C2C_ACTUAL_START_HTTP_NOT_REFUSED')
+            body = result.get('body')
+            need(isinstance(body, dict) and
+                 body.get('errorMessage') ==
+                     'Zapret2 Start refused: engine is not installed.' and
+                 isinstance(body.get('errorTitle'), str) and
+                 len(body['errorTitle']) > 0,
+                 'S05C2C_ACTUAL_ORIGINAL_CAUSE_NOT_DELIVERED')
+            context.close()
+        finally:
+            browser.close()
+    print('S05C2C_NATIVE_SAVED_WAN_REAL_AUTHENTICATED_HTTP_ENGINE_ABSENT=PASS')
+
 def main():
     try:
         if sys.argv[1:] == ['--self-test']:
@@ -436,6 +490,8 @@ def main():
             s03e3c_native_stop_restart_http_red('en' if 'en' in sys.argv[1] else 'ru')
         elif sys.argv[1:] in (['--s03e3d-en-browser'], ['--s03e3d-ru-browser']):
             s03e3c_native_stop_restart_http_red('en' if 'en' in sys.argv[1] else 'ru', green=True)
+        elif sys.argv[1:] == ['--s05c2c-absent-engine-browser']:
+            s05c2c_missing_engine_http()
         elif sys.argv[1:] == ['--browser']:
             need(not RESULT.exists() and not RESULT.is_symlink(), 'RECEIPT_PREEXISTS')
             result = real_browser()
