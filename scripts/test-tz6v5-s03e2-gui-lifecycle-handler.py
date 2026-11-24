@@ -156,6 +156,9 @@ clickHandler.call(button, {preventDefault(){}});
 check(requests.length === before, 'busy-guard allowed a mutation');
 strategiesApplyPending = false;
 currentServiceState = 'started';
+// Restore the RU locale expected by the original unconfirmed-200 assertion
+// after the new S05l mixed EN untrusted-legacy case.
+isRussian = true;
 clickHandler.call(button, {preventDefault(){}});
 const req = requests.at(-1), beforeSuccess = successCount, beforeRefresh = refreshCount;
 req.done({status:'ok',action:'stop',state:'stopped',verified:true});
