@@ -240,6 +240,8 @@
 2. Отделить platform XML/WAN/configd/pkg adapters от общего компилятора, для будущей pfSense оставить **интерфейс**, не добавлять неподтверждённый порт.
 3. Проверить enum, отсутствующие поля/невалидные значения, прежний native WAN resolver (`wan_preflight`/`config_resolve_interface()` с допустимыми назначенными TUN/OPT, в том числе без IPv4), registered list IDs и лимиты. Не использовать stale `zapret.conf` для Lab WAN device.
 
+**S07a source-only candidate 24.11.2026, `_190`:** [strict typed saved-XML + registry import-only projection](ZAPRET2_TZ6V5_S07A_SOURCE_PROJECTION.md). Local 7/7 source S0; no Config writer or new lifecycle. Native installed OPNsense unchanged-byte/FD9/pkgdb/engine/IPFW and real OPT/TUN original resolver still **PENDING**. Formal S07 GO is not claimed. Do not advance to S08 until that gate.
+
 **GO:** neutral model корректен и deterministic; Config ни разу не изменён.
 
 ### S08. Pure compiler target/resource/Voice/native

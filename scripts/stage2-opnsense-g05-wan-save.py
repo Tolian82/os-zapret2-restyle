@@ -355,6 +355,63 @@ try {
     return True
 
 
+
+def verify_s07_installed_readonly_projection():
+    """Qualify S07a on this already installed G05 guest without another VM."""
+    sys.dont_write_bytecode = True  # No __pycache__ under installed backend.
+    s04 = load("tz6v5-s04c-opnsense-native-inventory.py", "g05_s07_original_s04")
+    backend = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
+    source = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
+    names = ("neutral_config_model.py", "config_projection_opnsense.py",
+             "registry.sh", "component_inventory_opnsense.py")
+    for name in names:
+        installed = backend / name
+        upstream = source / name
+        need(installed.is_file() and not installed.is_symlink() and
+             upstream.is_file() and installed.read_bytes() == upstream.read_bytes(),
+             "S07_INSTALLED_SOURCE_NOT_THE_TESTED_PACKAGE")
+    # Existing accepted S04 read-only physical witness includes saved Config
+    # bytes/inode/mode/mtime, pkgdb, FD9/journal/release, PID, IPFW and engine.
+    before = s04.snapshot()
+    module_bytes = {name: s04.file_record(backend / name) for name in names}
+    sys.path.insert(0, str(backend))
+    try:
+        import config_projection_opnsense as opnsense_projector
+        model = opnsense_projector.read_saved()
+    finally:
+        sys.path.remove(str(backend))
+    need(model.schema == 1 and model.authorization == "NONE" and
+         model.physical_transition_allowed is False and
+         model.enabled is False and model.saved_wan == "wan" and
+         model.wan_state == "NEEDS_NATIVE_RESOLUTION" and
+         len(model.registered_sources) == 8,
+         "S07_SAVED_NATIVE_MODEL_UNQUALIFIED")
+    fields = {row.key: row for row in model.list_fields}
+    need(fields["youtubedomains"].present and fields["youtubedomains"].empty and
+         all(fields[key].present and fields[key].empty is False
+             for key in ("userdomains", "excludedomains",
+                         "excludeipset", "telegramips")) and
+         model.voice[0].service == "telegram" and model.voice[0].args_present,
+         "S07_NATIVE_SAVED_EMPTY_OR_USER_FIELDS_LOST")
+    # Only the ORIGINAL native WAN resolver may determine an actual device.
+    # The projection itself must never infer physical assignments.
+    mapping = run(["/bin/sh",
+                   "/usr/local/opnsense/scripts/OPNsense/Zapret/wan_preflight.sh",
+                   "device"], timeout=30)
+    resolved = mapping.stdout.strip()
+    need(mapping.returncode == 0 and bool(resolved) and
+         len(resolved) <= 32 and
+         all(c.isalnum() or c in "_.:-" for c in resolved) and
+         not mapping.stderr.strip(),
+         "S07_ORIGINAL_SAVED_WAN_RESOLVER_UNQUALIFIED")
+    after = s04.snapshot()
+    need(before == after and module_bytes == {
+         name: s04.file_record(backend / name) for name in names},
+         "S07_READONLY_PROJECTION_MUTATED_NATIVE_CONFIG_FD9_PKGDB_PID_IPFW")
+    print("S07_G05_REAL_INSTALLED_READONLY_PROJECTION_NO_WRITE=PASS", flush=True)
+    return True
+
+
 def main():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1" and
@@ -444,6 +501,7 @@ def main():
     # S06: same genuine G05 guest and same native package, ordinary delete,
     # not a force reinstall; preserve saved Config and all three Found files.
     s06_preserved = verify_s06_ordinary_remove_reinstall(web, package, sha, ipfw_before)
+    s07_readonly = verify_s07_installed_readonly_projection()
     print("G05_NATIVE=" + json.dumps({
         "status": "PASS_G05_COLD_NO_ENGINE_WAN_ONLY_HTTPS_CONFIG_AND_REINSTALL",
         "first_api_authenticated": True,
@@ -455,6 +513,7 @@ def main():
         "no_dvtws_or_ipfw_mutation": True,
         "same_archive_sha256": sha,
         "s06_ordinary_remove_reinstall_saved_fields": s06_preserved,
+        "s07_installed_readonly_no_write": s07_readonly,
         "owner_browser_tested": False,
         "running_wan_rollback_tested": False,
     }, sort_keys=True))
