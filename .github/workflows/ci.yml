@@ -588,6 +588,11 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s09a-root-manifest.py
+      - name: S09b original sealed native refs, pinned inode and tamper refusals
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s09b-sealed-root-refs.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh
       - name: Validate fast path routing and strict private-curl source mismatch
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test

@@ -593,6 +593,13 @@ orchestrator_build_release()
                 "mandatory per-profile IPSet exclusion failed"
             return 1
         }
+    # The original final writer may atomically replace argv after its global
+    # exclusion pass. Pin the exact original sealed-ref permission contract,
+    # without reassembling the native argv or introducing another generator.
+    chmod 0600 "${_orchestrator_build_args}" || {
+        common_error "original engine arguments permission qualification failed"
+        return 1
+    }
     # Only explicit native-detached evidence needs a private argv/IPFW
     # handoff; shared-candidate uses its one ordinary release generator.
     if [ "${_orchestrator_build_variant}" = "native-detached" ]; then
@@ -637,6 +644,10 @@ orchestrator_build_release()
                     "mandatory per-profile IPSet exclusion failed"
                 return 1
             }
+        chmod 0600 "${_orchestrator_build_native_args}" || {
+            common_error "original native Voice arguments permission qualification failed"
+            return 1
+        }
         # Bind the generated one-engine argv to destination-scoped IPFW rules.
         # This writes ONLY release-local private manifest/proof files. IPFW,
         # current dvtws2 and ordinary Strategies remain unchanged.
