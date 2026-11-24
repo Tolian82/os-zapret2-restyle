@@ -25,10 +25,10 @@ registry_validate()
 }
 '''
 
-def xml(general='<enabled>0</enabled><waninterface>opt0</waninterface><divertport>989</divertport><ports>80,443</ports><autorestart>off</autorestart>', hostlist='<mode>auto</mode><userdomains></userdomains>', voice='', strategy=''):
+def xml(general='<enabled>0</enabled><waninterface>opt0</waninterface><divertport>989</divertport><ports>80,443</ports><autorestart>off</autorestart>', hostlist='<mode>auto</mode><userdomains></userdomains>', voice='', strategy='', lab=''):
     return ('<opnsense><other>untouched</other><OPNsense><Zapret>'
             f'<general>{general}</general><hostlist>{hostlist}</hostlist>'
-            f'<voice>{voice}</voice><strategy>{strategy}</strategy>'
+            f'<voice>{voice}</voice><strategy>{strategy}</strategy><strategylab>{lab}</strategylab>'
             '</Zapret></OPNsense></opnsense>').encode()
 
 class S07Pure(unittest.TestCase):
@@ -50,6 +50,20 @@ class S07Pure(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             out.enabled = True
         self.assertNotIn('secret', repr(self.source(xml(voice='<telegram><args>secret</args></telegram>'))))
+
+    def test_real_native_version_attribute_and_strict_lab_boolean(self):
+        for version in ("2.0.0", "2", "1.0.0"):
+            original = xml(lab='<enablequic>1</enablequic>')
+            real = original.replace(b'<Zapret>', f'<Zapret version="{version}">'.encode())
+            self.assertIs(self.source(real).lab_enablequic, True)
+        self.assertIsNone(self.source().lab_enablequic)
+        for invalid in (xml(lab='<enablequic>yes</enablequic>'),
+                        xml(lab='<enablequic>0</enablequic><enablequic>1</enablequic>'),
+                        xml().replace(b'<Zapret>', b'<Zapret version="untrusted">'),
+                        xml().replace(b'<Zapret>', b'<Zapret foreign="1">')):
+            with self.subTest(invalid=invalid[:90]):
+                with self.assertRaises((ConfigModelError, NativeProjectionError)):
+                    self.source(invalid)
 
     def test_missing_vs_empty_and_valid_tunnel_selection(self):
         for val, state in (('', 'EMPTY'), ('tun0', 'NEEDS_NATIVE_RESOLUTION'), ('opt123', 'NEEDS_NATIVE_RESOLUTION')):

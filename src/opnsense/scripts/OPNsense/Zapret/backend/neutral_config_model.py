@@ -58,6 +58,7 @@ class RequestedConfig:
     ports: tuple[int, ...] | None
     autorestart: str | None
     target_mode: str | None
+    lab_enablequic: bool | None
     voice: tuple[VoiceRequest, ...]
     list_fields: tuple[TextPresence, ...]
     legacy_strategy: tuple[TextPresence, ...]
@@ -117,11 +118,12 @@ def project(tree: Mapping[str, object], sources: tuple[SourceId, ...]) -> Reques
     registry read, not a second hardcoded registry. The caller retains
     responsibility for original WAN preflight and original FD9 attestation.
     """
-    if type(tree) is not dict or set(tree) != {"general", "hostlist", "voice", "strategy"}:
+    if type(tree) is not dict or set(tree) != {"general", "hostlist", "voice", "strategy", "strategylab"}:
         raise ConfigModelError("INVALID_MODEL_KEYS")
     g = _section(tree["general"], frozenset(("enabled", "waninterface", "divertport", "ports", "autorestart")))
     h = _section(tree["hostlist"], frozenset(("mode", "domains", *_LISTS)))
     s = _section(tree["strategy"], frozenset(_STRATEGY))
+    lab = _section(tree["strategylab"], frozenset(("enablequic",)))
     raw_voice = tree["voice"]
     if type(raw_voice) is not dict or set(raw_voice) != set(_VOICES):
         raise ConfigModelError("INVALID_VOICE_KEYS")
@@ -168,6 +170,7 @@ def project(tree: Mapping[str, object], sources: tuple[SourceId, ...]) -> Reques
                            wan_state=wan_state, divert_port=dp, ports=ports,
                            autorestart=_option(g, "autorestart", _AUTORESTART),
                            target_mode=_option(h, "mode", _MODES),
+                           lab_enablequic=_bool(lab, "enablequic"),
                            voice=tuple(voice), list_fields=_text_presence(h, _LISTS),
                            legacy_strategy=_text_presence(s, _STRATEGY),
                            registered_sources=sources)

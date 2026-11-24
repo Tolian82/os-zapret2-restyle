@@ -59,7 +59,11 @@ def xml_snapshot(raw: bytes) -> dict[str, object]:
     if len(models) != 1:
         raise NativeProjectionError("ZAPRET_MODEL_MISSING_OR_DUPLICATE")
     model = models[0]
-    if model.attrib:
+    # The native OPNsense Model stores an optional version attribute, e.g.
+    # <Zapret version="2.0.0">. It is metadata, never a second config source.
+    version = model.attrib.get("version")
+    if set(model.attrib) - {"version"} or (version is not None and
+            not re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,3}){0,2}", version)):
         raise NativeProjectionError("INVALID_MODEL_ATTRIBUTES")
     top: dict[str, ET.Element] = {}
     allowed_top = ("general", "hostlist", "voice", "strategy", "strategylab")
@@ -69,7 +73,7 @@ def xml_snapshot(raw: bytes) -> dict[str, object]:
         top[el.tag] = el
     # Preserve legacy fields only as presence metadata: never treat them as
     # authoritative file-backed HOSTLIST/IPSET or as S08 compiled profile args.
-    _branch(top.get("strategylab"), ("enablequic",))
+    lab = _branch(top.get("strategylab"), ("enablequic",))
     voice = _nodes(top.get("voice"), ("waninterface", "telegram", "discord", "x", "sip", "custom"), leaf=False)
     for name, el in voice.items():
         if name == "waninterface":
@@ -81,6 +85,7 @@ def xml_snapshot(raw: bytes) -> dict[str, object]:
         "general": _branch(top.get("general"), ("enabled", "waninterface", "divertport", "ports", "autorestart")),
         "hostlist": _branch(top.get("hostlist"), ("mode", "domains", "youtubedomains", "userdomains", "excludedomains", "excludeipset", "telegramips", "discordips", "xips", "sipips", "customips")),
         "strategy": _branch(top.get("strategy"), ("httpargs", "httpsargs", "trafficargs", "extraargs")),
+        "strategylab": lab,
         "voice": {name: _branch(voice.get(name), ("enabled", "args")) for name in ("telegram", "discord", "x", "sip", "custom")},
     }
 
