@@ -157,16 +157,23 @@ final class SettingsApply
     public static function isVerifiedMissingUpstream(string $receipt): bool
     {
         $lines = preg_split('/\R/u', trim($receipt));
-        if (!is_array($lines) || count($lines) !== 5) {
+        if (!is_array($lines) || !in_array(count($lines), [5, 6], true)) {
             return false;
         }
         $seen = [];
         foreach ($lines as $line) {
-            if (!preg_match('/^(installed|service|version|setup|busy)=(.*)$/D', $line, $m) ||
+            if (!preg_match('/^(installed|service|version|setup|busy|lastsetupfailure)=(.*)$/D', $line, $m) ||
                 array_key_exists($m[1], $seen)) {
                 return false;
             }
             $seen[$m[1]] = $m[2];
+        }
+        if (isset($seen['lastsetupfailure'])) {
+            if ($seen['lastsetupfailure'] !== 'release-list-unavailable' ||
+                ($seen['setup'] ?? null) !== 'failed') {
+                return false;
+            }
+            unset($seen['lastsetupfailure']);
         }
         return count($seen) === 5 &&
             $seen['installed'] === '0' &&

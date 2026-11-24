@@ -1015,6 +1015,19 @@
                 ? data.service : 'error';
         }
 
+        // Historical detail must never be treated as a current-click receipt.
+        function lastSetupFailureDetail(data) {
+            if (data && data.status === 'ok' && data.installed === false &&
+                data.busy === false && data.setup === 'failed' &&
+                data.service === 'error' && data.version === '' &&
+                data.lastsetupfailure === 'release-list-unavailable') {
+                return isRussian
+                    ? 'Последняя зафиксированная причина первой установки: не удалось получить список стабильных версий Zapret2.'
+                    : 'Last recorded first-install failure: could not obtain the list of stable Zapret2 releases.';
+            }
+            return '';
+        }
+
         function renderRuntime(data) {
             const category = classifyRuntimeStatus(data);
             const installed = !!(data && data.installed === true);
@@ -1039,7 +1052,8 @@
                     requestResourceHelpInventory(true);
                 } else if (outcome === 'failed') {
                     failureReported = true;
-                    finishReleaseOperation(false, runtimeText.operationFailed);
+                    const detail = lastSetupFailureDetail(data);
+                    finishReleaseOperation(false, runtimeText.operationFailed + (detail ? ' ' + detail : ''));
                 }
             }
 
@@ -1055,7 +1069,7 @@
             }
             badge.removeClass('label-success label-default label-danger label-info');
             badge.attr('title', data && data.reason === 'status-unavailable'
-                ? runtimeText.statusUnavailable : '');
+                ? runtimeText.statusUnavailable : lastSetupFailureDetail(data));
 
             if (category === 'installing') {
                 // Native setup holds FD9; do not mistake transient stopped or
@@ -1083,7 +1097,8 @@
 
             if (wasBusy && !busy && data && data.setup === 'failed' && !failureReported &&
                 !releaseApplyPending) {
-                showRuntimeError(runtimeText.setupError, runtimeText.operationFailed);
+                const detail = lastSetupFailureDetail(data);
+                showRuntimeError(runtimeText.setupError, runtimeText.operationFailed + (detail ? ' ' + detail : ''));
             }
             runtimeWasBusy = busy;
             setRuntimeBusy(busy);

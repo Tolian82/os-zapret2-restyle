@@ -893,9 +893,10 @@ install_first_runtime()
         status_write failed || true
         return 1
     fi
-    status_write installing
+    status_write installing || return 1
     _fresh_rc=0
     if ZAPRET_DIR="${FIRST_INSTALL_STAGE}/runtime" \
+       SETUP_FIRST_INSTALL_DIAGNOSTIC=1 \
        "${SETUP_SCRIPT}" install-under-parent-lock "${VERSION}"; then
         :
     else
@@ -903,10 +904,23 @@ install_first_runtime()
     fi
     if [ "${_fresh_rc}" -ne 0 ] ||
        ! first_install_validate "${FIRST_INSTALL_STAGE}/runtime"; then
+        _fresh_release_list_failed=0
+        if [ "${_fresh_rc}" -eq 69 ] &&
+           [ -f "${SETUP_STATUS}" ] && [ ! -L "${SETUP_STATUS}" ] &&
+           printf '%s\n' installing 'cause=release-list-unavailable' |
+               cmp -s "${SETUP_STATUS}" -; then
+            _fresh_release_list_failed=1
+        fi
         status_write failed || true
         [ "${_fresh_rc}" -ne 0 ] || _fresh_rc=69
         first_install_cleanup_stage || return 69
         rm -f "${FIRST_INSTALL_MARKER}" || return 69
+        # Last recorded cause, not a receipt for a subsequent GUI click.
+        if [ "${_fresh_release_list_failed}" -eq 1 ] &&
+           [ -f "${SETUP_STATUS}" ] && [ ! -L "${SETUP_STATUS}" ]; then
+            status_write 'failed
+cause=release-list-unavailable' || status_write failed || true
+        fi
         return "${_fresh_rc}"
     fi
     first_install_stage_safe || {
@@ -962,6 +976,12 @@ install_transaction()
        ! ( : >&9 ) 2>/dev/null; then
         echo "ERROR: upstream install requires setup.lock and inherited native FD9" >&2
         return 75
+    fi
+    # Clear historical detail only inside the original admitted owner.
+    if [ -f "${SETUP_STATUS}" ] && [ ! -L "${SETUP_STATUS}" ] &&
+       printf '%s\n' failed 'cause=release-list-unavailable' |
+           cmp -s "${SETUP_STATUS}" -; then
+        status_write failed || return 1
     fi
     [ -x "${SETUP_SCRIPT}" ] || {
         echo "ERROR: setup backend is unavailable: ${SETUP_SCRIPT}" >&2
@@ -1035,13 +1055,15 @@ install_transaction()
     # install verifies and normalizes modes after the selected build, and
     # rollback normalizes the restored old runtime only after the safety gate.
     if [ -n "${VERSION}" ]; then
-        if ROLLBACK_DIR="${ROLLBACK_DIR}" "${SETUP_SCRIPT}" install-under-parent-lock "${VERSION}"; then
+        if ROLLBACK_DIR="${ROLLBACK_DIR}" SETUP_FIRST_INSTALL_DIAGNOSTIC=0 \
+           "${SETUP_SCRIPT}" install-under-parent-lock "${VERSION}"; then
             _setup_result=0
         else
             _setup_result=$?
         fi
     else
-        if ROLLBACK_DIR="${ROLLBACK_DIR}" "${SETUP_SCRIPT}" install-under-parent-lock; then
+        if ROLLBACK_DIR="${ROLLBACK_DIR}" SETUP_FIRST_INSTALL_DIAGNOSTIC=0 \
+           "${SETUP_SCRIPT}" install-under-parent-lock; then
             _setup_result=0
         else
             _setup_result=$?
