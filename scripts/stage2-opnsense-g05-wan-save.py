@@ -413,8 +413,31 @@ def verify_s07_installed_readonly_projection():
             uid = qualified("OWNER", lambda: pwd.getpwnam("wwwonly").pw_uid)
             config_raw = qualified(
                 "CONFIG_BYTES", lambda: _read_fixed(CONF, 16777216, uid))
-            tree = qualified(
-                "XML_SHAPE", lambda: opnsense_projector.xml_snapshot(config_raw))
+            # Observe only bounded attribute SHAPE when genuine native
+            # OPNsense XML has a model attribute not in our source policy.
+            # Never print an attribute name/value, saved WAN or Config bytes.
+            try:
+                tree = opnsense_projector.xml_snapshot(config_raw)
+            except opnsense_projector.NativeProjectionError as error:
+                if str(error) == "INVALID_MODEL_ATTRIBUTES":
+                    parsed = ET.fromstring(config_raw)
+                    model_node = parsed.find("./OPNsense/Zapret")
+                    attrs = model_node.attrib if model_node is not None else {}
+                    version_value = attrs.get("version", "")
+                    shape = ("N" if not version_value else
+                             "NUM_DOTS" if all(ch.isdigit() or ch == "."
+                                               for ch in version_value) else
+                             "OTHER")
+                    raise Refusal(
+                        "S07_NATIVE_XML_MODEL_ATTR_SHAPE:"
+                        "count=" + str(min(len(attrs), 99)) +
+                        ":has_version=" + str("version" in attrs) +
+                        ":other_keys=" + str(bool(set(attrs) - {"version"})) +
+                        ":version_kind=" + shape +
+                        ":version_len=" + str(min(len(version_value), 99))
+                    ) from None
+                qualified("XML_SHAPE", lambda: opnsense_projector.xml_snapshot(config_raw))
+                raise Refusal("S07_NATIVE_READ_XML_SHAPE_UNQUALIFIED") from None
             registry_raw = qualified(
                 "REGISTRY_BYTES",
                 lambda: _read_fixed(backend / "registry.sh", 131072, 0))
