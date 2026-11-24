@@ -8,7 +8,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 RUNTIME=$(dirname "$SOURCE")/backend/apply_runtime.sh
 sed -n '/^shared_apply_execute_service()$/,/^}$/p' "$SOURCE" > "$ROOT/executor.sh"
-for entry in shared_apply_record_current_service shared_apply_activate_and_commit_service; do
+for entry in shared_apply_unbound_root_preflight_service shared_apply_record_current_service shared_apply_activate_and_commit_service; do
     sed -n "/^$entry()$/,/^}$/p" "$SOURCE" >> "$ROOT/executor.sh"
 done
 sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/executor.sh"
@@ -53,6 +53,9 @@ apply_runtime_rehydrate_retired_legacy() {
     [ "$REHYDRATE_RC" -eq 0 ]
 }
 shared_apply_require_tools() { return 0; }
+# Original common_error reports to the native service logger, not the test
+# transition ledger. An expected post-PREPARED refusal must still return 70.
+common_error() { :; }
 shared_apply_bundle_service() { printf "bundle:%s\n" "$1" >> "$LOG"; [ "$1" != verify ] || [ "$BAD_BUNDLE" = 0 ]; }
 shared_apply_native_config() {
     case "$1" in
@@ -112,11 +115,17 @@ shared_apply_json_field() {
 }
 shared_apply_record_service() {
     printf "record:%s\n" "$1" >> "$LOG"
+    if [ "$1" = prepared ] && [ "${STAGE_ROOT_AFTER_PREPARED:-0}" = 1 ]; then
+        : > "$ROOT/work/manifest.json"
+    fi
     [ "$1" != "$BAD_RECORD" ]
 }
 apply_runtime_probe() {
     echo runtime-probe >> "$LOG"
     PROBE_COUNT=$((PROBE_COUNT + 1))
+    if [ "$PROBE_COUNT" -eq 1 ] && [ "${STAGE_ROOT_AFTER_PROBE:-0}" = 1 ]; then
+        : > "$ROOT/work/manifest.json"
+    fi
     [ "$PROBE_RC" -eq 0 ] &&
     { [ "$FINAL_PROBE_FAIL" -eq 0 ] || [ "$PROBE_COUNT" -ne 2 ]; }
 }
@@ -136,7 +145,7 @@ apply_runtime_verify_retired_legacy_committed() {
     echo runtime-final-verify >> "$LOG"
     [ "$FINAL_RC" -eq 0 ]
 }
-reset() { : > "$LOG"; FOUND_DRIFT=0; export FOUND_DRIFT; FINISH_FAIL=0; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; CONFIG_PREFLIGHT_RC=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; _apply_engine=0; }
+reset() { : > "$LOG"; FOUND_DRIFT=0; export FOUND_DRIFT; FINISH_FAIL=0; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; CONFIG_PREFLIGHT_RC=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; STAGE_ROOT_AFTER_PROBE=0; STAGE_ROOT_AFTER_PREPARED=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; _apply_engine=0; }
 expect_status() {
     expected="$1"; shift
     set +e
@@ -150,6 +159,39 @@ expect_status() {
 reset
 expect_status 0 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:committed '
 grep -Fqx "applied-id=$ID" "$ROOT/response.txt" || fail "successful receipt"
+# S10b2a: real original executor refuses ANY unbound/pending root before
+# native candidate/save/journal/IPFW. A symlink including a dangling target
+# is not an absent root. The S10a owner will later use a separate bound path.
+for root_candidate in \
+    "$ROOT/work/manifest.json" "$ROOT/work/.manifest.json.pending" \
+    "$ROOT/work/release/manifest.json" "$ROOT/work/release/.manifest.json.pending"; do
+    reset
+    : > "$root_candidate"
+    expect_status 0 ''
+    grep -Fqx 'preflight-rejected=manifest-unbound' "$ROOT/response.txt" ||
+        fail "unbound root crossed original pre-journal gate"
+    rm -f "$root_candidate"
+done
+reset
+ln -s nowhere "$ROOT/work/manifest.json"
+expect_status 0 ''
+grep -Fqx 'preflight-rejected=manifest-unbound' "$ROOT/response.txt" ||
+    fail "dangling manifest bypassed original root fence"
+rm "$ROOT/work/manifest.json"
+# A root appearing AFTER initial preflight but BEFORE PREPARED must not
+# create any original transaction, even if the original seal still checks.
+reset; STAGE_ROOT_AFTER_PROBE=1
+expect_status 0 'bundle:verify runtime-probe '
+grep -Fqx 'preflight-rejected=manifest-unbound' "$ROOT/response.txt" ||
+    fail "late manifest reached PREPARED"
+rm "$ROOT/work/manifest.json"
+# A root appearing AFTER original journal PREPARED must not trigger the old
+# launcher. An uncertain original PREPARED is preserved for cold recovery.
+reset; STAGE_ROOT_AFTER_PREPARED=1
+expect_status 70 'bundle:verify runtime-probe record:prepared '
+[ ! -s "$ROOT/response.txt" ] ||
+    fail "post-PREPARED root produced successful Apply receipt"
+rm "$ROOT/work/manifest.json"
 # A sealed but uncommitted form intent must refuse BEFORE the original
 # Prepared journal, Config::save, runtime transition and IPFW. The same
 # legacy Voice Apply fixture must remain operational with no found intent.

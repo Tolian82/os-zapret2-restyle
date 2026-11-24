@@ -8,7 +8,8 @@ SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 RUNTIME="$SOURCE/src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh"
 SERVICE="$SOURCE/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 sed -n '/^apply_runtime_abort_after_launcher_failure()$/,/^}$/p' "$RUNTIME" > "$ROOT/abort.sh"
-sed -n '/^shared_apply_activate_and_commit_service()$/,/^}$/p' "$SERVICE" > "$ROOT/owner.sh"
+sed -n '/^shared_apply_unbound_root_preflight_service()$/,/^}$/p' "$SERVICE" > "$ROOT/owner.sh"
+sed -n '/^shared_apply_activate_and_commit_service()$/,/^}$/p' "$SERVICE" >> "$ROOT/owner.sh"
 [ -s "$ROOT/abort.sh" ] && [ -s "$ROOT/owner.sh" ] || fail "production functions absent"
 sh -n "$ROOT/abort.sh" && sh -n "$ROOT/owner.sh" || fail "production shell syntax"
 . "$ROOT/abort.sh"
@@ -54,6 +55,10 @@ _shared_apply_base=$(printf "%064d" 0 | tr 0 b)
 _shared_apply_candidate=$(printf "%064d" 0 | tr 0 c)
 _shared_apply_fields=general.enabled
 _shared_apply_root="$ROOT/candidate"
+# The actual original owner has this sealed shared-work/release layout.
+# Extracting an owner function without its required native directory is
+# no longer a valid production-fault fixture after S10b2a's safety gate.
+mkdir -p "$_shared_apply_root/release"
 _shared_apply_mode=1
 shared_apply_record_current_service() { printf "journal:%s\n" "$1" >> "$LOG"; }
 apply_runtime_activate() { APPLY_EARLY_ENGINE_FAILURE=$STAGE; APPLY_IPFW_ATTACH_FAILURE=; return 1; }
