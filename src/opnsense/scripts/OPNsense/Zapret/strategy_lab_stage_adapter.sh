@@ -126,8 +126,24 @@ case "${ACTION}" in
         ;;
     20)
         load_lifecycle_context
-        strategy_lab_stop_normal_service ||
-            error 'The normal Zapret2 service could not be stopped and verified.'
+        if ! strategy_lab_stop_normal_service; then
+            # Only the same original Stop/Status action may classify this job.
+            # rc124 is a wrapper return, NOT proof of a timeout or nested rc.
+            case "${STRATEGY_LAB_STOP_FAILURE:-}" in
+                command:*)
+                    stop_rc=${STRATEGY_LAB_STOP_FAILURE#command:}
+                    msg="FAIL — stop-wrapper-rc=${stop_rc}: original Stop command wrapper failed; STOPPED not confirmed."
+                    [ "${LANGUAGE}" != ru ] || msg="FAIL — stop-wrapper-rc=${stop_rc}: команда Stop завершилась отказом; STOPPED не подтверждено."
+                    ;;
+                status:*)
+                    status_rc=${STRATEGY_LAB_STOP_FAILURE#status:}
+                    msg="FAIL — status-check-rc=${status_rc}: the service was not verified STOPPED."
+                    [ "${LANGUAGE}" != ru ] || msg="FAIL — status-check-rc=${status_rc}: остановленное состояние службы не подтверждено."
+                    ;;
+                *) msg='The normal Zapret2 service could not be stopped and verified.' ;;
+            esac
+            error "${msg}"
+        fi
         msg='PASS — The Zapret2 service has been stopped.'
         [ "${LANGUAGE}" != ru ] || msg='PASS — Служба Zapret2 остановлена'
         pass "${msg}"

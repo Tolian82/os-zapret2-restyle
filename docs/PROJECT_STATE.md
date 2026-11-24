@@ -1,15 +1,14 @@
-## 24.11.2026 — CURRENT S05 original producer diagnostics
+## 24.11.2026 — CURRENT S05 original lifecycle diagnostics
 
-**Accepted source:** `main 391d9f68cd6db997e5de5f6a41a5a8078e2d5e24`, `v0.6.5_173`, S05f1 [#1289](https://github.com/Tolian82/os-zapret2-restyle/pull/1289) merged with 15 exact-head successful workflows, original cold/hot read-only `reload --check` physical no-write acceptance. Bare reload does not start or restart; real semantic reload is NOT implemented. `_173.pkg` is not publicly published. Candidate `v0.6.5_174` (`VERSION=0.6.5`, `PLUGIN_REVISION=174`) source-only, prospective `os-zapret2-restyle-0.6.5_174.pkg` not published/owner-installed.
+**Accepted source:** `main 0b398b498cddbb39102b219e92a7a303cd1f2bde` = `v0.6.5_174`, [merged #1290](https://github.com/Tolian82/os-zapret2-restyle/pull/1290): 16 exact-head workflows SUCCESS; main CI and release classifier SUCCESS. Candidate `v0.6.5_175` (`VERSION=0.6.5`, `PLUGIN_REVISION=175`) source-only; `os-zapret2-restyle-0.6.5_175.pkg` not published or owner-installed.
 
-**S05g1 evidence:** unchanged original Lab producer and job-query/controller blobs since genuine [#45186404328](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45186404328) running-Auto native RESTORE_FAILED: per-job Stage90/99 FAIL with physically restored RUNNING, source-map-qualified inbox path drift only. The job result is the diagnostic source, NOT current unrelated Common Status. [Exact current-source audit](https://github.com/Tolian82/os-zapret2-restyle/issues/1269#issuecomment-7132109592). Owner-specific job `job.iDvhRh` physical after-state still not attested; #1224 OPEN.
+**S05g2 pkg qualification:** original protected rc70 fixed `boot|start|verify` classifier and retained postinstall record accepted in source/native ordinary update CI. Older genuine _107→_109 on disposable OPNsense shows native `boot` failure with exact protected postinstall-attested record, but no injected failure in _174 is claimed. No root-console `pkg-update` GUI to retrofit; current Status cannot treat pending `postinstall-attested` as current terminal failure. Owner live router untouched.
 
-**S05g2 candidate:** classify only three original `pkg-update-finish` failure origins from the protected FD9 action: inherited Common `boot`, direct ordinary `start`, or post-start `RUNNING` verification `verify`. All marker parsing exact full-line and rc70; no raw stderr, guessed child rc, historical pending-operation promotion, second journal or Config/FD9/IPFW writer. Return `RUNTIME_RESTORE_REQUIRES_REVIEW` and retained protected operation unchanged; native injected negative not yet attested. This diagnostic candidate is not equivalent to a safe physical restore.
+**S05h scoped change:** Stage20 original Lab Stop child outcome was never captured separately. Active `strategy_lab_stage_adapter.sh` calls original `strategy_lab_stop_normal_service`, where a failed timeout wrapper and a failed final native STOPPED verification were both collapsed into generic error. Candidate adds job-local strict type `command:<wrapper-rc>` versus `status:<native-status-rc>` and RU/EN result message through the existing Python-owned job. Wrapper rc124 is **not** proof of a 10s timer or original child rc; source fast RED→GREEN is distinct from installed native acceptance. No extra storage, FD9/Config/IPFW writer or timed-stop behavior change.
 
-**Full S05 remains NO-GO** pending remaining original Lab/pkg/GUI producer/consumer evidence; S06–S20 blocked, no new public package, no owner router changes. Next is exact-head acceptance of this narrow pkg cause binding, not architectural workarounds.
+**Full S05 OPEN/NO-GO:** genuine current-version injected pkg finish failure and real original Lab Stage20 failure with new cause receipt still not attested. Known Auto Stage90 inbox-generation raw-argv false RESTORE_FAILED separately open; no semantic reload yet, S06–S20 blocked. No owner router action or package publication.
 
 ---
-
 
 
 

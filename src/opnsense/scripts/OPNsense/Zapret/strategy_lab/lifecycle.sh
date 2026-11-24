@@ -126,16 +126,32 @@ strategy_lab_timed_service_action()
 
 strategy_lab_verify_stopped()
 {
-    if strategy_lab_service_status_code; then return 1; else _strategy_lab_verify_status=$?; fi
+    # Preserve the original native status exit for Stage20 attribution.
+    if strategy_lab_service_status_code; then _strategy_lab_verify_status=0; else _strategy_lab_verify_status=$?; fi
     [ "${_strategy_lab_verify_status}" -eq 1 ]
 }
 strategy_lab_verify_running(){ strategy_lab_service_status_code; }
 
 strategy_lab_stop_normal_service()
 {
+    # A job-local diagnostic in the original FD9 worker, not an extra writer.
+    # command: is the timeout WRAPPER exit, never an invented nested Stop rc.
+    STRATEGY_LAB_STOP_FAILURE=''
     case "${STRATEGY_LAB_INITIAL_SERVICE_STATE}" in
-        RUNNING) strategy_lab_timed_service_action stop "${STRATEGY_LAB_STOP_TIMEOUT}" || return 1; strategy_lab_verify_stopped ;;
-        STOPPED) strategy_lab_verify_stopped ;;
+        RUNNING)
+            if strategy_lab_timed_service_action stop "${STRATEGY_LAB_STOP_TIMEOUT}"; then :; else
+                STRATEGY_LAB_STOP_FAILURE="command:$?"
+                return 1
+            fi
+            if strategy_lab_verify_stopped; then return 0; fi
+            STRATEGY_LAB_STOP_FAILURE="status:${_strategy_lab_verify_status}"
+            return 1
+            ;;
+        STOPPED)
+            if strategy_lab_verify_stopped; then return 0; fi
+            STRATEGY_LAB_STOP_FAILURE="status:${_strategy_lab_verify_status}"
+            return 1
+            ;;
         *) return 1 ;;
     esac
 }
