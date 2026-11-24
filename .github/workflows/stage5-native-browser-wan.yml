@@ -75,6 +75,8 @@ jobs:
           python3.13 -m py_compile scripts/test-tz6v5-s03e3d-verified-lifecycle-contract.py
           python3.13 scripts/test-tz6v5-s03e3d-verified-lifecycle-contract.py --self-test
           python3.13 scripts/test-tz6v5-s05c2a-http-reason.py
+          python3.13 -m py_compile scripts/tz6v5-s05c2c-absent-engine-native.py
+          python3.13 scripts/tz6v5-s05c2c-absent-engine-native.py --self-test
           sh scripts/test-tz6v5-s05c2a-fd9-refusal.sh
           python3.13 scripts/p3-browser-i18n.py --self-test
           python3.13 -m pip install --disable-pip-version-check playwright
@@ -326,6 +328,22 @@ jobs:
         run: |
           set -eu
           GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/stage5-browser-wan.py --native-confirm
+      - name: S05c2c attest actual saved WAN and missing engine before real Start
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/tz6v5-s05c2c-absent-engine-native.py --prepare
+      - name: S05c2c one genuine authenticated HTTP Start refusal on disposable plugin-only OPNsense
+        env:
+          ZAPRET2_STAGE5_BROWSER_WAN: '1'
+        run: |
+          set -eu
+          python3.13 scripts/stage5-browser-wan.py --s05c2c-absent-engine-browser
+      - name: S05c2c attest unchanged Config IPFW and engine after HTTP refusal
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/tz6v5-s05c2c-absent-engine-native.py --verify
       - name: P3 set logged-in root user profile to English using native Config (disposable guest ONLY)
         shell: opnsense {0}
         run: |

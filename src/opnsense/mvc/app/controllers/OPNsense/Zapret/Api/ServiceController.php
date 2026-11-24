@@ -101,6 +101,15 @@ class ServiceController extends ApiMutableServiceControllerBase
                 gettext('Service operation failed')
             );
         }
+        // Only the genuine original missing-file Start producer qualifies
+        // this fixed cause. Never reflect raw configd stderr or arguments.
+        if ($isStart && strlen($raw) <= 128 &&
+            trim($raw) === 'zapret-api-lifecycle-v1:start:refused:engine-not-installed') {
+            throw new UserException(
+                'Zapret2 Start refused: engine is not installed.',
+                gettext('Service operation failed')
+            );
+        }
         $valid = strlen($raw) <= 8192 &&
             substr_count($raw, 'zapret-api-lifecycle-v1:') === 1 &&
             preg_match('/(?:\\A|\\n)' . preg_quote($expected, '/') . '\\z/D', trim($raw)) === 1;
