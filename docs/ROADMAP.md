@@ -1,6 +1,6 @@
 ## Current priority — ТЗ_6v5 S07
 
-**Текущий приоритет ТЗ_6v5:** [S05 Status/diagnostics GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md) and [S06 native first-install/reinstall/WAN-only GO](architecture/ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md). **S07 next** — one strict read-only OPNsense XML → neutral typed model, existing WAN/list sources, no Config writer. Reload/Force and Lab semantic fix remain S08–S15. [Order S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+**Текущий приоритет ТЗ_6v5:** [S05 Status/diagnostics GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md) and [S06 native first-install/reinstall/WAN-only GO](architecture/ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md). **S07a source candidate v0.6.5_190** — strict in-memory typed projection of native saved XML and current registry IDs; seven source checks PASS, installed no-write/OPT-TUN/native approval pending. S07 overall OPEN; no Config writer. [Evidence](architecture/ZAPRET2_TZ6V5_S07A_SOURCE_PROJECTION.md). Reload/Force and Lab semantic fix remain S08–S15. [Order S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
 
 ## 23.11.2026 — TZ6v5 S03e1 actual CLI strict-options expected RED
 
