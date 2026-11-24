@@ -246,7 +246,9 @@
 
 ### S08. Pure compiler target/resource/Voice/native
 
-**S08a source-only candidate (24.11.2026, `_192`):** [first bounded Target Mode/profile parity contract](ZAPRET2_TZ6V5_S08A_TARGET_POLICY_PARITY.md), [issue #1310](https://github.com/Tolian82/os-zapret2-restyle/issues/1310). Read original `target_mode.sh::target_mode_policy` bytes without executing it, use only S07 native registered IDs and canonical `profile_policy` split/normalize to project ordered selectors. No implied `HOSTLIST:auto`, explicit selectors win, original shell output exact-byte comparison in source CI. No effective Voice/resources/full native args/diff planner yet; this is NOT S08 GO and does not authorize a physical transition.
+**S08a GO (main v0.6.5_192 c6c1670b):** [PR #1311](https://github.com/Tolian82/os-zapret2-restyle/pull/1311), original shell 12-case Target Mode exact parity [CI #45482139242](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45482139242), protected native _107 upgrade and postmerge [CI #45483216982](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45483216982) SUCCESS. No physical activation.
+
+**S08b candidate (v0.6.5_193):** [original storage/Found/Exclude/Voice producer parity](ZAPRET2_TZ6V5_S08B_RESOURCE_VOICE_PARITY.md), [issue #1310](https://github.com/Tolian82/os-zapret2-restyle/issues/1310). Original storage.sh catalog, canonical domain/ipset/known owned/Voice producers, strict required linked refs and disabled Voice draft; exact-head source CI pending. Full S08 still OPEN until native final argv/source-map/Voice/IPFW/first-match and semantic planner parity.
 
 1. Переиспользовать `registry.sh`, `storage.sh`, `target_mode.sh`, `profile_pipeline.sh`, `auto_detect_origin_map.py`, Voice producers и уже принятый native 2-tier generator.
 2. Детерминированно вычислять requested/effective: manual empty≠Found disabled, Found initially empty but live target, Exclude empty OFF/invalid FAIL, Voice checkbox ON + empty/invalid IPSet FAIL, OFF retains draft; `auto` только eligible learning, `list/all` без clone, явные selectors приоритетнее default.

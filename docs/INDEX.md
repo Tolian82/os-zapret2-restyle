@@ -18,7 +18,7 @@ Read through EOF in this order:
 
 ## Level 2 — active work and current contracts
 
-**Текущая очередь:** [ТЗ_6v5](architecture/TZ_6v5.md) → [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), [S05 diagnostics GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md), [S06 native first/reinstall GO](architecture/ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md), [S07 native strict read-only XML→neutral GO](architecture/ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md) → **S08a pure original Target Mode/source-profile parity** ([contract](architecture/ZAPRET2_TZ6V5_S08A_TARGET_POLICY_PARITY.md)), followed by remaining S08 resource/Voice/first-match/diff planner. ТЗ_6v4 и STEP0–6/P0–P5 — прежние контракты/история, не активная очередь. [Future design](architecture/STRATEGIES_LIST_FUTURE.md) отдельно.
+**Текущая очередь:** [ТЗ_6v5](architecture/TZ_6v5.md) → [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md): [S05](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md), [S06](architecture/ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md), [S07](architecture/ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md), [S08a GO](architecture/ZAPRET2_TZ6V5_S08A_TARGET_POLICY_PARITY.md) → **S08b resource/Voice source candidate** ([contract](architecture/ZAPRET2_TZ6V5_S08B_RESOURCE_VOICE_PARITY.md)). Final native argv/first-match and semantic planner still OPEN.
 
 | Need | Primary document |
 |---|---|
