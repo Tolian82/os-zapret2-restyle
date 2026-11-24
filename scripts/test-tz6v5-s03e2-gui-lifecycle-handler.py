@@ -16,7 +16,7 @@ GENERAL = ROOT / "src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt"
 VOICE = ROOT / "src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt"
 
 
-def assert_source() -> str:
+def assert_source() -> tuple[str, str]:
     general = GENERAL.read_text(encoding="utf-8")
     voice = VOICE.read_text(encoding="utf-8")
     assert 'id="voiceServiceControl"' not in voice
@@ -40,10 +40,16 @@ def assert_source() -> str:
         general, re.MULTILINE | re.DOTALL,
     )
     assert click is not None, "Actual Strategies service click handler missing"
-    return click.group(0)
+    locale = re.search(
+        r"^" + re.escape("        function localizeStrategiesApplyError(message, reason) {") +
+        r".*?^        \}",
+        general, re.MULTILINE | re.DOTALL,
+    )
+    assert locale is not None, "Actual RU/EN lifecycle localizer missing"
+    return click.group(0), locale.group(0)
 
 
-def test_js_handler(click: str) -> None:
+def test_js_handler(click: str, localize: str) -> None:
     node = shutil.which("node")
     if not node:
         raise RuntimeError("S03E2_NODE_REQUIRED: the actual handler must execute")
@@ -74,7 +80,7 @@ $.ajax = function(opts) {
   return {done(fn){task.done=fn;return this;},
           fail(fn){task.fail=fn;return this;}};
 };
-function localizeStrategiesApplyError(message) {return 'mapped:' + message;}
+""" + localize + r"""
 function showRuntimeError(title, body) {shown.push([title, body]);}
 function refreshRuntime() {refreshCount++;}
 function updateServiceControlUI(svc) {if(svc!=='zapret')throw Error('wrong service');successCount++;}
@@ -113,19 +119,46 @@ clickOne('started', 'ru', 'Select a WAN interface', 'Не удалось ост�
 // The genuine OPNsense PHP UserException producer has errorMessage/errorTitle;
 // unknown server exception bytes MUST NOT be passed directly into the dialog.
 clickOne('stopped', 'en', 'Select a WAN interface',
-         'mapped:Select a WAN interface', true);
+         'Select a WAN interface', true);
 clickOne('stopped', 'ru', 'Select a WAN interface',
-         'mapped:Select a WAN interface', true);
+         'Укажите WAN интерфейс', true);
 clickOne('stopped', 'ru', '/conf/config.xml:secret-backend-error',
          'Не удалось запустить Zapret2.', true);
 check(!shown.at(-1)[1].includes('/conf/config.xml'),
       'raw OPNsense exception leaked to GUI');
+// S05l: genuine pre-fix RED on this extracted production click handler:
+ // arbitrary response.message leaked backend Config/path/secret text in EN,
+ // and made RU show an unrelated Strategies preflight error.
+clickOne('stopped', 'en', '/conf/config.xml:SECRET_FROM_BACKEND',
+         'Zapret2 could not be started.');
+check(!shown.at(-1)[1].includes('SECRET_FROM_BACKEND'),
+      'S05L_START_EN_LEGACY_MESSAGE_LEAK');
+clickOne('stopped', 'ru', '/conf/config.xml:SECRET_FROM_BACKEND',
+         'Не удалось запустить Zapret2.');
+check(!shown.at(-1)[1].includes('SECRET_FROM_BACKEND'),
+      'S05L_START_RU_LEGACY_MESSAGE_LEAK');
+// Even if a real allowlisted native cause is present alongside hostile
+// legacy bytes, only its bounded PHP errorMessage is consumed.
+currentServiceState = 'stopped'; isRussian = false; button.disabled = false;
+const beforeMixed = shown.length;
+clickHandler.call(button, {preventDefault(){}});
+requests.at(-1).fail({responseJSON:{
+  message:'/conf/config.xml:SECRET_FROM_BACKEND',
+  errorMessage:'Select a WAN interface',
+  errorTitle:'Zapret configuration error'
+}});
+check(shown.length === beforeMixed + 1 &&
+      shown.at(-1)[1] === 'Select a WAN interface',
+      'S05L_ALLOWLISTED_PRIMARY_ERROR_LOST_OR_UNTRUSTED_MESSAGE_WON');
 strategiesApplyPending = true;
 const before = requests.length;
 clickHandler.call(button, {preventDefault(){}});
 check(requests.length === before, 'busy-guard allowed a mutation');
 strategiesApplyPending = false;
 currentServiceState = 'started';
+// Restore the RU locale expected by the original unconfirmed-200 assertion
+// after the new S05l mixed EN untrusted-legacy case.
+isRussian = true;
 clickHandler.call(button, {preventDefault(){}});
 const req = requests.at(-1), beforeSuccess = successCount, beforeRefresh = refreshCount;
 req.done({status:'ok',action:'stop',state:'stopped',verified:true});
@@ -147,6 +180,7 @@ check(!shown.at(-1)[1].includes('/conf/config.xml'),
       'Stop leaked backend diagnostic');
 console.log('S03E2_ACTUAL_STRATEGIES_HANDLER_INERT_RU_EN_PASS');
 console.log('S03E3D_UNCONFIRMED_HTTP_200_FAIL_CLOSED_INERT_PASS');
+console.log('S05L_REAL_HANDLER_RU_EN_UNTRUSTED_MESSAGE_FAIL_CLOSED=PASS');
 """
     result = subprocess.run([node, "-"], input=script, text=True,
                             capture_output=True, timeout=20, check=False)
@@ -154,12 +188,14 @@ console.log('S03E3D_UNCONFIRMED_HTTP_200_FAIL_CLOSED_INERT_PASS');
         raise RuntimeError("S03E2_HANDLER_FAILED: " + result.stderr[-3000:])
     if "S03E2_ACTUAL_STRATEGIES_HANDLER_INERT_RU_EN_PASS" not in result.stdout:
         raise RuntimeError("S03E2_HANDLER_MISSING_WITNESS")
+    if "S05L_REAL_HANDLER_RU_EN_UNTRUSTED_MESSAGE_FAIL_CLOSED=PASS" not in result.stdout:
+        raise RuntimeError("S05L_SAFE_START_DIAGNOSTIC_NOT_VERIFIED")
     print(result.stdout.strip())
 
 
 def main() -> None:
-    handler = assert_source()
-    test_js_handler(handler)
+    handler, localizer = assert_source()
+    test_js_handler(handler, localizer)
     print("S03E2_VOICE_READONLY_SOURCE_CONTRACT_PASS")
     print("S03E2_NATIVE_GUI_RU_EN_CLICK_NOT_TESTED=1")
 

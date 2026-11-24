@@ -1613,12 +1613,11 @@
                     typeof nativeError === 'string' &&
                     Object.prototype.hasOwnProperty.call(nativeStartErrors, nativeError)
                     ? nativeStartErrors[nativeError] : '';
-                const legacyMessage = response && response.message;
-                // Legacy Stop errors are untrusted: never reflect arbitrary
-                // configd stderr or PHP traces into the GUI.
-                const message = action === 'stop' ? '' :
-                    (typeof legacyMessage === 'string' && legacyMessage
-                        ? legacyMessage : knownStartError);
+                // S05l: display only allowlisted native errorMessage keys
+                // for Start; legacy response.message may carry untrusted
+                // configd/PHP content and must never reach the dialog.
+                // Stop retains its independent fixed FD9/error fallback.
+                const message = action === 'stop' ? '' : knownStartError;
                 // S05c2a: accept only a fixed, safe PHP mapping of a genuine
                 // FD9 lockf timeout. Never show raw configd/errorMessage.
                 const fd9BusyStop = action === 'stop' &&
