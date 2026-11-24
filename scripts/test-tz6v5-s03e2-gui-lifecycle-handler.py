@@ -42,7 +42,7 @@ def assert_source() -> tuple[str, str]:
     assert click is not None, "Actual Strategies service click handler missing"
     locale = re.search(
         r"^" + re.escape("        function localizeStrategiesApplyError(message, reason) {") +
-        r".*?^        \\}",
+        r".*?^        \}",
         general, re.MULTILINE | re.DOTALL,
     )
     assert locale is not None, "Actual RU/EN lifecycle localizer missing"
