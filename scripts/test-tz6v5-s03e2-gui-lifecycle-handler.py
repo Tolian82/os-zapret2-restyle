@@ -193,9 +193,69 @@ console.log('S05L_REAL_HANDLER_RU_EN_UNTRUSTED_MESSAGE_FAIL_CLOSED=PASS');
     print(result.stdout.strip())
 
 
+def test_lab_restoration_summary() -> None:
+    """S05s: real terminal summary, without a native Lab mutation or raw fields."""
+    view = (GENERAL.parent / "diagnostics.volt").read_text(encoding="utf-8")
+    summary = re.search(r"(?ms)^    function renderResultSummary\(data\) \{.*?^    \}", view)
+    assert summary is not None, "S05S_REAL_LAB_SUMMARY_MISSING"
+    # Read both actual translations from the view, not a substitute dictionary.
+    passes = re.findall(r"restorationPass:'([^']+)'", view)
+    refusals = re.findall(r"restorationUnconfirmed:'([^']+)'", view)
+    assert passes == ["Успешно", "Pass"]
+    assert refusals == ["Восстановление не подтверждено", "Restoration not verified"]
+    import json
+    locales = json.dumps([dict(restorationPass=p, restorationUnconfirmed=r)
+                          for p, r in zip(passes, refusals)], ensure_ascii=False)
+    script = r'''
+"use strict";
+const assert = require('node:assert/strict');
+const locales = ''' + locales + r''';
+let fields, isRussian, ui;
+function $(id) { return {
+    toggle(value) { fields[id + ':visible'] = value; },
+    text(value) { fields[id] = value; }
+}; }
+function terminal(state) { return state === 'completed' || state === 'error'; }
+function label(labels, key) { return labels[key] || key; }
+const modeLabels = {}, outcomeLabels = {};
+''' + summary.group(0) + r'''
+const cases = [
+    [{state:'error', outcome:'RESTORE_FAILED', restoration:{verified:false,final_state:'unknown',temporary_runtime_clean:false}}, 'restorationUnconfirmed'],
+    [{state:'error', outcome:'RESTORE_FAILED'}, 'restorationUnconfirmed'],
+    [{state:'error', outcome:'RESTORE_FAILED', restoration:{verified:true}}, 'restorationUnconfirmed'],
+    [{state:'error', outcome:'ERROR', restoration:{verified:false}}, 'restorationUnconfirmed'],
+    [{state:'completed', outcome:'SUCCESS', restoration:{verified:true}}, 'restorationPass'],
+    [{state:'completed', outcome:'SUCCESS'}, '—'],
+    [{state:'completed', outcome:'SUCCESS', restoration:{verified:'true'}}, '—'],
+    [{state:'error', outcome:'ERROR', restoration:{verified:'false',message:'secret.example'}}, '—'],
+    [{state:'running', outcome:'RESTORE_FAILED', restoration:{verified:false}}, undefined]
+];
+for (let i=0; i<locales.length; ++i) {
+    isRussian = i === 0; ui = locales[i];
+    for (const [data,key] of cases) {
+        fields = {};
+        renderResultSummary(data);
+        assert.equal(fields['#strategyLabResultRestoration'], ui[key] ?? key);
+        assert.equal(fields['#strategyLabResultBox:visible'], terminal(data.state));
+    }
+}
+console.log('S05S_REAL_LAB_RESTORATION_SUMMARY_RU_EN_PASS');
+'''
+    node = shutil.which("node")
+    assert node, "S05S_NODE_REQUIRED"
+    result = subprocess.run([node, "-"], input=script, text=True,
+                            capture_output=True, timeout=20, check=False)
+    if result.returncode != 0:
+        raise RuntimeError("S05S_SUMMARY_FAILED: " + result.stderr[-2000:])
+    assert "S05S_REAL_LAB_RESTORATION_SUMMARY_RU_EN_PASS" in result.stdout
+    print(result.stdout.strip())
+
+
+
 def main() -> None:
     handler, localizer = assert_source()
     test_js_handler(handler, localizer)
+    test_lab_restoration_summary()
     print("S03E2_VOICE_READONLY_SOURCE_CONTRACT_PASS")
     print("S03E2_NATIVE_GUI_RU_EN_CLICK_NOT_TESTED=1")
 
