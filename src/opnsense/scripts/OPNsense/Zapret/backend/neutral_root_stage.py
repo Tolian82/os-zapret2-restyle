@@ -151,6 +151,17 @@ def _absent(fd: int, name: str) -> bool:
     return False
 
 
+def _require_only_sibling_root(wfd: int, owner_uid: int) -> None:
+    # Exactly ONE proposed root for this original operation. A second root
+    # sealed inside the release would create ambiguous owner/manifest order.
+    rfd = _open_dir(wfd, "release", owner_uid)
+    try:
+        if not _absent(rfd, ROOT_NAME) or not _absent(rfd, PENDING_NAME):
+            raise RootStageRefused("SECOND_RELEASE_ROOT_FORBIDDEN")
+    finally:
+        os.close(rfd)
+
+
 def _read_staged(wfd: int, owner_uid: int) -> bytes:
     try:
         info = os.stat(ROOT_NAME, dir_fd=wfd, follow_symlinks=False)
@@ -198,6 +209,7 @@ def _stage_candidate(*, generation: str, candidate: RootCandidate,
         wfd = _open_dir(pfd, generation, owner_uid)
         if not _absent(wfd, ROOT_NAME) or not _absent(wfd, PENDING_NAME):
             raise RootStageRefused("STAGED_ROOT_ALREADY_PRESENT_OR_INCOMPLETE")
+        _require_only_sibling_root(wfd, owner_uid)
         if _journal(generation, journal_root=journal_root, owner_uid=owner_uid)[0] != journal:
             raise RootStageRefused("ORIGINAL_JOURNAL_CHANGED_BEFORE_STAGE")
         # One original-owner staging file. Crash before link leaves only
@@ -278,6 +290,7 @@ def attest_staged_candidate(*, generation: str,
         wfd = _open_dir(pfd, generation, owner_uid)
         if not _absent(wfd, PENDING_NAME):
             raise RootStageRefused("STAGED_ROOT_INCOMPLETE")
+        _require_only_sibling_root(wfd, owner_uid)
         root = _read_staged(wfd, owner_uid)
         witness, candidate_sha, journal = _original_preflight(
             generation=generation, root_bytes=root, effective=effective,

@@ -140,6 +140,16 @@ class OriginalPreparedS10a(unittest.TestCase):
             self.stage(c)
         self.assertFalse((self.fx.work / "manifest.json").exists())
 
+    def test_second_root_inside_original_sealed_release_refused(self):
+        foreign = self.fx.release / "manifest.json"
+        foreign.write_bytes(b"second-manifest-owner\n")
+        foreign.chmod(0o600)
+        c = self.candidate()
+        with self.assertRaisesRegex(RootStageRefused, "SECOND_RELEASE_ROOT_FORBIDDEN"):
+            self.stage(c)
+        self.assertFalse((self.fx.work / "manifest.json").exists())
+        self.assertTrue(foreign.exists())  # no untrusted cleanup/write
+
     def test_original_plan_dependency_or_page_mismatch_refused(self):
         # Original immutable plan and prepared journal MUST identify same
         # page, source snapshot, owned changes, but we do not recompute
