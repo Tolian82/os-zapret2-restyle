@@ -555,7 +555,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: S05n execute actual lifecycle Start Stop Restart WAN and backend transport failures
+      - name: S05o original Start non-POST preflight refusal and S05n backend transport failures
         run: |
           php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php
           php -l scripts/test-g07-runtime-api.php

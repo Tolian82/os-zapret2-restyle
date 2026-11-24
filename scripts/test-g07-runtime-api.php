@@ -338,6 +338,32 @@ namespace {
               Backend::$verifiedCalls === array_slice(Backend::$verifiedCalls, 0, $before),
               'non-POST Stop dispatched backend');
     FakeRequest::$post = true;
+
+    // S05o: the original Start override ran the native WAN preflight
+    // BEFORE verifiedLifecycleAction() checked POST. The old source
+    // returned the expected empty non-POST response but still called
+    // configd once (portable real-source RED). Reject at the original
+    // public Start boundary, even for a failed WAN transport, without
+    // dispatching any backend call.
+    FakeRequest::$post = false;
+    foreach (['wan-ready', 'wan-required', 'wan-invalid', 'other'] as $receipt) {
+        Backend::$wanReceipt = $receipt;
+        Backend::$wanThrows = false;
+        $before = count(Backend::$verifiedCalls);
+        assertion(controller()->startAction() === ['response' => []],
+                  'non-POST Start response changed: ' . $receipt);
+        assertion(count(Backend::$verifiedCalls) === $before,
+                  'non-POST Start reached WAN configd: ' . $receipt);
+    }
+    Backend::$wanThrows = true;
+    $before = count(Backend::$verifiedCalls);
+    assertion(controller()->startAction() === ['response' => []] &&
+              count(Backend::$verifiedCalls) === $before,
+              'non-POST Start reached WAN configd transport failure');
+    Backend::$wanThrows = false;
+    Backend::$wanReceipt = 'wan-ready';
+    FakeRequest::$post = true;
+    echo "S05O_ORIGINAL_GET_START_ZERO_CONFIGD_CALLS=PASS\n";
     echo "S05N_ORIGINAL_LIFECYCLE_BACKEND_TRANSPORT_UNCONFIRMED=PASS\n";
     echo "G07_NATIVE_STATUS_API_FAST=PASS\n";
 }
