@@ -20,6 +20,9 @@ need('_service_receipt_action' in S and
      'return 75' in S and 'service_api_terminal_receipt()' in S,
      "SINGLE_ORIGINAL_DISPATCH")
 for v in ("stop","restart"):
+    action = A.split("["+v+"_verified]\n",1)
+    need(len(action)==2 and action[1].split("\n[",1)[0].count("\nerrors:no\n")==1,
+         "PRIVATE_CONFIGD_ERRORS_NO_REQUIRED_"+v)
     need(v+"_verified]" in A, "ORIGINAL_CONFIGD_MISSING_"+v)
     need('Zapret2 '+v.title()+' refused: original lifecycle lock is busy.' in P,
          "FIXED_HTTP_CAUSE_MISSING_"+v)
