@@ -179,17 +179,20 @@ def native_cli() -> dict:
                "LIFECYCLE_LOCK_FILE": str(lock),
                "LOCKF_BIN": str(LOCKF),
                "PYTHONDONTWRITEBYTECODE": "1"}
-        # These commands are never mutating verbs and must never reach FD9
-        # in the current baseline. They currently emit old usage rc64.
+        # S05f1 intentionally turns reload --check [--json] GREEN on the
+        # already accepted S04 read-only facts. This historical S03E RED
+        # checks only unsupported help/force forms. Never expect valid
+        # observational options to report old generic usage again.
         unsupported = (
-            ("--help",), ("reload", "--help"), ("reload", "--check"),
-            ("reload", "--check", "--json"), ("reload", "--force"),
+            ("--help",), ("reload", "--help"), ("reload", "--force"),
             ("unknown-verb",),
         )
         for args in unsupported:
             p = invoke(list(args), env)
+            expected_error = ("ERROR: INVALID_ARGUMENT" if args[0] == "reload"
+                              else "usage: zapret_service.sh")
             check(p.returncode == 64 and
-                  "usage: zapret_service.sh" in p.stderr and
+                  expected_error in p.stderr and
                   not lock.exists(),
                   "S03E_UNSUPPORTED_USAGE_RED_CHANGED_" + "_".join(args))
             assert_foreign_same(before_config, before_ipfw)
@@ -312,7 +315,7 @@ def native_cli() -> dict:
                     holder.wait(timeout=2)
     assert_foreign_same(before_config, before_ipfw)
     result = {
-        "unsupported_reload_and_global_help_usage_rc64": len(unsupported),
+        "unsupported_global_help_and_reload_flags_rc64": len(unsupported),
         "status_invalid_options_rejected_before_fd9": len(status_invalid),
         "s05a_status_json_verified_stopped_even_with_busy_fd9": True,
         "private_real_fd9_busy_rejects_unparsed_cli_rc75": len(blocked),

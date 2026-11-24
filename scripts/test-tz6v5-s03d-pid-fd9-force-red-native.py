@@ -108,14 +108,16 @@ def inspect_cli(lock: Path, original_config, original_ipfw) -> dict:
            "LIFECYCLE_LOCK_FILE": str(lock),
            "LOCKF_BIN": str(LOCKF),
            "PYTHONDONTWRITEBYTECODE": "1"}
-    # No lifecycle action can be performed by these two verbs.
+    # These are still read-only invalid option paths. The S05f1 strict
+    # reload option now emits its own fixed INVALID_ARGUMENT instead of
+    # the historical generic usage text; FD9/Config/IPFW remain untouched.
     help_result = run(["/bin/sh", str(SERVICE), "--help"], env=env)
     reload_result = run(["/bin/sh", str(SERVICE), "reload", "--help"],
                         env=env)
     need(help_result.returncode == 64 and
          reload_result.returncode == 64 and
          "usage: zapret_service.sh" in help_result.stderr and
-         "usage: zapret_service.sh" in reload_result.stderr,
+         reload_result.stderr.strip() == "ERROR: INVALID_ARGUMENT",
          "S03D_OLD_ACTUAL_HELP_RED_CHANGED_REQUIRE_NEW_GREEN")
     need(not lock.exists(), "S03D_UNSUPPORTED_HELP_TOUCHED_FD9")
     need(snapshot(CONFIG) == original_config and

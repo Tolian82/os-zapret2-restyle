@@ -64,6 +64,7 @@ def _bounded_tree_delta(previous, current):
             ("pkgdb", "/var/db/pkg"),
             ("active", "/usr/local/etc/zapret2/runtime-v2"),
             ("setup", "/var/db/zapret2-restyle"),
+            ("backend", "/usr/local/opnsense/scripts/OPNsense/Zapret/backend"),
             ("pid", "/var/run"),
         ) if key == root or key.startswith(root + "/")), "unknown")
         old = previous.get(key)
@@ -79,7 +80,7 @@ def _bounded_tree_delta(previous, current):
             change = "metadata"
         suffix = Path(key).suffix.lower()
         typ = {".log": "log", ".json": "json", ".sqlite": "sqlite",
-               ".db": "db", ".txt": "txt", ".wal": "wal"}.get(suffix, "other")
+               ".db": "db", ".txt": "txt", ".wal": "wal", ".pyc": "bytecode"}.get(suffix, "other")
         group = prefix + "_" + typ + "_" + change
         buckets[group] = buckets.get(group, 0) + 1
     parts = [name + "_" + str(buckets[name]) for name in sorted(buckets)]

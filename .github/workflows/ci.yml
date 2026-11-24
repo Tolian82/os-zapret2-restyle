@@ -1186,8 +1186,12 @@ jobs:
       - name: Test S04b OPNsense read-only original-reader adapter (source only)
         run: python3.13 scripts/test-tz6v5-s04b-opnsense-readonly-adapter.py
 
-      - name: S05a read-only JSON Status projection and strict CLI options
-        run: python3.13 scripts/test-tz6v5-s05a-status-json-source.py
+      - name: S05a Status and S05f1 strictly read-only reload check
+        run: |
+          python3.13 scripts/test-tz6v5-s05a-status-json-source.py
+          python3.13 scripts/test-tz6v5-s05f1-reload-check.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/reload_check_readonly.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 
       - name: S05b1 original failure journal read-only projection
         run: python3.13 scripts/test-tz6v5-s05b1-original-apply-error.py

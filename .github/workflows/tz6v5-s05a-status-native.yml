@@ -5,6 +5,8 @@ on:
     paths:
       - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/status_readonly.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/reload_check_readonly.py
+      - scripts/test-tz6v5-s05f1-reload-check.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/status_projection.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/status_error_original.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
@@ -37,6 +39,7 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/tz6v5-s05a-status-json-native.py src/opnsense/scripts/OPNsense/Zapret/backend/status_projection.py src/opnsense/scripts/OPNsense/Zapret/backend/status_readonly.py src/opnsense/scripts/OPNsense/Zapret/backend/status_error_original.py
           python3.13 scripts/test-tz6v5-s05a-status-json-source.py
+          python3.13 scripts/test-tz6v5-s05f1-reload-check.py
           python3.13 scripts/test-tz6v5-s05b1-original-apply-error.py
           python3.13 scripts/tz6v5-s05a-status-json-native.py --self-test
       - name: Native installed Status on disposable OPNsense cold guest
@@ -79,6 +82,7 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/tz6v5-s05a-status-json-native.py src/opnsense/scripts/OPNsense/Zapret/backend/status_projection.py src/opnsense/scripts/OPNsense/Zapret/backend/status_readonly.py src/opnsense/scripts/OPNsense/Zapret/backend/status_error_original.py
           python3.13 scripts/test-tz6v5-s05a-status-json-source.py
+          python3.13 scripts/test-tz6v5-s05f1-reload-check.py
           python3.13 scripts/test-tz6v5-s05b1-original-apply-error.py
           python3.13 scripts/tz6v5-s05a-status-json-native.py --self-test
       - name: Native Common original owner Status on disposable OPNsense hot guest

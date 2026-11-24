@@ -141,7 +141,9 @@
 
 ### S05. Read-only status и диагностический конверт
 
-**S05e2 (`_172`, current candidate):** Original S05e1 typed native rejection is promoted only after separate IPFW verification and full previous runtime restoration. Ordinary Apply under original FD9 persists a strict `IPFW_ATTACH_FAILED` event in the existing SharedApply schema-1 journal, from which no-write Status and RU/EN Strategies/Voice consumers project one fixed message. Found WAL, untrusted/partial failures, foreign IPFW and blind retries remain protected. Existing native original-Apply and source/GUI checks required; no complete S05 GO.
+**S05f1 (`_173`, source candidate):** `reload --check [--json]` is a strict read-only partial command on accepted S04/S05 status facts: STOPPED→NOT_RUNNING; RUNNING and unverified/foreign→REFUSE until S08/S09 can attest pure semantic equality and sealed refs. No RELOAD_SAFE/RESTART_REQUIRED inference, FD9, file writes, signal or implicit restart. Reuse existing S05a cold+hot native guests and full physical no-write gate. Does not complete S05.
+
+**S05e2 (`_172`, accepted PR #1288):** Original S05e1 typed native rejection is promoted only after separate IPFW verification and full previous runtime restoration. Ordinary Apply under original FD9 persists a strict `IPFW_ATTACH_FAILED` event in the existing SharedApply schema-1 journal, from which no-write Status and RU/EN Strategies/Voice consumers project one fixed message. Found WAL, untrusted/partial failures, foreign IPFW and blind retries remain protected. Existing native original-Apply and source/GUI checks required; no complete S05 GO.
 
 **S05e1 (`_171`, accepted):** Preserve a typed native `ipfw -qf add` nonzero producer only after the original reversible transaction verifies rollback. The adapter alone emits fixed `IPFW_ATTACH_FAILED`/`ipfw-attach-failure=rule-add-rejected`; non-add, foreign-owner, validation and partial rollback do not qualify. Existing IPFW source tests and the already existing native kernel fault witness are gates. No new FD9 journal event or GUI acceptance claimed; connect only after exact-head producer verification. Full S05 NO-GO.
 

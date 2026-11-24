@@ -31,6 +31,40 @@ def existing():
 s04 = existing()
 
 
+def reload_preflight_witness(label, runtime):
+    """Strict native physical no-write: reuse existing S05a OPNsense guests."""
+    expected = "NOT_RUNNING" if runtime == "STOPPED" else "REFUSE"
+    exit_code = 1 if expected == "NOT_RUNNING" else 2
+    for json_mode in (False, True):
+        before = s04.snapshot()
+        response = s04.run([str(SERVICE), "reload", "--check"] +
+                           (["--json"] if json_mode else []), timeout=90)
+        after = s04.snapshot()
+        s04.need(before == after, "S05F1_NATIVE_RELOAD_WROTE_" + label)
+        s04.need(response.returncode == exit_code and response.stderr.strip() == "",
+                 "S05F1_NATIVE_RELOAD_RC_" + label)
+        if not json_mode:
+            s04.need(response.stdout == "reload-check=" + expected + "\n",
+                     "S05F1_NATIVE_RELOAD_PLAIN_" + label)
+            continue
+        try:
+            data = json.loads(response.stdout)
+        except ValueError:
+            raise s04.Refusal("S05F1_NATIVE_RELOAD_NOT_JSON_" + label) from None
+        s04.need(response.stdout.count("\n") == 1 and
+                 data.get("schema") == 1 and
+                 data.get("decision") == expected and
+                 data.get("runtime_state") == runtime and
+                 data.get("authorization") == "NONE" and
+                 data.get("physical_transition_allowed") is False and
+                 data.get("semantic_diff_verified") is False,
+                 "S05F1_NATIVE_RELOAD_NOT_FAIL_CLOSED_" + label)
+        s04.need(not any(text in response.stdout for text in
+                         ("--filter-", "/conf/", "token=", "password",
+                          "RELOAD_SAFE", "RESTART_REQUIRED")),
+                 "S05F1_NATIVE_RELOAD_LEAK_" + label)
+
+
 def status_witness(label, expected, *, preinstall=False, setup_refused=False):
     # Also retain the S04 real physical native classification witness.
     s04.witness(label, expected, preinstall=preinstall)
@@ -128,16 +162,20 @@ def status_witness(label, expected, *, preinstall=False, setup_refused=False):
     s04.need(not any(secret in p.stdout for secret in
                      ("pid", "argv", "/conf/", "secret", "password", "token")),
              "S05A_JSON_LEAK")
+    if not preinstall:
+        reload_preflight_witness(label, expected_runtime)
     return {"case": label, "json_code": row["code"],
             "runtime": row["runtime_state"], "exit": desired_rc,
-            "json_no_write": True}
+            "json_no_write": True, "reload_check_no_write": not preinstall}
 
 
 def invalid_options():
     # Invalid combinations MUST be refused before opening original FD9.
     before = s04.snapshot()
     for args in (["status", "--force"], ["status", "--json", "--json"],
-                 ["status", "--check"], ["status", "--json", "--force"]):
+                 ["status", "--check"], ["status", "--json", "--force"],
+                 ["reload", "--force"], ["reload", "--check", "--force"],
+                 ["reload", "--check", "--json", "--force"]):
         p = s04.run([str(SERVICE), *args], timeout=20)
         s04.need(p.returncode == 64 and p.stdout.strip() == "",
                  "S05A_INVALID_OPTION_NOT_REFUSED")
