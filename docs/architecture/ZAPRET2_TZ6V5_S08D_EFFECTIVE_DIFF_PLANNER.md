@@ -1,0 +1,29 @@
+# TZ6v5 S08d — pure effective structural fingerprint + semantic planner
+
+**24 November 2026 — source candidate `v0.6.5_195`, S08d final S08 substep, S08 overall still OPEN pending exact original native evidence.** Accepted base [S08c merged PR #1313](https://github.com/Tolian82/os-zapret2-restyle/pull/1313), [main `v0.6.5_194 ac17d36e`](https://github.com/Tolian82/os-zapret2-restyle/commit/ac17d36e447e9b508d093f0bafe48e4696bd61ef), [CI #45489135401](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45489135401) and [original protected native _107 #45489135385](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45489135385) SUCCESS; postmerge [main CI #45490156753](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45490156753) / [release classifier #45490156907](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45490156907) SUCCESS. [Tracking S08 issue #1310](https://github.com/Tolian82/os-zapret2-restyle/issues/1310).
+
+## Bounded component
+
+New import-only `backend/neutral_effective_diff.py`, pure immutable `EffectiveSnapshot` / `EffectiveDecision`, both `authorization=NONE`, `physical_transition_allowed=False`, **no original FD9/Config/XML/engine/PID/IPFW/journal/service operation**.
+
+- The caller supplies the **genuine original offline candidate outputs**, not another generated argv: original `dvtws.args`, native collapsed Voice IPFW capture (`voice-plan.json`), actual original captured Auto source map reduced to stable semantic source roles/statuses/selectors/native indices (or **none** in List/All), saved and original resolved WAN separately, engine-version identity supplied explicitly, original ordinary TCP/UDP ports, authored selectors from canonical `profile_policy`, and staged managed file hashes.
+- Structural SHA-256 is a canonical deterministic JSON digest over **actual argv SHA, canonical Target Mode, source-map semantics/ordered original numbers, authored selector order, logical+physical WAN, declared engine version, original Voice/IPFW capture, ordinary TCP/UDP, exact active reference set and opaque external reference identities**. It does NOT pin mutable list content into the structural digest; otherwise every linked HOSTLIST change would falsely force Restart. It does NOT claim that original runtime owns its inputs, nor turn source artifacts into S09 root manifest.
+- Only managed native references explicitly linked by the **actual** argv (`--hostlist`, `--ipset`, and global exclude variants) are eligible for content-only classification. Absent/foreign managed refs, invalid hashes, corrupt map, unsafe/past-bound IPFW outside **19000–19099**, noncanonical input and unqualified source → refuse. No blanket treatment of all GUI lists as active. An unlinked editor draft changed with identical structural fingerprint → `SAVE_ONLY`. A linked managed content change with unchanged structure → `RELOAD_SAFE_CANDIDATE` **only if no unverified external native list ref**. Ref additions/removals, order, mode, Voice, WAN, engine version, IPFW, args or external ref changes → `RESTART_REQUIRED`. Exactly unchanged → `NO_CHANGE`.
+- `RELOAD_SAFE_CANDIDATE` is an **analytical label, NOT a reload authorization, receipt or claim of physical reload**. Only a later original FD9 holder with separately attested current process, sealed active generation, original CAS/content/refs and rollback can take an actual action. Found/live managed P1/CAS/ACK remains distinct and is not permanently hash-pinned by the future immutable root manifest. Auto→List even with byte-identical native argv is always structural.
+- Original upstream Zapret2's automatic list reread/SIGHUP semantics are accepted from canonical manual and **not** engine-tested again. Lab 19100–19131 and future 19140–19200 remain separate and unmodified.
+
+## Single original S03b ten-case truth (native verification pending)
+
+Reuse the **EXISTING** original `scripts/test-tz6v5-s03-effective-diff-baseline.py`, which already invokes the genuine `scripts/test-p2e-original-shared-build.py::OriginalSharedGeneration` and old `orchestrator_build_release` against disposable OPNsense candidate inputs. Enrich the SAME returned object with actual already-generated `voice-plan.json` capture, native TCP/UDP staged bytes, original `profile_policy` authored selector order and the declared synthetic version/WAN tuple. Feed those identical production results into the new planner **without additional builds**; retain the ten old baseline observations and assert:
+
+| Actual original S03b scenario | Pure S08d expected |
+| --- | --- |
+| same_input | NO_CHANGE |
+| youtube_contents, user_contents, exclude_contents (already active) | RELOAD_SAFE_CANDIDATE |
+| profile_order, dpi_args, voice_enabled, divert_port | RESTART_REQUIRED |
+| target_mode auto→list with same argv | RESTART_REQUIRED |
+| exclude_presence empty→nonempty | RESTART_REQUIRED |
+
+The scoped original workflow `.github/workflows/p2e-original-shared-build-native.yml` is triggered by modifying its **existing** S03b test, so it reuses **its preexisting single OPNsense 26.7 guest**, no extra VM matrix. Source fast CI `scripts/test-tz6v5-s08d-semantic-diff.py` supplies 11 independent negative/pure cases including linked vs unlinked, mixed, WAN/engine/mode/selector/IPFW and tamper, with no physical access. The authentic S03b/S08d native markers and exact-head workflow conclusions are separate acceptance gates.
+
+**S08d GO** requires both source fast and genuine original ten-case VM parity, all required CI and postmerge main success, then a **separate formal S08 GO checkpoint** and closing issue #1310. This document alone is NOT that checkpoint; S09 follows only after formal S08 acceptance. No public `os-zapret2-restyle-0.6.5_195.pkg` or owner installation; no live WAN/FD9/Config/IPFW/engine changes.

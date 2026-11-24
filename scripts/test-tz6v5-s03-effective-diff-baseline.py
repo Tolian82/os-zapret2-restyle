@@ -20,6 +20,11 @@ from pathlib import Path
 import sys
 import unittest
 
+BACKEND = Path(__file__).resolve().parents[1] / "src/opnsense/scripts/OPNsense/Zapret/backend"
+sys.path.insert(0, str(BACKEND))
+import profile_policy
+from neutral_effective_diff import snapshot, plan
+
 ROOT = Path(__file__).resolve().parents[1]
 BUILDER = ROOT / "scripts/test-p2e-original-shared-build.py"
 STRATEGY = (
@@ -102,6 +107,8 @@ def produce(module, *, strategy=STRATEGY, voice_on=False, mode="auto",
             profiles = None
         if (fixture.release / "manifest.json").exists():
             raise AssertionError("PRE_V5_BUILDER_UNEXPECTEDLY_HAS_V5_MANIFEST")
+        native_voice = json.loads((fixture.release / "voice-plan.json").read_bytes())
+        capture = native_voice["capture"]
         if not normalized.startswith(f"--port={divert_port}\n".encode()):
             raise AssertionError("REAL_ORIGINAL_DIVERT_VALUE_NOT_PROPAGATED")
         return {
@@ -110,6 +117,18 @@ def produce(module, *, strategy=STRATEGY, voice_on=False, mode="auto",
             "managed": files,
             "profiles": profiles,
             "mode": mode,
+            # S08d uses ONLY the already emitted original artifacts: no
+            # second native generator, no guessed active engine or WAN.
+            "original_capture": capture,
+            "ordinary_tcp": (fixture.release / "tcp-ports.txt").read_bytes(),
+            "ordinary_udp": (fixture.release / "udp-ports.txt").read_bytes(),
+            "authored_selectors": tuple(
+                tuple(f"<{kind}:{name}>" for kind, name in profile_policy._supported(p))
+                for p in profile_policy.split_profiles(strategy.encode("utf-8"))
+            ),
+            "saved_wan": "lo0",  # genuine input of this test-owned P2e fixture
+            "resolved_wan": "lo0",  # original resolver in the P2e fixture
+            "engine_version": "v1.0.7",  # DECLARED detached scenario, not installed binary proof
         }
     finally:
         fixture.doCleanups()
@@ -190,6 +209,66 @@ class RealOriginalDiffEvidence(unittest.TestCase):
         self.assertEqual(baseline["arg_bytes"],
                          modified["target_mode"]["arg_bytes"])
         self.assertNotEqual(baseline["mode"], modified["target_mode"]["mode"])
+        # S08d: Classify those SAME ten actual production outputs. No new
+        # builder calls, VM jobs, engine reread experiments or invented args.
+        def original_snapshot(result: dict):
+            return snapshot(
+                original_native_args=result["arg_bytes"],
+                target_mode=result["mode"],
+                original_source_rows=result["profiles"],
+                authored_selectors=result["authored_selectors"],
+                saved_wan=result["saved_wan"],
+                resolved_wan=result["resolved_wan"],
+                engine_version=result["engine_version"],
+                original_capture=result["original_capture"],
+                original_tcp=result["ordinary_tcp"],
+                original_udp=result["ordinary_udp"],
+                managed_sha256=result["managed"],
+            )
+
+        planned_expected = {
+            "same_input": "NO_CHANGE",
+            "youtube_contents": "RELOAD_SAFE_CANDIDATE",
+            "user_contents": "RELOAD_SAFE_CANDIDATE",
+            "exclude_contents": "RELOAD_SAFE_CANDIDATE",
+            "profile_order": "RESTART_REQUIRED",
+            "dpi_args": "RESTART_REQUIRED",
+            "voice_enabled": "RESTART_REQUIRED",
+            "divert_port": "RESTART_REQUIRED",
+            "target_mode": "RESTART_REQUIRED",
+            "exclude_presence": "RESTART_REQUIRED",
+        }
+        applied = {
+            name: plan(
+                original_snapshot(
+                    nonempty_old if name == "exclude_contents" else baseline),
+                original_snapshot(
+                    nonempty_new if name == "exclude_contents" else candidate),
+            )
+            for name, candidate in modified.items()
+        }
+        self.assertEqual({name: outcome.kind for name, outcome in applied.items()},
+                         planned_expected)
+        for outcome in applied.values():
+            self.assertEqual(outcome.authorization, "NONE")
+            self.assertIs(outcome.physical_transition_allowed, False)
+        self.assertEqual(applied["youtube_contents"].changed_active,
+                         ("hostlist-youtube.txt",))
+        self.assertEqual(applied["user_contents"].changed_active,
+                         ("hostlist-user.txt",))
+        self.assertEqual(applied["exclude_contents"].changed_active,
+                         ("hostlist-exclude.txt",))
+        self.assertEqual(baseline["arg_bytes"], modified["target_mode"]["arg_bytes"])
+        self.assertEqual(applied["target_mode"].kind, "RESTART_REQUIRED")
+        print("TZ6V5_S08D_REAL_ORIGINAL_EFFECTIVE_PLANNER=" + json.dumps({
+            "schema": 1,
+            "case_count": len(applied),
+            "observations": {name: item.kind for name, item in applied.items()},
+            "native_source": "original P2e orchestrator_build_release",
+            "authorization": "NONE",
+            "physical_transition_allowed": False,
+        }, sort_keys=True))
+        print("S08D_ORIGINAL_GENERATOR_TEN_CASE_SEMANTIC_PLANNER=PASS")
         # Report only hashes/categories, never raw domains or args.
         witness = {
             "marker": "TZ6V5_S03B_REAL_ORIGINAL_EFFECTIVE_DIFF_BASELINE",
@@ -198,7 +277,7 @@ class RealOriginalDiffEvidence(unittest.TestCase):
             "baseline_argv_sha256": baseline["args_hash"],
             "case_count": len(got),
             "observations": got,
-            "no_future_planner_implemented": True,
+            "historical_s03b_evidence_only": True,
         }
         print(witness["marker"] + "=" + json.dumps(witness, sort_keys=True))
         print("S03B_ACTUAL_OLD_GENERATOR_BASELINE=PASS")
