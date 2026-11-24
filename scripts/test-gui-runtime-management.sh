@@ -98,6 +98,23 @@ printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'setup=installing' ||
 [ ! -e "${SERVICE_CALLS}" ] ||
     fail "passive busy status called native service under its held FD9"
 
+# Exact last first-install cause, not an arbitrary or intermediate record.
+rm -f "${DVTWS_BIN}" "${ACTIVE_RELEASE_FILE}"
+printf '%s\n' failed 'cause=release-list-unavailable' > "${STATE_DIR}/setup.status"
+STATUS_OUTPUT=$(runtime_status 0)
+printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'lastsetupfailure=release-list-unavailable' ||
+    fail "qualified last setup cause lost"
+printf '%s\n' failed 'cause=release-list-unavailable' extra > "${STATE_DIR}/setup.status"
+STATUS_OUTPUT=$(runtime_status 0)
+if printf '%s\n' "${STATUS_OUTPUT}" | grep -q '^lastsetupfailure='; then
+    fail "malformed setup cause reflected"
+fi
+printf '%s\n' installing 'cause=release-list-unavailable' > "${STATE_DIR}/setup.status"
+STATUS_OUTPUT=$(runtime_status 0)
+if printf '%s\n' "${STATUS_OUTPUT}" | grep -q '^lastsetupfailure='; then
+    fail "intermediate setup cause exposed"
+fi
+
 # One configd placeholder receives one selected version; setup_launcher already supplies install.
 grep -Fq '[setup_install]' "${ACTIONS}" || fail "dedicated selected-release action is missing"
 grep -Fq 'setup_launcher.sh install' "${ACTIONS}" || fail "selected-release action does not supply install mode"
