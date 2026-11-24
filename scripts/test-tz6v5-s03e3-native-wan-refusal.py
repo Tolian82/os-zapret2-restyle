@@ -101,10 +101,30 @@ def receipt_path(locale):
     return RECEIPT.with_name("s03e3-native-wan-refusal-witness-" + locale + ".json")
 
 
+def original_fd9_wan_refusal():
+    """Actual installed FD9 Start on WAN-empty disposable OPNsense.
+
+    Distinct from authenticated GUI pre-dispatch refusal. Require unchanged
+    Config, IPFW and processes. No browser WAN race is simulated.
+    """
+    service = SCRIPT.parent / "zapret_service.sh"
+    need(service.is_file() and not service.is_symlink(),
+         "S05J_INSTALLED_ORIGINAL_SERVICE_MISSING")
+    before = witness()
+    rc, output, _ = command([str(service), "start", "--configd-receipt"],
+                             timeout=60)
+    need(rc == 64 and
+         output == b"zapret-api-lifecycle-v1:start:refused:wan-required\n" and
+         before == witness(),
+         "S05J_ORIGINAL_FD9_WAN_CAUSE_OR_NO_WRITE_UNVERIFIED")
+    print("S05J_ORIGINAL_FD9_WAN_REQUIRED=PASS")
+
+
 def prepare(locale):
     target = receipt_path(locale)
     need(not target.exists() and not target.is_symlink(),
          "S03E3_RECEIPT_ALREADY_PRESENT_" + locale)
+    original_fd9_wan_refusal()
     observed = witness()
     target.parent.mkdir(parents=True, exist_ok=True)
     # No secrets are written: only digests and boolean witnesses.

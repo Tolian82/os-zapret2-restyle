@@ -7,7 +7,9 @@ SERVICE="${ROOT}/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/zapret-python-down-service.XXXXXX")
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }
-for fn in stop_legacy_without_python_service service_with_lifecycle_lock; do
+# The isolated original FD9 function now calls the same original WAN
+# private receipt helper. Extract it; never mock away that dependency.
+for fn in stop_legacy_without_python_service service_wan_first_private service_with_lifecycle_lock; do
     sed -n "/^${fn}()$/,/^}$/p" "${SERVICE}" >> "${TMP}/functions.sh"
 done
 grep -Fq 'stop_legacy_without_python_service()' "${TMP}/functions.sh" ||

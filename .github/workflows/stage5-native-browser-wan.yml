@@ -11,6 +11,7 @@ on:
       - scripts/test-tz6v5-s03e3c-native-http-fd9-hold.py
       - scripts/test-tz6v5-s03e3d-verified-lifecycle-contract.py
       - scripts/test-tz6v5-s05c2a-http-reason.py
+      - scripts/test-tz6v5-s05j-original-wan-cause.py
       - scripts/test-tz6v5-s05c2a-fd9-refusal.sh
       - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
       - src/opnsense/service/conf/actions.d/actions_zapret.conf
@@ -33,6 +34,7 @@ on:
       - scripts/test-tz6v5-s03e3c-native-http-fd9-hold.py
       - scripts/test-tz6v5-s03e3d-verified-lifecycle-contract.py
       - scripts/test-tz6v5-s05c2a-http-reason.py
+      - scripts/test-tz6v5-s05j-original-wan-cause.py
       - scripts/test-tz6v5-s05c2a-fd9-refusal.sh
       - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
       - src/opnsense/service/conf/actions.d/actions_zapret.conf
@@ -77,6 +79,7 @@ jobs:
           python3.13 -m py_compile scripts/test-tz6v5-s03e3d-verified-lifecycle-contract.py
           python3.13 scripts/test-tz6v5-s03e3d-verified-lifecycle-contract.py --self-test
           python3.13 scripts/test-tz6v5-s05c2a-http-reason.py
+          python3.13 scripts/test-tz6v5-s05j-original-wan-cause.py
           python3.13 -m py_compile scripts/tz6v5-s05c2c-absent-engine-native.py
           python3.13 scripts/tz6v5-s05c2c-absent-engine-native.py --self-test
           python3.13 -m py_compile scripts/test-tz6v5-s05d4-browser-setup-refusal.py

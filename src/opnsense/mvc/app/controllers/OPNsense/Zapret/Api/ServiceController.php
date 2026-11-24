@@ -101,6 +101,20 @@ class ServiceController extends ApiMutableServiceControllerBase
                 gettext('Service operation failed')
             );
         }
+        // The GUI WAN preflight may become stale before FD9 acquisition.
+        // Allow only the fixed same-action native refusal, never raw stderr.
+        if (!$isStop && strlen($raw) <= 128) {
+            $wanCauses = [
+                'wan-required' => 'Select a WAN interface',
+                'wan-invalid' => 'Selected WAN interface is not assigned or unavailable',
+                'wan-unavailable' => 'Saved WAN preflight is unavailable',
+            ];
+            foreach ($wanCauses as $cause => $safeText) {
+                if (trim($raw) === 'zapret-api-lifecycle-v1:' . $action . ':refused:' . $cause) {
+                    throw new UserException($safeText, gettext('Zapret configuration error'));
+                }
+            }
+        }
         // Only the genuine original missing-file Start producer qualifies
         // this fixed cause. Never reflect raw configd stderr or arguments.
         if ($isStart && strlen($raw) <= 128 &&
