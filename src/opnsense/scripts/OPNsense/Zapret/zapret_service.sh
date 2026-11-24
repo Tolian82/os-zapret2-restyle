@@ -80,6 +80,12 @@ wan_first_service()
 ensure_runtime_components()
 {
     [ -x "${DVTWS_BIN}" ] && return 0
+    # S05c2c: fixed private refusal from the existing original FD9 Start
+    # only when the engine path is truly absent; foreign symlinks are not absent.
+    if [ "${_service_receipt_action:-}" = start ] &&
+       [ ! -e "${DVTWS_BIN}" ] && [ ! -L "${DVTWS_BIN}" ]; then
+        printf '%s\n' 'zapret-api-lifecycle-v1:start:refused:engine-not-installed'
+    fi
 
     echo "ERROR: zapret2 runtime is not installed or installation is incomplete" >&2
     echo "ERROR: reinstall the plugin and inspect /var/log/zapret2/setup.log" >&2

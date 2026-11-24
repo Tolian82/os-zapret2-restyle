@@ -824,6 +824,8 @@
             }
             if (!isRussian) return message;
             const translations = {
+                'Zapret2 engine is not installed. Install an engine version first.':
+                    'Движок Zapret2 не установлен. Сначала установите его версию.',
                 'Select a WAN interface': 'Укажите WAN интерфейс',
                 'Saved WAN preflight is unavailable':
                     'Предварительная проверка сохранённого WAN недоступна.',
@@ -1547,6 +1549,9 @@
                         'Selected WAN interface is not assigned or unavailable',
                     'Saved WAN preflight is unavailable':
                         'Saved WAN preflight is unavailable',
+                    // This is a fixed PHP mapping of an original FD9 refusal.
+                    'Zapret2 Start refused: engine is not installed.':
+                        'Zapret2 engine is not installed. Install an engine version first.',
                     'Укажите WAN интерфейс': 'Select a WAN interface',
                     'Укажите WAN-интерфейс.': 'Select a WAN interface'
                 };

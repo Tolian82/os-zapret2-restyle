@@ -1,13 +1,18 @@
-## 24.11.2026 — CURRENT S05c2b verified Start under original FD9
+## 24.11.2026 — CURRENT S05c2c original missing-engine Start refusal candidate
 
-**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=162`, source candidate `v0.6.5_162`, prospective `os-zapret2-restyle-0.6.5_162.pkg` **NOT published/installed**. Base `main _161 aee02fc81`, [#1277](https://github.com/Tolian82/os-zapret2-restyle/pull/1277) accepted with 17/17 exact-head CI and real original-FD9-busy EN/RU Chromium. Post-merge main CI and release passed; additional main-push Chromium was CANCELLED, not PASS.
+**Identity:** accepted `main v0.6.5_162 / 0bbc3c13` after [PR #1278](https://github.com/Tolian82/os-zapret2-restyle/pull/1278) with 18/18 exact-head workflows SUCCESS and native Common/Legacy/FD9 proof; new source-only candidate `v0.6.5_163`, no published/installed `os-zapret2-restyle-0.6.5_163.pkg`, owner router untouched.
 
-**Immediate bounded user path:** saved WAN → native PHP WAN-first → authenticated Start → PRIVATE `start_verified` configd action → same original FD9 Start (legacy, Common and Recovery early returns) → original read-only `shared_apply_status_service` witnesses RUNNING before releasing FD9 → fixed terminal `zapret-api-lifecycle-v1:start:running` → strict PHP → GUI Start requires `verified=true,action=start,state=started`. Real FD9 busy, STOPPED/INCOMPLETE, nonzero Start or missing marker are HTTP failures, not fictitious success. Public Start/Stop/Restart CLI, original journal and Config/IPFW unchanged.
+**One causal scenario:** saved WAN passes existing GUI PHP WAN-first preflight; original `start_service` detects an actually **absent** `dvtws2` at `ensure_runtime_components()` before firewall/engine. Only under the existing original private `start --configd-receipt` and held FD9 is a fixed `zapret-api-lifecycle-v1:start:refused:engine-not-installed` emitted; unchanged public CLI rc/stdout/stderr, existing configd `script_output,errors:no`, strict PHP `UserException` and bounded Strategies RU/EN mapping. Dangling symlink, invalid engine, foreign owner, pending package or other failures stay generic/UNKNOWN and may not be mislabeled as engine absent. Existing verified RUNNING Start remains mandatory for success.
 
-**Required exact-head native proof:** real installed G07 Common Start success and saved-WAN genuine held-FD9 Start refusal with no Config/IPFW/engine mutation; S03e3f Legacy Start success; existing Chromium RU/EN WAN-first/Stop plus source negative matrix and CI. No owner router action, no public package. Full S05 NO-GO; S06+ blocked.
+**NEXT:** actual-function S0 missing executable / public / Restart / symlink / present executable negative matrix, PHP syntax and existing S05c2b/c2a gates, then exact-head applicable CI and ONE targeted actual disposable OPNsense 26.7 saved-WAN no-engine authenticated API refusal with Config/IPFW/owner before/after. GUI service button is intentionally disabled when engine not installed: do not claim GUI-click acceptance from API-only evidence. Full S05 remains NO-GO, S06–S20 blocked, no public .pkg or owner device action.
 
 ---
 
+## 24.11.2026 — HISTORICAL accepted S05c2b under original FD9
+
+[PR #1278](https://github.com/Tolian82/os-zapret2-restyle/pull/1278) squash-merged as `main 0bbc3c13`, source `v0.6.5_162`. Real Common G07, Legacy S03e3f and WAN-first FD9_BUSY native tests PASS on the exact head, 18/18 PR workflows success; no public package. Post-merge main CI/Chromium were running at the recorded receipt and are not silently reclassified.
+
+---
 
 ## 23.11.2026 — HISTORICAL TZ6v5 S05c1 original plain Status FD9 no-write witness
 
