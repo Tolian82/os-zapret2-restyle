@@ -1,4 +1,6 @@
-# TZ6v5 S07a — native XML source projection, source-only candidate
+# TZ6v5 S07a — historical source-only XML projection candidate
+
+**Status update:** the pre-acceptance candidate described below is now qualified by [formal S07 native GO](ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md), source [PR #1308](https://github.com/Tolian82/os-zapret2-restyle/pull/1308) merged `main v0.6.5_190 717d37dd`. Any native-pending text below is historical, not the current project state.
 
 **24 November 2026 — candidate v0.6.5_190, NOT formal S07 GO.** [Tracked S07 #1307](https://github.com/Tolian82/os-zapret2-restyle/issues/1307). Accepted base is [main v0.6.5_189](https://github.com/Tolian82/os-zapret2-restyle/commit/2f907b3f3c5865259148017aedd3fb7b2f5c42e5) after formal native [S06 GO](ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md).
 

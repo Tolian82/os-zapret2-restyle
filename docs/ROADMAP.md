@@ -1,10 +1,7 @@
-## Current priority — ТЗ_6v5 S07
+## Current priority — ТЗ_6v5 S08
 
-**Текущий приоритет ТЗ_6v5:** [S05 Status/diagnostics GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md) and [S06 native first-install/reinstall/WAN-only GO](architecture/ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md). **S07a source candidate v0.6.5_190** — strict in-memory typed projection of native saved XML and current registry IDs; seven source checks PASS, installed no-write/OPT-TUN/native approval pending. S07 overall OPEN; no Config writer. [Evidence](architecture/ZAPRET2_TZ6V5_S07A_SOURCE_PROJECTION.md). Reload/Force and Lab semantic fix remain S08–S15. [Order S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+**Текущий приоритет ТЗ_6v5:** [S05 diagnostics GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md) → [S06 first-install/reinstall/WAN-only GO](architecture/ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md) → [S07 strict OPNsense XML → neutral typed no-write native GO](architecture/ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md) on source `main v0.6.5_190 717d37dd`; postmerge main CI/classifier successful. **NEXT S08:** pure target/resource/Voice compiler, old native generator `dvtws.args`/source-map parity and semantic action planner, with no runtime writes. S07 formal documentation-only `_191` publishes no package. Original Lab Stage90 issue #1224 remains ordered S15. [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
 
-## 23.11.2026 — TZ6v5 S03e1 actual CLI strict-options expected RED
-
-Candidate `v0.6.5_137` on merged `main _136 aa3e2993` after native S03d [#1245](https://github.com/Tolian82/os-zapret2-restyle/pull/1245). New [actual service CLI options/status/FD9 native expected RED + separately marked RU/EN GUI source-path audit](architecture/ZAPRET2_TZ6V5_S03E_PUBLIC_CLI_LOCALE_RED_NATIVE.md). Source-only changes, tests/CI/docs and revision; no engine/PID/IPFW/Config mutations, no `_137.pkg` published, owner untouched. Exact-head native CI PENDING. Full S03 NO-GO, G1 S04–S20 NOT RUN.
 
 ---
 
