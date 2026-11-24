@@ -10,9 +10,10 @@ namespace OPNsense\Core {
     class Backend {
         public static string $receipt = "installed=0\nservice=error\nversion=\nsetup=unknown\nbusy=0";
         public static array $mutations = [];
+        public static string $releaseReceipt = "v1.0.7\n";
         public function configdRun($key, ...$ignored): string {
             if ($key === 'zapret setup_status') return self::$receipt;
-            if ($key === 'zapret setup_releases') return "v1.0.7\n";
+            if ($key === 'zapret setup_releases') return self::$releaseReceipt;
             throw new \RuntimeException('Unexpected read-only action: ' . $key);
         }
         public function configdpRun($key, $args, ...$ignored): string {
@@ -75,6 +76,25 @@ namespace {
             $actual['busy'] === $busy && $actual['service'] === $service,
             'valid genuine native receipt incorrectly refused');
     }
+    // Existing release-list refusal is a real pre-dispatch controller branch.
+    // Empty/malformed configd data cannot become a selected release; the
+    // fixed cause never reflects arbitrary backend output.
+    Backend::$receipt = $clean;
+    foreach (['', 'untrusted backend text'] as $unavailableList) {
+        Backend::$releaseReceipt = $unavailableList;
+        $before = Backend::$mutations;
+        assertion(controller()->releasesAction() === ['status' => 'unavailable', 'releases' => []],
+                  'invalid release list reported as available');
+        try {
+            controller()->installAction();
+            throw new \RuntimeException('G07_FAIL:missing release list accepted');
+        } catch (UserException $error) {
+            assertion($error->getMessage() === 'No stable bol-van/zapret2 releases could be obtained.',
+                      'fixed pre-dispatch release refusal missing');
+        }
+        assertion(Backend::$mutations === $before, 'release-list refusal dispatched setup');
+    }
+    Backend::$releaseReceipt = "v1.0.7\n";
     // The clean documented release path still allows exactly one native install.
     Backend::$receipt = $clean;
     $result = controller()->installAction();

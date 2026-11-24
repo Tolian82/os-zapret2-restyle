@@ -1,4 +1,14 @@
-# 24.11.2026 — CURRENT S05c3b original stage13 private Start reason
+# 24.11.2026 — CURRENT S05d1 setup release pre-dispatch refusal
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=166`, candidate `v0.6.5_166`; prospective `os-zapret2-restyle-0.6.5_166.pkg` **NOT published or owner-installed**. Accepted `main _165 4d75e6c32367` [S05c3b #1281](https://github.com/Tolian82/os-zapret2-restyle/pull/1281): 17 workflows SUCCESS, 34 successful/7 path-skipped checks, genuine installed Legacy stage13 exact HTTP refusal with unchanged Config/IPFW/engine and positive lifecycle; main-push CI/release classifier/[Chromium](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45331289056) all SUCCESS.
+
+**S05d1 scope / V5-12 ADAPT:** `installAction()` already refuses before `setup_install` dispatch if `getReleaseList()` cannot obtain a valid stable release list. The existing GUI click failure handler discarded that safe cause, always showing unconfirmed update. Preserve the exact fixed PHP UserException for this single pre-dispatch cause and map it to explicit EN/RU text in the existing upper Install/Apply handler. Always retain `finishReleaseOperation(true, ...)`, status refresh and review lock; unknown HTTP/transport/worker errors keep the old generic guidance. No raw configd output, no claim of a specific network error, no changes to setup/cache/locks, no second writer or new persisted diagnosis. Existing first-attempt native upstream `Forbidden` failures in #1281 concerned the asynchronous worker, **not** proof of this PHP path; those worker causes remain OPEN, never guessed from rc69.
+
+**Gates:** reuse actual PHP controller source fixture (empty/malformed release data → exact fixed UserException, zero dispatch; valid release still dispatches exactly once) and actual GUI JS helper EN/RU exact positive + unknown/timeout/extra text negatives. Existing affected CI and native Chromium/G03 run by normal paths; source fixture is not an installed HTTP or GUI-click proof of the unavailable-release case. No separate VM matrix. Full S05 NO-GO; S06–S20 blocked; no public pkg. Candidate checks pending.
+
+---
+
+# 24.11.2026 — HISTORICAL pre-merge S05c3b candidate
 
 `VERSION=0.6.5`, `PLUGIN_REVISION=165`, candidate `v0.6.5_165`, prospective `os-zapret2-restyle-0.6.5_165.pkg` **NOT published, NOT installed on owner OPNsense**. Base `main _164 0887f1ce` [S05c3a #1280](https://github.com/Tolian82/os-zapret2-restyle/pull/1280): exact native Legacy original template reload failure at `1/13/config/failed`, actual HTTP generic refusal, unchanged Config/IPFW/engine/PID, exact template restoration and positive Start/Restart/Stop. 4 workflows PASS; 9 check-runs SUCCESS, 8 SKIPPED. `_163` main CI/Chromium/release classifier PASSED.
 
