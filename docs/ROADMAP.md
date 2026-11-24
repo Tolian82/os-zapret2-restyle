@@ -1,9 +1,8 @@
-## Current priority — ТЗ_6v5 S09 root immutable manifest
+## Current priority — TZ6v5 S09b verified original sealed references
 
-**S08 completed in source/native scope:** accepted [main `v0.6.5_195 2cb6b318`](https://github.com/Tolian82/os-zapret2-restyle/commit/2cb6b318321d024243c961422b2e79c6ed4280f2), [formal S08 pure compiler/native GO](architecture/ZAPRET2_TZ6V5_S08_PURE_COMPILER_NATIVE_GO.md), [S08d merged PR #1314](https://github.com/Tolian82/os-zapret2-restyle/pull/1314) with **10 authentic S03b original generator cases** on existing P2e OPNsense VM [#45491313522](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45491313522), 11 pure negative cases, protected native _107, postmerge [CI #45492640890](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45492640890) and [classifier #45492640860](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45492640860) SUCCESS. Current documentation-only `v0.6.5_196` checkpoint; exact docs-head CI pending.
+**Completed prerequisite:** S08 formal pure compiler/native GO is recorded in [its decision](architecture/ZAPRET2_TZ6V5_S08_PURE_COMPILER_NATIVE_GO.md). [S08 #1310](https://github.com/Tolian82/os-zapret2-restyle/issues/1310) is closed; prior accepted [main `v0.6.5_196 9bfed7c5`](https://github.com/Tolian82/os-zapret2-restyle/commit/9bfed7c52ae48a5af1b8fd3188b40a4bff6e0711).
 
-**Next S09:** [approved S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) — schema-versioned immutable root JSON with verified sealed refs to `dvtws.args`, source-map, controlled candidate artifacts, separate mutable P1/Found ref policy and strict tamper/ownership/size/race validation. No new writer, activation or unrelated VM test. Preserve WAN-only Save and prestart Lab without ordinary manifest. Next physical lifecycle transitions S10–S14 and Lab/Auto later; **no public pkg or owner appliance action**.
-
+**Current S09a source candidate:** `v0.6.5_197` contains [a pure bounded immutable root candidate and strict structural rejection](architecture/ZAPRET2_TZ6V5_S09A_ROOT_SCHEMA.md), not an active root or native seal attester. Next is **S09b** within active [issue #1316](https://github.com/Tolian82/os-zapret2-restyle/issues/1316): exact original generator/source-map against sealed file descriptors, owner/mode/size/SHA/generation/race proof, preserving mutable P1/CAS/ACK. The single original FD9/Config owner remains unchanged; S10 promotion and S11–S14 physical lifecycle remain later. There is **no public `_197.pkg` or owner-appliance action**.
 
 ---
 

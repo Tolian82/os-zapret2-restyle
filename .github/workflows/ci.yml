@@ -584,6 +584,10 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s08d-semantic-diff.py
+      - name: S09a immutable JSON root proposal / original structural refs (pure, nonactivating)
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s09a-root-manifest.py
       - name: Validate fast path routing and strict private-curl source mismatch
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test
