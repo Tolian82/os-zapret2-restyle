@@ -4,6 +4,7 @@
 Not an installed proof. G07 and S03e3f are the real native HTTP witnesses.
 """
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -25,7 +26,12 @@ need("service_api_complete()" in S and
      "start:0)" in S and
      "zapret-api-lifecycle-v1:start:running" in S and
      'start|stop|restart)' in S,"SINGLE_FD9_START_RECEIPT_MISSING")
-need(S.count('shared_apply_boot_service "$_shared_owner"\n')==4 and
+# Four Common/Recovery Start exits require an immediately adjacent
+# original FD9 terminal proof. The fifth original boot call belongs to the
+# existing Common Restart path and must NOT count as a Start exit.
+boot_proven = re.findall(
+    r'shared_apply_boot_service "\$_shared_owner"\n[ ]+service_api_complete "\$\?"', S)
+need(len(boot_proven)==4 and
      S.count('service_api_complete "$?"')>=5 and
      'shared_apply_recover_saved_service "$_shared_owner"\n'
      '                            service_api_complete "$?"' in S,
