@@ -9,6 +9,7 @@ PHP=(ROOT/"src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceControlle
 GUI=(ROOT/"src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt").read_text()
 LEG=(ROOT/"scripts/test-tz6v5-s03e3f-legacy-positive.py").read_text()
 MARK="zapret-api-lifecycle-v1:start:refused:template-generation-failed"
+RESTART_MARK="zapret-api-lifecycle-v1:restart:refused:template-generation-failed"
 def need(ok,why):
     if not ok: raise SystemExit("S05C3B_REFUSED="+why)
 start=SH.index("refresh_generated_configuration()\n{")
@@ -26,14 +27,21 @@ need("Zapret2 Start refused: configuration template generation failed." in GUI
      and "Не удалось сформировать конфигурацию Zapret2." in GUI
      and "Object.prototype.hasOwnProperty.call(nativeStartErrors, nativeError)" in GUI,
      "SAFE_RU_EN_ALLOWLIST")
+need(SH.count(RESTART_MARK)==1 and PHP.count(RESTART_MARK)==1
+     and "trim($raw) === '"+RESTART_MARK+"'" in PHP and
+     "Zapret2 Restart refused: configuration template generation failed." in PHP,
+     "RESTART_HTTP_BOUND")
+need("S05K_REAL_STAGE13_RESTART_HTTP_CAUSE=PASS" in LEG,
+     "REAL_NATIVE_HTTP_REQUIRED")
 need("S05C3B_REAL_STAGE13_HTTP_QUALIFIED_CAUSE=PASS" in LEG
      and "S05C3A_ORIGINAL_STAGE13_NOT_OBSERVED" in LEG,
      "SAME_NATIVE_VM_PROOF")
 for name,reload_ok,stage_ok,action,rc,out in (
     ("private-saved-stage",False,True,"start",1,MARK+"\n"),
     ("public-saved-stage",False,True,"",1,""),
-    ("restart-saved-stage",False,True,"restart",1,""),
+    ("restart-saved-stage",False,True,"restart",1,RESTART_MARK+"\n"),
     ("failed-stage-write",False,False,"start",1,""),
+    ("restart-failed-stage-write",False,False,"restart",1,""),
     ("successful-reload",True,True,"start",0,""),
 ):
     src=producer+"\n"

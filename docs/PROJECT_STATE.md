@@ -1,4 +1,16 @@
-## 24.11.2026 — CURRENT S05 original WAN-first diagnostics
+## 24.11.2026 — CURRENT S05k Legacy Restart diagnostic cause
+
+**Base:** `main v0.6.5_177` / [`62019345`](https://github.com/Tolian82/os-zapret2-restyle/commit/62019345c44d943ba87ae683d063bdbb57c0bcb6); [S05j #1293](https://github.com/Tolian82/os-zapret2-restyle/pull/1293) merged. [Main CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45418270323), [release classifier](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45418269933), and previously pending [Chromium RU/EN](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45418269947) all SUCCESS.
+
+**S05k candidate:** `v0.6.5_178` source-only, no public package. Real original Legacy `restart` -> `reconfigure_service` shares missing-engine and stage13-template checks with Start but did not forward their verified private causes. Add only exact action-bound Restart private markers from existing genuine producers, and <=128-byte full-match PHP UserException mappings. Preserve original FD9, WAN-first, public CLI rc/stdout, Config, IPFW, engine, Voice and unrelated GUI. Foreign symlink, failed stage write and arbitrary configd text never qualify.
+
+**Acceptance:** run updated extracted original POSIX shell negative matrices, actual existing installed OPNsense S03e3f Legacy guest with invalid template and unmocked HTTPS Restart HTTP500/stage13/no-write, then unchanged positive Start/Restart/Stop. Same VM, no additional writer or lifecycle change. CI/native exact-head PENDING; full **S05 OPEN/NO-GO** and S06–S20 blocked. Auto Stage90 semantic fix belongs to S15, not this PR; owner router untouched, no `.pkg` published.
+
+**Next:** qualify exact-head negative and positive native lifecycle. [Plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+
+---
+
+## 24.11.2026 — HISTORICAL S05 original WAN-first diagnostics
 
 **Accepted source:** `main v0.6.5_176` commit `04c5dc5665e92b9913cc40972b5fb9252690f521` via [PR #1292](https://github.com/Tolian82/os-zapret2-restyle/pull/1292), exact-head current installed same-pkg protected finish fail-closed+successful restore on disposable OPNsense [#45410165785](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45410165785) and main CI/release classifier SUCCESS. `_176.pkg` not published or owner-installed.
 

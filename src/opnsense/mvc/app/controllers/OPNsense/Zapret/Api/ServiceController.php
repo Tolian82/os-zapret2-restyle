@@ -133,6 +133,21 @@ class ServiceController extends ApiMutableServiceControllerBase
                 gettext('Service operation failed')
             );
         }
+        // S05k: Legacy Restart prelaunch causes from original FD9 only.
+        if ($action === 'restart' && strlen($raw) <= 128 &&
+            trim($raw) === 'zapret-api-lifecycle-v1:restart:refused:engine-not-installed') {
+            throw new UserException(
+                'Zapret2 Restart refused: engine is not installed.',
+                gettext('Service operation failed')
+            );
+        }
+        if ($action === 'restart' && strlen($raw) <= 128 &&
+            trim($raw) === 'zapret-api-lifecycle-v1:restart:refused:template-generation-failed') {
+            throw new UserException(
+                'Zapret2 Restart refused: configuration template generation failed.',
+                gettext('Service operation failed')
+            );
+        }
         $valid = strlen($raw) <= 8192 &&
             substr_count($raw, 'zapret-api-lifecycle-v1:') === 1 &&
             preg_match('/(?:\\A|\\n)' . preg_quote($expected, '/') . '\\z/D', trim($raw)) === 1;
