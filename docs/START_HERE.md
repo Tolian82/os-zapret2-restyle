@@ -1,4 +1,14 @@
-## 24.11.2026 — CURRENT S05c2c original missing-engine Start refusal candidate
+## 24.11.2026 — CURRENT S05c3a true template-generation RED candidate
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=164`, source candidate `v0.6.5_164`; `os-zapret2-restyle-0.6.5_164.pkg` is prospective only, NOT published/owner-installed. Accepted base `main _163 f2c651dfd36b`, [S05c2c PR #1279](https://github.com/Tolian82/os-zapret2-restyle/pull/1279) exact-head 33 SUCCESS and 7 legitimate skipped checks. Real OPNsense 26.7 saved-WAN HTTP missing-engine refusal, Config/IPFW unchanged, protected pkg upgrade and plain Status all qualified. Postmerge CI/release classification PASS; Chromium main-push was still in progress at first check.
+
+**One narrow RED, no product patch:** original `config_reload_template OPNsense/Zapret` is called before engine/IPFW in actual Legacy `Start`. On failure, inherited `orchestrator_fail_stage` writes `1|13|config|failed|...|template generation failed` to original stage file, while PHP returns only generic unconfirmed Start. Use existing **S03e3f native Legacy OPNsense VM** after engine installed and WAN saved, before first Start. Temporarily corrupt ONLY exact installed package-owned `zapret.conf` Jinja in this disposable guest, call genuine authenticated Start HTTP (no mocks), demand real 500 refusal and original stage13, compare saved Config XML, engine, PID and owned/foreign IPFW before/after. Restore template byte-exact in `finally`, then proceed to original Legacy positive Start/Restart/Stop. No additional workflow or new VM, no journal/FD9/Config writer changes. **Native exact-head result PENDING; do not call source fixture physical PASS.**
+
+**NEXT:** if native producer is physically qualified, consider S05c3b fixed private original-FD9 failure receipt and strict existing RU/EN mapping; if no stage13 or side-effect mismatch, refuse candidate and correct cause instead of broadening assumptions. Full S05 NO-GO; S06+ blocked.
+
+---
+
+## 24.11.2026 — HISTORICAL pre-merge S05c2c candidate
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=163`, current source candidate `v0.6.5_163`; accepted `main v0.6.5_162 / 0bbc3c13` after [PR #1278](https://github.com/Tolian82/os-zapret2-restyle/pull/1278) with 18/18 exact-head workflows SUCCESS and native Common/Legacy/FD9 proof; new source-only candidate `v0.6.5_163`, no published/installed `os-zapret2-restyle-0.6.5_163.pkg`, owner router untouched.
 

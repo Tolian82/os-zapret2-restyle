@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
 import urllib.error
@@ -199,6 +200,87 @@ def lifecycle_http(web, name, g07):
     return True
 
 
+
+def s05c3a_template_red(web, core, saved_config, engine_sha, foreign_before):
+    """Genuine original Legacy Start template failure on test-only native guest.
+
+    Mutate only the disposable guest's exact installed template and restore the
+    original inode/bytes in finally. The PHP HTTP and configctl are unmocked.
+    """
+    need(os.environ.get("GITHUB_ACTIONS") == "true" and
+         os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1" and
+         os.environ.get("ZAPRET2_S03E3F_DISPOSABLE_NATIVE") == "1" and
+         os.uname().sysname == "FreeBSD" and os.geteuid() == 0,
+         "S05C3A_DISPOSABLE_GUEST_ONLY")
+    template = Path("/usr/local/opnsense/service/templates/OPNsense/Zapret/zapret.conf")
+    source = REPO / "src/opnsense/service/templates/OPNsense/Zapret/zapret.conf"
+    stage = Path("/var/run/zapret2-execution.status")
+    need(template.is_file() and not template.is_symlink() and
+         source.is_file() and not source.is_symlink(),
+         "S05C3A_REAL_INSTALLED_TEMPLATE_MISSING")
+    meta = template.lstat()
+    need(stat.S_ISREG(meta.st_mode) and meta.st_uid == 0 and
+         meta.st_nlink == 1 and not meta.st_mode & 0o022 and
+         0 < meta.st_size < 128 * 1024 and
+         template.read_bytes() == source.read_bytes(),
+         "S05C3A_PACKAGE_OWNED_TEMPLATE_IDENTITY")
+    need(not stage.is_symlink() and
+         (not stage.exists() or
+          (stat.S_ISREG(stage.lstat().st_mode) and
+           stage.lstat().st_uid == 0 and stage.lstat().st_nlink == 1)),
+         "S05C3A_ORIGINAL_STAGE_UNSAFE")
+    need(CONFIG.read_bytes() == saved_config and
+         ENGINE.is_file() and not ENGINE.is_symlink() and
+         hashlib.sha256(ENGINE.read_bytes()).hexdigest() == engine_sha and
+         not PID.exists() and not MONITOR.exists() and
+         not ACTIVE.exists() and not census(),
+         "S05C3A_NOT_STOPPED_LEGACY_WITH_REAL_ENGINE")
+    before_owned, before_foreign = inventory()
+    need(before_owned in (None, []) and before_foreign == foreign_before,
+         "S05C3A_PREEXISTING_KERNEL_DRIFT")
+    fd = os.open(template, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(fd, "r+b", buffering=0) as f:
+        check = os.fstat(f.fileno())
+        need((check.st_dev, check.st_ino) == (meta.st_dev, meta.st_ino) and
+             stat.S_ISREG(check.st_mode) and check.st_nlink == 1,
+             "S05C3A_TEMPLATE_OPEN_CHANGED_IDENTITY")
+        old = f.read()
+        need(old == source.read_bytes(), "S05C3A_TEMPLATE_PREWRITE_CHANGED")
+        try:
+            f.seek(0)
+            f.write(b"{% S05C3A_INVALID_JINJA_TAG %}\n")
+            f.truncate()
+            os.fsync(f.fileno())
+            try:
+                web.api("POST", "/api/zapret/service/start")
+            except core.Refusal as error:
+                need(str(error) == "GUI_HTTP_REJECTED_500:/api/zapret/service/start",
+                     "S05C3A_NOT_REAL_PHP_USEREXCEPTION")
+            else:
+                raise Refusal("S05C3A_FALSE_SUCCESS_WITH_INVALID_TEMPLATE")
+            need(stage.is_file() and not stage.is_symlink() and
+                 re.fullmatch(
+                    r"1\|13\|config\|failed\|[^|\r\n]{1,64}\|template generation failed\n?",
+                    stage.read_text()) is not None,
+                 "S05C3A_ORIGINAL_STAGE13_NOT_OBSERVED")
+            need(CONFIG.read_bytes() == saved_config and
+                 hashlib.sha256(ENGINE.read_bytes()).hexdigest() == engine_sha and
+                 not PID.exists() and not MONITOR.exists() and not ACTIVE.exists() and
+                 not census(), "S05C3A_CONFIG_OR_ENGINE_CHANGED")
+            after_owned, after_foreign = inventory()
+            need(after_owned in (None, []) and after_foreign == foreign_before,
+                 "S05C3A_IPFW_CHANGED")
+        finally:
+            f.seek(0)
+            f.write(old)
+            f.truncate()
+            os.fsync(f.fileno())
+    need(template.read_bytes() == source.read_bytes() and
+         template.stat().st_ino == meta.st_ino and
+         stat.S_IMODE(template.stat().st_mode) == stat.S_IMODE(meta.st_mode),
+         "S05C3A_ORIGINAL_TEMPLATE_RESTORE_FAILED")
+    print("S05C3A_REAL_STAGE13_HTTP_GENERIC_RED=PASS")
+
 def self_test():
     g07 = load("stage2-opnsense-g07-native-lifecycle.py")
     for name, state in (("stop", "stopped"), ("restart", "started"), ("start", "started")):
@@ -217,6 +299,9 @@ def self_test():
          OWNED.match("19140 divert") is None and
          OWNED.match("65534 allow") is None,
          "S03E3F_IPFW_RANGE_SCOPE_REGRESSION")
+    need("S05C3A_INVALID_JINJA_TAG" in Path(__file__).read_text() and
+         "S05C3A_REAL_STAGE13_HTTP_GENERIC_RED=PASS" in Path(__file__).read_text(),
+         "S05C3A_SOURCE_GUARD_MISSING")
     print("S03E3F_LEGACY_FAST=PASS")
 
 
@@ -277,6 +362,7 @@ def execute():
     web = core.GuestHttps()
     core.login(web)
     status(web, "stopped")
+    s05c3a_template_red(web, core, config_enabled, engine_sha, foreign_before)
 
     # Every request below is authentic installed PHP -> configd -> original
     # FD9 -> unchanged legacy service. A failure leaves the disposable guest

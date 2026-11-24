@@ -141,6 +141,8 @@
 
 ### S05. Read-only status и диагностический конверт
 
+**S05c3a candidate (`_164`, 24.11.2026):** after [accepted S05c2c #1279](https://github.com/Tolian82/os-zapret2-restyle/pull/1279) `main f2c651dfd36b`, prove real `configctl template reload OPNsense/Zapret` failure on existing native S03e3f Legacy VM: temporarily invalid package-owned guest template, then genuine original FD9 authenticated Start HTTP reject, original `stage 1/13/config/failed`, unchanged Config/IPFW/engine, exact template restore and later genuine Legacy success. No production patch or separate VM. Native evidence PENDING, diagnostics code only after actual producer; S05 full NO-GO.
+
 **S05c2b source candidate (`_162`, 24.11.2026):** the inherited PHP Start returns configd *transport*, not terminal RUNNING; original Common/Recovery Start has early returns bypassing a tail-only receipt. Add PRIVATE start_verified on the SAME FD9, exact native RUNNING receipt across Common/Recovery/Legacy, strict PHP+GUI Start success, existing WAN-first. Genuine G07 Common and saved-WAN original FD9 BUSY negative, S03e3f Legacy installed positive and Chromium RU/EN plus exact-head CI mandatory. Full S05 NO-GO.
 
 **S05c2a accepted (`_161`, 24.11.2026):** [PR #1277](https://github.com/Tolian82/os-zapret2-restyle/pull/1277) merged `main aee02fc81` after 17/17 exact-head PASS incl. genuine installed EN/RU original-FD9_BUSY Stop/Restart unmocked HTTP and no Config/IPFW/engine changes; two private actions `errors:no` and PHP strict parser do not change public rc. Main-push CI/release PASS, independent main Chromium CANCELLED (not PASS). Remaining lifecycle causes unqualified.
