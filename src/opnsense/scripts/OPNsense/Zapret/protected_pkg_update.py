@@ -315,6 +315,26 @@ def restore_finish_evidence(finished: subprocess.CompletedProcess) -> str:
     return f"rc:{rc},stage:{stage},guard:{guard.group(1) if guard else 'unknown'}"
 
 
+def continuation_finish_evidence(completed: subprocess.CompletedProcess) -> str | None:
+    """Forward only the exact bounded refusal from the verified staged child."""
+    if completed.returncode != 69:
+        return None
+    lines = (completed.stderr or "").split("\n")
+    if lines.count("pkg-update-refused=RUNTIME_RESTORE_REQUIRES_REVIEW") != 1:
+        return None
+    markers = [line for line in lines if line.startswith("pkg-update-restore-evidence=")]
+    if len(markers) != 1:
+        return None
+    matched = re.fullmatch(
+        r"pkg-update-restore-evidence=(rc:(0|69|70|other),stage:(boot|start|verify|unknown),"
+        r"guard:(activate|activated-journal|activated-bundle|activated-probe|config-save|"
+        r"epoch-journal|saved-readback|saved-probe|ipfw-commit|committed-probe|epoch-schema|"
+        r"epoch-dispatch|epoch-attest|epoch-receipt|unknown))", markers[0])
+    if matched is None or (matched[2] != "70" and matched[3] != "unknown"):
+        return None
+    return matched[1]
+
+
 def replace(path: Path) -> None:
     stage, digest, version = stage_archive(path)
     prepared = False
@@ -508,10 +528,14 @@ def continue_postinstall(path: Path, original_record_sha: str) -> None:
         installed_service = "/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
         finished = native_command([installed_service, "pkg-update-finish", digest,
                                    version], timeout=120, env=clean_env)
-        need(finished.returncode == 0 and
-             "zapret-pkg-update-committed=1" in finished.stdout and
-             not ACTIVE.exists() and not ACTIVE.is_symlink(),
-             "RUNTIME_RESTORE_REQUIRES_REVIEW")
+        if not (finished.returncode == 0 and
+                "zapret-pkg-update-committed=1" in finished.stdout and
+                not ACTIVE.exists() and not ACTIVE.is_symlink()):
+            # Same installed native finish as replace(); preserve only the
+            # existing bounded diagnostic, not the child's stderr.
+            print("pkg-update-restore-evidence=" + restore_finish_evidence(finished),
+                  file=sys.stderr)
+            raise Refused("RUNTIME_RESTORE_REQUIRES_REVIEW")
         stage.unlink()
         durable_directory()
         print("pkg-update=verified-continued-and-restored")
@@ -604,9 +628,12 @@ def bootstrap_continuation(package: Path, digest: str, target: Path,
     completed = native_command([str(stage / "zapret_service.sh"),
                                "pkg-update-continue", str(target),
                                original_record_sha], timeout=480, env=environment)
-    need(completed.returncode == 0 and
-         "pkg-update=verified-continued-and-restored" in completed.stdout,
-         "STAGED_CONTINUATION_REQUIRES_REVIEW")
+    if not (completed.returncode == 0 and
+            "pkg-update=verified-continued-and-restored" in completed.stdout):
+        evidence = continuation_finish_evidence(completed)
+        if evidence is not None:
+            print("pkg-update-restore-evidence=" + evidence, file=sys.stderr)
+        raise Refused("STAGED_CONTINUATION_REQUIRES_REVIEW")
     print("pkg-recovery=verified-installed-and-restored")
 
 
