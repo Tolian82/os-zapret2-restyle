@@ -157,6 +157,85 @@ class ProtectedPkgUpdate(unittest.TestCase):
         self.assertIn("pkg-update-restore-evidence=rc:70,stage:unknown,guard:unknown",
                       output.getvalue())
 
+    def test_original_finish_phase_causes_are_exact_and_qualified(self):
+        # Execute the real extracted POSIX function with inert original
+        # children. No pkg, Config, FD9, IPFW, service or journal write.
+        match = re.search(
+            r"(?ms)^pkg_update_finish_service\(\)\n\{.*?^\}",
+            SERVICE.read_text())
+        self.assertIsNotNone(match)
+        with tempfile.TemporaryDirectory() as temp:
+            runtime = Path(temp) / "runtime.sh"
+            runtime.write_text(
+                '#!/bin/sh\n'
+                'case "$2" in\n'
+                ' verify|complete) exit 0 ;;\n'
+                ' previous) printf "running\\n" ;;\n'
+                ' *) exit 69 ;;\n'
+                'esac\n')
+            runtime.chmod(0o755)
+            harness = match.group() + """
+status_calls=0
+shared_apply_status_service() {
+    status_calls=$((status_calls + 1))
+    if [ "$status_calls" -eq 1 ]; then return 1; fi
+    return "${FINAL_RC:-0}"
+}
+wan_first_service() { return 0; }
+extra_resources_block_pending_start_service() { return 0; }
+shared_apply_has_record_service() { [ "${OWNER_MODE:-legacy}" = common ]; }
+shared_apply_inspect_service() { printf 'committed original\\n'; }
+shared_apply_boot_service() { return "${BOOT_RC:-0}"; }
+start_service() { return "${START_RC:-0}"; }
+pkg_update_finish_service pkg-update-finish sha version
+"""
+            environment = {**os.environ, "PYTHON_RUNTIME": str(runtime),
+                "SCRIPT_DIR": temp,
+                "PKG_UPDATE_RESTART_MARKER": str(Path(temp) / "restart"),
+                "PKG_UPDATE_LEGACY_MARKER": str(Path(temp) / "legacy")}
+            checks = (
+                ({"OWNER_MODE": "common", "BOOT_RC": "1"}, 70, "boot"),
+                ({"OWNER_MODE": "legacy", "START_RC": "1"}, 70, "start"),
+                ({"OWNER_MODE": "legacy", "FINAL_RC": "2"}, 70, "verify"),
+                ({"OWNER_MODE": "legacy"}, 0, None),
+            )
+            syntax = subprocess.run(["/bin/sh", "-n"], input=harness,
+                capture_output=True, text=True)
+            self.assertEqual(syntax.returncode, 0, syntax.stderr)
+            for overrides, expected_rc, stage in checks:
+                done = subprocess.run(["/bin/sh", "-c", harness],
+                    env={**environment, **overrides}, capture_output=True,
+                    text=True)
+                self.assertEqual(done.returncode, expected_rc, overrides)
+                if stage is None:
+                    self.assertIn("zapret-pkg-update-committed=1", done.stdout)
+                    self.assertNotIn("pkg-update-finish-failed=", done.stderr)
+                else:
+                    self.assertIn(
+                        "pkg-update-finish-failed=" + stage + "\n",
+                        done.stderr)
+                evidence = m.restore_finish_evidence(result(
+                    [], done.returncode, stderr=done.stderr))
+                self.assertEqual(evidence,
+                    f"rc:{expected_rc},stage:{stage or 'unknown'},guard:unknown")
+
+    def test_finish_stage_cannot_be_spoofed_by_child_stderr(self):
+        for rc, stderr, expected in (
+            (70, "noise pkg-update-finish-failed=boot\n", "unknown"),
+            (70, "pkg-update-finish-failed=boot extra\n", "unknown"),
+            (69, "pkg-update-finish-failed=boot\n", "unknown"),
+            (0, "pkg-update-finish-failed=boot\n", "unknown"),
+            (70, "pkg-update-finish-failed=boot\npkg-update-finish-failed=start\n",
+             "unknown"),
+            (70, "pkg-update-finish-failed=start\n", "start"),
+            (70, "pkg-update-finish-failed=verify\n", "verify"),
+        ):
+            with self.subTest(rc=rc, stderr=stderr):
+                actual = m.restore_finish_evidence(
+                    result([], rc, stderr=stderr))
+                self.assertEqual(actual,
+                    f"rc:{rc},stage:{expected},guard:unknown")
+
     def test_exact_success_dispatches_one_native_pkg(self):
         with tempfile.TemporaryDirectory() as tmp:
             calls, error, exists = self.trial(tmp)
