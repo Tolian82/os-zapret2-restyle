@@ -83,6 +83,18 @@ class ServiceController extends ApiMutableServiceControllerBase
         );
         // Do not parse or return raw configd text. At most one exact receipt
         // must end the bounded output; all refusals are handled by gettext.
+        // Only the EXACT fixed refusal from a real native lockf timeout
+        // on this verb is a qualified cause. This remains an HTTP error,
+        // never a terminal Stop/Restart success. No raw configd output.
+        $fd9Refusal = 'zapret-api-lifecycle-v1:' . $action . ':refused:fd9-busy';
+        if (strlen($raw) <= 128 && trim($raw) === $fd9Refusal) {
+            throw new UserException(
+                $isStop
+                    ? 'Zapret2 Stop refused: original lifecycle lock is busy.'
+                    : 'Zapret2 Restart refused: original lifecycle lock is busy.',
+                gettext('Service operation failed')
+            );
+        }
         $valid = strlen($raw) <= 8192 &&
             substr_count($raw, 'zapret-api-lifecycle-v1:') === 1 &&
             preg_match('/(?:\\A|\\n)' . preg_quote($expected, '/') . '\\z/D', trim($raw)) === 1;
