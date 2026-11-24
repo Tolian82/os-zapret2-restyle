@@ -18,7 +18,7 @@ Read through EOF in this order:
 
 ## Level 2 — active work and current contracts
 
-**Текущая очередь:** [ТЗ_6v5](architecture/TZ_6v5.md) → [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), [formal S05 diagnostics GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md) → S06 first install/reinstall. ТЗ_6v4 и STEP0–6/P0–P5 — прежние контракты/история, не активная очередь. [Future design](architecture/STRATEGIES_LIST_FUTURE.md) отдельно.
+**Текущая очередь:** [ТЗ_6v5](architecture/TZ_6v5.md) → [S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), [formal S05 diagnostics GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md) and [S06 native install/reinstall GO](architecture/ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md) → S07 neutral XML adapter. ТЗ_6v4 и STEP0–6/P0–P5 — прежние контракты/история, не активная очередь. [Future design](architecture/STRATEGIES_LIST_FUTURE.md) отдельно.
 
 | Need | Primary document |
 |---|---|

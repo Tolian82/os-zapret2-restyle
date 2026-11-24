@@ -4,6 +4,8 @@
 
 ## Active work and retained long-term design
 
+- **Current S07:** [formal S06 first-install/reinstall/WAN-only native GO](ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md); next [OPNsense XML → neutral model](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) with strict typed no-write projection. Later S08–S15 remain separate.
+
 - **MANDATORY UPSTREAM CANON:** [официальный manual.en.md](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) → [правило DEV-069: не проверять описанное поведение движка](ZAPRET2_UPSTREAM_MANUAL_CANON.md).
 - **CLI Emergency Contract:** [ТЗ_6v5 §5.5–5.6: guarded `--force` и read-only `--help`](TZ_6v5.md), [DEV-070](../PROJECT_PRINCIPLES.md); новая регрессия V5-15/16 в [S00–S20](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
 - **IPFW Allocation:** [Normal 19000–19099, current Lab 19100–19131, future comparative 19140–19200](TZ_6v5.md) — [DEV-071](../PROJECT_PRINCIPLES.md), numbers outside these are not ours.
