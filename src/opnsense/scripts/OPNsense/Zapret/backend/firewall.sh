@@ -13,8 +13,32 @@ firewall_shared_runtime()
     # verify-cleanup is read-only: it only classifies a partially completed
     # post-COMMIT stage before the EXISTING commit cleanup is permitted.
     case "$1" in install|rollback|commit|verify|verify-staged|verify-cleanup|verify-legacy) ;; *) return 64 ;; esac
-    "${PYTHON_BIN:-${PYTHON_RUNTIME:-/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh}}" \
-        "${BACKEND_DIR}/voice_ipfw_adapter.py" shared "$1" "$2" "$3"
+    # The real Python adapter is a separate process. Capture its bounded
+    # original fixed refusal HERE, while the caller invokes this shell
+    # function directly: a $(firewall_shared_runtime ...) in the caller would
+    # run the entire shell function in a subshell and lose lifecycle state.
+    _firewall_shared_python="${PYTHON_BIN:-${PYTHON_RUNTIME:-/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh}}"
+    case "$1" in
+        install)
+            FIREWALL_SHARED_ATTACH_CAUSE=
+            if _firewall_shared_receipt=$("$_firewall_shared_python" \
+                "${BACKEND_DIR}/voice_ipfw_adapter.py" shared "$1" "$2" "$3"); then
+                _firewall_shared_receipt=
+                return 0
+            else
+                _firewall_shared_rc=$?
+                if [ "$_firewall_shared_receipt" = 'ipfw-attach-failure=rule-add-rejected' ]; then
+                    FIREWALL_SHARED_ATTACH_CAUSE=rule-add-rejected
+                fi
+                _firewall_shared_receipt=
+                return "$_firewall_shared_rc"
+            fi
+            ;;
+        *)
+            "$_firewall_shared_python" "${BACKEND_DIR}/voice_ipfw_adapter.py" \
+                shared "$1" "$2" "$3"
+            ;;
+    esac
 }
 
 # This is a numeric BOUNDARY guard on the arguments of our own IPFW

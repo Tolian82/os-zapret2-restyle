@@ -97,7 +97,7 @@ jobs:
           # Native engine Exclude proof changes require the REAL FreeBSD VM,
           # even when only a non-packaged regression script changes.
           native_wan_process=false
-          if printf '%s\n' "${changed}" | grep -Eq '^(src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter[.]py|scripts/test-freebsd15-native-wan-process-continuity[.]py|scripts/stage5-wan-baseline-capture[.]py|scripts/test-freebsd15-native-engine-exclude[.]py|scripts/test-freebsd15-native-strategy-mutation[.]py|scripts/test-freebsd15-native-tls-strategy[.]py|scripts/test-freebsd15-native-tls-fake[.]py|scripts/test-freebsd15-native-tls-process-identity[.]py)$'; then
+          if printf '%s\n' "${changed}" | grep -Eq '^(src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter[.]py|src/opnsense/scripts/OPNsense/Zapret/backend/firewall[.]sh|src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime[.]sh|scripts/test-freebsd15-native-wan-process-continuity[.]py|scripts/stage5-wan-baseline-capture[.]py|scripts/test-freebsd15-native-engine-exclude[.]py|scripts/test-freebsd15-native-strategy-mutation[.]py|scripts/test-freebsd15-native-tls-strategy[.]py|scripts/test-freebsd15-native-tls-fake[.]py|scripts/test-freebsd15-native-tls-process-identity[.]py)$'; then
             native_wan_process=true
           fi
           stage0_private_elf=false
@@ -1209,6 +1209,11 @@ jobs:
           python3.13 scripts/test-tz6v5-s05b2b2-early-journal.py
           sh -n scripts/test-tz6v5-s05b2b2-original-producer.sh
           sh scripts/test-tz6v5-s05b2b2-original-producer.sh
+          python3.13 scripts/test-tz6v5-s05e2-runtime-ipfw-producer.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
+          php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/VoiceController.php
 
       - name: Test S04c disposable physical runner source contract
         run: |

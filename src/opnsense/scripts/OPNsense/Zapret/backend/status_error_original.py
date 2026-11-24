@@ -116,12 +116,15 @@ def read_qualified_failure(report: dict, *, reader=None) -> dict | None:
         event = stable["failure"]
         if reader() != first:
             raise ValueError("S05B_RACING_ORIGINAL_EARLY_JOURNAL")
+        ipfw_refusal = event["code"] == "IPFW_ATTACH_FAILED"
         return {
             "source": "original-shared-apply-journal",
             "action": "voice-apply" if stable["detail"]["page"] == "voice" else "apply",
-            "stage": "engine-start",
+            "stage": "ipfw-attach" if ipfw_refusal else "engine-start",
             "code": event["code"],
-            "message": ("Original engine did not produce a verified live PID"
+            "message": ("Original IPFW rule add was rejected; previous runtime restored"
+                        if ipfw_refusal else
+                        "Original engine did not produce a verified live PID"
                         if event["cause"] == "no-live-pid" else
                         "Original engine lost verified readiness during startup"),
             "operation_id": event["operation_id"],

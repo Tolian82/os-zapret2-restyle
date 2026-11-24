@@ -52,6 +52,39 @@ def drift_class(before, after):
         labels.append("other_tree")
     return sorted(set(labels))
 
+def _bounded_tree_delta(previous, current):
+    """Only root category, fixed file type and mutation kind; never paths."""
+    buckets = {}
+    all_keys = previous.keys() | current.keys()
+    for key in all_keys:
+        if previous.get(key) == current.get(key):
+            continue
+        prefix = next((name for name, root in (
+            ("shared", "/var/db/zapret2"),
+            ("pkgdb", "/var/db/pkg"),
+            ("active", "/usr/local/etc/zapret2/runtime-v2"),
+            ("setup", "/var/db/zapret2-restyle"),
+            ("pid", "/var/run"),
+        ) if key == root or key.startswith(root + "/")), "unknown")
+        old = previous.get(key)
+        new = current.get(key)
+        if old is None:
+            change = "added"
+        elif new is None:
+            change = "removed"
+        elif isinstance(old, list) and isinstance(new, list) and len(old) >= 10 and len(new) >= 10:
+            change = "content" if old[-1] != new[-1] else (
+                "mtime" if old[8] != new[8] else "metadata")
+        else:
+            change = "metadata"
+        suffix = Path(key).suffix.lower()
+        typ = {".log": "log", ".json": "json", ".sqlite": "sqlite",
+               ".db": "db", ".txt": "txt", ".wal": "wal"}.get(suffix, "other")
+        group = prefix + "_" + typ + "_" + change
+        buckets[group] = buckets.get(group, 0) + 1
+    parts = [name + "_" + str(buckets[name]) for name in sorted(buckets)]
+    return "_".join(parts[:4])[:90] if parts else "none"
+
 
 def verify_plain(label, message, rc, *, busy=False):
     exists_before = LOCK.is_file() and not LOCK.is_symlink()
@@ -92,11 +125,17 @@ def verify_plain(label, message, rc, *, busy=False):
                      ("--filter-", "/conf/", "token=", "password")),
              "S05C1_PLAIN_SECRET_LEAK_" + label)
     if flags:
-        # Existing-file truncation and first-use creation are DISTINCT bugs.
-        # Show only this boolean, never FD9 inode, paths or private contents.
+        # Do not relax the physical no-write gate. Distinguish status-window
+        # drift from a SECOND equal-duration-free idle observation, with only
+        # a bounded coarse class; never disclose filenames, paths, journal
+        # contents, hostlists, IP addresses or process arguments.
+        control = s04.snapshot()
+        changed = _bounded_tree_delta(before["tree"], after["tree"])
+        idle = _bounded_tree_delta(after["tree"], control["tree"])
         fd9_cause = ("_preexisting" if exists_before else "_missing")
-        raise s04.Refusal("S05C1_PLAIN_STATUS_WROTE_" + label + "__" +
-                          "_".join(flags) + fd9_cause)
+        raise s04.Refusal(("S05C1_PLAIN_STATUS_WROTE_" + label + "__" +
+                          "_".join(flags) + fd9_cause +
+                          "__changed_" + changed + "__idle_" + idle)[:160])
     return {"case": label, "rc": rc, "original_fd9": exists_before,
             "safe_absent_fd9_projection": not exists_before,
             "no_write": True, "lockfile_preexisting": exists_before,

@@ -382,6 +382,14 @@ class SettingsController extends ApiMutableModelControllerBase
                         : gettext('The previous Apply was recovered. Reload before applying again.'),
                 ];
             }
+            // Only the previously persisted, exact original FD9 receipt.
+            if (preg_match('/(?:^|\n)ipfw-attach-failure=rule-add-rejected$/D', $response)) {
+                return [
+                    'result' => 'failed', 'applied' => false, 'requires_review' => true,
+                    'reason' => 'ipfw-attach-failed',
+                    'message' => gettext('IPFW rejected a Zapret2 rule; previous runtime was restored. Inspect IPFW and service state before retrying.'),
+                ];
+            }
             $wanSaved = $wanOnlyCandidate &&
                 preg_match('/^wan-saved=[a-f0-9]{64}$/D', $response) === 1;
             if (!$wanSaved &&

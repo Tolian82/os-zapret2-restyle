@@ -797,6 +797,12 @@
                 return isRussian ? 'Предыдущая операция восстановлена. После обновления страницы проверьте списки.'
                     : 'The previous Apply was recovered. Reload the page to check the lists.';
             }
+            // Exact post-FD9 marker only; unknown errors remain generic.
+            if (reason === 'ipfw-attach-failed') {
+                return isRussian
+                    ? 'IPFW отклонил правило Zapret2. Предыдущее состояние восстановлено. Проверьте службу и IPFW перед новой попыткой.'
+                    : 'IPFW rejected a Zapret2 rule. Previous runtime was restored. Inspect the service and IPFW before retrying.';
+            }
             // Server gettext and browser language can differ.
             if (reason === 'runtime-not-installed') {
                 return isRussian
@@ -2006,9 +2012,13 @@
                 updateServiceControlUI('zapret');
                 refreshRuntime();
             }
-            function needsReview() {
+            function needsReview(message) {
                 strategiesApplyNeedsReview = true;
-                showRuntimeError(runtimeText.applyError, runtimeText.strategiesReview);
+                if (message) {
+                    showRuntimeError(runtimeText.applyError, message);
+                } else {
+                    showRuntimeError(runtimeText.applyError, runtimeText.strategiesReview);
+                }
             }
 
             $.ajax({
@@ -2049,7 +2059,10 @@
                 } else {
                     if (!data || data.result !== 'failed' ||
                         data.requires_review === true) {
-                        needsReview();
+                        needsReview(data && data.requires_review === true &&
+                            data.reason === 'ipfw-attach-failed'
+                            ? localizeStrategiesApplyError(data.message, data.reason)
+                            : null);
                     } else if (data.found_error) {
                         const invalid = foundHostlistFields.find(function(spec) {
                             return spec.source === data.found_error.source;
