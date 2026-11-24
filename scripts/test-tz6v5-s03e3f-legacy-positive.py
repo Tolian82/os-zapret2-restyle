@@ -201,7 +201,7 @@ def lifecycle_http(web, name, g07):
 
 
 
-def s05c3a_template_red(web, core, saved_config, engine_sha, foreign_before):
+def s05c3_template_refusal(web, core, saved_config, engine_sha, foreign_before):
     """Genuine original Legacy Start template failure on test-only native guest.
 
     Mutate only the disposable guest's exact installed template and restore the
@@ -251,13 +251,30 @@ def s05c3a_template_red(web, core, saved_config, engine_sha, foreign_before):
             f.write(b"{% S05C3A_INVALID_JINJA_TAG %}\n")
             f.truncate()
             os.fsync(f.fileno())
+            # Real authenticated TLS session, original CSRF and PHP/configd.
+            # Read only bounded error fields; never print configd stdout/stderr.
+            request = urllib.request.Request(
+                core.ORIGIN + "/api/zapret/service/start", data=b"",
+                method="POST", headers={"X-CSRFToken": web.csrf_token,
+                    "Referer": core.ORIGIN + "/ui/zapret/voice",
+                    "Accept": "application/json"})
             try:
-                web.api("POST", "/api/zapret/service/start")
-            except core.Refusal as error:
-                need(str(error) == "GUI_HTTP_REJECTED_500:/api/zapret/service/start",
-                     "S05C3A_NOT_REAL_PHP_USEREXCEPTION")
-            else:
-                raise Refusal("S05C3A_FALSE_SUCCESS_WITH_INVALID_TEMPLATE")
+                with web.client.open(request, timeout=45):
+                    raise Refusal("S05C3B_FALSE_SUCCESS_WITH_INVALID_TEMPLATE")
+            except urllib.error.HTTPError as error:
+                need(error.code == 500, "S05C3B_HTTP_STATUS_NOT_500")
+                raw = error.read(8193)
+                need(len(raw) <= 8192, "S05C3B_UNBOUNDED_HTTP_ERROR")
+                try:
+                    refusal = json.loads(raw)
+                except (ValueError, UnicodeDecodeError):
+                    raise Refusal("S05C3B_HTTP_ERROR_NOT_JSON") from None
+                need(type(refusal) is dict and
+                     refusal.get("errorMessage") ==
+                       "Zapret2 Start refused: configuration template generation failed." and
+                     isinstance(refusal.get("errorTitle"), str) and
+                     bool(refusal["errorTitle"]),
+                     "S05C3B_REAL_HTTP_CAUSE_NOT_DELIVERED")
             need(stage.is_file() and not stage.is_symlink() and
                  re.fullmatch(
                     r"1\|13\|config\|failed\|[^|\r\n]{1,64}\|template generation failed\n?",
@@ -279,7 +296,7 @@ def s05c3a_template_red(web, core, saved_config, engine_sha, foreign_before):
          template.stat().st_ino == meta.st_ino and
          stat.S_IMODE(template.stat().st_mode) == stat.S_IMODE(meta.st_mode),
          "S05C3A_ORIGINAL_TEMPLATE_RESTORE_FAILED")
-    print("S05C3A_REAL_STAGE13_HTTP_GENERIC_RED=PASS")
+    print("S05C3B_REAL_STAGE13_HTTP_QUALIFIED_CAUSE=PASS")
 
 def self_test():
     g07 = load("stage2-opnsense-g07-native-lifecycle.py")
@@ -300,7 +317,7 @@ def self_test():
          OWNED.match("65534 allow") is None,
          "S03E3F_IPFW_RANGE_SCOPE_REGRESSION")
     need("S05C3A_INVALID_JINJA_TAG" in Path(__file__).read_text() and
-         "S05C3A_REAL_STAGE13_HTTP_GENERIC_RED=PASS" in Path(__file__).read_text(),
+         "S05C3B_REAL_STAGE13_HTTP_QUALIFIED_CAUSE=PASS" in Path(__file__).read_text(),
          "S05C3A_SOURCE_GUARD_MISSING")
     print("S03E3F_LEGACY_FAST=PASS")
 
@@ -362,7 +379,7 @@ def execute():
     web = core.GuestHttps()
     core.login(web)
     status(web, "stopped")
-    s05c3a_template_red(web, core, config_enabled, engine_sha, foreign_before)
+    s05c3_template_refusal(web, core, config_enabled, engine_sha, foreign_before)
 
     # Every request below is authentic installed PHP -> configd -> original
     # FD9 -> unchanged legacy service. A failure leaves the disposable guest

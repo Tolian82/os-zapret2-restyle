@@ -1144,6 +1144,7 @@ jobs:
           sh scripts/test-tz6v5-s05c2a-fd9-refusal.sh
           python3.13 scripts/test-tz6v5-s05c2b-start-terminal.py
           python3.13 scripts/test-tz6v5-s05c2c-missing-engine.py
+          python3.13 scripts/test-tz6v5-s05c3b-template-failure.py
 
       - name: Test Strategy Lab Python foundation
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-foundation.sh
