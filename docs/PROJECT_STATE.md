@@ -1,4 +1,12 @@
-# 24.11.2026 — CURRENT S05c2c source-only original Start engine absence
+# 24.11.2026 — CURRENT S05c3a bounded physical template-generation RED
+
+`VERSION=0.6.5`, `PLUGIN_REVISION=164`, candidate `v0.6.5_164`, prospective `os-zapret2-restyle-0.6.5_164.pkg` **NOT published/owner-installed**. Accepted `main _163 f2c651dfd36b`, [PR #1279](https://github.com/Tolian82/os-zapret2-restyle/pull/1279) merged after 33/33 applicable SUCCESS and 7 path-skipped checks; genuine saved WAN → missing engine HTTP UserException PASS, Config/IPFW unchanged, original Status/protected .pkg targeted retries PASS. Postmerge main CI/release classifier PASS; Chromium still in progress at first observation.
+
+New **source-only** S05c3a test in existing native S03e3f Legacy positive VM: after G03 genuine upstream installation and saved enabled/WAN but before ordinary Start, one temporary invalid installed Jinja `zapret.conf` (strict root/package identity, restored byte-exact in finally) must make actual original `configctl template reload OPNsense/Zapret` fail. Assert authenticated unmocked HTTP Start refusal, original stage `1/13/config/failed`, unchanged saved Config XML, engine, PID and owned/foreign IPFW; then existing genuine positive Legacy Start/Restart/Stop executes. No product modifications, no separate VM, no new FD9/Config writer. **Native physical evidence pending**; if real failure cannot be qualified, do NOT invent a fixed diagnostic code. Full S05 NO-GO, S06–S20 blocked.
+
+---
+
+# 24.11.2026 — HISTORICAL pre-merge S05c2c snapshot
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=163`, source candidate `v0.6.5_163`, prospective `os-zapret2-restyle-0.6.5_163.pkg` **NOT published/installed**. Accepted `main _162 0bbc3c13` [PR #1278](https://github.com/Tolian82/os-zapret2-restyle/pull/1278) includes verified original-FD9 Start success, real Common/Legacy and FD9_BUSY negative, 18/18 exact-head workflows successful. Candidate `v0.6.5_163`: actual original `ensure_runtime_components()` emits a single fixed private missing-engine refusal only if the path is absent (not symlink), in protected Start; existing configd/PHP/Strategies RU/EN exact allowlist consumes it. All other unknown Start failures, public CLI rc/stdout/stderr, journal/FD9/PID/IPFW/Config and terminal RUNNING verification unchanged. Source/CI/new native no-engine API refusal not yet accepted; no GUI-click proof (control disabled without upstream), no public `_163.pkg`, no user appliance changes. Full S05 NO-GO; S06+ blocked.
 
