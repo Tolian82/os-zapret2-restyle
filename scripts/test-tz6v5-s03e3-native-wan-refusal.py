@@ -64,7 +64,7 @@ def guest_guard():
     need(body.count("configdRun('zapret wan_preflight'") == 1 and
          "throw new UserException(gettext('Select a WAN interface')" in body and
          body.find("throw new UserException(gettext('Select a WAN interface')") <
-         body.find("return parent::startAction();") and
+         body.find("return $this->verifiedLifecycleAction(\'start\');") and\n         "return parent::startAction();" not in body and
          "if ($result === 'wan-required')" in body,
          "S03E3_PRE_DISPATCH_USEREXCEPTION_GATE_CHANGED")
     # The native action is the genuinely installed PHP/configd preflight, not

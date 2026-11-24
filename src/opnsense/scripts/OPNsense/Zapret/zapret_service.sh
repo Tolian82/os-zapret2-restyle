@@ -3517,19 +3517,6 @@ stop_legacy_without_python_service()
     return 0
 }
 
-# Complete a private GUI action while the SAME original FD9 is held,
-# including Common/Recovery early-return branches. Legacy public rc unchanged.
-service_api_complete()
-{
-    [ "$#" -eq 1 ] || return 64
-    _service_complete_rc="$1"
-    if [ -n "$_service_receipt_action" ]; then
-        service_api_terminal_receipt "$_service_receipt_action" "$_service_complete_rc"
-        return $?
-    fi
-    return "$_service_complete_rc"
-}
-
 # A single writer (the original FD9 holder) may print this fixed, bounded
 # GUI receipt, and ONLY after the normal mutation returns success AND a
 # read-only native state probe verifies the target while FD9 is still held.
@@ -3564,6 +3551,20 @@ service_api_terminal_receipt()
 
 service_with_lifecycle_lock()
 {
+    # Local completion is defined WITHIN the original extracted FD9 function,
+    # so cold/status and shell-source witnesses remain self-contained.
+    # It is used only from already-existing Common/Recovery Start returns.
+    service_api_complete()
+    {
+        [ "$#" -eq 1 ] || return 64
+        _service_complete_rc="$1"
+        if [ -n "$_service_receipt_action" ]; then
+            service_api_terminal_receipt "$_service_receipt_action" "$_service_complete_rc"
+            return $?
+        fi
+        return "$_service_complete_rc"
+    }
+
     # This function is also sourced alone by native fail-closed shell tests.
     : "${PKG_UPDATE_RECORD:=/var/db/zapret2/pkg-update/operation.json}"
     _service_lock_timeout="$1"
@@ -3884,8 +3885,11 @@ service_with_lifecycle_lock()
         esac
         service_dispatch "$@"
         _service_dispatch_rc=$?
-        service_api_complete "$_service_dispatch_rc"
-        return $?
+        if [ -n "$_service_receipt_action" ]; then
+            service_api_terminal_receipt "$_service_receipt_action" "$_service_dispatch_rc"
+            return $?
+        fi
+        return "$_service_dispatch_rc"
     )
 }
 
