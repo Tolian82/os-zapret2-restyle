@@ -246,6 +246,8 @@
 
 ### S08. Pure compiler target/resource/Voice/native
 
+**S08a source-only candidate (24.11.2026, `_192`):** [first bounded Target Mode/profile parity contract](ZAPRET2_TZ6V5_S08A_TARGET_POLICY_PARITY.md), [issue #1310](https://github.com/Tolian82/os-zapret2-restyle/issues/1310). Read original `target_mode.sh::target_mode_policy` bytes without executing it, use only S07 native registered IDs and canonical `profile_policy` split/normalize to project ordered selectors. No implied `HOSTLIST:auto`, explicit selectors win, original shell output exact-byte comparison in source CI. No effective Voice/resources/full native args/diff planner yet; this is NOT S08 GO and does not authorize a physical transition.
+
 1. Переиспользовать `registry.sh`, `storage.sh`, `target_mode.sh`, `profile_pipeline.sh`, `auto_detect_origin_map.py`, Voice producers и уже принятый native 2-tier generator.
 2. Детерминированно вычислять requested/effective: manual empty≠Found disabled, Found initially empty but live target, Exclude empty OFF/invalid FAIL, Voice checkbox ON + empty/invalid IPSet FAIL, OFF retains draft; `auto` только eligible learning, `list/all` без clone, явные selectors приоритетнее default.
 3. Гарантировать все обычные working профили перед learning; known User не перехватывается YouTube learner, нет hidden `<HOSTLIST:auto>` или observer, exact final native number map.

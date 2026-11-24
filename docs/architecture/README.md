@@ -4,7 +4,7 @@
 
 ## Active work and retained long-term design
 
-- **Current S08:** [formal S07 original OPNsense XML → strict neutral read-only model native GO](ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md) after [S06 native first-install/reinstall GO](ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md); next [S08 pure compiler/semantic planner](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) retaining original FD9, exact first-match/profile order. S09–S15 separate.
+- **Current S08:** [formal S07 original OPNsense XML → strict neutral read-only model native GO](ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md) after [S06 native first-install/reinstall GO](ZAPRET2_TZ6V5_S06_NATIVE_INSTALL_REINSTALL_GO.md); next [S08 pure compiler/semantic planner](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) retaining original FD9, exact first-match/profile order. [S08a original-mode target parity candidate](ZAPRET2_TZ6V5_S08A_TARGET_POLICY_PARITY.md) is source-only and not full S08 GO; S09–S15 separate.
 
 - **MANDATORY UPSTREAM CANON:** [официальный manual.en.md](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) → [правило DEV-069: не проверять описанное поведение движка](ZAPRET2_UPSTREAM_MANUAL_CANON.md).
 - **CLI Emergency Contract:** [ТЗ_6v5 §5.5–5.6: guarded `--force` и read-only `--help`](TZ_6v5.md), [DEV-070](../PROJECT_PRINCIPLES.md); новая регрессия V5-15/16 в [S00–S20](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
