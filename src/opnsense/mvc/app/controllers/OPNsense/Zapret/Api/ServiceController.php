@@ -110,6 +110,15 @@ class ServiceController extends ApiMutableServiceControllerBase
                 gettext('Service operation failed')
             );
         }
+        // A real config reload failure persisted original stage 1/13 under
+        // the inherited FD9. Only its exact private marker can cross HTTP.
+        if ($isStart && strlen($raw) <= 128 &&
+            trim($raw) === 'zapret-api-lifecycle-v1:start:refused:template-generation-failed') {
+            throw new UserException(
+                'Zapret2 Start refused: configuration template generation failed.',
+                gettext('Service operation failed')
+            );
+        }
         $valid = strlen($raw) <= 8192 &&
             substr_count($raw, 'zapret-api-lifecycle-v1:') === 1 &&
             preg_match('/(?:\\A|\\n)' . preg_quote($expected, '/') . '\\z/D', trim($raw)) === 1;
