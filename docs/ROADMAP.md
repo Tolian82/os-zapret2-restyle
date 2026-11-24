@@ -1,3 +1,5 @@
+## Current priority — ТЗ_6v5 S06
+
 **Текущий приоритет ТЗ_6v5:** [S05 Status/diagnostics formal GO](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md). **S06 next** — first install one-time seed, saved/empty reinstall and WAN-only Save. Unified Reload/Force and semantic Lab repair remain S08–S15. [Order S00–S20](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
 
 ## 23.11.2026 — TZ6v5 S03e1 actual CLI strict-options expected RED

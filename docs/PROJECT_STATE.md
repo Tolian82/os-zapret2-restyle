@@ -4,7 +4,7 @@
 
 **S05 acceptance:** [formal read-only Status / genuine original diagnostic evidence](architecture/ZAPRET2_TZ6V5_S05_READONLY_DIAGNOSTICS_GO.md). Unknown child rc stays null, Lab same-job installed consumer test intercepts historical result (not a new physical failure); S08/S09 semantic Reload, S11–S14 new physical command/force/help and S15 real Lab repair still pending. Issue #1269 closes after formal acceptance delivery.
 
-**Next S06:** docs-only v0.6.5_187, VERSION=0.6.5, PLUGIN_REVISION=187; prospective os-zapret2-restyle-0.6.5_187.pkg is NOT built or published. Read [S06 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), [G04 initial config](verification/G04_INITIAL_NATIVE_CONFIG.md) and [G05 WAN](verification/G05_WAN_ONLY_NATIVE.md). Qualify empty first install, one-time ten-domain YouTube TCP/QUIC seed/service OFF, saved/empty/user content preservation on reinstall, genuine WAN-only Apply/F5 without ordinary engine/IPFW. Reuse accepted original Config writer; no new VM unless a genuine S06 gap. Owner #1224 afterstate unknown; no owner appliance action.
+**Next S06:** docs-only `v0.6.5_187`, `VERSION=0.6.5`, `PLUGIN_REVISION=187`; prospective `os-zapret2-restyle-0.6.5_187.pkg` is NOT built or published. Read [S06 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), [G04 initial config](verification/G04_INITIAL_NATIVE_CONFIG.md) and [G05 WAN](verification/G05_WAN_ONLY_NATIVE.md). Qualify empty first install, one-time ten-domain YouTube TCP/QUIC seed/service OFF, saved/empty/user content preservation on reinstall, genuine WAN-only Apply/F5 without ordinary engine/IPFW. Reuse accepted original Config writer; no new VM unless a genuine S06 gap. Owner #1224 afterstate unknown; no owner appliance action.
 
 
 ---
