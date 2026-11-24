@@ -143,8 +143,18 @@ class NativeBuilderTests(unittest.TestCase):
                 ("profile", "chrome146", "CHROME_PROFILE_MISMATCH")):
             with self.subTest(field=field):
                 changed = dict(observed, **{field: wrong})
-                with self.assertRaisesRegex(mod.Refusal, refusal):
+                with self.assertRaisesRegex(mod.Refusal, refusal) as caught:
                     mod.verified_private_source(lock, changed, platform)
+                self.assertIn(":UNQUALIFIED_SIGNED_SOURCE=", str(caught.exception))
+                self.assertIn(changed["signed_freebsd_latest_package_sha256"],
+                              str(caught.exception))
+                self.assertIn(changed["private_binary_sha256"], str(caught.exception))
+        with self.assertRaisesRegex(mod.Refusal, "VERSION_MISMATCH") as caught:
+            mod.verified_private_source(
+                lock, dict(observed, latest_version_diagnostic="invalid\nprivate"),
+                platform)
+        self.assertNotIn("private", str(caught.exception))
+        self.assertNotIn("UNQUALIFIED_SIGNED_SOURCE", str(caught.exception))
         with self.assertRaisesRegex(mod.Refusal, "TARGET_ABI_MISMATCH"):
             mod.verified_private_source(
                 lock, observed, {"freebsd_pkg_abi": "FreeBSD:16:amd64"})

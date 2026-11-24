@@ -580,7 +580,8 @@ class ServiceController extends ApiMutableServiceControllerBase
             $releases = $this->getReleaseList($backend);
         } catch (\Throwable $exception) {
             throw new UserException(
-                gettext('No stable bol-van/zapret2 releases could be obtained.'),
+                // Fixed pre-dispatch reason for the existing RU/EN GUI allowlist.
+                'No stable bol-van/zapret2 releases could be obtained.',
                 gettext('Zapret2 release error')
             );
         }

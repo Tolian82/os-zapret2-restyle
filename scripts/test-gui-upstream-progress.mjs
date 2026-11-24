@@ -58,3 +58,26 @@ assert.match(script, /if \(releaseApplyPending \|\| runtimeWasBusy\)/);
 assert.match(script, /ensureRuntimePolling\(false\);[\s\S]{0,100}refreshRuntime\(\);/);
 assert(braces.includes('releaseNeedsReview'), 'missing fail-closed retry guard');
 console.log('PASS: upstream GUI terminal classifier, missing busy pulse, transient polling, bounded review');
+
+// S05d1: execute the actual fixed-cause consumer in both languages.
+const failureStart = view.indexOf('        function releaseInstallFailureMessage(xhr) {');
+const failureEnd = view.indexOf('\n        // The runtime worker can finish between polls', failureStart);
+assert(failureStart >= 0 && failureEnd > failureStart);
+const failureSource = '(' + view.slice(failureStart, failureEnd).trim() + ')';
+const known = {status: 500, responseJSON: {errorTitle: 'Zapret2 release error',
+    errorMessage: 'No stable bol-van/zapret2 releases could be obtained.'}};
+for (const isRussian of [false, true]) {
+    const failureMessage = vm.runInNewContext(failureSource,
+        {isRussian, runtimeText: {applyReview: 'REVIEW'}});
+    assert.equal(failureMessage(known), isRussian
+        ? 'Не удалось получить список стабильных версий Zapret2. Обновите страницу и проверьте состояние службы перед повтором.'
+        : 'Could not obtain the list of stable Zapret2 releases. Reload and check the service state before retrying.');
+    for (const unknown of [null, {}, {status: 0}, {status: 503, responseJSON: known.responseJSON},
+        {status: 500, responseJSON: {errorMessage: known.responseJSON.errorMessage}},
+        {status: 500, responseJSON: {errorTitle: 'x', errorMessage: 'untrusted backend text'}},
+        {status: 500, responseJSON: {errorTitle: 'x', errorMessage: known.responseJSON.errorMessage + ' extra'}}]) {
+        assert.equal(failureMessage(unknown), 'REVIEW', 'unknown cause must retain review guidance');
+    }
+}
+assert.match(view, /finishReleaseOperation\(true, releaseInstallFailureMessage\(xhr\)\);/);
+console.log('PASS: S05d1 known release-list refusal RU/EN, unknown transport review unchanged');

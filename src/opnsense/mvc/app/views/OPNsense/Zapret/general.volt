@@ -932,6 +932,21 @@
             setRuntimeBusy(runtimeWasBusy);
         }
 
+        // Only the existing fixed PHP pre-dispatch release-list refusal
+        // has a known cause here. A lost/unknown HTTP response may have
+        // occurred after dispatch; preserve the review lock in both cases.
+        function releaseInstallFailureMessage(xhr) {
+            const response = xhr && xhr.responseJSON;
+            if (xhr && xhr.status === 500 && response &&
+                typeof response.errorTitle === 'string' && response.errorTitle.length > 0 &&
+                response.errorMessage === 'No stable bol-van/zapret2 releases could be obtained.') {
+                return isRussian
+                    ? 'Не удалось получить список стабильных версий Zapret2. Обновите страницу и проверьте состояние службы перед повтором.'
+                    : 'Could not obtain the list of stable Zapret2 releases. Reload and check the service state before retrying.';
+            }
+            return runtimeText.applyReview;
+        }
+
         // The runtime worker can finish between polls, or its status endpoint
         // can transiently fail while native FD9 is held. Correlate the desired
         // release with a real busy observation OR a changed committed version.
@@ -1633,10 +1648,10 @@
                 ensureRuntimePolling(false);
                 refreshRuntime();
                 refreshReleases(data && data.version ? data.version : version);
-            }).fail(function() {
-                // A transport timeout may happen after dispatch. Never
-                // silently unlock a potentially live second transaction.
-                finishReleaseOperation(true, runtimeText.applyReview);
+            }).fail(function(xhr) {
+                // Even a known pre-dispatch refusal does not prove the
+                // absence of another transaction. Keep the review lock.
+                finishReleaseOperation(true, releaseInstallFailureMessage(xhr));
                 ensureRuntimePolling(false);
                 setRuntimeBusy(runtimeWasBusy);
                 refreshRuntime();

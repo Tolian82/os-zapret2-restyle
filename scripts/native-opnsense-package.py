@@ -406,8 +406,29 @@ def verified_private_source(lock, bundle, platform):
               ("elf_sha256", "private_binary_sha256", "ELF_SHA256"),
               ("chrome_profile", "profile", "CHROME_PROFILE"))
     for wanted, observed, label in fields:
-        need(bundle[observed] == lock[wanted],
-             "PRIVATE_CURL_PIN_" + label + "_MISMATCH")
+        if bundle[observed] != lock[wanted]:
+            # The signed-source bundle has already passed native validation,
+            # ldd and smoke checks. Report only bounded public identities;
+            # observation is not approval and MUST NOT permit packaging.
+            evidence = {
+                "version": bundle["latest_version_diagnostic"],
+                "source_pkg_sha256": bundle["signed_freebsd_latest_package_sha256"],
+                "elf_sha256": bundle["private_binary_sha256"],
+                "chrome_profile": bundle["profile"],
+            }
+            patterns = {
+                "version": r"[0-9A-Za-z][0-9A-Za-z._,+~$-]{0,127}",
+                "source_pkg_sha256": r"[a-f0-9]{64}",
+                "elf_sha256": r"[a-f0-9]{64}",
+                "chrome_profile": r"chrome[0-9]{1,8}",
+            }
+            reason = "PRIVATE_CURL_PIN_" + label + "_MISMATCH"
+            if all(isinstance(evidence[key], str) and
+                   re.fullmatch(pattern, evidence[key])
+                   for key, pattern in patterns.items()):
+                reason += ":UNQUALIFIED_SIGNED_SOURCE=" + json.dumps(
+                    evidence, sort_keys=True, separators=(",", ":"))
+            raise Refusal(reason)
     return True
 
 
