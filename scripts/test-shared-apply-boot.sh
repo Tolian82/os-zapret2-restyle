@@ -191,7 +191,10 @@ grep -Fq 'shared_apply_boot_service "$_shared_owner"' "$SOURCE" || fail "common 
 # Exercise the ACTUAL lifecycle wrapper, including the original lockf FD9.
 # These tests never touch a real system lock or OPNsense configuration.
 # The isolated original-FD9 router receives a read-only WAN mock.
-sed -n '/^service_with_lifecycle_lock()$/,/^}$/p' "$SOURCE" > "$ROOT/lifecycle.sh"
+# Include the actual native WAN helper called by this extracted original
+# FD9 dispatcher; the WAN decision itself remains the test's existing stub.
+sed -n '/^service_wan_first_private()$/,/^}$/p' "$SOURCE" > "$ROOT/lifecycle.sh"
+sed -n '/^service_with_lifecycle_lock()$/,/^}$/p' "$SOURCE" >> "$ROOT/lifecycle.sh"
 sh -n "$ROOT/lifecycle.sh" || fail "lifecycle shell syntax"
 . "$ROOT/lifecycle.sh"
 wan_first_service() { [ "${WAN_OK:-1}" = 1 ] || return 64; }

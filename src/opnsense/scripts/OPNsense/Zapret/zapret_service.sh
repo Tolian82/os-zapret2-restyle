@@ -77,6 +77,27 @@ wan_first_service()
     esac
 }
 
+# Original WAN decision under SAME FD9. Only private Start/Restart exposes
+# exact native rc and source cause, never public CLI, Voice or arbitrary stderr.
+service_wan_first_private()
+{
+    [ "$#" -eq 2 ] || return 64
+    case "$1:$2" in start:require|restart:if-start) ;; *) return 64 ;; esac
+    _service_wan_verb="$1"
+    if wan_first_service "$2"; then return 0; else _service_wan_rc=$?; fi
+    if [ "${_service_receipt_action:-}" = "${_service_wan_verb}" ]; then
+        case "${_service_wan_rc}:${_wan_response:-}" in
+            64:wan-required)
+                printf 'zapret-api-lifecycle-v1:%s:refused:wan-required\n' "${_service_wan_verb}" ;;
+            64:wan-invalid)
+                printf 'zapret-api-lifecycle-v1:%s:refused:wan-invalid\n' "${_service_wan_verb}" ;;
+            69:wan-unavailable)
+                printf 'zapret-api-lifecycle-v1:%s:refused:wan-unavailable\n' "${_service_wan_verb}" ;;
+        esac
+    fi
+    return "${_service_wan_rc}"
+}
+
 ensure_runtime_components()
 {
     [ -x "${DVTWS_BIN}" ] && return 0
@@ -3688,13 +3709,12 @@ service_with_lifecycle_lock()
                    return 69 ;;
             esac
         fi
-        # WAN-first runtime gate; no effect on Stop, setup or passive Save.
+        # WAN-first before any native Start or Restart mutation. A strict
+        # action-bound private refusal comes only from original WAN source.
         case "${1:-}" in
-            start) wan_first_service require || return $? ;;
-            restart|reconfigure)
-                wan_first_service if-start || return $? ;;
-            # An explicit compatibility Voice ENABLE is a start request even
-            # if persisted general/Voice Enabled are currently OFF.
+            start) service_wan_first_private start require || return $? ;;
+            restart) service_wan_first_private restart if-start || return $? ;;
+            reconfigure) wan_first_service if-start || return $? ;;
             telegram-voice-enable) wan_first_service require || return $? ;;
         esac
         # Refuse Python-dependent operations BEFORE any Config/engine/IPFW
