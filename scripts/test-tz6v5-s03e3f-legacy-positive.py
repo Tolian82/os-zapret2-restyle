@@ -19,6 +19,7 @@ import stat
 import subprocess
 import sys
 import urllib.error
+import urllib.request
 import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
@@ -201,6 +202,56 @@ def lifecycle_http(web, name, g07):
 
 
 
+def s05q_http_outcome(code, payload):
+    if type(payload) is not dict:
+        return None
+    if code == 200 and payload.get("status") == "ok" and payload.get("response") == "OK":
+        return "FALSE_OK"
+    if (code == 500 and payload.get("errorMessage") ==
+            "Zapret2 reconfigure was not confirmed. Check service status and recovery before retrying."
+            and isinstance(payload.get("errorTitle"), str) and payload["errorTitle"]):
+        return "HTTP_REFUSED"
+    return None
+
+
+def s05q_stage_snapshot(stage):
+    if not stage.exists() and not stage.is_symlink():
+        return None
+    meta = stage.lstat()
+    need(stat.S_ISREG(meta.st_mode) and meta.st_uid == 0 and
+         meta.st_nlink == 1 and 0 < meta.st_size <= 4096,
+         "S05Q_ORIGINAL_STAGE_UNSAFE")
+    return (meta.st_dev, meta.st_ino, meta.st_mtime_ns, meta.st_ctime_ns,
+            stage.read_bytes())
+
+
+def s05q_reconfigure_refusal(web, core, stage):
+    before = s05q_stage_snapshot(stage)
+    request = urllib.request.Request(
+        core.ORIGIN + "/api/zapret/service/reconfigure", data=b"",
+        method="POST", headers={"X-CSRFToken": web.csrf_token,
+            "Referer": core.ORIGIN + "/ui/zapret/voice",
+            "Accept": "application/json"})
+    try:
+        with web.client.open(request, timeout=45) as response:
+            code, raw = response.getcode(), response.read(8193)
+    except urllib.error.HTTPError as error:
+        with error:
+            code, raw = error.code, error.read(8193)
+    need(len(raw) <= 8192, "S05Q_UNBOUNDED_HTTP_RESPONSE")
+    try:
+        payload = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise Refusal("S05Q_HTTP_NOT_JSON") from None
+    outcome = s05q_http_outcome(code, payload)
+    need(outcome is not None, "S05Q_HTTP_OUTCOME_UNQUALIFIED")
+    after = s05q_stage_snapshot(stage)
+    need(after is not None and after != before and re.fullmatch(
+        rb"1\|13\|config\|failed\|[^|\r\n]{1,64}\|template generation failed\n?",
+        after[-1]) is not None, "S05Q_FRESH_ORIGINAL_STAGE13_NOT_OBSERVED")
+    return outcome
+
+
 def s05c3_template_refusal(web, core, saved_config, engine_sha, foreign_before):
     """Genuine original Legacy Start template failure on test-only native guest.
 
@@ -251,6 +302,18 @@ def s05c3_template_refusal(web, core, saved_config, engine_sha, foreign_before):
             f.write(b"{% S05C3A_INVALID_JINJA_TAG %}\n")
             f.truncate()
             os.fsync(f.fileno())
+            # S05q goes FIRST, so the Stage13 witness cannot be a prior
+            # Start/Restart from this fixture. The original FD9 is unmodified.
+            outcome = s05q_reconfigure_refusal(web, core, stage)
+            unowned()
+            need(CONFIG.read_bytes() == saved_config and
+                 hashlib.sha256(ENGINE.read_bytes()).hexdigest() == engine_sha and
+                 not PID.exists() and not MONITOR.exists() and not ACTIVE.exists() and
+                 not census(), "S05Q_MUTATED_CONFIG_OR_ENGINE")
+            owned, foreign = inventory()
+            need(owned == before_owned and foreign == before_foreign,
+                 "S05Q_MUTATED_IPFW")
+            print("S05Q_ORIGINAL_STAGE13_HTTP_OUTCOME=" + outcome)
             # Real authenticated TLS session, original CSRF and PHP/configd.
             # Read only bounded error fields; never print configd stdout/stderr.
             request = urllib.request.Request(
@@ -355,6 +418,18 @@ def self_test():
          "S05C3B_REAL_STAGE13_HTTP_QUALIFIED_CAUSE=PASS" in Path(__file__).read_text() and
          "S05K_REAL_STAGE13_RESTART_HTTP_CAUSE=PASS" in Path(__file__).read_text(),
          "S05C3A_SOURCE_GUARD_MISSING")
+    need(s05q_http_outcome(200, {"status": "ok", "response": "OK"}) ==
+         "FALSE_OK", "S05Q_FALSE_OK_NOT_CLASSIFIED")
+    need(s05q_http_outcome(500, {"errorMessage":
+         "Zapret2 reconfigure was not confirmed. Check service status and recovery before retrying.",
+         "errorTitle": "Zapret configuration error"}) == "HTTP_REFUSED",
+         "S05Q_REFUSAL_NOT_CLASSIFIED")
+    for code, payload in ((200, {"response": "OK"}),
+                          (200, {"status": "failed", "response": "OK"}),
+                          (500, {"errorMessage": "private"}),
+                          (503, {}), (200, [])):
+        need(s05q_http_outcome(code, payload) is None,
+             "S05Q_UNQUALIFIED_HTTP_ACCEPTED")
     print("S03E3F_LEGACY_FAST=PASS")
 
 
