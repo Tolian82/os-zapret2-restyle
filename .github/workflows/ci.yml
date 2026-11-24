@@ -555,7 +555,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: S05m execute actual reconfigure API fail-closed and positive path
+      - name: S05n execute actual lifecycle Start Stop Restart WAN and backend transport failures
         run: |
           php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php
           php -l scripts/test-g07-runtime-api.php

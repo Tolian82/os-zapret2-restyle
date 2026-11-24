@@ -42,7 +42,14 @@ class ServiceController extends ApiMutableServiceControllerBase
     /** Localized GUI guard; original FD9 repeats the native WAN-first test. */
     public function startAction(): array
     {
-        $result = trim((string)(new Backend())->configdRun('zapret wan_preflight', false, 20));
+        try {
+            $result = trim((string)(new Backend())->configdRun('zapret wan_preflight', false, 20));
+        } catch (\Throwable $exception) {
+            // A transport error is not evidence of missing WAN or a safe
+            // native cause. Never expose raw backend exception text.
+            throw new UserException(gettext('Saved WAN preflight is unavailable'),
+                gettext('Zapret configuration error'));
+        }
         if ($result === 'wan-required') {
             throw new UserException(gettext('Select a WAN interface'),
                 gettext('Zapret configuration error'));
@@ -82,9 +89,24 @@ class ServiceController extends ApiMutableServiceControllerBase
                 ? 'zapret-api-lifecycle-v1:stop:stopped'
                 : 'zapret-api-lifecycle-v1:restart:running');
         $state = $isStop ? 'stopped' : 'started';
-        $raw = (string)(new Backend())->configdRun(
-            $backendAction, false, $isStop ? 120 : 600
-        );
+        try {
+            $raw = (string)(new Backend())->configdRun(
+                $backendAction, false, $isStop ? 120 : 600
+            );
+        } catch (\Throwable $exception) {
+            // A lost/failed configd transport cannot prove physical state
+            // or attribute a native cause. The original FD9 may have run.
+            // Use the same action-specific unconfirmed message as a
+            // malformed terminal receipt; never return exception bytes.
+            throw new UserException(
+                $isStart
+                    ? gettext('Zapret2 Start was not confirmed. Check the service status and log.')
+                    : ($isStop
+                        ? gettext('Zapret2 Stop was not confirmed. Check the service status and log.')
+                        : gettext('Zapret2 Restart was not confirmed. Check the service status and log.')),
+                gettext('Service operation failed')
+            );
+        }
         // Do not parse or return raw configd text. At most one exact receipt
         // must end the bounded output; all refusals are handled by gettext.
         // Only the EXACT fixed refusal from a real native lockf timeout

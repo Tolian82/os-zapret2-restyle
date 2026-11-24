@@ -14,6 +14,15 @@ namespace OPNsense\Core {
         public static string $reconfigureReceipt = 'OK';
         public static bool $reconfigureThrows = false;
         public static int $reconfigureCalls = 0;
+        public static string $wanReceipt = 'wan-ready';
+        public static bool $wanThrows = false;
+        public static array $verifiedThrows = [];
+        public static array $verifiedCalls = [];
+        public static array $verifiedReceipts = [
+            'zapret start_verified' => 'zapret-api-lifecycle-v1:start:running',
+            'zapret stop_verified' => 'zapret-api-lifecycle-v1:stop:stopped',
+            'zapret restart_verified' => 'zapret-api-lifecycle-v1:restart:running',
+        ];
         public function configdRun($key, ...$ignored): string {
             if ($key === 'zapret setup_status') return self::$receipt;
             if ($key === 'zapret setup_releases') return self::$releaseReceipt;
@@ -23,6 +32,20 @@ namespace OPNsense\Core {
                     throw new \RuntimeException('transport exception: /conf/config.xml SECRET_BACKEND');
                 }
                 return self::$reconfigureReceipt;
+            }
+            if ($key === 'zapret wan_preflight') {
+                self::$verifiedCalls[] = $key;
+                if (self::$wanThrows) {
+                    throw new \RuntimeException('WAN transport: /conf/config.xml SECRET_BACKEND');
+                }
+                return self::$wanReceipt;
+            }
+            if (array_key_exists($key, self::$verifiedReceipts)) {
+                self::$verifiedCalls[] = $key;
+                if (self::$verifiedThrows[$key] ?? false) {
+                    throw new \RuntimeException('FD9 transport: /conf/config.xml SECRET_BACKEND');
+                }
+                return self::$verifiedReceipts[$key];
             }
             throw new \RuntimeException('Unexpected read-only action: ' . $key);
         }
@@ -238,5 +261,83 @@ namespace {
               'non-POST reconfigure reached backend');
     FakeRequest::$post = true;
     echo "S05M_ORIGINAL_RECONFIGURE_STAGE_UNCORRELATED_FAIL_CLOSED=PASS\n";
+
+    // S05n: execute each *original* ServiceController public lifecycle
+    // entrypoint with a backend exception carrying synthetic private bytes.
+    // A failure or unknown transport result must never be terminal success,
+    // nor an unbounded internal PHP exception. Old source propagates
+    // RuntimeException verbatim (RED); the candidate throws safe
+    // action-specific UserException, retaining known receipts (GREEN).
+    foreach ([
+        ['start', 'zapret start_verified', 'started',
+            'Zapret2 Start was not confirmed. Check the service status and log.'],
+        ['stop', 'zapret stop_verified', 'stopped',
+            'Zapret2 Stop was not confirmed. Check the service status and log.'],
+        ['restart', 'zapret restart_verified', 'started',
+            'Zapret2 Restart was not confirmed. Check the service status and log.'],
+    ] as [$verb, $action, $state, $safe]) {
+        Backend::$wanThrows = false;
+        Backend::$wanReceipt = 'wan-ready';
+        Backend::$verifiedThrows[$action] = true;
+        $before = count(Backend::$verifiedCalls);
+        try {
+            controller()->{$verb . 'Action'}();
+            throw new \RuntimeException('S05N_FAIL:exception became success ' . $verb);
+        } catch (UserException $error) {
+            assertion($error->getMessage() === $safe &&
+                      !str_contains($error->getMessage(), 'SECRET_BACKEND'),
+                      'unbounded backend exception escaped ' . $verb);
+        }
+        $expectedActions = $verb === 'start'
+            ? ['zapret wan_preflight', $action] : [$action];
+        assertion(array_slice(Backend::$verifiedCalls, $before) === $expectedActions,
+                  'exception changed original configd action ordering ' . $verb);
+        Backend::$verifiedThrows[$action] = false;
+        $before = count(Backend::$verifiedCalls);
+        $positive = controller()->{$verb . 'Action'}();
+        assertion(($positive['status'] ?? null) === 'ok' &&
+                  ($positive['action'] ?? null) === $verb &&
+                  ($positive['state'] ?? null) === $state &&
+                  ($positive['verified'] ?? null) === true,
+                  'original exact terminal lifecycle success lost ' . $verb);
+        assertion(array_slice(Backend::$verifiedCalls, $before) === $expectedActions,
+                  'positive path changed configd action ordering ' . $verb);
+    }
+
+    // WAN is a separate pre-dispatch read. A failed transport can prove
+    // neither WAN_REQUIRED nor a verified Start; no FD9 call is allowed.
+    Backend::$wanThrows = true;
+    $before = count(Backend::$verifiedCalls);
+    try {
+        controller()->startAction();
+        throw new \RuntimeException('S05N_FAIL:WAN transport accepted');
+    } catch (UserException $error) {
+        assertion($error->getMessage() === 'Saved WAN preflight is unavailable',
+                  'WAN transport falsely attributed cause or leaked raw data');
+    }
+    assertion(array_slice(Backend::$verifiedCalls, $before) === ['zapret wan_preflight'],
+              'WAN transport error dispatched Start');
+    Backend::$wanThrows = false;
+
+    // Known genuine in-band WAN refusal remains the highest-precedence cause.
+    Backend::$wanReceipt = 'wan-required';
+    $before = count(Backend::$verifiedCalls);
+    try {
+        controller()->startAction();
+        throw new \RuntimeException('S05N_FAIL:WAN missing accepted');
+    } catch (UserException $error) {
+        assertion($error->getMessage() === 'Select a WAN interface',
+                  'known WAN_REQUIRED cause lost');
+    }
+    assertion(array_slice(Backend::$verifiedCalls, $before) === ['zapret wan_preflight'],
+              'known WAN refusal dispatched Start');
+    Backend::$wanReceipt = 'wan-ready';
+    FakeRequest::$post = false;
+    $before = count(Backend::$verifiedCalls);
+    assertion(controller()->stopAction() === ['response' => []] &&
+              Backend::$verifiedCalls === array_slice(Backend::$verifiedCalls, 0, $before),
+              'non-POST Stop dispatched backend');
+    FakeRequest::$post = true;
+    echo "S05N_ORIGINAL_LIFECYCLE_BACKEND_TRANSPORT_UNCONFIRMED=PASS\n";
     echo "G07_NATIVE_STATUS_API_FAST=PASS\n";
 }
