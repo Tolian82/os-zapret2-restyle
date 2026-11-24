@@ -1,4 +1,12 @@
-# 24.11.2026 — CURRENT S05c3a bounded physical template-generation RED
+# 24.11.2026 — CURRENT S05c3b original stage13 private Start reason
+
+`VERSION=0.6.5`, `PLUGIN_REVISION=165`, candidate `v0.6.5_165`, prospective `os-zapret2-restyle-0.6.5_165.pkg` **NOT published, NOT installed on owner OPNsense**. Base `main _164 0887f1ce` [S05c3a #1280](https://github.com/Tolian82/os-zapret2-restyle/pull/1280): exact native Legacy original template reload failure at `1/13/config/failed`, actual HTTP generic refusal, unchanged Config/IPFW/engine/PID, exact template restoration and positive Start/Restart/Stop. 4 workflows PASS; 9 check-runs SUCCESS, 8 SKIPPED. `_163` main CI/Chromium/release classifier PASSED.
+
+**Scope:** existing `refresh_generated_configuration` on genuine `config_reload_template` failure invokes original `orchestrator_fail_stage`. Only after successful stage-write AND private Start under inherited original FD9 emit one fixed `template-generation-failed` marker, never echo raw configctl details. Existing `start_verified errors:no` transports marker; PHP exact length-bounded match throws UserException and Strategies Start allowlisted RU/EN displays actionable safe text. Public Start and non-Start rc/stdout, no extra FD9/journal/Config writer, no foreign IPFW rule changes. Portable original-function negative and true same-VM Legacy authenticated HTTP evidence, plus exact-head CI/Stage1/Chromium **PENDING**. Whole S05 NO-GO, S06–S20 blocked; no public pkg.
+
+---
+
+# 24.11.2026 — HISTORICAL pre-merge S05c3a RED
 
 `VERSION=0.6.5`, `PLUGIN_REVISION=164`, candidate `v0.6.5_164`, prospective `os-zapret2-restyle-0.6.5_164.pkg` **NOT published/owner-installed**. Accepted `main _163 f2c651dfd36b`, [PR #1279](https://github.com/Tolian82/os-zapret2-restyle/pull/1279) merged after 33/33 applicable SUCCESS and 7 path-skipped checks; genuine saved WAN → missing engine HTTP UserException PASS, Config/IPFW unchanged, original Status/protected .pkg targeted retries PASS. Postmerge main CI/release classifier PASS; Chromium still in progress at first observation.
 

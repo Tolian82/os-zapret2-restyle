@@ -826,6 +826,8 @@
             const translations = {
                 'Zapret2 engine is not installed. Install an engine version first.':
                     'Движок Zapret2 не установлен. Сначала установите его версию.',
+                'Zapret2 could not generate its configuration. Check the service log.':
+                    'Не удалось сформировать конфигурацию Zapret2. Проверьте журнал службы.',
                 'Select a WAN interface': 'Укажите WAN интерфейс',
                 'Saved WAN preflight is unavailable':
                     'Предварительная проверка сохранённого WAN недоступна.',
@@ -1552,6 +1554,8 @@
                     // This is a fixed PHP mapping of an original FD9 refusal.
                     'Zapret2 Start refused: engine is not installed.':
                         'Zapret2 engine is not installed. Install an engine version first.',
+                    'Zapret2 Start refused: configuration template generation failed.':
+                        'Zapret2 could not generate its configuration. Check the service log.',
                     'Укажите WAN интерфейс': 'Select a WAN interface',
                     'Укажите WAN-интерфейс.': 'Select a WAN interface'
                 };

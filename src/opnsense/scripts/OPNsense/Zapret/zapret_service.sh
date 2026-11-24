@@ -95,9 +95,16 @@ ensure_runtime_components()
 refresh_generated_configuration()
 {
     if ! config_reload_template OPNsense/Zapret; then
-        orchestrator_fail_stage \
+        # S05c3b: only the actual original persisted stage-13 failure
+        # qualifies this fixed private Start cause. No stale stage file read.
+        if orchestrator_fail_stage \
             "${STAGE_FILE}" 1 13 config \
-            "template generation failed"
+            "template generation failed"; then
+            if [ "${_service_receipt_action:-}" = start ]; then
+                printf '%s\n' \
+                    'zapret-api-lifecycle-v1:start:refused:template-generation-failed'
+            fi
+        fi
         return 1
     fi
 }

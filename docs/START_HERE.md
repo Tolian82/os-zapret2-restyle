@@ -1,4 +1,14 @@
-## 24.11.2026 — CURRENT S05c3a true template-generation RED candidate
+## 24.11.2026 — CURRENT S05c3b genuine original template-stage13 to fixed Start cause
+
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=165`, source-only candidate `v0.6.5_165`, prospective `os-zapret2-restyle-0.6.5_165.pkg` **NOT published/owner-installed**. Accepted base `main _164 0887f1ce`, [merged S05c3a #1280](https://github.com/Tolian82/os-zapret2-restyle/pull/1280) physical RED on real installed disposable OPNsense 26.7: original Legacy `Start` after real v1.0.7 upstream and saved WAN produced `1/13/config/failed`, authentic HTTP generic refusal, unchanged Config/engine/IPFW, template restored and next Legacy Start/Restart/Stop PASS. 4/4 PR workflows SUCCESS, 9 success + 8 legitimate path-skipped checks; no public `_164.pkg`. Earlier `_163` postmerge CI/release/main native Chromium PASS.
+
+**Narrow GREEN:** only failed original `config_reload_template` AND successful original `orchestrator_fail_stage` stage13 inside inherited FD9/private Start may emit fixed `zapret-api-lifecycle-v1:start:refused:template-generation-failed`. No stale-stage read, no raw configctl stderr, no second writer. Preserve rc1 and public CLI stdout/stderr. Existing registered `start_verified errors:no` + PHP exact 128-byte receipt produce HTTP UserException; existing Strategies Start RU/EN allowlist displays safe error. Unknown or failed stage-write remains generic, never fake success.
+
+**Exact-head acceptance pending:** one added original-function source-only negative matrix (private/public/restart/stage-write-failure/reload-success), existing S03e3f real installed Legacy native negative now requires precise HTTP error with original stage13, unchanged Config/PID/engine/IPFW, intact template restore and positive Start/Restart/Stop. Existing Stage5 Chromium RU/EN and applicable affected CI/Stage1 are gates. No operator appliance action; no public package. Full S05 NO-GO; S06–S20 blocked.
+
+---
+
+## 24.11.2026 — HISTORICAL pre-merge S05c3a RED candidate
 
 **Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=164`, source candidate `v0.6.5_164`; `os-zapret2-restyle-0.6.5_164.pkg` is prospective only, NOT published/owner-installed. Accepted base `main _163 f2c651dfd36b`, [S05c2c PR #1279](https://github.com/Tolian82/os-zapret2-restyle/pull/1279) exact-head 33 SUCCESS and 7 legitimate skipped checks. Real OPNsense 26.7 saved-WAN HTTP missing-engine refusal, Config/IPFW unchanged, protected pkg upgrade and plain Status all qualified. Postmerge CI/release classification PASS; Chromium main-push was still in progress at first check.
 
