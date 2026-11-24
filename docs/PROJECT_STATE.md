@@ -6,6 +6,9 @@
 
 **Gates:** reuse actual PHP controller source fixture (empty/malformed release data → exact fixed UserException, zero dispatch; valid release still dispatches exactly once) and actual GUI JS helper EN/RU exact positive + unknown/timeout/extra text negatives. Existing affected CI and native Chromium/G03 run by normal paths; source fixture is not an installed HTTP or GUI-click proof of the unavailable-release case. No separate VM matrix. Full S05 NO-GO; S06–S20 blocked; no public pkg. Candidate checks pending.
 
+**Native build blocker (24.11.2026):** exact first `_166` head `99786d5f` passed the actual PHP and RU/EN JS source tests, Stage1 and P2e native; native package, Chromium and P5c refused `PRIVATE_CURL_PIN_SOURCE_PACKAGE_SHA256_MISMATCH` before their product cases. Existing pin remains unchanged. Add bounded public signed-source identity to the original fail-closed refusal so the actual archive SHA, ELF SHA, profile and version can be independently compared. This observation does not approve a new pin, bypass the check, publish or install anything. All new-head affected checks remain pending.
+
+
 ---
 
 # 24.11.2026 — HISTORICAL pre-merge S05c3b candidate
