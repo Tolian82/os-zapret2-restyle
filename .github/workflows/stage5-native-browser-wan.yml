@@ -5,6 +5,7 @@ on:
     paths:
       - VERSION
       - scripts/stage5-browser-wan.py
+      - scripts/test-tz6v5-s05d4-browser-setup-refusal.py
       - scripts/test-tz6v5-s03e3-native-wan-refusal.py
       - scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py
       - scripts/test-tz6v5-s03e3c-native-http-fd9-hold.py
@@ -26,6 +27,7 @@ on:
     paths:
       - VERSION
       - scripts/stage5-browser-wan.py
+      - scripts/test-tz6v5-s05d4-browser-setup-refusal.py
       - scripts/test-tz6v5-s03e3-native-wan-refusal.py
       - scripts/test-tz6v5-s03e3b-native-configd-fd9-busy-red.py
       - scripts/test-tz6v5-s03e3c-native-http-fd9-hold.py
@@ -77,6 +79,8 @@ jobs:
           python3.13 scripts/test-tz6v5-s05c2a-http-reason.py
           python3.13 -m py_compile scripts/tz6v5-s05c2c-absent-engine-native.py
           python3.13 scripts/tz6v5-s05c2c-absent-engine-native.py --self-test
+          python3.13 -m py_compile scripts/test-tz6v5-s05d4-browser-setup-refusal.py
+          python3.13 scripts/test-tz6v5-s05d4-browser-setup-refusal.py --self-test
           sh scripts/test-tz6v5-s05c2a-fd9-refusal.sh
           python3.13 scripts/p3-browser-i18n.py --self-test
           python3.13 -m pip install --disable-pip-version-check playwright
@@ -278,6 +282,13 @@ jobs:
           test -f /root/s03e3c-native-http-fd9-hold.py
           test -f /root/s03e3c-disposable-ci.pub
           rm /root/s03e3c-native-http-fd9-hold.py /root/s03e3c-disposable-ci.pub
+      - name: Stage S05d4 disposable guest fixtures
+        shell: opnsense {0}
+        run: |
+          set -eu
+          install -m 0700 scripts/test-tz6v5-s05d4-browser-setup-refusal.py /root/s05d4-browser-setup-refusal.py
+          install -m 0600 scripts/tz6v5-s04c-opnsense-native-inventory.py /root/s05d4-native-snapshot.py
+          install -m 0600 stage5-browser-wan-ci.pub /root/s05d4-disposable-ci.pub
       - name: S03e3 prepare genuine WAN-required native witness for English
         shell: opnsense {0}
         run: |
@@ -295,6 +306,10 @@ jobs:
         run: |
           set -eu
           GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --verify-en
+      - name: S05d4 real installed first-install refusal and historical detail in English
+        env:
+          ZAPRET2_STAGE5_BROWSER_WAN: '1'
+        run: python3.13 scripts/test-tz6v5-s05d4-browser-setup-refusal.py --browser-en
       - name: S03e3 prepare genuine WAN-required native witness for Russian
         shell: opnsense {0}
         run: |
@@ -312,10 +327,15 @@ jobs:
         run: |
           set -eu
           GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/test-tz6v5-s03e3-native-wan-refusal.py --verify-ru
+      - name: S05d4 real installed first-install refusal and historical detail in Russian
+        env:
+          ZAPRET2_STAGE5_BROWSER_WAN: '1'
+        run: python3.13 scripts/test-tz6v5-s05d4-browser-setup-refusal.py --browser-ru
       - name: S03e3 restore disposable native root locale before WAN Apply
         shell: opnsense {0}
         run: |
           set -eu
+          rm /root/s05d4-browser-setup-refusal.py /root/s05d4-native-snapshot.py /root/s05d4-disposable-ci.pub
           GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php en_US
       - name: Chromium real lower WAN Apply after pre-dispatch refusal tests
         env:

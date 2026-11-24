@@ -1,12 +1,10 @@
-## 24.11.2026 — CURRENT S05d3 original first-install refusal in read-only JSON Status
+## 24.11.2026 — CURRENT S05d4 first-install release refusal through installed Chromium
 
-**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=168`, candidate `v0.6.5_168`. The prospective `os-zapret2-restyle-0.6.5_168.pkg` is for CI qualification. Accepted base is `main _167 69034d2f310d` ([PR #1283](https://github.com/Tolian82/os-zapret2-restyle/pull/1283)).
+**Identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=169`, candidate `v0.6.5_169`. The prospective `os-zapret2-restyle-0.6.5_169.pkg` is for CI qualification. Accepted base is `main _168 303f7341b5cb` ([S05d3 PR #1284](https://github.com/Tolian82/os-zapret2-restyle/pull/1284)).
 
-`status --json` reads the same original terminal `setup.status` as the setup UI. It reports `last_error.code=SETUP_RELEASE_LIST_UNAVAILABLE` only for a stopped plugin with no engine or manifest and no setup launcher PID file, after checking the file and engine again. It reads the fixed root-owned file without taking FD9. The status exit code and component classification are physical, while the diagnostic is historical with nullable operation ID, timestamp, generation and exit status.
+The existing disposable OPNsense Chromium job uses the actual Install Version button in English and Russian. It proves that the previous worker refusal appears as historical detail, then confirms the live pre-dispatch release-list error, original PHP HTTP response, review lock and unchanged Config, IPFW and worker state. Only the external fetch is controlled, using the original resolver and a temporary test cache. The test restores the installed setup script byte for byte. Product sources are unchanged.
 
-Reuse the existing S05a cold OPNsense guest. Run the installed original setup transaction with an isolated unavailable fetch and absent cache, check refusal and cleanup, then read installed `status --json` and verify its before/after Config, runtime, PID, IPFW and file snapshots. The original successful install must follow in the same guest and clear the historical detail. Source tests reproduced the missing JSON cause on `_167` and passed with the candidate.
-
-**Next:** Qualify the existing S05a native Status checks on this exact candidate. Full S05 remains open and S06–S20 remain blocked.
+**Next:** Qualify the installed Chromium check on the exact candidate. Full S05 remains open and S06–S20 remain blocked.
 
 ---
 
