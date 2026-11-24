@@ -101,6 +101,51 @@ class EarlyOriginal(unittest.TestCase):
                 with self.assertRaises(SharedOperationError):
                     read_qualified_failure(facts(), reader=lambda: forged)
 
+    def test_ipfw_qualified_original_and_legacy_event_refusal(self):
+        for page in ("strategies", "voice"):
+            with self.subTest(page=page), tempfile.TemporaryDirectory() as tmp:
+                store = SharedApplyOperation(Path(tmp) / "journal", owner=os.geteuid())
+                owner = detail()
+                owner["page"] = page
+                for phase in ("prepared", "activating", "requires-review"):
+                    store.advance(phase, owner)
+                event = store.record_ipfw_attach_failure(owner["id"], "rule-add-rejected")
+                self.assertEqual(event["failure"]["code"], "IPFW_ATTACH_FAILED")
+                self.assertIsNone(event["failure"]["exit_status"])
+                self.assertEqual(store.record_ipfw_attach_failure(owner["id"], "rule-add-rejected"), event)
+                original = (store.root / "operation.json").read_bytes()
+                projected = read_qualified_failure(facts(), reader=store.read)
+                self.assertEqual(projected["stage"], "ipfw-attach")
+                self.assertEqual(projected["code"], "IPFW_ATTACH_FAILED")
+                self.assertEqual(projected["operation_id"], owner["id"])
+                self.assertEqual(projected["action"], "voice-apply" if page == "voice" else "apply")
+                self.assertIsNone(projected["exit_status"])
+                self.assertIsNone(projected["stderr_excerpt"])
+                self.assertEqual(original, (store.root / "operation.json").read_bytes())
+                for ident, cause in ((owner["id"], "IPFW stderr private"), ("f" * 32, "rule-add-rejected")):
+                    with self.assertRaises(SharedOperationError):
+                        store.record_ipfw_attach_failure(ident, cause)
+                    self.assertEqual(original, (store.root / "operation.json").read_bytes())
+                with self.assertRaises(SharedOperationError):
+                    store.record_early_start_failure(owner["id"], "no-live-pid")
+                for bad in ({"action": "engine-start"}, {"cause": "secret"},
+                            {"exit_status": 75}, {"private_ip": "192.0.2.1"}):
+                    forged = store.read()
+                    forged["failure"].update(bad)
+                    with self.assertRaises(SharedOperationError):
+                        read_qualified_failure(facts(), reader=lambda: forged)
+                for runtime, manifest in (("RUNNING", "stale"), ("INCOMPLETE", "valid")):
+                    self.assertIsNone(read_qualified_failure(
+                        facts(runtime, manifest), reader=lambda: self.fail("unsafe reader")))
+
+    def test_ipfw_receipt_refuses_unverified_phase(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store, owner = self.setup_owner(Path(tmp) / "journal", "activating")
+            before = (store.root / "operation.json").read_bytes()
+            with self.assertRaises(SharedOperationError):
+                store.record_ipfw_attach_failure(owner["id"], "rule-add-rejected")
+            self.assertEqual(before, (store.root / "operation.json").read_bytes())
+
     def test_prior_unextended_error_and_late_exit_unaffected(self):
         with tempfile.TemporaryDirectory() as tmp:
             store, owner = self.setup_owner(Path(tmp) / "journal")

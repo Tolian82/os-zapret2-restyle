@@ -400,6 +400,13 @@ class VoiceController extends ApiControllerBase
                 // post-activation result or freeze editable Voice settings.
                 return $failed('Native Voice preflight rejected before runtime (' . $match[1] . ')');
             }
+            if (preg_match('/(?:^|\n)ipfw-attach-failure=rule-add-rejected$/D', $output)) {
+                return [
+                    'result' => 'failed', 'applied' => false, 'requires_review' => true,
+                    'reason' => 'ipfw-attach-failed',
+                    'validations' => ['zapret.voice.waninterface' => 'IPFW rejected a Zapret2 rule; previous runtime was restored. Inspect IPFW and service state before retrying.'],
+                ];
+            }
             if (!preg_match('/(?:^|\n)applied-id=([a-f0-9]{32})$/D', $output)) {
                 return $failed(
                     'Native Voice Apply was not confirmed; inspect Zapret runtime and recovery status',

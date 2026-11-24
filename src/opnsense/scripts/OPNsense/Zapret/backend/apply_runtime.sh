@@ -432,6 +432,7 @@ apply_runtime_abort()
 apply_runtime_activate()
 {
     APPLY_EARLY_ENGINE_FAILURE=
+    APPLY_IPFW_ATTACH_FAILURE=
     [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || return 64
     # The optional third argument is already recorded in the durable shared
     # Apply journal before this invocation. Keep normal boot/legacy callers
@@ -512,17 +513,30 @@ apply_runtime_activate()
         fi
     fi
     if [ "$APPLY_OLD_RUNNING" = 1 ] || [ "$APPLY_NEW_RUNNING" = 1 ]; then
-        firewall_shared_runtime install "$APPLY_OLD" "$APPLY_NEW" || {
-            # Install is self-rolling-back, but an incomplete rollback must
-            # preserve both trees instead of announcing restored state.
+        # The original firewall_shared_runtime() shell function captures
+        # only the adapter's exact fixed refusal. Do not use $(...) here:
+        # shell-scope activation and rollback must stay in the FD9 caller.
+        if firewall_shared_runtime install "$APPLY_OLD" "$APPLY_NEW"; then
+            APPLY_IPFW_INSTALLED=1
+        else
+            _apply_ipfw_rejected_add=0
+            [ "${FIREWALL_SHARED_ATTACH_CAUSE:-}" = rule-add-rejected ] &&
+                _apply_ipfw_rejected_add=1
             firewall_shared_runtime verify "$APPLY_CANDIDATE" "$APPLY_OLD" || {
                 common_error "RESTORE_FAILED: shared IPFW install"
                 return 70
             }
-            apply_runtime_abort "IPFW activation failed"
-            return $?
-        }
-        APPLY_IPFW_INSTALLED=1
+            if apply_runtime_abort "IPFW activation failed"; then
+                _apply_ipfw_abort_rc=0
+            else
+                _apply_ipfw_abort_rc=$?
+            fi
+            if [ "$_apply_ipfw_abort_rc" -eq 1 ] &&
+               [ "$_apply_ipfw_rejected_add" -eq 1 ]; then
+                APPLY_IPFW_ATTACH_FAILURE=rule-add-rejected
+            fi
+            return "$_apply_ipfw_abort_rc"
+        fi
     fi
     # Before native Config commit, the staged old IPFW table values are
     # intentional. Ordinary verify is only valid after commit or rollback.

@@ -25,6 +25,7 @@ DEFAULT_ROOT = Path("/var/db/zapret2/shared-apply")
 RECORD = "operation.json"
 SCHEMA = 1
 EARLY_START_CAUSES = frozenset(("no-live-pid", "stability-unverified"))
+IPFW_ATTACH_CAUSES = frozenset(("rule-add-rejected",))
 MAX_RECORD = 8192
 MAX_FOUND_PLAN = 4 * 1024 * 1024
 FOUND_NAMES = ("youtube", "user", "auto")
@@ -274,10 +275,13 @@ def _validate_record(record: object) -> dict:
                 type(failure["schema"]) is not int or failure["schema"] != 1 or
                 not ((late and failure["code"] == "ENGINE_EXIT_AFTER_READY" and
                       failure["action"] == "runtime-failure") or
-                     (early and failure["code"] == "ENGINE_START_UNVERIFIED" and
-                      failure["action"] == "engine-start" and
-                      type(failure["cause"]) is str and
-                      failure["cause"] in EARLY_START_CAUSES)) or
+                     (early and type(failure["cause"]) is str and
+                      ((failure["code"] == "ENGINE_START_UNVERIFIED" and
+                        failure["action"] == "engine-start" and
+                        failure["cause"] in EARLY_START_CAUSES) or
+                       (failure["code"] == "IPFW_ATTACH_FAILED" and
+                        failure["action"] == "ipfw-attach" and
+                        failure["cause"] in IPFW_ATTACH_CAUSES)))) or
                 failure["operation_id"] != record["detail"]["id"] or
                 failure["exit_status"] is not None or
                 type(failure["observed_at"]) is not str or
@@ -684,6 +688,28 @@ class SharedApplyOperation:
                  "observed_at": at, "exit_status": None, "cause": cause}
         if self.read() != before:
             raise SharedOperationError("original early-start journal raced")
+        return self._persist_record({**before, "failure": event})
+
+    def record_ipfw_attach_failure(self, operation_id: str, cause: str) -> dict:
+        """Original held FD9 only, after native IPFW and previous runtime restoration."""
+        if (type(operation_id) is not str or not OP_ID.fullmatch(operation_id) or
+                type(cause) is not str or cause not in IPFW_ATTACH_CAUSES):
+            raise SharedOperationError("invalid original IPFW attach receipt")
+        before = self.read()
+        if (before is None or before["phase"] != "requires-review" or
+                before["detail"]["id"] != operation_id or "found" in before):
+            raise SharedOperationError("original IPFW attach owner changed")
+        if "failure" in before:
+            if (before["failure"]["code"] == "IPFW_ATTACH_FAILED" and
+                    before["failure"]["cause"] == cause):
+                return before
+            raise SharedOperationError("original IPFW attach event conflict")
+        at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        event = {"schema": 1, "code": "IPFW_ATTACH_FAILED",
+                 "action": "ipfw-attach", "operation_id": operation_id,
+                 "observed_at": at, "exit_status": None, "cause": cause}
+        if self.read() != before:
+            raise SharedOperationError("original IPFW attach journal raced")
         return self._persist_record({**before, "failure": event})
 
     def record_runtime_exit(self, operation_id: str) -> dict:
@@ -1184,6 +1210,8 @@ def main(argv: list[str]) -> int:
     finish_review = len(argv) == 3 and argv[1] == "finish-reviewed-legacy" and bool(OP_ID.fullmatch(argv[2]))
     early_start = (len(argv) == 4 and argv[1] == "record-early-start" and
                    bool(OP_ID.fullmatch(argv[2])) and argv[3] in EARLY_START_CAUSES)
+    ipfw_attach = (len(argv) == 4 and argv[1] == "record-ipfw-attach" and
+                   bool(OP_ID.fullmatch(argv[2])) and argv[3] in IPFW_ATTACH_CAUSES)
     runtime_record = (len(argv) == 3 and argv[1] == "runtime-exit-record" and
                       bool(OP_ID.fullmatch(argv[2])))
     runtime_clear = (len(argv) == 3 and argv[1] == "runtime-exit-clear" and
@@ -1197,7 +1225,7 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or runtime_record or runtime_clear or recovery or finish or pristine or cold_restore or native_gate_request):
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -1230,6 +1258,9 @@ def main(argv: list[str]) -> int:
             # independent error database or event writer is created.
             SharedApplyOperation(owner=0).record_early_start_failure(argv[2], argv[3])
             print("original-engine-start=unverified")
+        elif ipfw_attach:
+            SharedApplyOperation(owner=0).record_ipfw_attach_failure(argv[2], argv[3])
+            print("original-ipfw-attach=refused")
         elif found_pending:
             record = SharedApplyOperation().read()
             if record is not None and "found" in record:

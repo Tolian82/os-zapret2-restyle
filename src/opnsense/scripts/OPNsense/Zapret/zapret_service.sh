@@ -1554,6 +1554,15 @@ shared_apply_activate_and_commit_service()
                         "$APPLY_EARLY_ENGINE_FAILURE" >/dev/null || return 70
                     ;;
             esac
+            # Emit the private marker only after the SAME original FD9
+            # journal writer records the qualified post-rollback cause.
+            # Never store it in the separate Found WAL.
+            if [ "${APPLY_IPFW_ATTACH_FAILURE:-}" = rule-add-rejected ] &&
+               [ -z "${APPLY_EARLY_ENGINE_FAILURE:-}" ]; then
+                "$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
+                    record-ipfw-attach "$_shared_apply_id" rule-add-rejected >/dev/null || return 70
+                printf '%s\n' 'ipfw-attach-failure=rule-add-rejected'
+            fi
         fi
         printf '%s\n' 'shared-apply-guard=activate' >&2
         return 70

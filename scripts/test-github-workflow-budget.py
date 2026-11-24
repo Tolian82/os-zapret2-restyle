@@ -109,6 +109,14 @@ class BudgetContracts(unittest.TestCase):
             'src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter[.]py',
             gate,
         )
+        self.assertIn(
+            'src/opnsense/scripts/OPNsense/Zapret/backend/firewall[.]sh',
+            gate,
+        )
+        self.assertIn(
+            'src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime[.]sh',
+            gate,
+        )
         self.assertIn('native_wan_process=true', gate)
         self.assertIn(
             "needs.changes.outputs.native_wan_process == 'true'",
