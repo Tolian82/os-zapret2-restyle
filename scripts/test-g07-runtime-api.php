@@ -11,9 +11,19 @@ namespace OPNsense\Core {
         public static string $receipt = "installed=0\nservice=error\nversion=\nsetup=unknown\nbusy=0";
         public static array $mutations = [];
         public static string $releaseReceipt = "v1.0.7\n";
+        public static string $reconfigureReceipt = 'OK';
+        public static bool $reconfigureThrows = false;
+        public static int $reconfigureCalls = 0;
         public function configdRun($key, ...$ignored): string {
             if ($key === 'zapret setup_status') return self::$receipt;
             if ($key === 'zapret setup_releases') return self::$releaseReceipt;
+            if ($key === 'zapret reconfigure') {
+                self::$reconfigureCalls++;
+                if (self::$reconfigureThrows) {
+                    throw new \RuntimeException('transport exception: /conf/config.xml SECRET_BACKEND');
+                }
+                return self::$reconfigureReceipt;
+            }
             throw new \RuntimeException('Unexpected read-only action: ' . $key);
         }
         public function configdpRun($key, $args, ...$ignored): string {
@@ -22,14 +32,39 @@ namespace OPNsense\Core {
         }
     }
 }
+// Inert stage-file hook: load the *actual* source controller while ensuring
+// no test ever reads or mutates a real appliance /var/run record.
+namespace OPNsense\Zapret\Api {
+    class S05mStageProbe {
+        public static bool $present = false;
+        public static string $record = '';
+        public static int $reads = 0;
+    }
+    function is_readable($path): bool {
+        if ($path === '/var/run/zapret2-execution.status') {
+            S05mStageProbe::$reads++;
+            return S05mStageProbe::$present;
+        }
+        return \is_readable($path);
+    }
+    function file_get_contents($path) {
+        if ($path === '/var/run/zapret2-execution.status') {
+            S05mStageProbe::$reads++;
+            return S05mStageProbe::$record;
+        }
+        return \file_get_contents($path);
+    }
+}
 namespace {
     use OPNsense\Core\Backend;
+    use OPNsense\Zapret\Api\S05mStageProbe;
     use OPNsense\Base\UserException;
     require dirname(__DIR__) .
         '/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php';
 
     class FakeRequest {
-        public function isPost(): bool { return true; }
+        public static bool $post = true;
+        public function isPost(): bool { return self::$post; }
         public function getPost($key) { return $key === 'version' ? 'v1.0.7' : ''; }
     }
     function assertion($check, $message): void {
@@ -153,5 +188,55 @@ namespace {
     }
     assertion(count(Backend::$mutations) === 0,
               'unverified receipt triggered a real setup mutation');
+
+    // S05m: execute actual ServiceController::reconfigureAction() with a
+    // real method/Backend call and a synthetic stage from ANOTHER operation.
+    // Previous source returned raw last-error bytes via HTTP UserException.
+    // The stage has no operation or action ID, so even a recent timestamp
+    // cannot prove it caused this specific failed reconfigure.
+    $safe = 'Zapret2 reconfigure was not confirmed. Check service status and recovery before retrying.';
+    foreach ([
+        "1|13|config|failed|2026-11-24T00:00:00+0000|/conf/config.xml SECRET_BACKEND",
+        "9|13|engine|failed|2026-11-24T00:00:00+0000|--hostlist=PRIVATE_DOMAIN",
+        "non-stage|malformed|record"
+    ] as $stage) {
+        S05mStageProbe::$present = true;
+        S05mStageProbe::$record = $stage;
+        S05mStageProbe::$reads = 0;
+        Backend::$reconfigureReceipt = 'NO: secret-transport-details';
+        Backend::$reconfigureThrows = false;
+        $calls = Backend::$reconfigureCalls;
+        try {
+            controller()->reconfigureAction();
+            throw new \RuntimeException('S05M_FAIL:invalid reconfigure response accepted');
+        } catch (UserException $error) {
+            assertion($error->getMessage() === $safe, 'stale/hostile stage escaped into HTTP');
+        }
+        assertion(Backend::$reconfigureCalls === $calls + 1,
+                  'original reconfigure configd action not called exactly once');
+        assertion(S05mStageProbe::$reads === 0,
+                  'unqualified legacy stage file read after configd failure');
+    }
+    Backend::$reconfigureThrows = true;
+    try {
+        controller()->reconfigureAction();
+        throw new \RuntimeException('S05M_FAIL:unexpected backend success');
+    } catch (UserException $error) {
+        assertion($error->getMessage() === $safe &&
+                  !str_contains($error->getMessage(), 'SECRET_BACKEND'),
+                  'backend exception leaked or invented a verified result');
+    }
+    Backend::$reconfigureThrows = false;
+    Backend::$reconfigureReceipt = 'OK';
+    $ok = controller()->reconfigureAction();
+    assertion($ok === ['status' => 'ok', 'response' => 'OK'],
+              'positive original reconfigure response changed');
+    FakeRequest::$post = false;
+    $calls = Backend::$reconfigureCalls;
+    assertion(controller()->reconfigureAction() === ['status' => 'failed'] &&
+              Backend::$reconfigureCalls === $calls,
+              'non-POST reconfigure reached backend');
+    FakeRequest::$post = true;
+    echo "S05M_ORIGINAL_RECONFIGURE_STAGE_UNCORRELATED_FAIL_CLOSED=PASS\n";
     echo "G07_NATIVE_STATUS_API_FAST=PASS\n";
 }
