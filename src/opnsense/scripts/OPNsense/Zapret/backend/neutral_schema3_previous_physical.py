@@ -64,7 +64,7 @@ class CompletePriorPreimage:
     old_release_sha256: str
     active_release_sha256: str
     saved_config_base_sha256: str
-    resolved_wan_device: str
+    resolved_wan_device: str | None
     prior_pid: int
     prior_birth: str
     supervisor_pid: int

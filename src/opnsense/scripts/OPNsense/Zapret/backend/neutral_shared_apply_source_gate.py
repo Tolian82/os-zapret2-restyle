@@ -805,6 +805,7 @@ class OriginalSemanticReceipt:
     previous_root_sha256: str | None
     decision: EffectiveDecision
     previous_physical: object
+    lifecycle_proposal: str = "UNCLASSIFIED"
     status: str = "ORIGINAL_PREPARED_SEMANTIC_PROPOSAL_ONLY"
     authorization: str = "NONE"
     physical_transition_allowed: bool = False
@@ -813,12 +814,12 @@ class OriginalSemanticReceipt:
 
 
 def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSemanticReceipt:
-    """Compare a bound ordinary PREPARED to its genuine RUNNING old owner.
+    """Propose the action for an attested RUNNING old owner, without executing.
 
-    Reuse the same original physical, Config/WAN, kernel/argv and root
-    witnesses for all/list/auto. Never treat a legacy unbound old owner
-    as NO_CHANGE or a reload candidate; the first conversion must be
-    structural. Cold/stopped and Found paths stay separately fenced.
+    A disabled saved candidate proposes STOP even if S08d detects identical
+    traffic args. Its previous process, full release tree, Config and IPFW
+    must still pass the same native physical proof. Cold/stopped and Found
+    paths stay separately fenced, not inferred from a running proof failure.
     """
     from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
     from shared_apply_seal import WORK
@@ -833,7 +834,7 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
                 source.authorization != "NONE" or source.physical_transition_allowed or
                 type(source.native) is not NativeParity or
                 type(source.effective) is not EffectiveSnapshot or
-                source.requested_enabled is not True):
+                type(source.requested_enabled) is not bool):
             raise OriginalSourceGateRefused("S10_SEMANTIC_NATIVE_SOURCE_REQUIRED")
         store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
         before = store.read()
@@ -851,7 +852,7 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
                     engine_version=engine["engine_version"])
         candidate = _read_pinned_effective(
             detail=before["detail"], binding=current_pin, **read)
-        if candidate != (source.effective, True):
+        if candidate != (source.effective, source.requested_enabled):
             raise OriginalSourceGateRefused("S10_SEMANTIC_CANDIDATE_CHANGED")
         old = None if old_pin is None else _read_pinned_effective(
             detail=before["previous"], binding=old_pin, **read)
@@ -859,19 +860,32 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
             raise OriginalSourceGateRefused("S10_SEMANTIC_OLD_RUNNING_DISABLED")
         physical = attest_previous_physical_under_fd9(
             generation=source.generation, native=source.native,
-            effective=source.effective, enabled=True)
+            effective=source.effective, enabled=source.requested_enabled)
         if (type(physical) is not CompletePriorPreimage or
                 physical.authorization != "NONE" or physical.physical_transition_allowed or
                 physical.promotion_allowed or
                 physical.root_sha256 != current_pin["root_sha256"] or
                 physical.previous_generation != before["previous"]["id"] or
-                physical.saved_config_base_sha256 != before["detail"]["base"]):
+                physical.saved_config_base_sha256 != before["detail"]["base"] or
+                (source.requested_enabled is False and
+                 physical.resolved_wan_device is not None) or
+                (source.requested_enabled is True and
+                 type(physical.resolved_wan_device) is not str)):
             raise OriginalSourceGateRefused("S10_SEMANTIC_PHYSICAL_UNQUALIFIED")
         # The original semantic planner owns classification. A pre-S10
         # predecessor has no structural pin: don't claim equal/reload-safe
         # on the basis of a display version or a native argv coincidence.
         decision = (EffectiveDecision("RESTART_REQUIRED", (), ())
                     if old is None else plan(old[0], candidate[0]))
+        # The S08d decision is deliberately unchanged and nonauthorizing.
+        # Enabled OFF dominates it at the lifecycle level: NO_CHANGE is
+        # never interpreted as permission to leave the old engine running.
+        lifecycle = ("STOP" if source.requested_enabled is False else {
+            "NO_CHANGE": "NO_CHANGE",
+            "SAVE_ONLY": "SAVE_ONLY",
+            "RELOAD_SAFE_CANDIDATE": "RELOAD",
+            "RESTART_REQUIRED": "RESTART",
+        }[decision.kind])
         if (candidate != _read_pinned_effective(
                 detail=before["detail"], binding=current_pin, **read) or
                 (old is not None and old != _read_pinned_effective(
@@ -884,7 +898,7 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
             source.generation, before["previous"]["id"],
             current_pin["root_sha256"],
             None if old_pin is None else old_pin["root_sha256"],
-            decision, physical)
+            decision, physical, lifecycle_proposal=lifecycle)
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_SEMANTIC_PREPARED_REFUSED") from None
 
