@@ -2142,13 +2142,15 @@ shared_apply_finalize_release_modes()
     common_set_directory_mode "$1" 0755 || return 69
     validator_validate_runtime_modes "$1" || return 69
 }
-# S10c2b1: the ORIGINAL FD9 Shared Apply streams the original loaded
-# template scalars directly to a read-only source->managed parity witness.
+# S10c2b2: the ONE original FD9 Shared Apply streams the original loaded
+# scalars to the read-only S07/S08a/S08b/S08c parity witness. Auto candidate
+# digest comes exclusively from the original native PHP preflight.
 # Nothing is retained in a second input directory or passed in process argv.
 # This does not act on Config, P1, runtime, IPFW or any engine process.
 shared_apply_original_source_gate()
 {
-    [ "$#" -eq 1 ] && [ -x "${PYTHON_RUNTIME}" ] &&
+    [ "$#" -ge 1 ] && [ "$#" -le 2 ] &&
+    [ -x "${PYTHON_RUNTIME}" ] &&
     [ -r "${BACKEND_DIR}/neutral_shared_apply_source_gate.py" ] || return 69
     {
         printf 'S10C2B1_ORIGINAL_INPUT_V1\0'
@@ -2159,7 +2161,7 @@ shared_apply_original_source_gate()
             "${SIP_IPS:-}" "${CUSTOM_IPS:-}" \
             "${EXCLUDE_DOMAINS:-}" "${EXCLUDE_IPSET:-}" \
             "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
-    } | "${PYTHON_RUNTIME}" "${BACKEND_DIR}/neutral_shared_apply_source_gate.py" "$1" >/dev/null
+    } | "${PYTHON_RUNTIME}" "${BACKEND_DIR}/neutral_shared_apply_source_gate.py" "$@" >/dev/null
 }
 # Prepare one complete Voice+Strategies release from the detached OPNsense
 # candidate. This is an INTERNAL FD9 operation, not a Config/runtime Apply.
@@ -2208,13 +2210,6 @@ shared_apply_prepare_service()
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }
-    # One read-only S07/S08a/S08b source-to-generated-file check under the
-    # already-held original FD9, BEFORE Auto promotion and bundle seal.
-    # Failure keeps the previous active runtime intact.
-    shared_apply_original_source_gate "$1" || {
-        printf '%s\n' preflight-rejected=runtime-build
-        return 0
-    }
     # The original FD9 and native PHP candidate must agree BEFORE seal.
     # Explicit native Target Mode AUTO selects the now-qualified per-profile
     # schema3 lifecycle, not a hidden global observer. List/All retain the
@@ -2238,6 +2233,13 @@ shared_apply_prepare_service()
             shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
         _shared_auto_digest=$(printf "%s\n" "$_shared_auto_preflight" |
             shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+        # The original PHP preflight produces the ONLY qualified Auto
+        # candidate digest. Compare original argv/Voice/IPFW/source-map under
+        # that exact identity BEFORE any schema2/schema3 promotion or seal.
+        shared_apply_original_source_gate "$1" "$_shared_auto_digest" || {
+            printf '%s\n' preflight-rejected=runtime-build
+            return 0
+        }
         if [ "$_shared_found_build_scope" = planned ] &&
            [ "${_shared_found_rebuild_running:-0}" != 1 ] &&
            ! launcher_is_running "$CHILD_PIDFILE"; then
@@ -2292,6 +2294,13 @@ shared_apply_prepare_service()
                 fi
             fi
         fi
+    else
+        # All/List have no original Auto source-map, no hidden learner and
+        # no synthetic candidate digest. Same single preseal read-only gate.
+        shared_apply_original_source_gate "$1" || {
+            printf '%s\n' preflight-rejected=runtime-build
+            return 0
+        }
     fi
     # Normal Start/Reconfigure make their release 0755 before activation.
     # The native shared candidate needs the same normalization BEFORE SEAL.
