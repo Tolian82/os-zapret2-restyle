@@ -709,6 +709,43 @@ def native_installed_engine_identity() -> dict:
     return receipt
 
 
+
+def native_bound_engine_for_s10_readback() -> dict:
+    """Exact original setup marker as a *version input*, NEVER a Start permit.
+
+    This is the same original root-owned FD9 observation, not a second
+    provenance producer, journal or authority. An old one-line marker stays
+    useful for display but must not qualify S08d/S10 effective compilation.
+    """
+    receipt = native_installed_engine_identity()
+    if (type(receipt) is not dict or
+            set(receipt) != {"release", "commit", "engine_sha256",
+                             "record_schema", "status",
+                             "build_provenance_verified", "authorization",
+                             "physical_transition_allowed"} or
+            receipt["record_schema"] != "exact-bound-candidate" or
+            receipt["status"] != "ORIGINAL_INSTALLED_ENGINE_OBSERVATION_ONLY" or
+            receipt["build_provenance_verified"] is not False or
+            receipt["authorization"] != "NONE" or
+            receipt["physical_transition_allowed"] is not False or
+            type(receipt["release"]) is not str or
+            re.fullmatch(r"v[0-9]+(?:\.[0-9]+)+", receipt["release"]) is None or
+            type(receipt["commit"]) is not str or
+            re.fullmatch(r"[0-9a-f]{40}", receipt["commit"]) is None or
+            type(receipt["engine_sha256"]) is not str or
+            re.fullmatch(r"[0-9a-f]{64}", receipt["engine_sha256"]) is None):
+        raise TransactionError("S10_ORIGINAL_BOUND_ENGINE_REQUIRED")
+    return {"engine_version": receipt["release"],
+            "source_commit": receipt["commit"],
+            "engine_sha256": receipt["engine_sha256"],
+            "status": "S10_ORIGINAL_BOUND_ENGINE_VERSION_READ_ONLY",
+            "authorization": "NONE",
+            "physical_transition_allowed": False,
+            "build_provenance_verified": False}
+
+
+
+
 def _mutating_old_identity() -> str:
     checkpoint = BACKUP_ROOT / "checkpoint"
     if BACKUP_ROOT.is_symlink() or not BACKUP_ROOT.is_dir() or checkpoint.is_symlink() or not checkpoint.is_file():

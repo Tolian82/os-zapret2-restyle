@@ -28,6 +28,23 @@ For an upgrade/reinstall, the original parent already sees genuine child success
 **Next implementation boundary:** make the original prepared→built intent proof and legacy/strict recovery classification **in the existing producer transaction**, with red→green local and genuine native G03 evidence, then return to S10 immutable physical promotion and P1/Found crash recovery. No other stage is implicitly accepted.
 
 
+## S10c2b3h accepted native provenance (25.11.2026)
+
+The original first-install producer change was accepted and merged in
+[PR #1344](https://github.com/Tolian82/os-zapret2-restyle/pull/1344) as
+`v0.6.5_223`, `main c7779b7ef0b4c870edd15637d868856cdf9b4f40`.
+Exact PR head `19c4392758ee0ca28e019c3bc82d7fe005cd0795` passed
+[G03](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45657082626)
+with genuine OPNsense 26.7 `v1.0.7` clone, native make, first-install bound
+marker and same-release reinstall; [main CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45658729823)
+and [PR Stage5](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45657082650)
+including clean/RUNNING-Voice/reboot/no-git guests passed.
+A CI-only G03 pinned-tag cache fixture bypasses a transient blocked GitHub
+Releases API after verifying the exact real remote tag; it never claims API
+success. This acceptance does NOT constitute a full S10 physical GO, owner
+router install, or public package.
+
+
 ## S10c2b3h original producer implementation candidate (_223)
 
 The original shell now seals an exact five-line `first-install.intent` (`version`, `original`, `state=built`, `commit`, `engine_sha256`) only after its genuine `setup.sh` child exits successfully and the parent verifies the safe staged Git/engine. The existing parent owns the only intent promotion and sole `write_active_release`; the read-only `first-install-read-record` guard is deliberately not a standalone make witness. The original filesystem rename follows the durable built intent. Subsequent original resume with a five-line built intent re-attests staged/promoted source before either promotion or original bound marker, including the package-created configd templates. Old two-line interrupted intents remain legacy/unbound. Check the original G03 fast suite and real FreeBSD 15 native G03 before treating these source changes as accepted. Source-only implementation does not authorize physical S10 Apply/Start, Found P1, a public package or owner-live acceptance.

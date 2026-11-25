@@ -236,6 +236,42 @@ def five_hostlist_native_apply(config_path: Path):
     need(first_tab.get("result") == "saved" and first_tab.get("applied") is True and
          read()["editors"]["shared_found"]["content"] == expected_first,
          "FIVE_HOSTLIST_FIRST_TAB_ADDITION_NOT_SAVED_OR_CANONICAL_SORTED")
+    # Back-to-back HTTPS Apply requests are independent original FD9
+    # operations. A successful response does not authorize racing the next
+    # click while configd still holds the old lifecycle lock. Observe the
+    # stock read-only guard and STOPPED state; do NOT restart, unlock, retry
+    # a failed Apply or suppress unknown/busy Strategy Lab ownership.
+    def await_original_fd9_idle():
+        for _ in range(30):
+            guard_response = run([configctl, "zapret", "strategy_lab_guard"],
+                                 timeout=15)
+            need(guard_response.returncode == 0,
+                 "FIVE_HOSTLIST_STALE_TAB_GUARD_DISPATCH_FAILED")
+            try:
+                guard_state = json.loads(guard_response.stdout.strip())
+            except (ValueError, TypeError):
+                raise Refusal("FIVE_HOSTLIST_STALE_TAB_GUARD_INVALID") from None
+            need(type(guard_state) is dict and
+                 type(guard_state.get("busy")) is bool,
+                 "FIVE_HOSTLIST_STALE_TAB_GUARD_INVALID")
+            if (guard_state["busy"] is False and
+                    guard_state.get("owner") == "none" and
+                    guard_state.get("state") == "idle" and
+                    guard_state.get("reason") == "available"):
+                need(json.loads(journal.read_bytes()).get("phase") == "committed"
+                     and status()["service"] == "stopped" and
+                     not pidfile.exists(),
+                     "FIVE_HOSTLIST_STALE_TAB_CHANGED_WHILE_WAITING")
+                return
+            need(guard_state["busy"] is True and
+                 guard_state.get("owner") == "lifecycle" and
+                 guard_state.get("state") == "locked" and
+                 guard_state.get("reason") == "lifecycle_lock_busy",
+                 "FIVE_HOSTLIST_STALE_TAB_GUARD_OTHER_OWNER")
+            time.sleep(0.5)
+        raise Refusal("FIVE_HOSTLIST_STALE_TAB_ORIGINAL_FD9_NOT_RELEASED")
+
+    await_original_fd9_idle()
     stale_remove = apply({}, stale_tab, {"auto": ""})
     rebased = read()["editors"]
     need(stale_remove.get("result") == "saved" and

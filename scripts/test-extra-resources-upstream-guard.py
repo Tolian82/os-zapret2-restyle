@@ -87,6 +87,76 @@ class InstalledEngineObservation(unittest.TestCase):
         self.assertEqual(self.observe()["record_schema"], "exact-bound-candidate")
         self.assertFalse(self.observe()["build_provenance_verified"])
 
+
+    def test_s10_native_bound_version_readback_is_nonauthorizing(self):
+        # Simulated FD9 wrapper calls the REAL immutable marker/Git/ELF reader.
+        # Only the G03 FreeBSD guest proves a genuine original make.
+        source = guard.draft_original_setup_release_record(
+            runtime=self.runtime, release="v1.0.7",
+            git=self.git, owner_uid=os.geteuid())
+        self.marker.write_bytes(source)
+        old = (self.marker.read_bytes(), self.engine.read_bytes())
+        with patch.object(guard, "native_installed_engine_identity",
+                          side_effect=self.observe):
+            found = guard.native_bound_engine_for_s10_readback()
+        self.assertEqual(found["engine_version"], "v1.0.7")
+        self.assertEqual(found["source_commit"],
+                         self.run_git("rev-parse", "HEAD").decode())
+        self.assertEqual(found["engine_sha256"],
+                         hashlib.sha256(self.binary).hexdigest())
+        self.assertEqual(found["status"],
+                         "S10_ORIGINAL_BOUND_ENGINE_VERSION_READ_ONLY")
+        self.assertEqual(found["authorization"], "NONE")
+        self.assertIs(found["physical_transition_allowed"], False)
+        self.assertIs(found["build_provenance_verified"], False)
+        self.assertEqual(old, (self.marker.read_bytes(),
+                               self.engine.read_bytes()))
+
+    def test_s10_bound_version_refuses_legacy_unfinished_and_tamper(self):
+        with patch.object(guard, "native_installed_engine_identity",
+                          side_effect=self.observe):
+            with self.assertRaisesRegex(
+                    guard.TransactionError, "S10_ORIGINAL_BOUND_ENGINE_REQUIRED"):
+                guard.native_bound_engine_for_s10_readback()
+        self.marker.write_bytes(guard.draft_original_setup_release_record(
+            runtime=self.runtime, release="v1.0.7",
+            git=self.git, owner_uid=os.geteuid()))
+        intent = self.state / "first-install.intent"
+        intent.write_bytes(b"version=v1.0.7\noriginal=0\n")
+        with patch.object(guard, "native_installed_engine_identity",
+                          side_effect=self.observe):
+            with self.assertRaises(guard.TransactionError):
+                guard.native_bound_engine_for_s10_readback()
+        intent.unlink()
+        self.engine.write_bytes(self.binary + b"unexpected")
+        with patch.object(guard, "native_installed_engine_identity",
+                          side_effect=self.observe):
+            with self.assertRaises(guard.TransactionError):
+                guard.native_bound_engine_for_s10_readback()
+
+    def test_s10_bound_version_rejects_forged_authorization(self):
+        bound = guard.draft_original_setup_release_record(
+            runtime=self.runtime, release="v1.0.7",
+            git=self.git, owner_uid=os.geteuid())
+        self.marker.write_bytes(bound)
+        observed = self.observe()
+        for bad in (
+            {"authorization": "START"},
+            {"physical_transition_allowed": True},
+            {"build_provenance_verified": True},
+            {"record_schema": "legacy-display-only"},
+            {"unexpected": "foreign"},
+            {"engine_sha256": "not-a-digest"},
+        ):
+            with self.subTest(bad=bad):
+                with patch.object(guard, "native_installed_engine_identity",
+                                  return_value={**observed, **bad}):
+                    with self.assertRaisesRegex(
+                            guard.TransactionError,
+                            "S10_ORIGINAL_BOUND_ENGINE_REQUIRED"):
+                        guard.native_bound_engine_for_s10_readback()
+
+
     def test_first_install_original_reader_is_strictly_read_only(self):
         """Fixture FD9 is simulated; real native setup is qualified by G03."""
         env = {
