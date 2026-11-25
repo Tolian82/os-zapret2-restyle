@@ -37,12 +37,13 @@ persist a receipt or authorize any physical transition; the typed receipt
 stays in memory, not in a new journal or Config writer.
 
 Ordinary preseal/sealed calls are byte-for-byte compatible, and the existing
-shared Apply never switches to strict S10 by default. The original shell
-accepts one additional argument solely to allow this opt-in read-only path
-to be invoked **when a later S10 owner explicitly qualifies its PREPARED
-candidate**. Existing `manifest-unbound` refusal and the bound
-PREPARED→ACTIVATING gate remain closed; there is no new Start/Stop, PID/IPFW,
-WAN, Found P1/ACK, config.xml or mutable hostlist mutation.
+original `zapret_service.sh` is **not modified**: regular Apply never calls
+this strict S10 bridge. A later S10 stage must wire the explicit read-only
+command into the original FD9 owner **only after** it qualifies the same
+PREPARED operation. Do not expand an active-traffic entrypoint merely to
+exercise detached source proof. Existing `manifest-unbound` refusal and
+bound PREPARED→ACTIVATING gate remain closed; there is no new Start/Stop,
+PID/IPFW, WAN, Found P1/ACK, config.xml or mutable hostlist mutation.
 
 ## Acceptance & next step
 
