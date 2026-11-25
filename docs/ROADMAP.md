@@ -1,10 +1,10 @@
-## Current priority — TZ6v5 S10b2b1 schema3 original two-SHA witness → S10b2b2 bound FD9 gate → S10c crash recovery
+## Current priority — TZ6v5 S10b2b2a truthful schema3 root → S10b2b2b FD9 gate → S10c rollback
 
-**GO baseline:** main `v0.6.5_201 23dd4953`, accepted S10a/S10b1/S10b2a; [PR #1322](https://github.com/Tolian82/os-zapret2-restyle/pull/1322) 15/15 workflows SUCCESS, main CI #45510870065 and Chromium #45510870195 SUCCESS. [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN. **Candidate** `v0.6.5_202`, `VERSION=0.6.5`, `PLUGIN_REVISION=202`, prospective unpublished `os-zapret2-restyle-0.6.5_202.pkg`.
+**GO baseline:** `main v0.6.5_202 bf9f5a19`, [PR #1323](https://github.com/Tolian82/os-zapret2-restyle/pull/1323) merged; main CI #45513450309 and release classifier #45513450316 SUCCESS. **S09, S10a, S10b1, S10b2a, S10b2b1 GO; [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN.** Source-only candidate `v0.6.5_203` (`PLUGIN_REVISION=203`); no public `_203.pkg` and no owner appliance action.
 
-**S10b2b1:** [S10b2b1 original schema3 source bridge](architecture/ZAPRET2_TZ6V5_S10B2B1_SCHEMA3_ORIGINAL_SOURCE_BRIDGE.md). Genuine original P2e prepromotion source + postpromotion native schema3 must be independently paired by SHA and original source map, original sealed release, same PHP logical PREPARED journal; no inventing Auto final argv or giving detached proof runtime authority. Existing S10b2a native unbound-root fence remains mandatory and prevents legacy physical bypass.
+**S10b2b2a:** [pure final schema3 root contract](architecture/ZAPRET2_TZ6V5_S10B2B2A_FINAL_SCHEMA3_PROPOSAL.md) — distinct real P2e old and promoted argv SHA values plus original/active schema3 maps, original S08d witness, original seal SHA, ordered exact refs. Schema-1 legacy root intentionally rejects schema-2 proposal. Genuine original generator negative test and exact-head CI are the gate; not a physical authorization.
 
-**S10b2b2:** qualify truthfully postpromotion final effective semantics/root schema3 and actual original FD9 POSITIVE gate for bound PREPARED only with saved WAN, Config/IPFW/engine predecessor preimages and original rollback. **S10c:** crash/uncertain Config::save, list-only P1 CAS/ACK, semantic restore and cold recovery. **S11:** single physical Start/Stop/Reload after S10 GO. WAN-only Save and prestart Lab unaffected.
+**Next S10b2b2b:** positively reattested real original FD9 bound PREPARED→ACTIVATING with immutable same-generation seal/source/root and WAN/Config/IPFW/process/previous active owner preimages, no new Config writer or journal. **S10c:** interrupted atomic promotion/Config::save uncertainty, rollback, P1 CAS/ACK. **S11:** one original physical Start/Stop/Reload. WAN-only Save and prestart Lab remain independent; old unbound-root fence remains.
 
 ---
 
