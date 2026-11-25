@@ -18,11 +18,12 @@ import stat
 import sys
 
 from config_projection_opnsense import registered_ids, xml_snapshot
-from neutral_config_model import project
-from neutral_target_compiler import compile_target_profiles, parse_original_policy
+from neutral_config_model import project, ConfigModelError
+from neutral_target_compiler import compile_target_profiles, parse_original_policy, TargetCompileError
 from neutral_resource_compiler import (
-    compile_resources, compare_original_managed_bytes, parse_original_storage)
-from neutral_native_parity import NativeParity, inspect_original
+    compile_resources, compare_original_managed_bytes, parse_original_storage,
+    ResourceCompileError)
+from neutral_native_parity import NativeParity, inspect_original, NativeParityRefused
 from neutral_effective_diff import EffectiveSnapshot, snapshot
 from shared_apply_seal import _stat, verify_seal
 from voice_profile_compiler import SERVICES
@@ -60,6 +61,117 @@ class SourceGateReceipt:
     native: NativeParity | None = None
     effective: EffectiveSnapshot | None = None
 
+
+def _fixed_unclassified_reason(error: BaseException) -> str:
+    """Only literal source-owned identifiers; never emit private error data."""
+    kind = (type(error).__module__, type(error).__name__)
+    source_codes = {
+        ("config_projection_opnsense", "NativeProjectionError"): {
+            "INVALID_OR_DUPLICATE_XML_NODE": "INVALID_OR_DUPLICATE_XML_NODE",
+            "INVALID_XML_INPUT": "INVALID_XML_INPUT",
+            "INVALID_XML": "INVALID_XML",
+            "INVALID_XML_ROOT": "INVALID_XML_ROOT",
+            "OPNSENSE_MODEL_MISSING_OR_DUPLICATE": "OPNSENSE_MODEL_MISSING_OR_DUPLICATE",
+            "ZAPRET_MODEL_MISSING_OR_DUPLICATE": "ZAPRET_MODEL_MISSING_OR_DUPLICATE",
+            "INVALID_MODEL_ATTRIBUTES": "INVALID_MODEL_ATTRIBUTES",
+            "INVALID_MODEL_BRANCH": "INVALID_MODEL_BRANCH",
+            "INVALID_LEGACY_VOICE_WAN": "INVALID_LEGACY_VOICE_WAN",
+            "INVALID_VOICE_MODEL": "INVALID_VOICE_MODEL",
+            "INVALID_REGISTRY_SOURCE": "INVALID_REGISTRY_SOURCE",
+            "UNKNOWN_REGISTRY_DECLARATION": "UNKNOWN_REGISTRY_DECLARATION",
+            "INVALID_REGISTRY_OPTION": "INVALID_REGISTRY_OPTION",
+            "INVALID_REGISTRY_STORAGE": "INVALID_REGISTRY_STORAGE",
+            "INVALID_REGISTRY_MEMBERS": "INVALID_REGISTRY_MEMBERS",
+            "UNQUALIFIED_CONFIG_OWNER": "UNQUALIFIED_CONFIG_OWNER",
+            "UNQUALIFIED_SAVED_CONFIG": "UNQUALIFIED_SAVED_CONFIG",
+        },
+        ("auto_detect_owned_sources", "OwnedSourcesRefused"): {
+            "ownership_directory_unavailable": "P1_OWNERSHIP_DIRECTORY_UNAVAILABLE",
+            "unsafe_ownership_directory": "P1_UNSAFE_OWNERSHIP_DIRECTORY",
+            "unsafe_owned_component": "P1_UNSAFE_OWNED_COMPONENT",
+            "owned_component_changed_during_read": "P1_OWNED_COMPONENT_CHANGED_DURING_READ",
+            "owned_component_unreadable": "P1_OWNED_COMPONENT_UNREADABLE",
+            "short_ownership_write": "P1_SHORT_OWNERSHIP_WRITE",
+            "incomplete_or_foreign_owned_sources": "P1_INCOMPLETE_OR_FOREIGN_OWNED_SOURCES",
+            "invalid_owned_manifest": "P1_INVALID_OWNED_MANIFEST",
+            "invalid_owned_component_syntax": "P1_INVALID_OWNED_COMPONENT_SYNTAX",
+            "noncanonical_owned_component": "P1_NONCANONICAL_OWNED_COMPONENT",
+            "original_clean_bootstrap_authority_required": "P1_ORIGINAL_CLEAN_BOOTSTRAP_AUTHORITY_REQUIRED",
+            "ownership_already_present_or_partial": "P1_OWNERSHIP_ALREADY_PRESENT_OR_PARTIAL",
+            "invalid_initial_shared_destination": "P1_INVALID_INITIAL_SHARED_DESTINATION",
+            "native_original_config_proof_required": "P1_NATIVE_ORIGINAL_CONFIG_PROOF_REQUIRED",
+            "unsafe_initial_runtime_root": "P1_UNSAFE_INITIAL_RUNTIME_ROOT",
+            "historical_epochs_preclude_clean_baseline": "P1_HISTORICAL_EPOCHS_PRECLUDE_CLEAN_BASELINE",
+            "initial_native_owned_source_not_sealed": "P1_INITIAL_NATIVE_OWNED_SOURCE_NOT_SEALED",
+        },
+        ("auto_detect_destination_commit", "DestinationRefused"): {
+            "unsafe_gui_lock_path": "P1_UNSAFE_GUI_LOCK_PATH",
+            "unsafe_gui_lock_directory": "P1_UNSAFE_GUI_LOCK_DIRECTORY",
+            "unsafe_gui_lock": "P1_UNSAFE_GUI_LOCK",
+            "gui_writer_busy": "P1_GUI_WRITER_BUSY",
+            "gui_lock_already_held": "P1_GUI_LOCK_ALREADY_HELD",
+            "gui_lock_required": "P1_GUI_LOCK_REQUIRED",
+        },
+    }
+    if kind in source_codes:
+        return source_codes[kind].get(str(error), {
+            ("config_projection_opnsense", "NativeProjectionError"): "ORIGINAL_PROJECTION_UNCLASSIFIED",
+            ("auto_detect_owned_sources", "OwnedSourcesRefused"): "P1_OWNED_SOURCE_UNCLASSIFIED",
+            ("auto_detect_destination_commit", "DestinationRefused"): "P1_DESTINATION_UNCLASSIFIED",
+        }[kind])
+    if kind == ("builtins", "FileNotFoundError"):
+        # Only predefined artifact roles are returned, never actual paths.
+        missing = error.filename
+        if type(missing) is str:
+            basename = Path(missing).name
+            fixed = {
+                "candidate.xml": "MISSING_CANDIDATE_XML",
+                "plan.json": "MISSING_SOURCE_PLAN",
+                "traffic.input": "MISSING_STRATEGY_INPUT",
+                "target-registry.tsv": "MISSING_TARGET_REGISTRY",
+                "storage-catalog.tsv": "MISSING_STORAGE_CATALOG",
+                "registry.sh": "MISSING_REGISTRY_SOURCE",
+                "storage.sh": "MISSING_STORAGE_SOURCE",
+                "target_mode.sh": "MISSING_MODE_POLICY_SOURCE",
+                "dvtws.args": "MISSING_ORIGINAL_ARGV",
+                "voice.conf": "MISSING_VOICE_PROFILE",
+                "voice-plan.json": "MISSING_VOICE_PLAN",
+                "hostlist-exclude.txt": "MISSING_HOSTLIST_EXCLUSIONS",
+                "ipset-exclude.txt": "MISSING_IPSET_EXCLUSIONS",
+                "auto-detect-source-map.json": "MISSING_AUTO_SOURCE_MAP",
+                "auto-domains.txt": "MISSING_AUTO_HOSTLIST",
+                "ipset": "MISSING_GUI_IPSET_DIRECTORY",
+                "shared-work": "MISSING_SHARED_WORK_DIRECTORY",
+                "auto-detect-owned": "MISSING_P1_OWNED_DIRECTORY",
+                "managed": "MISSING_MANAGED_DIRECTORY",
+            }
+            if basename in fixed:
+                return fixed[basename]
+            if Path(missing).parent.name == "managed":
+                return "MISSING_MANAGED_OUTPUT"
+        return "ORIGINAL_FILE_MISSING"
+    return {
+        ("shared_apply_seal", "SharedBundleError"): "ORIGINAL_BUNDLE_REFUSAL",
+        ("voice_ipfw_adapter", "IPFWAdapterError"): "ORIGINAL_FD9_LOCK_REFUSAL",
+        ("auto_detect_effective_known", "EffectiveKnownRefused"): "ORIGINAL_KNOWN_SOURCE_REFUSAL",
+        ("builtins", "FileNotFoundError"): "ORIGINAL_FILE_MISSING",
+        ("builtins", "PermissionError"): "ORIGINAL_FILE_DENIED",
+        ("builtins", "OSError"): "ORIGINAL_OS_REFUSAL",
+        ("builtins", "ValueError"): "ORIGINAL_VALUE_REFUSAL",
+        ("builtins", "TypeError"): "ORIGINAL_TYPE_REFUSAL",
+        ("builtins", "KeyError"): "ORIGINAL_KEY_REFUSAL",
+        ("builtins", "IndexError"): "ORIGINAL_INDEX_REFUSAL",
+        ("json.decoder", "JSONDecodeError"): "ORIGINAL_JSON_REFUSAL",
+        ("neutral_effective_diff", "EffectiveDiffRefused"): "ORIGINAL_EFFECTIVE_REFUSAL",
+        ("auto_detect_gui_hostlist", "AutoHostlistRefused"): "ORIGINAL_GUI_HOSTLIST_REFUSAL",
+        ("auto_detect_origin_map", "AttributionError"): "ORIGINAL_ORIGIN_MAP_REFUSAL",
+        ("shared_apply_operation", "SharedOperationError"): "ORIGINAL_SHARED_OPERATION_REFUSAL",
+        ("auto_detect_epoch_receipts", "ReceiptRefused"): "ORIGINAL_P1_RECEIPT_REFUSAL",
+        ("neutral_resource_compiler", "ResourceCompileError"): "RESOURCE_COMPILE_UNCLASSIFIED",
+        ("neutral_target_compiler", "TargetCompileError"): "TARGET_COMPILE_UNCLASSIFIED",
+        ("neutral_native_parity", "NativeParityRefused"): "NATIVE_PARITY_UNCLASSIFIED",
+        ("neutral_config_model", "ConfigModelError"): "CONFIG_MODEL_UNCLASSIFIED",
+    }.get(kind, 'UNCLASSIFIED_PARITY_REFUSAL')
 
 def decode_pipe(raw: bytes) -> dict[str, bytes]:
     """Exact fixed framing: original shell uses printf %s\\0, never argv secrets."""
@@ -313,13 +425,14 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
         native=native if effective is not None else None, effective=effective)
 
 
-def _owned_under_original_p2(work: Path, uid: int) -> dict[str, bytes] | None:
+def _owned_under_original_p2(work: Path, uid: int, *, mode: bytes) -> dict[str, bytes] | None:
     """Read original known P1 snapshot; never replace it with generated files."""
     from auto_detect_destination_commit import (
         SHARED_FOUND_NAMES, _qualified_shared_found_batch, exclusive_destination_lock)
     from auto_detect_effective_known import _verify_planned_preimages_locked
     from auto_detect_gui_hostlist import AUTO_LOCK, AUTO_HOSTLIST
-    from auto_detect_owned_sources import OWNED_ROOT, KNOWN_HOSTLISTS, read_owned
+    from auto_detect_owned_sources import (
+        OWNED_ROOT, KNOWN_HOSTLISTS, read_owned, _safe_dir)
 
     plan = json.loads(_read(work / "plan.json", uid, MAX_FILE))
     if type(plan) is not dict:
@@ -327,6 +440,20 @@ def _owned_under_original_p2(work: Path, uid: int) -> dict[str, bytes] | None:
     found = ("found_intent" in plan, "found_batch" in plan)
     if found[0] != found[1]:
         raise OriginalSourceGateRefused("INCOMPLETE_ORIGINAL_FOUND_PLAN")
+    # All/List without Found or previously initialized P1-owned rows must
+    # not require an unrelated Auto GUI directory that does not yet exist.
+    # The ORIGINAL caller has already attested FD9; only a proven *absence*
+    # is observed here, never unguarded P1 bytes. The accepted P1 bootstrap
+    # requires that same FD9, so it cannot race this read-only absence proof.
+    if (not found[0] and mode in (b"all", b"list") and
+            not AUTO_LOCK.parent.exists() and
+            not AUTO_LOCK.parent.is_symlink()):
+        _safe_dir(OWNED_ROOT.parent, uid)
+        try:
+            OWNED_ROOT.lstat()
+        except FileNotFoundError:
+            return None
+        raise OriginalSourceGateRefused("P1_OWNER_PRESENT_BUT_GUI_LOCK_ABSENT")
     with exclusive_destination_lock(AUTO_LOCK, uid):
         if found[0]:
             if (plan.get("page") != "strategies" or
@@ -358,7 +485,7 @@ def native_original_fd9(operation: str, raw_pipe: bytes,
     require_lifecycle_lock()
     inputs = decode_pipe(raw_pipe)
     work = WORK / operation
-    known = _owned_under_original_p2(work, 0)
+    known = _owned_under_original_p2(work, 0, mode=inputs["mode"])
     auto_bytes = None
     # Shared Auto is a runtime provider, NOT a managed hostlist and never
     # becomes an implicit learner. Only read its native source if referenced.
@@ -386,11 +513,124 @@ def main(argv: list[str] | None = None) -> int:
         native_original_fd9(args[0], raw, digest, sealed=sealed)
         return 0
     except (ValueError, RuntimeError, OSError, TypeError, UnicodeError,
-            KeyError, IndexError, json.JSONDecodeError):
-        # Stable, content-free diagnostic; original Apply owns the single
-        # preflight-rejected=runtime-build response and stage journal.
-        print("ERROR: original source-to-managed candidate parity refused",
-              file=sys.stderr)
+            KeyError, IndexError, json.JSONDecodeError) as error:
+        # The only diagnostic is a fixed, source-code-owned error identifier.
+        # NEVER serialize exception details, source fields, user lists or paths.
+        reason = (str(error) if type(error) in (
+            OriginalSourceGateRefused, ConfigModelError, TargetCompileError,
+            ResourceCompileError, NativeParityRefused) else "")
+        approved = {
+            "INVALID_ORIGINAL_PIPE",
+            "INVALID_ORIGINAL_FIELDS",
+            "INVALID_ORIGINAL_FIELD_SIZE",
+            "INVALID_ORIGINAL_SOURCE_SELECTOR",
+            "UNTRUSTED_ORIGINAL_FILE",
+            "ORIGINAL_FILE_CHANGED",
+            "UNQUALIFIED_ORIGINAL_CONTEXT",
+            "PREMATURE_OR_SECOND_ROOT_FORBIDDEN",
+            "ORIGINAL_CONFIG_SOURCE_DRIFT",
+            "ORIGINAL_STRATEGY_SOURCE_DRIFT",
+            "ORIGINAL_REGISTRY_SOURCE_DRIFT",
+            "ORIGINAL_STORAGE_SOURCE_DRIFT",
+            "ORIGINAL_MANAGED_SOURCE_SET_DRIFT",
+            "UNEXPECTED_ORIGINAL_PROMOTION",
+            "NONAUTO_OLD_ARGS_FORBIDDEN",
+            "UNFINISHED_ORIGINAL_PROMOTION",
+            "ORIGINAL_NATIVE_CANDIDATE_DIGEST_REQUIRED",
+            "ORIGINAL_NONAUTO_MAP_OR_DIGEST_FORBIDDEN",
+            "ORIGINAL_NATIVE_PROOF_NOT_READONLY",
+            "FINAL_ORIGINAL_NATIVE_REFS_MISMATCH",
+            "ORIGINAL_NATIVE_ARTIFACT_CHANGED",
+            "ORIGINAL_INPUT_CHANGED_DURING_CHECK",
+            "EFFECTIVE_SOURCE_REQUIRES_FINAL_SEAL",
+            "FINAL_ORIGINAL_SEAL_CHANGED",
+            "INVALID_ORIGINAL_PLAN",
+            "INCOMPLETE_ORIGINAL_FOUND_PLAN",
+            "INVALID_ORIGINAL_FOUND_INTENT",
+            "NATIVE_ORIGINAL_FD9_REQUIRED",
+            "P1_OWNER_PRESENT_BUT_GUI_LOCK_ABSENT",
+        }
+        approved.update({
+            "INVALID_MODEL_SECTION",
+            "INVALID_MODEL_SCALAR",
+            "INVALID_BOOLEAN",
+            "INVALID_ENUM",
+            "INVALID_PORT",
+            "INVALID_MODEL_KEYS",
+            "INVALID_VOICE_KEYS",
+            "INVALID_REGISTRY",
+            "INVALID_WAN_SELECTION",
+            "INVALID_PORTS",
+            "INVALID_ORIGINAL_POLICY",
+            "ORIGINAL_POLICY_SOURCE_CHANGED",
+            "ORIGINAL_POLICY_BRANCHES_CHANGED",
+            "ORIGINAL_POLICY_DECLARATION_CHANGED",
+            "INVALID_ORIGINAL_POLICY_ROWS",
+            "UNQUALIFIED_TARGET_INPUT",
+            "INVALID_TARGET_REGISTRY",
+            "UNQUALIFIED_TARGET_POLICY",
+            "INVALID_TARGET_DEFAULTS",
+            "UNREGISTERED_OR_IMPLICIT_AUTO_DEFAULT",
+            "ALL_MODE_MUST_NOT_INJECT_TARGETS",
+            "UNSUPPORTED_EXPLICIT_TARGET",
+            "UNREGISTERED_EXPLICIT_TARGET",
+            "TOO_MANY_NORMALIZED_PROFILES",
+            "INVALID_ORIGINAL_PROFILE",
+            "INVALID_STORAGE_SOURCE",
+            "STORAGE_SOURCE_CHANGED",
+            "STORAGE_DECLARATION_CHANGED",
+            "INVALID_STORAGE_LOCATOR",
+            "INVALID_STORAGE_CATALOG",
+            "INVALID_DOMAIN_INPUT",
+            "INVALID_IPSET_INPUT",
+            "INCOMPLETE_OWNED_KNOWN_SNAPSHOT",
+            "INVALID_OWNED_KNOWN_SNAPSHOT",
+            "NONCANONICAL_OWNED_KNOWN",
+            "UNQUALIFIED_RESOURCE_PREVIEW",
+            "INVALID_RESOURCE_REGISTRY",
+            "REGISTRY_STORAGE_MISMATCH",
+            "INCOMPLETE_PREPARED_RESOURCES",
+            "INVALID_PREPARED_BYTES",
+            "INVALID_SAVED_VOICE",
+            "INVALID_TARGET_PROFILES",
+            "INVALID_RESOURCE_TYPE",
+            "UNKNOWN_LINKED_SOURCE",
+            "INVALID_EFFECTIVE_KNOWN",
+            "UNQUALIFIED_STORAGE_REFERENCE",
+            "UNQUALIFIED_RUNTIME_RESOURCE",
+            "UNPREPARED_MANAGED_RESOURCE",
+            "LINKED_RESOURCE_NOT_PRESENT",
+            "LINKED_RESOURCE_EMPTY",
+            "VOICE_REQUIRES_SAVED_WAN",
+            "VOICE_CANDIDATE_INVALID",
+            "UNQUALIFIED_MANAGED_PARITY",
+            "MANAGED_REFERENCE_MISMATCH",
+            "MANAGED_EXPECTATION_MISSING",
+            "INVALID_EXCLUSION_EXPECTATION",
+            "ORIGINAL_MANAGED_SET_MISMATCH",
+            "ORIGINAL_MANAGED_BYTES_MISMATCH",
+            "UNQUALIFIED_ORIGINAL_INPUT",
+            "ORIGINAL_NATIVE_ARGS_INVALID",
+            "UNEXPECTED_ORIGINAL_NATIVE_ARGS",
+            "VOICE_ORIGINAL_ARTIFACT_MISMATCH",
+            "NATIVE_CAPTURE_PLAN_REFUSED",
+            "NATIVE_CAPTURE_PLAN_CHANGED",
+            "NATIVE_VOICE_ORDER_CHANGED",
+            "NATIVE_VOICE_SHA_CHANGED",
+            "ORDINARY_IPFW_RANGE_CHANGED",
+            "UNQUALIFIED_LINKED_RESOURCES",
+            "UNEXPECTED_NONAUTO_SOURCE_MAP",
+            "LEARNING_NOT_ALLOWED_IN_NONAUTO",
+            "INVALID_ORIGINAL_SOURCE_MAP",
+            "ORIGINAL_PROFILE_MAP_COUNT",
+            "ORIGINAL_VOICE_OR_STRATEGY_MAP_COUNT",
+            "ORIGINAL_SOURCE_PROFILE_IDENTITY_CHANGED",
+            "ORIGINAL_LEARNING_PROOF_REFUSED",
+            "UNQUALIFIED_FIRST_MATCH_OR_LEARNING_ORDER",
+        })
+        if reason not in approved:
+            reason = _fixed_unclassified_reason(error)
+        print("ORIGINAL_SOURCE_GATE_REFUSAL=" + reason, file=sys.stderr)
         return 69
 
 

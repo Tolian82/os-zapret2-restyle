@@ -58,9 +58,48 @@ write_active_release()
 
     mkdir -p "${STATE_DIR}"
     _temporary=$(mktemp "${STATE_DIR}/runtime.release.XXXXXX") || return 1
-    printf '%s\n' "${_release}" > "${_temporary}"
-    chmod 0644 "${_temporary}"
-    mv -f "${_temporary}" "${ACTIVE_RELEASE_FILE}"
+    case "${2:-legacy}" in
+        legacy)
+            printf '%s\n' "${_release}" > "${_temporary}" || {
+                rm -f "${_temporary}"
+                return 1
+            }
+            ;;
+        bound)
+            # Only THIS original writer publishes the child make output.
+            # The original guard returns verified bytes and never writes.
+            if [ "${ACTIVE_RELEASE_FILE}" != "${STATE_DIR}/runtime.release" ] ||
+               [ -L "${STATE_DIR}" ] || [ -L "${ACTIVE_RELEASE_FILE}" ] ||
+               [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" != 1 ] ||
+               [ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" != 1 ] ||
+               [ "${STRATEGY_LAB_LIFECYCLE_OWNER:-0}" != 1 ] ||
+               ! ( : >&9 ) 2>/dev/null ||
+               ! backup_evidence write-built-release-record "${_release}" > "${_temporary}"; then
+                rm -f "${_temporary}"
+                return 69
+            fi
+            if [ "$(wc -l < "${_temporary}" | tr -d '[:space:]')" != 3 ] ||
+               [ "$(sed -n '1p' "${_temporary}")" != "${_release}" ] ||
+               ! sed -n '2p' "${_temporary}" | grep -Eq '^commit=[0-9a-f]{40}$' ||
+               ! sed -n '3p' "${_temporary}" | grep -Eq '^engine_sha256=[0-9a-f]{64}$' ||
+               [ "$(wc -c < "${_temporary}" | tr -d '[:space:]')" -gt 192 ]; then
+                rm -f "${_temporary}"
+                return 69
+            fi
+            ;;
+        *)
+            rm -f "${_temporary}"
+            return 64
+            ;;
+    esac
+    if ! chmod 0644 "${_temporary}" ||
+       ! mv -f "${_temporary}" "${ACTIVE_RELEASE_FILE}"; then
+        rm -f "${_temporary}"
+        return 1
+    fi
+    if [ "${2:-legacy}" = bound ]; then
+        sync || return 1
+    fi
 }
 
 
@@ -1205,9 +1244,11 @@ cause=release-list-unavailable' ]; then
             return 1
         }
 
-        write_active_release "${_installed_release}" || {
+        # Actual original child make succeeded; STOPPED, Git target, managed
+        # resources and previous rollback evidence were verified above.
+        write_active_release "${_installed_release}" bound || {
             status_write "failed"
-            echo "ERROR: active runtime release marker could not be written" >&2
+            echo "ERROR: original build-bound release marker refused publication" >&2
             rollback_runtime || true
             return 1
         }

@@ -9,6 +9,7 @@ No network, firewall, OPNsense files, package manager or root privileges.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -52,6 +53,15 @@ class UpstreamInterrupted(unittest.TestCase):
         self.adopted_blob = b"preexisting user's target-named BIN\n"
         self.managed = b"return 'pinned additional lua'\n"
         self.old_binary = b"original compiled executable\n"
+        spec = importlib.util.spec_from_file_location(
+            "native_engine_fixture", ROOT / "scripts/test-extra-resources-engine-abi.py")
+        assert spec is not None and spec.loader is not None
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        self.new_binary = fixture.native_elf("libc.so.7", "libluajit-5.1.so.2")
+        self.new_compiled = self.root / "compiled-elf"
+        self.new_compiled.write_bytes(self.new_binary)
+
         self.git("init", "-q")
         self.git("config", "user.name", "Upstream Test")
         self.git("config", "user.email", "git@example.invalid")
@@ -176,8 +186,12 @@ echo CHECKED_OUT >> "$TEST_NATIVE_EVENTS"
 if [ "$TEST_CUT_POINT" = checkout ]; then
     "$TEST_PYTHON" -c 'import os,signal; os.killpg(os.getpgrp(),signal.SIGKILL)'
 fi
-printf 'new compiled executable\n' > "$TEST_ZAPRET_DIR/binaries/my/dvtws2"
+cp "$TEST_COMPILED_ELF" "$TEST_ZAPRET_DIR/binaries/my/dvtws2"
 chmod 0755 "$TEST_ZAPRET_DIR/binaries/my/dvtws2"
+if [ "$TEST_CUT_POINT" = bad-elf ]; then
+    printf 'not an ELF\n' > "$TEST_ZAPRET_DIR/binaries/my/dvtws2"
+    chmod 0755 "$TEST_ZAPRET_DIR/binaries/my/dvtws2"
+fi
 echo BUILT >> "$TEST_NATIVE_EVENTS"
 if [ "$TEST_CUT_POINT" = soft-foreign ] || [ "$TEST_CUT_POINT" = soft-staged ]; then
     printf 'foreign tracked user bytes\n' > "$TEST_ZAPRET_DIR/README"
@@ -213,6 +227,7 @@ fi
             "TEST_OLD_SHA": self.old_sha,
             "TEST_FD9_FILE": str(self.root / "fd9"),
             "TEST_PYTHON": sys.executable,
+            "TEST_COMPILED_ELF": str(self.new_compiled),
             "TEST_GUARD": str(GUARD),
             "TEST_ROLLBACK": str(self.state / "runtime-rollback"),
             "SETUP_SCRIPT": str(self.setup),
@@ -303,6 +318,25 @@ fi
         self.assertIn("RECOVERY_FD9", self.log.read_text())
         self.assertIn("START", self.log.read_text())
 
+    def test_successful_original_build_writes_bound_marker(self) -> None:
+        result = subprocess.run([str(TRANSACTION), "install", "v1.0.3"],
+                                env=self.environment("normal"), capture_output=True,
+                                text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.state / "runtime.release").read_text().splitlines(), [
+            "v1.0.3", "commit=" + self.new_sha,
+            "engine_sha256=" + digest(self.new_binary)])
+        self.assertEqual((self.runtime / "binaries/my/dvtws2").read_bytes(), self.new_binary)
+        self.assertEqual(self.service_state.read_text(), "running\n")
+        self.assertFalse((self.state / "runtime-rollback").exists())
+
+    def test_failed_non_elf_build_refuses_and_restores_old_marker(self) -> None:
+        result = subprocess.run([str(TRANSACTION), "install", "v1.0.3"],
+                                env=self.environment("bad-elf"), capture_output=True,
+                                text=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assert_original()
+
     def test_original_bound_record_is_restored_byte_for_byte_after_hard_cut(self) -> None:
         # Existing original record is an exact preimage, not rebuilt after
         # interruption from the restored tag alone.
@@ -326,7 +360,9 @@ fi
         marker = self.state / "runtime.release"
         marker.write_bytes(self.expected_original_marker)
         self.cut("start")
-        self.assertEqual(marker.read_text(), "v1.0.3\n")
+        self.assertEqual(marker.read_text().splitlines(), [
+            "v1.0.3", "commit=" + self.new_sha,
+            "engine_sha256=" + digest(self.new_binary)])
         self.recover("start", False)
         self.service_state.write_text("stopped\n")
         self.recover("start", True)
@@ -338,7 +374,9 @@ fi
         self.expected_original_marker = None
         self.cut("start")
         self.assertTrue(marker.is_file())
-        self.assertEqual(marker.read_text(), "v1.0.3\n")
+        self.assertEqual(marker.read_text().splitlines(), [
+            "v1.0.3", "commit=" + self.new_sha,
+            "engine_sha256=" + digest(self.new_binary)])
         self.service_state.write_text("stopped\n")
         self.recover("start", True)
         self.assert_original()

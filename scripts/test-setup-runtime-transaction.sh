@@ -216,10 +216,20 @@ if [ "${1:-}" = export-original-release ] ||
     if [ "$1" = verify-prepared-original-release ]; then
         [ -f "${TEST_ACTIVE_RELEASE_FILE}" ] &&
         [ ! -L "${TEST_ACTIVE_RELEASE_FILE}" ] &&
-        [ "$(cat "${TEST_ACTIVE_RELEASE_FILE}")" = "$3" ] || exit 70
+        [ "$(sed -n '1p' "${TEST_ACTIVE_RELEASE_FILE}")" = "$3" ] || exit 70
     else
         printf 'LEGACY\n'
     fi
+    exit 0
+fi
+# Only a strict FRAME mock for the original single-writer shell test.
+# The genuine ELF and tag checks are in the real Git/FreeBSD jobs.
+if [ "${1:-}" = write-built-release-record ]; then
+    [ "$#" -eq 2 ] &&
+    [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] &&
+    [ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" = 1 ] &&
+    [ "${STRATEGY_LAB_LIFECYCLE_OWNER:-0}" = 1 ] || exit 75
+    printf '%s\ncommit=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nengine_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' "$2"
     exit 0
 fi
 # Prepared cleanup requires live-resource verification as well as a saved
@@ -338,7 +348,7 @@ fi
 if run_transaction v1.0.3 >/dev/null 2>&1; then
     fail "failed candidate activation reported success"
 fi
-[ "$(cat "${ACTIVE_RELEASE_FILE}")" = v1.0.4 ] || fail "active release marker was not restored"
+[ "$(sed -n '1p' "${ACTIVE_RELEASE_FILE}")" = v1.0.4 ] || fail "active release marker was not restored"
 [ "$(cat "${GIT_RELEASE_STATE}")" = v1.0.4 ] || fail "previous Git release was not restored"
 [ "$(cat "${GIT_COMMIT_STATE}")" = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ] || fail "previous Git commit was not restored"
 [ "$(cat "${ZAPRET_DIR}/binaries/my/dvtws2")" = old-binary ] || fail "previous binary was not restored"
@@ -366,7 +376,13 @@ printf '%s\n' v1.0.4 > "${GIT_RELEASE_STATE}"
 printf '%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "${GIT_COMMIT_STATE}"
 printf '%s\n' old-binary > "${ZAPRET_DIR}/binaries/my/dvtws2"
 run_transaction v1.0.3 >/dev/null
-[ "$(cat "${ACTIVE_RELEASE_FILE}")" = v1.0.3 ] || fail "successful activation did not publish selected release"
+[ "$(sed -n '1p' "${ACTIVE_RELEASE_FILE}")" = v1.0.3 ] || fail "successful activation did not publish selected release"
+[ "$(wc -l < "${ACTIVE_RELEASE_FILE}" | tr -d '[:space:]')" = 3 ] ||
+    fail "original setup did not publish bounded three-line build record"
+grep -Eq '^commit=[0-9a-f]{40}$' "${ACTIVE_RELEASE_FILE}" ||
+    fail "original setup record lacks source commit"
+grep -Eq '^engine_sha256=[0-9a-f]{64}$' "${ACTIVE_RELEASE_FILE}" ||
+    fail "original setup record lacks compiled engine SHA"
 [ "$(cat "${GIT_RELEASE_STATE}")" = v1.0.3 ] || fail "successful activation has wrong Git release"
 [ "$(cat "${SERVICE_STATE}")" = running ] || fail "successful activation changed running state"
 [ "$(cat "${ZAPRET_DIR}/binaries/my/dvtws2")" = new-binary ] || fail "successful activation did not retain candidate binary"
@@ -575,7 +591,7 @@ printf '%s\n' "${output}" | grep -Fq 'RECOVERY_MUTATING_RESTORED:' ||
 [ "$(cat "${GIT_COMMIT_STATE}")" = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ] ||
     fail "original checkout was not restored after interruption"
 [ "$(cat "${GIT_RELEASE_STATE}")" = v1.0.3 ] || fail "original git release was not restored"
-[ "$(cat "${ACTIVE_RELEASE_FILE}")" = v1.0.3 ] || fail "original release marker was not restored"
+[ "$(sed -n '1p' "${ACTIVE_RELEASE_FILE}")" = v1.0.3 ] || fail "original release marker was not restored"
 [ "$(cat "${ZAPRET_DIR}/binaries/my/dvtws2")" = new-binary ] ||
     fail "original compiled binary was not restored"
 [ "$(cat "${SERVICE_STATE}")" = running ] || fail "original running service not restarted"
@@ -653,7 +669,7 @@ fi
     fail "failed target Start did not restore previous Git release"
 [ "$(cat "${SERVICE_STATE}")" = running ] ||
     fail "original native service was not restarted after target Start failure"
-[ "$(cat "${ACTIVE_RELEASE_FILE}")" = v1.0.4 ] ||
+[ "$(sed -n '1p' "${ACTIVE_RELEASE_FILE}")" = v1.0.4 ] ||
     fail "failed target Start left changed active release"
 [ ! -e "${ROLLBACK_DIR}" ] || fail "successful original rollback retained state"
 TEST_START_FAIL=0

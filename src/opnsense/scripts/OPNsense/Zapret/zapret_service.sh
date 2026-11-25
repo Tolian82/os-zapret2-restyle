@@ -2152,8 +2152,10 @@ shared_apply_original_source_gate()
     [ "$#" -ge 1 ] && [ "$#" -le 3 ] &&
     [ -x "${PYTHON_RUNTIME}" ] &&
     [ -r "${BACKEND_DIR}/neutral_shared_apply_source_gate.py" ] || return 69
-    {
-        printf 'S10C2B1_ORIGINAL_INPUT_V1\0'
+    _shared_original_gate_reason=UNCLASSIFIED_PARITY_REFUSAL
+    _shared_original_gate_output=$(
+        {
+            printf 'S10C2B1_ORIGINAL_INPUT_V1\0'
         printf '%s\0' \
             "${TRAFFIC_ARGS:-}" \
             "${YOUTUBE_DOMAINS:-}" "${USER_DOMAINS:-}" \
@@ -2161,7 +2163,21 @@ shared_apply_original_source_gate()
             "${SIP_IPS:-}" "${CUSTOM_IPS:-}" \
             "${EXCLUDE_DOMAINS:-}" "${EXCLUDE_IPSET:-}" \
             "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
-    } | "${PYTHON_RUNTIME}" "${BACKEND_DIR}/neutral_shared_apply_source_gate.py" "$@" >/dev/null
+        } | "${PYTHON_RUNTIME}" "${BACKEND_DIR}/neutral_shared_apply_source_gate.py" "$@" 2>&1 >/dev/null
+    )
+    _shared_original_gate_rc=$?
+    [ "$_shared_original_gate_rc" -eq 0 ] && return 0
+    case "$_shared_original_gate_output" in
+        ORIGINAL_SOURCE_GATE_REFUSAL=*)
+            _shared_original_gate_reason=${_shared_original_gate_output#ORIGINAL_SOURCE_GATE_REFUSAL=}
+            case "$_shared_original_gate_reason" in
+                ""|*[!A-Z0-9_]*) _shared_original_gate_reason=UNCLASSIFIED_PARITY_REFUSAL ;;
+            esac
+            [ "${#_shared_original_gate_reason}" -le 64 ] ||
+                _shared_original_gate_reason=UNCLASSIFIED_PARITY_REFUSAL
+            ;;
+    esac
+    return "$_shared_original_gate_rc"
 }
 # Prepare one complete Voice+Strategies release from the detached OPNsense
 # candidate. This is an INTERNAL FD9 operation, not a Config/runtime Apply.
@@ -2237,6 +2253,7 @@ shared_apply_prepare_service()
         # candidate digest. Compare original argv/Voice/IPFW/source-map under
         # that exact identity BEFORE any schema2/schema3 promotion or seal.
         shared_apply_original_source_gate "$1" "$_shared_auto_digest" || {
+            orchestrator_fail_stage "$STAGE_FILE" 8 8 source-gate "${_shared_original_gate_reason:-UNCLASSIFIED_PARITY_REFUSAL}" || return 69
             printf '%s\n' preflight-rejected=runtime-build
             return 0
         }
@@ -2298,6 +2315,7 @@ shared_apply_prepare_service()
         # All/List have no original Auto source-map, no hidden learner and
         # no synthetic candidate digest. Same single preseal read-only gate.
         shared_apply_original_source_gate "$1" || {
+            orchestrator_fail_stage "$STAGE_FILE" 8 8 source-gate "${_shared_original_gate_reason:-UNCLASSIFIED_PARITY_REFUSAL}" || return 69
             printf '%s\n' preflight-rejected=runtime-build
             return 0
         }
@@ -2305,6 +2323,7 @@ shared_apply_prepare_service()
     # Normal Start/Reconfigure make their release 0755 before activation.
     # The native shared candidate needs the same normalization BEFORE SEAL.
     shared_apply_finalize_release_modes "$_shared_work/release" || {
+        orchestrator_fail_stage "$STAGE_FILE" 8 8 release-modes VALIDATION_FAILED || return 69
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }

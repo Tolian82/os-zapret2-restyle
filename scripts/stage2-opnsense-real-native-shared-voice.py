@@ -224,8 +224,18 @@ def witness(active, engine_sha, *, running, page='voice'):
          'COMMON_NATIVE_SERVICE_STATUS_INCORRECT')
     report = json.loads(invoke(active, '/usr/local/sbin/configctl',
                                'zapret', 'voice_inspect', timeout=60))
-    need(report.get('source') == 'native-common' and
-         report.get('state') == ('ready' if running else 'stopped'),
+    # Only fixed boolean failure evidence; never print owner PID, Config,
+    # native argv, domains or the raw private read-only inspection response.
+    inspected_source = report.get('source') == 'native-common'
+    inspected_state = report.get('state') == ('ready' if running else 'stopped')
+    if not (inspected_source and inspected_state):
+        print('COMMON_NATIVE_READONLY_INSPECT_SAFE_FLAGS=' + json.dumps({
+            'source_is_native_common': inspected_source,
+            'state_matches_requested': inspected_state,
+            'state_is_ready': report.get('state') == 'ready',
+            'state_is_stopped': report.get('state') == 'stopped',
+        }, sort_keys=True), flush=True)
+    need(inspected_source and inspected_state,
          'COMMON_NATIVE_READONLY_INSPECT_NOT_ATTESTED')
     st = JOURNAL.lstat()
     need(stat.S_ISREG(st.st_mode) and st.st_uid == 0 and
@@ -261,6 +271,43 @@ def witness(active, engine_sha, *, running, page='voice'):
     return {'id': owner, 'pid': int(pid), 'rules': rules}
 
 
+def safe_original_build_stage():
+    """Report only pipeline step identifiers, never stage text or user data."""
+    stage_file = Path('/var/run/zapret2-execution.status')
+    if stage_file.is_symlink() or not stage_file.is_file():
+        return {'receipt': 'absent'}
+    try:
+        raw = stage_file.read_bytes()
+        if not 0 < len(raw) <= 4096 or raw.count(b'\n') != 1:
+            return {'receipt': 'invalid'}
+        parts = raw.decode('utf-8').rstrip('\n').split('|', 5)
+        if len(parts) != 6:
+            return {'receipt': 'invalid'}
+        number, total, step, state = parts[:4]
+        if (not re.fullmatch(r'[1-9][0-9]{0,2}', number) or
+                not re.fullmatch(r'[1-9][0-9]{0,2}', total)):
+            return {'receipt': 'invalid-position'}
+        if state not in {'running', 'ok', 'failed', 'stopped'}:
+            return {'receipt': 'unknown-state', 'index': int(number)}
+        # The original status writer owns the stage name. Do not echo an
+        # arbitrary name from disk if it is not one of our fixed stages.
+        approved = {'config', 'parser', 'targets', 'blobs', 'ports',
+                    'args', 'validator', 'validation', 'release',
+                    'complete', 'runtime', 'build', 'source-gate',
+                    'release-modes'}
+        result = {'receipt': 'present', 'index': int(number),
+                  'total': int(total),
+                  'stage': step if step in approved else 'other',
+                  'state': state}
+        if step == 'source-gate' and state == 'failed':
+            reason = parts[5]
+            result['refusal'] = (reason if re.fullmatch(r'[A-Z0-9_]{4,64}',
+                                reason) else 'unclassified')
+        return result
+    except (OSError, UnicodeError):
+        return {'receipt': 'unreadable'}
+
+
 def execute():
     active = module('stage2-opnsense-real-native-active-service.py')
     boot = module('stage2-opnsense-real-native-boot-syshook.py')
@@ -270,13 +317,76 @@ def execute():
     _, foreign, strategies = prepare_fixture(active, boot)
     need(active.live_state(engine_sha) == before,
          'VOICE_OFF_FIXTURE_MODIFIED_EXISTING_ENGINE')
-    invoke(active, '/usr/local/sbin/configctl', 'zapret',
-           'telegram_voice_enable', timeout=600)
+    apply_response = active.cmd(
+        ['/usr/local/sbin/configctl', 'zapret', 'telegram_voice_enable'],
+        timeout=600)
+    need(apply_response.returncode == 0,
+         'INSTALLED_ACTION_REFUSED:configctl:rc=' + str(apply_response.returncode))
+    apply_output = apply_response.stdout
+    # configd can exit zero even on a deliberate original Apply preflight
+    # refusal. Never log raw output, Config, argv, IPs or candidate fields.
+    matches = re.findall(r'(?m)^preflight-rejected=([a-z0-9-]{1,48})$', apply_output)
+    safe_preflight = matches[-1] if matches and matches[-1] in {
+        'manifest-unbound', 'bundle-verify', 'runtime-build', 'render',
+        'seal', 'candidate', 'candidate-plan', 'candidate-validation',
+        'config-preflight', 'runtime-preflight', 'observer-generation',
+        'wan-required', 'bootstrap', 'model', 'decode', 'root-gate',
+        'found-intent', 'owned-baseline',
+    } else 'none-or-unclassified'
     saved = active.CONFIG.read_bytes()
     root = ET.fromstring(saved)
-    need(root.findtext('./OPNsense/Zapret/voice/telegram/enabled') == '1' and
-         boot.config_except_model(saved) == foreign and
-         boot.protected_model_values(saved) == strategies,
+    # Diagnose WHICH of the original three strict checks failed. Emit only
+    # bounded safe booleans, never serialize Config or raw voice/list values.
+    saved_voice = root.findtext('./OPNsense/Zapret/voice/telegram/enabled') == '1'
+    saved_foreign = boot.config_except_model(saved) == foreign
+    saved_protected = boot.protected_model_values(saved) == strategies
+    if not saved_voice and safe_preflight == 'runtime-build':
+        print('COMMON_APPLY_RUNTIME_BUILD_STAGE=' + json.dumps(
+            safe_original_build_stage(), sort_keys=True), flush=True)
+        # Parse only fixed, source-code-owned enum identifiers; never raw errors.
+        reasons = re.findall(
+            r'(?m)^ORIGINAL_SOURCE_GATE_REFUSAL=([A-Z0-9_]{4,64})$',
+            apply_output + '\n' + apply_response.stderr)
+        if reasons:
+            approved = {
+                "INVALID_ORIGINAL_PIPE",
+                "INVALID_ORIGINAL_FIELDS",
+                "INVALID_ORIGINAL_FIELD_SIZE",
+                "INVALID_ORIGINAL_SOURCE_SELECTOR",
+                "UNTRUSTED_ORIGINAL_FILE",
+                "ORIGINAL_FILE_CHANGED",
+                "UNQUALIFIED_ORIGINAL_CONTEXT",
+                "PREMATURE_OR_SECOND_ROOT_FORBIDDEN",
+                "ORIGINAL_CONFIG_SOURCE_DRIFT",
+                "ORIGINAL_STRATEGY_SOURCE_DRIFT",
+                "ORIGINAL_REGISTRY_SOURCE_DRIFT",
+                "ORIGINAL_STORAGE_SOURCE_DRIFT",
+                "ORIGINAL_MANAGED_SOURCE_SET_DRIFT",
+                "NONAUTO_OLD_ARGS_FORBIDDEN",
+                "UNFINISHED_ORIGINAL_PROMOTION",
+                "ORIGINAL_NATIVE_CANDIDATE_DIGEST_REQUIRED",
+                "ORIGINAL_NONAUTO_MAP_OR_DIGEST_FORBIDDEN",
+                "ORIGINAL_NATIVE_PROOF_NOT_READONLY",
+                "FINAL_ORIGINAL_NATIVE_REFS_MISMATCH",
+                "ORIGINAL_NATIVE_ARTIFACT_CHANGED",
+                "ORIGINAL_INPUT_CHANGED_DURING_CHECK",
+                "EFFECTIVE_SOURCE_REQUIRES_FINAL_SEAL",
+                "FINAL_ORIGINAL_SEAL_CHANGED",
+                "INVALID_ORIGINAL_PLAN",
+                "INCOMPLETE_ORIGINAL_FOUND_PLAN",
+                "INVALID_ORIGINAL_FOUND_INTENT",
+                "NATIVE_ORIGINAL_FD9_REQUIRED",
+            }
+            safe = reasons[-1] if reasons[-1] in approved else 'unclassified'
+            print('COMMON_APPLY_SOURCE_GATE_CAUSE=' + safe, flush=True)
+    if not (saved_voice and saved_foreign and saved_protected):
+        print('COMMON_APPLY_VOICE_SAFE_FLAGS=' + json.dumps({
+            'enabled_saved': saved_voice,
+            'original_preflight_stage': safe_preflight,
+            'foreign_unchanged': saved_foreign,
+            'protected_unchanged': saved_protected,
+        }, sort_keys=True), flush=True)
+    need(saved_voice and saved_foreign and saved_protected,
          'COMMON_APPLY_DID_NOT_ATOMICALLY_SAVE_REQUESTED_VOICE')
     first = witness(active, engine_sha, running=True)
     need(first['pid'] != before['pid'], 'COMMON_APPLY_REUSED_ORDINARY_PID')

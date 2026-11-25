@@ -21,7 +21,7 @@ sys.path.insert(0, str(BACKEND))
 
 from neutral_shared_apply_source_gate import (
     FIELDS, MARKER, decode_pipe, qualify_source_to_managed,
-    OriginalSourceGateRefused)
+    OriginalSourceGateRefused, _fixed_unclassified_reason, _owned_under_original_p2)
 from neutral_resource_compiler import ResourceCompileError
 from neutral_native_parity import NativeParityRefused
 from shared_apply_seal import create_seal, verify_seal
@@ -95,6 +95,52 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 "candidate": {"general": {"enabled": "1"}},
                 "changed_fields": [], "dependencies": "a" * 64,
             }, sort_keys=True, separators=(",", ":")) + "\n")
+
+    def test_fixed_native_refusal_reason_redaction(self):
+        from config_projection_opnsense import NativeProjectionError
+        from auto_detect_owned_sources import OwnedSourcesRefused
+        from shared_apply_seal import SharedBundleError
+        self.assertEqual(_fixed_unclassified_reason(NativeProjectionError("INVALID_MODEL_ATTRIBUTES")),
+                         "INVALID_MODEL_ATTRIBUTES")
+        self.assertEqual(_fixed_unclassified_reason(OwnedSourcesRefused("unsafe_ownership_directory")),
+                         "P1_UNSAFE_OWNERSHIP_DIRECTORY")
+        for error in (ValueError("private-secret.example"),
+                      NativeProjectionError("private-secret.example"),
+                      OwnedSourcesRefused("private-secret.example"),
+                      SharedBundleError("private-secret.example")):
+            code = _fixed_unclassified_reason(error)
+            self.assertRegex(code, r"^[A-Z0-9_]{4,64}$")
+            self.assertNotIn("private", code)
+
+    def test_missing_file_role_is_fixed_and_no_path_leaks(self):
+        missing = FileNotFoundError(2, "private-host.example",
+                                    "/var/db/zapret2/shared-work/private/traffic.input")
+        self.assertEqual(_fixed_unclassified_reason(missing), "MISSING_STRATEGY_INPUT")
+        unknown = FileNotFoundError(2, "private-host.example",
+                                    "/tmp/private-host.example")
+        self.assertEqual(_fixed_unclassified_reason(unknown), "ORIGINAL_FILE_MISSING")
+
+    def test_missing_auto_directory_requires_proven_absent_p1_for_all_list(self):
+        import tempfile
+        from auto_detect_owned_sources import OwnedSourcesRefused
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            work = base / "work"
+            work.mkdir(mode=0o700)
+            (work / "plan.json").write_text('{"page":"voice","result":"prepared"}\n')
+            owned = base / "auto-detect-owned"
+            auto_lock = base / "missing-auto-directory" / ".auto-domains.lock"
+            with patch("auto_detect_owned_sources.OWNED_ROOT", owned), \
+                 patch("auto_detect_gui_hostlist.AUTO_LOCK", auto_lock):
+                for mode in (b"all", b"list"):
+                    self.assertIsNone(_owned_under_original_p2(
+                        work, os.geteuid(), mode=mode))
+                with self.assertRaises(FileNotFoundError):
+                    _owned_under_original_p2(work, os.geteuid(), mode=b"auto")
+                owned.mkdir(mode=0o700)
+                with self.assertRaisesRegex(
+                    OriginalSourceGateRefused, "P1_OWNER_PRESENT_BUT_GUI_LOCK_ABSENT"):
+                    _owned_under_original_p2(work, os.geteuid(), mode=b"all")
 
     def test_stdin_original_scalars_are_bounded_and_lossless(self):
         inputs = original_input(STRATEGY, mode="list", exclude="",

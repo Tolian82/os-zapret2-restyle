@@ -550,6 +550,31 @@ def draft_original_setup_release_record(*, runtime: Path, release: str,
         raise TransactionError("ORIGINAL_SETUP_BUILD_SOURCE_UNQUALIFIED") from None
 
 
+
+def original_setup_built_release_record(release: str) -> bytes:
+    """Read-only same-operation evidence after original setup.sh make completed.
+
+    Only the existing original shell writes runtime.release. The data is
+    correlated with the verified original build, not an authority to Start.
+    """
+    if (os.environ.get("SETUP_TRANSACTION_LOCK_OWNER") != "1" or
+            os.environ.get("UPSTREAM_RUNTIME_LIFECYCLE_OWNER") != "1" or
+            os.environ.get("STRATEGY_LAB_LIFECYCLE_OWNER") != "1"):
+        raise TransactionError("original build record requires inherited setup and native owners")
+    try:
+        os.fstat(9)
+    except OSError as exc:
+        raise TransactionError("original build record requires original FD9") from exc
+    if not isinstance(release, str) or re.fullmatch(r"v[0-9]+(?:\.[0-9]+)+", release) is None:
+        raise TransactionError("invalid selected upstream build release")
+    identity = verify_target_identity("HEAD")
+    if identity["target_release"] != release:
+        raise TransactionError("selected build release differs from saved target")
+    verify_backup_attestation(_binary_snapshot_inventory()["present"])
+    verify_switch_complete()
+    return draft_original_setup_release_record(
+        runtime=RUNTIME, release=release, git=GIT, owner_uid=os.geteuid())
+
 def _read_original_release_marker_bytes(path: Path, owner: int) -> tuple[bytes, tuple]:
     """Original marker inode + exact bytes, no symlinks or speculative fallback."""
     identity = _engine_identity_stat(path, owner)
@@ -895,7 +920,7 @@ def preflight_exact(ref: str = "FETCH_HEAD") -> None:
     preflight_switch(ref)
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence", "export-original-release", "verify-prepared-original-release", "bind-target", "verify-target", "inspect-target", "inspect-checkout"}:
+    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence", "write-built-release-record", "export-original-release", "verify-prepared-original-release", "bind-target", "verify-target", "inspect-target", "inspect-checkout"}:
         print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|preflight-exact [COMMIT]|verify-exact|snapshot|verify|verify-snapshot|restore|snapshot-evidence 0|1|verify-evidence 0|1}", file=sys.stderr)
         return 64
     try:
@@ -936,6 +961,12 @@ def main(argv: list[str]) -> int:
             if len(argv) != 2:
                 return 64
             verify_exact()
+        elif argv[1] == "write-built-release-record":
+            if len(argv) != 3:
+                return 64
+            # Data-only output; no PASS banner and no extra state writer.
+            sys.stdout.buffer.write(original_setup_built_release_record(argv[2]))
+            return 0
         elif argv[1] in {"export-original-release", "verify-prepared-original-release"}:
             if (len(argv) != 5 or argv[2] not in {"0", "1"}):
                 return 64

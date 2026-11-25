@@ -357,6 +357,15 @@ def main():
     # not a second package build or a separate VM.
     second = dispatch_and_poll()
     need(second == first, "G03_SAME_RELEASE_REINSTALL_STATE_CHANGED")
+    # The original first install deliberately remains legacy/unbound.
+    # Same-release reinstall really runs make under native FD9 and now mints
+    # the strict build-correlated record through the one original shell writer.
+    expected_record = (
+        f"{RELEASE}\ncommit={commit.stdout.strip()}\n"
+        f"engine_sha256={hashlib.sha256((ROOT / 'binaries/my/dvtws2').read_bytes()).hexdigest()}\n"
+    ).encode("ascii")
+    need((STATE / "runtime.release").read_bytes() == expected_record,
+         "G03_REINSTALL_BUILD_RECORD_NOT_BOUND")
     need(hashlib.sha256(cfg.read_bytes()).hexdigest() == config_before,
          "G03_UNEXPECTED_OPNSENSE_CONFIG_MUTATION")
     after = run(["/sbin/ipfw", "list"], timeout=15)
