@@ -1,9 +1,8 @@
-## Current priority — TZ6v5 S10c2b3g original successful make → build record
+## Current priority — TZ6v5 S10c2b3h first-install crash-safe provenance
 
-**Accepted main `v0.6.5_220` / 2537f116** via PR #1341, source/native CI + postmerge PASS; S10 OPEN/NO-GO, public testing pkg _117.
+Accepted `main v0.6.5_221 / ff032d36` ([PR #1342](https://github.com/Tolian82/os-zapret2-restyle/pull/1342)): original post-make three-line bound marker for upgrade/reinstall and the narrow original All/List Voice Auto-GUI absence fix; exact-head CI and disposable native gates PASS. [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) remains OPEN/NO-GO; no public `_221.pkg`, owner appliance unchanged. Source-only documentation candidate `v0.6.5_222` records the next original producer-binding gate, not new runtime behavior.
 
-**Candidate _221:** original FD9 setup/reinstall publishes exact release/Git OID/dvtws2 digest through its single original shell writer after actual successful make and all original checks. First install remains unbound until crash-resume evidence is designed. Recheck source/installed native G03 and regressions; then Found/P1 and physical executor gates. No second service writer/owner/lock.
-
+**Next executable scope:** [S10c2b3h original first-install proven build handoff](architecture/ZAPRET2_TZ6V5_S10C2B3H_FIRST_INSTALL_PROVENANCE_GATE.md): use existing first-install intent, held original setup.lock+FD9, exact staged make/result + Git/tag/ELF attestation and one original runtime.release writer; refuse an unproven resumed checkout rather than inferring success. Qualify original first-install/interrupt crash states in scoped local and genuine native G03. Then return to S10 immutable root/Found P1/physical promotion and rollback gates before S11. No new FD9 owner, journal, Config writer or unrequested package publication.
 
 ---
 
