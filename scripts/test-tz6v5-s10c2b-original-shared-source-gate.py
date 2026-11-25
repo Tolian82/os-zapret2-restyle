@@ -22,6 +22,9 @@ from neutral_shared_apply_source_gate import (
     OriginalSourceGateRefused)
 from neutral_resource_compiler import ResourceCompileError
 from neutral_native_parity import NativeParityRefused
+from shared_apply_seal import create_seal, verify_seal
+import auto_detect_origin_map as origin
+import hashlib
 
 BUILDER = ROOT / "scripts/test-p2e-original-shared-build.py"
 STRATEGY = (
@@ -77,6 +80,16 @@ class OriginalFd9SourceGate(unittest.TestCase):
                    # preflight; native production MUST supply that actual SHA.
                    "candidate_sha256": "d" * 64 if mode == "auto" else None}
         return fixture, keyword
+
+    def original_plan(self, fixture):
+        # Genuine original P2e builder produces candidate.xml and release;
+        # shared_apply_request.php normally owns this sibling plan on FD9.
+        (fixture.work / "plan.json").write_text(
+            __import__("json").dumps({
+                "result": "prepared", "page": "strategies",
+                "candidate": {"general": {"enabled": "1"}},
+                "changed_fields": [], "dependencies": "a" * 64,
+            }, sort_keys=True, separators=(",", ":")) + "\n")
 
     def test_stdin_original_scalars_are_bounded_and_lossless(self):
         inputs = original_input(STRATEGY, mode="list", exclude="",
@@ -175,6 +188,75 @@ class OriginalFd9SourceGate(unittest.TestCase):
         (fixture.release / "auto-detect-source-map.json").write_text("{}")
         with self.assertRaises(OriginalSourceGateRefused):
             qualify_source_to_managed(**kw)
+
+    def test_real_original_final_seal_all_list_and_promoted_auto(self):
+        for mode in ("all", "list", "auto"):
+            for voice in (False, True):
+                with self.subTest(mode=mode, voice=voice):
+                    fixture, kw = self.original(
+                        mode=mode, voice=voice, exclude="ads.example.org",
+                        exclude_ipset="203.0.113.0/24")
+                    before = qualify_source_to_managed(**kw)
+                    self.original_plan(fixture)
+                    if mode == "auto":
+                        candidate = kw["candidate_sha256"]
+                        original = origin.preflight_learning_tier(fixture.work, candidate)
+                        self.assertGreater(len(original["learning_native_numbers"]), 0)
+                        origin.promote_learning_release(fixture.work, candidate)
+                        self.assertEqual(
+                            origin.verify_learning_promotion(fixture.work, candidate)["schema"], 3)
+                    create_seal(fixture.work, owner=os.geteuid())
+                    sealed = qualify_source_to_managed(**dict(kw, sealed=True))
+                    self.assertEqual(sealed.status, "ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY")
+                    self.assertEqual(sealed.authorization, "NONE")
+                    self.assertFalse(sealed.physical_transition_allowed)
+                    self.assertEqual(sealed.original_args_sha256, before.original_args_sha256)
+                    self.assertEqual(
+                        sealed.final_args_sha256,
+                        hashlib.sha256((fixture.release / "dvtws.args").read_bytes()).hexdigest())
+                    self.assertEqual(
+                        sealed.original_seal_sha256,
+                        hashlib.sha256((fixture.work / "bundle-seal.json").read_bytes()).hexdigest())
+                    self.assertEqual(verify_seal(fixture.work, owner=os.geteuid())["id"],
+                                     fixture.work.name)
+                    if mode == "auto":
+                        self.assertNotEqual(sealed.final_args_sha256, before.original_args_sha256)
+                    else:
+                        self.assertEqual(sealed.final_args_sha256, before.original_args_sha256)
+
+    def test_final_seal_ref_and_native_drift_refuse_without_action(self):
+        fixture, kw = self.original(mode="auto", voice=True)
+        self.assertEqual(qualify_source_to_managed(**kw).mode, "auto")
+        self.original_plan(fixture)
+        origin.promote_learning_release(fixture.work, kw["candidate_sha256"])
+        create_seal(fixture.work, owner=os.geteuid())
+        self.assertTrue(qualify_source_to_managed(**dict(kw, sealed=True)).original_seal_sha256)
+        with self.assertRaises((ValueError, RuntimeError)):
+            qualify_source_to_managed(
+                **dict(kw, sealed=True, candidate_sha256="c" * 64))
+        target = fixture.release / "auto-detect-generation.json"
+        original = target.read_bytes()
+        target.write_bytes(original + b" ")
+        with self.assertRaises((ValueError, RuntimeError)):
+            qualify_source_to_managed(**dict(kw, sealed=True))
+        target.write_bytes(original)
+        self.assertTrue(qualify_source_to_managed(**dict(kw, sealed=True)).original_seal_sha256)
+
+    def test_sealed_root_collision_and_unsealed_refuse(self):
+        fixture, kw = self.original(mode="list")
+        with self.assertRaises((ValueError, RuntimeError, OSError)):
+            qualify_source_to_managed(**dict(kw, sealed=True))
+        self.original_plan(fixture)
+        create_seal(fixture.work, owner=os.geteuid())
+        self.assertTrue(qualify_source_to_managed(**dict(kw, sealed=True)).original_seal_sha256)
+        extra = fixture.work / "manifest.json"
+        extra.write_text("{}")
+        with self.assertRaises((ValueError, RuntimeError)):
+            qualify_source_to_managed(**dict(kw, sealed=True))
+        extra.unlink()
+        (fixture.release / "dvtws.original.args").write_bytes(b"forged")
+        with self.assertRaises((ValueError, RuntimeError)):
+            qualify_source_to_managed(**dict(kw, sealed=True))
 
     def test_original_registry_and_source_map_are_not_reconstructed(self):
         fixture, kw = self.original(mode="auto")
