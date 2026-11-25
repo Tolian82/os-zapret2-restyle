@@ -4,7 +4,7 @@
 
 ## Active work and retained long-term design
 
-- **Current transition:** [S08 formally GO — pure read-only compiler + actual native parity/semantic planner](ZAPRET2_TZ6V5_S08_PURE_COMPILER_NATIVE_GO.md) on accepted `v0.6.5_195`, following [S07 native XML GO](ZAPRET2_TZ6V5_S07_NATIVE_XML_PROJECTION_GO.md); **next [S09 root immutable JSON and verified reference sealing](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md)**, within [declarative architecture](ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md). S08 did not install a runtime consumer, write Config/FD9/IPFW or authorize actual reload; S10–S20 remain separate.
+- **CURRENT S10c2 owner-approved refinement (25.11.2026):** [ТЗ_6v5 §4.2/V5-18](TZ_6v5.md), [existing architecture §4.1](ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md), [ordered S10](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). S08 pure source-level GO and [S10c1 original PREPARED recovery #1331](https://github.com/Tolian82/os-zapret2-restyle/pull/1331) accepted; original physical activation/owner-live still NO-GO. Source-only doc revision `_211`; latest published pkg `_117`. One generator/FD9/launcher; no extra HOSTLIST/IPSET entrypoint.
 
 - **MANDATORY UPSTREAM CANON:** [официальный manual.en.md](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) → [правило DEV-069: не проверять описанное поведение движка](ZAPRET2_UPSTREAM_MANUAL_CANON.md).
 - **CLI Emergency Contract:** [ТЗ_6v5 §5.5–5.6: guarded `--force` и read-only `--help`](TZ_6v5.md), [DEV-070](../PROJECT_PRINCIPLES.md); новая регрессия V5-15/16 в [S00–S20](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
