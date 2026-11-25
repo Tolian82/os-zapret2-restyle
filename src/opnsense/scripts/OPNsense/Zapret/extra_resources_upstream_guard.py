@@ -11,6 +11,7 @@ import os
 import re
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 
@@ -351,16 +352,125 @@ def restore() -> None:
 
 
 
-def _commit_sha(ref: str) -> str:
+def _commit_sha(ref: str, *, runtime: Path | None = None,
+                git: str | None = None) -> str:
     """Resolve a full immutable commit OID, not a mutable tag or FETCH_HEAD."""
     result = subprocess.run(
-        [GIT, "-C", str(RUNTIME), "rev-parse", "--verify", ref + "^{commit}"],
+        [GIT if git is None else git, "-C", str(RUNTIME if runtime is None else runtime),
+         "rev-parse", "--verify", ref + "^{commit}"],
         capture_output=True, text=True, timeout=30, check=False,
     )
     sha = result.stdout.strip()
     if result.returncode or not re.fullmatch(r"[0-9a-f]{40}", sha):
         raise TransactionError("cannot resolve upstream Git commit: " + ref)
     return sha
+
+
+
+def _engine_identity_stat(path: Path, owner: int, *, directory: bool = False):
+    info = path.lstat()
+    if (not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode))
+            or info.st_uid != owner or info.st_mode & 0o022
+            or (not directory and info.st_nlink != 1)):
+        raise TransactionError("INSTALLED_ENGINE_UNSAFE_IDENTITY")
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
+            info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_nlink)
+
+
+def _installed_release_marker(path: Path, owner: int) -> tuple[str, tuple]:
+    identity = _engine_identity_stat(path, owner)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        raw = os.read(fd, 129)
+        info = os.fstat(fd)
+        observed = (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
+                    info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_nlink)
+        if (identity != observed or identity != _engine_identity_stat(path, owner)
+                or len(raw) != info.st_size
+                or re.fullmatch(rb"v[0-9]+(?:\.[0-9]+)+\n", raw) is None
+                or len(raw) > 64):
+            raise TransactionError("INSTALLED_ENGINE_RELEASE_MARKER_INVALID")
+        return raw[:-1].decode("ascii"), identity
+    finally:
+        os.close(fd)
+
+
+def observe_installed_engine_identity(*, runtime: Path, state_dir: Path,
+                                      git: str, owner_uid: int) -> dict:
+    """Observe original setup marker, Git tag/HEAD and ELF under one context.
+
+    Detached read-only evidence. The original marker does NOT bind the ELF
+    hash to the upstream build; this receipt cannot authorize Start/Apply or
+    supply an independently qualified version to S08d by itself.
+    """
+    from extra_resources_engine_abi import inspect_installed_engine_abi, EngineABIError
+
+    if (not runtime.is_absolute() or not state_dir.is_absolute()
+            or not Path(git).is_absolute() or type(owner_uid) is not int
+            or owner_uid < 0):
+        raise TransactionError("INSTALLED_ENGINE_CONTEXT_INVALID")
+    marker = state_dir / "runtime.release"
+    engine = runtime / "binaries/my/dvtws2"
+    dirs = (runtime, runtime / ".git", runtime / "binaries",
+            runtime / "binaries/my", state_dir)
+    pending = (state_dir / "runtime-rollback", state_dir / "first-install.intent")
+
+    def assert_quiescent_setup():
+        # Original setup recovery/first-install evidence is not a stable
+        # installed identity. Do not consume, clear or repair it here.
+        for item in pending:
+            try:
+                item.lstat()
+            except FileNotFoundError:
+                continue
+            raise TransactionError("INSTALLED_ENGINE_SETUP_UNFINISHED")
+
+    try:
+        assert_quiescent_setup()
+        before = tuple(_engine_identity_stat(path, owner_uid, directory=True)
+                       for path in dirs)
+        release, marker_id = _installed_release_marker(marker, owner_uid)
+        head = _commit_sha("HEAD", runtime=runtime, git=git)
+        if _commit_sha("refs/tags/" + release, runtime=runtime, git=git) != head:
+            raise TransactionError("INSTALLED_ENGINE_TAG_HEAD_MISMATCH")
+        engine_id = _engine_identity_stat(engine, owner_uid)
+        abi = inspect_installed_engine_abi(engine)
+        digest = abi.get("engine_sha256")
+        if (type(digest) is not str or re.fullmatch(r"[a-f0-9]{64}", digest) is None
+                or abi.get("state") != "engine-elf-abi-hint-only"):
+            raise TransactionError("INSTALLED_ENGINE_ELF_UNQUALIFIED")
+        if (head != _commit_sha("HEAD", runtime=runtime, git=git)
+                or head != _commit_sha("refs/tags/" + release, runtime=runtime, git=git)
+                or (release, marker_id) != _installed_release_marker(marker, owner_uid)
+                or engine_id != _engine_identity_stat(engine, owner_uid)
+                or before != tuple(_engine_identity_stat(path, owner_uid, directory=True)
+                                   for path in dirs)):
+            raise TransactionError("INSTALLED_ENGINE_IDENTITY_CHANGED")
+        assert_quiescent_setup()
+    except (OSError, ValueError, subprocess.SubprocessError, EngineABIError):
+        raise TransactionError("INSTALLED_ENGINE_IDENTITY_UNQUALIFIED") from None
+    return {"release": release, "commit": head, "engine_sha256": digest,
+            "status": "ORIGINAL_INSTALLED_ENGINE_OBSERVATION_ONLY",
+            "build_provenance_verified": False, "authorization": "NONE",
+            "physical_transition_allowed": False}
+
+
+def native_installed_engine_identity() -> dict:
+    """Canonical native paths and existing FD9 only; no new CLI or lock."""
+    # The original guard is beside the existing backend, not inside it.
+    backend = str(Path(__file__).resolve().parent / "backend")
+    sys.path.insert(0, backend)
+    try:
+        from voice_ipfw_adapter import require_lifecycle_lock
+    finally:
+        sys.path.pop(0)
+    require_lifecycle_lock()
+    receipt = observe_installed_engine_identity(
+        runtime=Path("/usr/local/etc/zapret2"),
+        state_dir=Path("/var/db/zapret2-restyle"),
+        git="/usr/local/bin/git", owner_uid=0)
+    require_lifecycle_lock()
+    return receipt
 
 
 def _mutating_old_identity() -> str:
