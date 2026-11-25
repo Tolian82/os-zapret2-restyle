@@ -63,6 +63,70 @@ write_active_release()
     mv -f "${_temporary}" "${ACTIVE_RELEASE_FILE}"
 }
 
+
+# The original setup shell is the ONLY writer of runtime.release. Consume
+# the sealed old bytes/absence from the existing rollback evidence as data,
+# never source/eval it and never let Python write the active marker.
+restore_original_release_marker()
+{
+    [ "${ACTIVE_RELEASE_FILE}" = "${STATE_DIR}/runtime.release" ] || return 69
+    [ -d "${STATE_DIR}" ] && [ ! -L "${STATE_DIR}" ] || return 69
+    [ ! -L "${ACTIVE_RELEASE_FILE}" ] && {
+        [ ! -e "${ACTIVE_RELEASE_FILE}" ] || [ -f "${ACTIVE_RELEASE_FILE}" ]
+    } || return 69
+    _original_frame_tmp=$(mktemp "${STATE_DIR}/runtime.release.frame.XXXXXXXX") || return 69
+    if ! backup_evidence export-original-release "${PREVIOUS_BINARIES}" \
+         "${PREVIOUS_RELEASE}" "${PREVIOUS_COMMIT}" > "${_original_frame_tmp}"; then
+        rm -f "${_original_frame_tmp}"
+        return 69
+    fi
+    IFS= read -r _original_frame_kind < "${_original_frame_tmp}" || {
+        rm -f "${_original_frame_tmp}"
+        return 69
+    }
+    case "${_original_frame_kind}" in
+        LEGACY)
+            if ! printf 'LEGACY\n' | cmp -s "${_original_frame_tmp}" -; then
+                rm -f "${_original_frame_tmp}"
+                return 69
+            fi
+            rm -f "${_original_frame_tmp}"
+            # A PRE-_219 interrupted transaction had only a one-line marker.
+            # It cannot be promoted to a build-bound receipt on rollback.
+            write_active_release "${PREVIOUS_RELEASE}" || return 70
+            ;;
+        ABSENT)
+            if ! printf 'ABSENT\n' | cmp -s "${_original_frame_tmp}" -; then
+                rm -f "${_original_frame_tmp}"
+                return 69
+            fi
+            rm -f "${_original_frame_tmp}"
+            # Original state was ABSENCE, not a guessed Git tag. Unlink only
+            # the canonical marker that this setup transaction may have made.
+            rm -f "${ACTIVE_RELEASE_FILE}" || return 70
+            ;;
+        PRESENT)
+            _original_marker_tmp=$(mktemp "${STATE_DIR}/runtime.release.XXXXXXXX") || {
+                rm -f "${_original_frame_tmp}"
+                return 70
+            }
+            if ! sed '1d' "${_original_frame_tmp}" > "${_original_marker_tmp}" ||
+               ! chmod 0644 "${_original_marker_tmp}" ||
+               ! mv -f "${_original_marker_tmp}" "${ACTIVE_RELEASE_FILE}"; then
+                rm -f "${_original_marker_tmp}" "${_original_frame_tmp}"
+                return 70
+            fi
+            rm -f "${_original_frame_tmp}"
+            ;;
+        *)
+            rm -f "${_original_frame_tmp}"
+            return 69
+            ;;
+    esac
+    # Durable marker publication must precede native service restoration.
+    sync
+}
+
 read_active_release()
 {
     _release=""
@@ -279,9 +343,17 @@ verify_prepared_recovery()
     [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ] || return 69
     _current_commit=$("${GIT_BIN}" -C "${ZAPRET_DIR}" rev-parse --verify HEAD 2>/dev/null) || return 69
     [ "${_current_commit}" = "${PREVIOUS_COMMIT}" ] || return 69
-    [ -f "${ACTIVE_RELEASE_FILE}" ] && [ ! -L "${ACTIVE_RELEASE_FILE}" ] || return 69
-    _current_release=$(cat "${ACTIVE_RELEASE_FILE}") || return 69
-    [ "${_current_release}" = "${PREVIOUS_RELEASE}" ] || return 69
+    if [ "${RECOVERY_SCHEMA}" = 1 ]; then
+        [ -f "${ACTIVE_RELEASE_FILE}" ] && [ ! -L "${ACTIVE_RELEASE_FILE}" ] || return 69
+        _current_release=$(cat "${ACTIVE_RELEASE_FILE}") || return 69
+        [ "${_current_release}" = "${PREVIOUS_RELEASE}" ] || return 69
+    else
+        # Schema3 proves the old bytes/absence; legacy schema2 retains its
+        # original single-line contract. Neither may drop changed PREPARED.
+        [ "${ACTIVE_RELEASE_FILE}" = "${STATE_DIR}/runtime.release" ] || return 69
+        backup_evidence verify-prepared-original-release "${PREVIOUS_BINARIES}" \
+            "${PREVIOUS_RELEASE}" "${PREVIOUS_COMMIT}" || return 69
+    fi
 
     if service_state; then
         _running=1
@@ -421,7 +493,7 @@ recover_mutating_stopped()
     else
         [ ! -e "${ZAPRET_DIR}/binaries/my" ] || return 70
     fi
-    write_active_release "${PREVIOUS_RELEASE}" || return 70
+    restore_original_release_marker || return 70
     if [ "${SERVICE_WAS_RUNNING}" -eq 1 ]; then
         "${SERVICE_SCRIPT}" strategy-lab-start >/dev/null 2>&1 || {
             echo "ERROR: RESTORE_FAILED: native service refused Start" >&2
@@ -644,8 +716,8 @@ rollback_runtime()
     fi
 
     if [ -n "${PREVIOUS_RELEASE}" ]; then
-        write_active_release "${PREVIOUS_RELEASE}" || {
-            echo "ERROR: previous active release marker could not be restored" >&2
+        restore_original_release_marker || {
+            echo "ERROR: exact previous active release marker could not be restored" >&2
             return 1
         }
     fi

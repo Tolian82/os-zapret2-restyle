@@ -550,6 +550,55 @@ class ExactReleaseSwitch(unittest.TestCase):
             guard.create_backup_attestation(False)
         self.assertFalse(guard.ATTESTATION.exists())
 
+    def test_prepared_marker_requires_exact_original_bytes(self):
+        marker = self.state.parent / "runtime.release"
+        marker.write_bytes(b"v1.0.4\n")
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        self.assertEqual(guard._original_release_evidence_frame(
+            False, "v1.0.4", self.old), b"PRESENT\nv1.0.4\n")
+        guard.verify_prepared_original_release(False, "v1.0.4", self.old)
+        marker.write_bytes(b"v1.0.3\n")
+        with self.assertRaisesRegex(guard.TransactionError, "changed before mutation"):
+            guard.verify_prepared_original_release(False, "v1.0.4", self.old)
+
+    def test_prepared_marker_exact_absence_cannot_be_forged(self):
+        marker = self.state.parent / "runtime.release"
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        self.assertEqual(guard._original_release_evidence_frame(
+            False, "v1.0.4", self.old), b"ABSENT\n")
+        guard.verify_prepared_original_release(False, "v1.0.4", self.old)
+        marker.write_bytes(b"v1.0.4\n")
+        with self.assertRaisesRegex(guard.TransactionError, "unexpectedly appeared"):
+            guard.verify_prepared_original_release(False, "v1.0.4", self.old)
+
+    def test_bound_old_release_cannot_avoid_saved_binary_hash_check(self):
+        marker = self.state.parent / "runtime.release"
+        marker.write_bytes((f"v1.0.4\ncommit={self.old}\n"
+                            f"engine_sha256={'a'*64}\n").encode("ascii"))
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        with self.assertRaisesRegex(guard.TransactionError, "backed-up binary"):
+            guard._original_release_evidence_frame(False, "v1.0.4", self.old)
+
+    def test_preexisting_schema_two_can_only_restore_legacy_unbound_tag(self):
+        marker = self.state.parent / "runtime.release"
+        marker.write_bytes(b"v1.0.4\n")
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        legacy = json.loads(guard.ATTESTATION.read_text())
+        self.assertEqual(legacy.pop("original_release_marker")["state"], "present")
+        legacy["schema"] = 2
+        guard.ATTESTATION.write_text(json.dumps(legacy))
+        self.assertEqual(guard._original_release_evidence_frame(
+            False, "v1.0.4", self.old), b"LEGACY\n")
+        guard.verify_prepared_original_release(False, "v1.0.4", self.old)
+
     def test_untracked_snapshot_tampering_refuses_recovery(self):
         guard.snapshot()
         guard.snapshot_untracked()
