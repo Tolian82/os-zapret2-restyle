@@ -632,6 +632,11 @@ jobs:
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_previous_preimage.py scripts/test-tz6v5-s10b2b2b3a-original-previous-readonly.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2b2b3a-original-previous-readonly.py
+      - name: S10b2b2b3b1 original FD9 saved Config/WAN and previous runtime read-only proof
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_saved_wan_preimage.py scripts/test-tz6v5-s10b2b2b3b1-original-saved-wan-preimage.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2b2b3b1-original-saved-wan-preimage.py
       - name: Validate fast path routing and strict private-curl source mismatch
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test
