@@ -1034,5 +1034,119 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     quiescent.assert_not_called()
                 self.assertEqual(store.read(), record)
 
+
+    def test_s10_found_prepared_source_cas_readonly(self):
+        """Injected native lock/CAS seams, never a physical Found qualification."""
+        from contextlib import ExitStack, contextmanager
+        from unittest.mock import Mock
+        from neutral_effective_diff import EffectiveSnapshot
+        from neutral_native_parity import NativeParity
+        from auto_detect_destination_commit import DestinationRefused
+
+        raw = b'{"sealed":"original-found-plan"}'
+        seal = b'{"sealed":"original-bundle"}'
+        operation = "d" * 32
+        detail = {"id": operation, "base": "b" * 64, "candidate": "c" * 64}
+        expected = gate.SourceGateReceipt(
+            "list", "a" * 64, (),
+            status="ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY",
+            generation=operation, original_seal_sha256=hashlib.sha256(seal).hexdigest(),
+            native=NativeParity("list", "a" * 64, "a" * 64,
+                                "ORIGINAL_NONAUTO_NO_SOURCE_MAP",
+                                0, 1, 0, (), (), "a" * 64, 19000, 19099),
+            effective=EffectiveSnapshot("a" * 64, "a" * 64, (), (), 0),
+            requested_enabled=True)
+        inputs = original_input(STRATEGY, mode="list", exclude="", exclude_ipset="")
+        wire = MARKER + b"\0" + b"\0".join(inputs[k] for k in FIELDS) + b"\0"
+        for case in ("ok", "wrong-phase", "wrong-plan", "prior-pin",
+                     "old-config-drift", "first-cas", "late-cas",
+                     "wrong-seal", "journal-drift", "plan-drift",
+                     "config-fd-lost"):
+            with self.subTest(case=case), ExitStack() as stack:
+                record = {"phase": "prepared", "detail": detail,
+                          "found": {"plan_sha256": hashlib.sha256(raw).hexdigest()}}
+                if case == "wrong-phase":
+                    record["phase"] = "found-files-writing"
+                if case == "wrong-plan":
+                    record["found"]["plan_sha256"] = "0" * 64
+                if case == "prior-pin":
+                    record["previous_manifest"] = {}
+                if case == "old-config-drift":
+                    record["previous"] = {"candidate": "0" * 64}
+                store = Mock()
+                store.read.return_value = record
+                rows = {"original": "rows"}
+                targets = {"original": "targets"}
+                verified = {"validated": "rows"}
+                held = [False]
+                @contextmanager
+                def p2(*args):
+                    self.assertFalse(held[0], "recursive P2")
+                    held[0] = True
+                    try:
+                        yield
+                    finally:
+                        held[0] = False
+
+                def attest():
+                    self.assertTrue(held[0])
+                    if case == "config-fd-lost" and cas.call_count:
+                        raise DestinationRefused("config_fd_changed")
+                    return True
+
+                def observe(*args, **kwargs):
+                    self.assertTrue(held[0])
+                    if case == "first-cas" or (case == "late-cas" and cas.call_count == 2):
+                        raise DestinationRefused("planned_preimage_drift")
+
+                def source(*args):
+                    self.assertFalse(held[0], "source reader needs same P2")
+                    if case == "journal-drift":
+                        store.read.return_value = {**record, "phase": "restored"}
+                    return (replace(expected, original_seal_sha256="0" * 64)
+                            if case == "wrong-seal" else expected)
+
+                stack.enter_context(patch.object(gate.sys, "platform", "freebsd"))
+                stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+                stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+                context = stack.enter_context(patch(
+                    "auto_detect_destination_commit._native_found_wal_context",
+                    return_value=(store, record, raw, rows, targets, attest)))
+                stack.enter_context(patch(
+                    "auto_detect_destination_commit._qualified_shared_found_batch",
+                    return_value=verified))
+                stack.enter_context(patch(
+                    "auto_detect_destination_commit.exclusive_destination_lock",
+                    side_effect=p2))
+                cas = stack.enter_context(patch(
+                    "auto_detect_effective_known._verify_planned_preimages_locked",
+                    side_effect=observe))
+                stack.enter_context(patch.object(
+                    gate, "_read", side_effect=lambda path, *args:
+                        seal if path.name == "bundle-seal.json" else
+                        (b"changed" if case == "plan-drift" else raw)))
+                bridge = stack.enter_context(patch.object(
+                    gate, "native_original_bound_effective_fd9", side_effect=source))
+                if case == "ok":
+                    receipt = gate.native_attest_found_prepared_fd9(operation, wire, 4)
+                    self.assertIs(receipt.source, expected)
+                    self.assertEqual(receipt.plan_sha256, hashlib.sha256(raw).hexdigest())
+                    self.assertEqual(receipt.config_base_sha256, detail["base"])
+                    self.assertEqual(receipt.config_candidate_sha256, detail["candidate"])
+                    self.assertEqual(receipt.authorization, "NONE")
+                    self.assertFalse(receipt.physical_transition_allowed)
+                    self.assertFalse(receipt.promotion_allowed)
+                    self.assertTrue(receipt.final_original_fd9_reattest_required)
+                    self.assertEqual(cas.call_count, 2)
+                    bridge.assert_called_once_with(operation, wire, None)
+                else:
+                    with self.assertRaises(OriginalSourceGateRefused):
+                        gate.native_attest_found_prepared_fd9(operation, wire, 4)
+                context.assert_called_once_with(operation, 4)
+                store._persist_record.assert_not_called()
+                store.advance.assert_not_called()
+                store.bind_prepared_manifest.assert_not_called()
+                self.assertFalse(held[0])
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

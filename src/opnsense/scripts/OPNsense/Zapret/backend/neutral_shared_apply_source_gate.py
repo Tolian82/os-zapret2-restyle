@@ -577,6 +577,100 @@ def native_original_bound_effective_fd9(
 
 
 
+@dataclass(frozen=True)
+class FoundPreparedSourceReceipt:
+    """Read-only joint source/CAS evidence, NOT a durable root or commit grant."""
+
+    source: SourceGateReceipt
+    plan_sha256: str
+    config_base_sha256: str
+    config_candidate_sha256: str
+    status: str = "ORIGINAL_FOUND_PREPARED_SOURCE_ONLY"
+    authorization: str = "NONE"
+    physical_transition_allowed: bool = False
+    promotion_allowed: bool = False
+    final_original_fd9_reattest_required: bool = True
+
+
+def native_attest_found_prepared_fd9(
+        operation: str, raw_pipe: bytes, config_fd: int) -> FoundPreparedSourceReceipt:
+    """Join the existing Found WAL/CAS to the original sealed S08d source.
+
+    Import-only, called with the genuine inherited Config FD and original
+    FD9. No PHP Config lock acquisition in this child, no recursive P2,
+    no root stage/bind, no new WAL or writes. This is not a proof of current
+    Config revision or previous runtime: the original Config owner must
+    supply those at the future combined binding/commit. Until then every
+    existing Found/immutable-root physical fence stays closed.
+    """
+    from auto_detect_destination_commit import (
+        _native_found_wal_context, _qualified_shared_found_batch,
+        exclusive_destination_lock)
+    from auto_detect_effective_known import _verify_planned_preimages_locked
+    from auto_detect_gui_hostlist import AUTO_LOCK
+    from auto_detect_owned_sources import OWNED_ROOT
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(operation) is not str or not _ID.fullmatch(operation) or
+                type(config_fd) is not int or config_fd < 3):
+            raise OriginalSourceGateRefused("S10_FOUND_NATIVE_LOCK_REQUIRED")
+        require_lifecycle_lock()
+        inputs = decode_pipe(raw_pipe)
+        store, record, raw, rows, targets, attest = _native_found_wal_context(
+            operation, config_fd)
+        if (type(record) is not dict or record.get("phase") != "prepared" or
+                "manifest" in record or "previous_manifest" in record or
+                record["detail"]["id"] != operation or
+                type(raw) is not bytes or
+                hashlib.sha256(raw).hexdigest() != record["found"]["plan_sha256"]):
+            raise OriginalSourceGateRefused("S10_FOUND_PREPARED_REQUIRED")
+        detail = record["detail"]
+        if (record.get("previous") is not None and
+                record["previous"]["candidate"] != detail["base"]):
+            raise OriginalSourceGateRefused("S10_FOUND_PREVIOUS_CONFIG_MISMATCH")
+        verified = _qualified_shared_found_batch(rows)
+
+        def recheck():
+            # The shared source reader takes this SAME P2 lock itself.
+            # Never keep it held across that call or wait on Config here.
+            with exclusive_destination_lock(AUTO_LOCK, 0):
+                if store.read() != record or attest() is not True:
+                    raise OriginalSourceGateRefused("S10_FOUND_WAL_OR_SEAL_CHANGED")
+                _verify_planned_preimages_locked(
+                    verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+                if (attest() is not True or store.read() != record or
+                        _read(WORK / operation / "plan.json", 0, MAX_FILE) != raw):
+                    raise OriginalSourceGateRefused("S10_FOUND_WAL_OR_SEAL_CHANGED")
+                seal_digest = hashlib.sha256(_read(
+                    WORK / operation / "bundle-seal.json", 0, 1024)).hexdigest()
+                if attest() is not True or store.read() != record:
+                    raise OriginalSourceGateRefused("S10_FOUND_WAL_OR_SEAL_CHANGED")
+                return seal_digest
+
+        seal = recheck()
+        digest = detail["candidate"] if inputs["mode"] == b"auto" else None
+        source = native_original_bound_effective_fd9(operation, raw_pipe, digest)
+        if (type(source) is not SourceGateReceipt or
+                source.native_candidate_sha256 != digest or
+                source.generation != operation or
+                source.mode != inputs["mode"].decode("ascii") or
+                source.status != "ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY" or
+                source.authorization != "NONE" or
+                source.physical_transition_allowed is not False or
+                type(source.native) is not NativeParity or
+                type(source.effective) is not EffectiveSnapshot or
+                type(source.requested_enabled) is not bool or
+                source.original_seal_sha256 != seal or recheck() != seal):
+            raise OriginalSourceGateRefused("S10_FOUND_SOURCE_CHANGED")
+        require_lifecycle_lock()
+        return FoundPreparedSourceReceipt(
+            source, record["found"]["plan_sha256"], detail["base"], detail["candidate"])
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+        raise OriginalSourceGateRefused("S10_FOUND_PREPARED_SOURCE_REFUSED") from None
+
+
 def _bind_original_prepared_source(*, store, parent: Path, before: dict,
                                    source: SourceGateReceipt,
                                    read_config, config_receipt: dict):

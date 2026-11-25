@@ -1,3 +1,9 @@
+## 26 November 2026 — S10 original Found PREPARED source/CAS candidate
+
+**Accepted main:** `v0.6.5_234` / `21ed595a84c1c5435b0476a4258ae0bd5c66c176`; PR #1355 exact-head 6/6 SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=235`, `v0.6.5_235`, prospective CI-only `os-zapret2-restyle-0.6.5_235.pkg`. Import-only existing original FD4/FD9/P2 sealed Found PREPARED → S08d source bridge, no physical permission, no mixed WAL or new writer. See [S10](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md), [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Exact-head CI pending, S10 OPEN/S11 blocked.
+
+---
+
 ## 26 November 2026 — S10 genuine engine-qualified cold START proposal candidate
 
 **Accepted main:** `v0.6.5_233` / `85c2fad5ee7cd8b9b652b78cefe501a5b43ccbe6`; exact-head 4/4 and main CI/release SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=234`, `v0.6.5_234`, prospective CI-only `os-zapret2-restyle-0.6.5_234.pkg`. Existing G03 actual setup + saved lo0/Enabled ON test fixture, original no-predecessor sealed PREPARED, START proposal only, recovery without activation/deletion and ordinary Apply regression retained. [S10](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md), [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Native qualification pending; S10 OPEN/S11 blocked.
