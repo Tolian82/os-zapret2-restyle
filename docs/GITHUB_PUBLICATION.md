@@ -1,7 +1,7 @@
 # GitHub rules — Правила работы с GitHub
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-11-12
+**Updated:** 2026-11-25
 
 This file is the fourth canonical rule book and the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, documentation synchronization, and repository hygiene. The filename `GITHUB_PUBLICATION.md` is intentionally retained; its scope is all GitHub work, not publication only.
 
@@ -112,6 +112,19 @@ GH-072. **Outcome-first CI routing and real-user boundary priority are mandatory
 GH-063. **An Issue is a tracked request, not running implementation or an installed watcher.** Opening, linking or updating an Issue does not automatically assign an agent, start coding, open a PR, run CI or deploy monitoring. For an owner-authorized implementation, specify its concrete execution path and acceptance evidence and advance to a scoped branch/PR in the active work whenever possible. If blocked, state the reason explicitly and leave the Issue open. Close as completed only after implementation and verification; use a clearly reasoned non-completion disposition if applicable. Never describe an idle Issue as a stuck PR.
 
 GH-064. **The executing developer remains accountable for the PR's terminal outcome.** A Ready PR or successful CI run is not delivery. Observe and validate all scope-required checks for the **current PR head SHA**, never treating failed, cancelled, skipped, missing, queued, stalled or old-head checks as PASS. Repair same-scope failures in the same PR; when all required checks pass, verify the actual base, next source revision, review/authorization and safety gates, then complete the authorized exact-head merge, post-merge `main` verification and temporary branch cleanup. If the PR cannot be completed or work cannot continue, report that it remains OPEN with its head SHA, precise blocker and next action instead of claiming completion. Do not bypass required checks or authorization.
+
+
+**Complete the active-session acceptance cycle (owner decision 2026-11-25).** For each authorized logical increment, follow this mandatory order:
+
+1. Implement the task and run the applicable local checks.
+2. Publish the verified commit to GitHub.
+3. Wait for the applicable CI results within the active session, checking the exact current candidate head. Do not end the work merely because CI is queued or running when continued verification is possible.
+4. On FAIL, inspect the actual failed-job logs, establish and correct the cause, and repeat the applicable checks. Distinguish infrastructure failures from product defects; do not weaken acceptance gates or launch speculative reruns.
+5. On PASS, complete the authorized exact-head PR merge and verify the resulting main commit and applicable post-merge checks.
+6. Only after completing this cycle, deliver the final acceptance report and proceed to the next implementation stage.
+
+While CI is running, use the available active-session time for useful preparation of the next approved stage: read its specification, trace the real production paths, and prepare the necessary implementation and verification plan. Preparation must not interrupt the current qualification, create competing candidates, advance the ordered implementation before acceptance, or expand the approved scope. Avoid repetitive interim reports and unnecessary requests for the owner to say "continue". If an actual blocker, owner decision, or active-session limit prevents completion, state the exact unfinished boundary and next action explicitly; never claim acceptance, pretend to continue after the session ends, or promise unattended execution without a real authorized automation. Existing exact-head, authorization, safety and CI-budget requirements remain in force.
+
 
 GH-065. **Unattended completion alerts require a real, separately operating automation.** An Issue, GitHub Actions CI, open/idle chat or intention to follow up is not a watchdog and cannot wake an inactive assistant. A deployed GitHub-native watcher must check owner-managed open PRs against their **current head** and scope-specific required checks on relevant CI completion, with a bounded scheduled fallback; classify ready-but-open, failed, stalled and stale conditions and send deduplicated actionable notifications. Obsolete, cancelled or skipped checks never establish current-head PASS. Privileged watchers must not execute untrusted PR code, leak secrets, weaken protections or silently auto-merge. Notifications alone do not repair or merge PRs; autonomous action requires separately configured authorization and all normal safety gates. **Notification delivery is a separate qualified gate:** an attempted comment that GitHub returns HTTP 403/429, a successful read-only state classification, a passed unit test, or a red run alone is **not** proof that the owner received an alert. A privileged watcher must retain trusted-default-branch execution, deduplicated current-head scanning and a bounded scheduled fallback; it must fail visibly on comment refusal, preserve a minimal redacted API diagnostic and safe GitHub Actions summary without leaking secrets or claiming the summary is a pushed notification. Document and verify actual requested/effective token permissions and at least one live PR-timeline write, while maintaining the developer's GH-064 responsibility to finish Ready PRs.
 

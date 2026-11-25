@@ -128,7 +128,9 @@ class OriginalDurableRootBinding(unittest.TestCase):
         with self.assertRaisesRegex(SharedOperationError, "preactivation gate"):
             self.owner.advance("activating", self.case.detail)
         self.assertEqual(self.owner.read(), bound)
-        restored = self.owner.advance("restored", self.case.detail)
+        restored = self.owner.recover_prepared(
+            self.case.detail["id"], lambda: True,
+            shared_work_parent=self.case.fx.parent)
         self.assertEqual(restored["phase"], "restored")
         self.assertEqual(restored["manifest"], bound["manifest"])
         self.assertEqual(self.owner.read(), restored)

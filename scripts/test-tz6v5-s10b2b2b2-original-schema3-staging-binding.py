@@ -148,10 +148,105 @@ class GenuineOriginalSchema3StagingAndBinding(unittest.TestCase):
         with self.assertRaisesRegex(SharedOperationError, "preactivation gate"):
             self.original.advance("activating", self.f.detail)
         self.assertEqual(self.original.read(), bound)
-        restored = self.original.advance("restored", self.f.detail)
+        restored = self.original.recover_prepared(
+            self.f.generation, lambda: True, shared_work_parent=self.f.parent)
         self.assertEqual(restored["manifest"], bound["manifest"])
         with self.assertRaises(BoundRootRefused):
             self.bound()
+
+    def test_bound_prepared_cannot_bypass_original_recovery(self):
+        self.staging()
+        bound = self.bind()
+        with self.assertRaisesRegex(SharedOperationError, "pinned recovery"):
+            self.original.advance("restored", self.f.detail)
+        self.assertEqual(self.original.read(), bound)
+
+    def test_bound_recovery_rejects_mutated_missing_and_pending_root(self):
+        self.staging()
+        bound = self.bind()
+        root = self.f.work / "manifest.json"
+        raw = root.read_bytes()
+        pending = self.f.work / ".manifest.json.pending"
+        def recover():
+            return self.original.recover_prepared(
+                self.f.generation, lambda: True, shared_work_parent=self.f.parent)
+        root.write_bytes(raw + b" ")
+        with self.assertRaisesRegex(SharedOperationError, "recovery pin"):
+            recover()
+        root.unlink()
+        with self.assertRaisesRegex(SharedOperationError, "recovery pin"):
+            recover()
+        root.write_bytes(raw)
+        root.chmod(0o600)
+        pending.write_bytes(raw)
+        with self.assertRaisesRegex(SharedOperationError, "recovery pin"):
+            recover()
+        pending.unlink()
+        self.assertEqual(self.original.read(), bound)
+        self.assertEqual(recover()["phase"], "restored")
+
+    def test_bound_recovery_rechecks_after_existing_seal_callback(self):
+        self.staging()
+        bound = self.bind()
+        root = self.f.work / "manifest.json"
+        raw = root.read_bytes()
+        def race():
+            root.write_bytes(raw + b" ")
+            return True
+        with self.assertRaisesRegex(SharedOperationError, "recovery pin"):
+            self.original.recover_prepared(
+                self.f.generation, race, shared_work_parent=self.f.parent)
+        self.assertEqual(self.original.read(), bound)
+        self.assertEqual(root.read_bytes(), raw + b" ")
+
+    def test_bound_recovery_rejects_second_root_or_changed_bundle(self):
+        self.staging()
+        bound = self.bind()
+        second = self.f.release / "manifest.json"
+        second.write_bytes(b"foreign\n")
+        def recover():
+            return self.original.recover_prepared(
+                self.f.generation, lambda: True, shared_work_parent=self.f.parent)
+        with self.assertRaisesRegex(SharedOperationError, "recovery pin"):
+            recover()
+        second.unlink()
+        (self.f.release / "tcp-ports.txt").write_bytes(b"tampered\n")
+        with self.assertRaisesRegex(SharedOperationError, "recovery pin"):
+            recover()
+        self.assertEqual(self.original.read(), bound)
+
+    def test_original_native_cli_recover_prepared_checks_bound_pin(self):
+        # Exercise the shipped CLI dispatch and real original journal/reader.
+        # Only the fixed native paths and inherited FD9 probe are substituted.
+        from contextlib import redirect_stdout, redirect_stderr
+        from io import StringIO
+        import shared_apply_operation as operation
+        from shared_apply_seal import verify_seal as real_verify_seal
+
+        self.staging()
+        bound = self.bind()
+        root = self.f.work / "manifest.json"
+        raw = root.read_bytes()
+        detail = self.f.detail
+        record_argv = ["operation", "record", "restored", self.f.generation,
+                       detail["page"], detail["base"], detail["candidate"], "-"]
+        with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None), \
+             patch.object(operation, "SharedApplyOperation", return_value=self.original), \
+             patch("shared_apply_seal.WORK", self.f.parent), \
+             patch("shared_apply_seal.verify_seal", side_effect=lambda work, owner: \
+                   real_verify_seal(work, owner=os.geteuid())), \
+             redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as stderr:
+            self.assertEqual(operation.main(record_argv), 69)
+            root.write_bytes(raw + b" ")
+            self.assertEqual(operation.main(
+                ["operation", "recover-prepared", self.f.generation]), 69)
+            self.assertEqual(self.original.read(), bound)
+            root.write_bytes(raw)
+            self.assertEqual(operation.main(
+                ["operation", "recover-prepared", self.f.generation]), 0, stderr.getvalue())
+        self.assertEqual(stdout.getvalue(), "prepared-restored\n")
+        self.assertEqual(self.original.read()["phase"], "restored")
+        self.assertEqual(self.original.read()["manifest"], bound["manifest"])
 
     def test_existing_s09_schema1_path_cannot_claim_schema2(self):
         self.staging()

@@ -210,6 +210,56 @@ def _read_staged(wfd: int, owner_uid: int) -> bytes:
         raise RootStageRefused("STAGED_ROOT_UNAVAILABLE") from None
 
 
+def verify_prepared_recovery_pin(*, record: dict, parent: Path,
+                                 owner_uid: int) -> None:
+    """Verify an already bound immutable root for PREPARED-only abort.
+
+    Unlike activation, this may rely on the EXACT previously bound bytes:
+    no caller-supplied S08 receipt, physical mutation, or new authority.
+    The original journal must remain PREPARED throughout this read.
+    """
+    from neutral_root_refs import _read_file
+    from shared_apply_operation import _validate_manifest_binding
+
+    pfd = wfd = None
+    try:
+        if record["phase"] != "prepared" or "found" in record:
+            raise RootStageRefused("RECOVERY_NOT_PREPARED")
+        detail = record["detail"]
+        binding = _validate_manifest_binding(record["manifest"], detail)
+        generation = detail["id"]
+        pfd = _open_parent(parent, owner_uid)
+        wfd = _open_dir(pfd, generation, owner_uid)
+        if not _absent(wfd, PENDING_NAME):
+            raise RootStageRefused("RECOVERY_ROOT_INCOMPLETE")
+        _require_only_sibling_root(wfd, owner_uid)
+        root = _read_staged(wfd, owner_uid)
+        seal = _read_file(wfd, "bundle-seal.json", owner_uid)
+        if (hashlib.sha256(root).hexdigest() != binding["root_sha256"] or
+                hashlib.sha256(seal).hexdigest() != binding["seal_sha256"] or
+                binding["candidate_sha256"] != detail["candidate"] or
+                verify_seal(parent / generation, owner=owner_uid)["id"] != generation or
+                not _original_plan_matches(parent=parent, generation=generation,
+                                           journal=record, owner_uid=owner_uid)):
+            raise RootStageRefused("RECOVERY_BOUND_ROOT_CHANGED")
+        if (not _absent(wfd, PENDING_NAME) or
+                _read_staged(wfd, owner_uid) != root or
+                _read_file(wfd, "bundle-seal.json", owner_uid) != seal):
+            raise RootStageRefused("RECOVERY_BOUND_ROOT_RACED")
+        _require_only_sibling_root(wfd, owner_uid)
+        _verify_dir_still(pfd, generation, wfd)
+        if _identity(parent.lstat()) != _identity(os.fstat(pfd)):
+            raise RootStageRefused("RECOVERY_BOUND_PARENT_CHANGED")
+    except (SharedOperationError, SharedBundleError, SealedRefsRefused,
+            OSError, ValueError, TypeError, KeyError):
+        raise RootStageRefused("RECOVERY_BOUND_PIN_REFUSED") from None
+    finally:
+        if wfd is not None:
+            os.close(wfd)
+        if pfd is not None:
+            os.close(pfd)
+
+
 def _stage_candidate(*, generation: str, candidate: RootCandidate,
                      effective: EffectiveSnapshot, native: NativeParity,
                      mode: str, enabled: bool, parent: Path,
