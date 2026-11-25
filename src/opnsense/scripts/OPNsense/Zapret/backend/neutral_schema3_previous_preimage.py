@@ -92,7 +92,7 @@ def _attest_prepared_previous(*, generation: str, native: NativeParity,
         before = store.read()
         if (type(before) is not dict or before.get("phase") != "prepared" or
                 "found" in before or type(before.get("manifest")) is not dict or
-                before["manifest"].get("schema") != 2 or
+                before["manifest"].get("schema") not in (1, 2) or
                 type(before.get("detail")) is not dict or
                 before["detail"].get("id") != generation or
                 type(before.get("previous")) is not dict or
@@ -100,10 +100,15 @@ def _attest_prepared_previous(*, generation: str, native: NativeParity,
                 before["previous"]["candidate"] != before["detail"]["base"]):
             raise OriginalPredecessorRefused("ORIGINAL_PREVIOUS_COMMITTED_REQUIRED")
         previous = before["previous"]
+        schema3 = before["manifest"]["schema"] == 2
+        if (type(native) is not NativeParity or
+                native.mode not in ("all", "list", "auto") or
+                (schema3 != (native.mode == "auto" and enabled is True))):
+            raise OriginalPredecessorRefused("ORIGINAL_BOUND_MODE_MISMATCH")
         bound_args = dict(
             generation=generation, native=native, effective=effective,
-            mode="auto", enabled=enabled, parent=parent,
-            journal_root=journal_root, owner_uid=owner_uid, schema3=True,
+            mode=native.mode, enabled=enabled, parent=parent,
+            journal_root=journal_root, owner_uid=owner_uid, schema3=schema3,
         )
         root = _attest_bound_candidate(**bound_args)
         if (type(root) is not BoundRootReceipt or

@@ -24,7 +24,7 @@ from neutral_resource_compiler import (
     compile_resources, compare_original_managed_bytes, parse_original_storage,
     ResourceCompileError)
 from neutral_native_parity import NativeParity, inspect_original, NativeParityRefused
-from neutral_effective_diff import EffectiveSnapshot, snapshot
+from neutral_effective_diff import EffectiveDecision, EffectiveSnapshot, plan, snapshot
 from shared_apply_seal import _stat, verify_seal
 from voice_profile_compiler import SERVICES
 
@@ -703,6 +703,190 @@ def native_bind_original_prepared_fd9(operation: str, raw_pipe: bytes):
     # Retain this same typed source in memory for the future existing owner
     # semantic preflight; do not turn the immutable pin into a Start permit.
     return source, receipt
+
+
+
+def _read_pinned_effective(*, detail: dict, binding: dict, parent: Path,
+                           sources: Path, owner_uid: int,
+                           engine_version: str) -> tuple[EffectiveSnapshot, bool]:
+    """Reconstruct S08d from the original sealed model/release and old pin.
+
+    The original manifest stores structural identity and mutable locators,
+    NOT a serialized EffectiveSnapshot. Never substitute current GUI values
+    or current Found/P1 files for the previous sealed snapshot. Reuse the
+    same S07/S08a/S08d projection; require the reproduced structural hash
+    and mutable reference set to match the existing exact durable root.
+    """
+    from neutral_root_stage import _verify_original_pinned_root
+    from neutral_root_manifest import _decode, _proof
+    raw = _verify_original_pinned_root(
+        detail=detail, binding=binding, parent=parent, owner_uid=owner_uid)
+    root = _decode(raw, 16384)
+    work = parent / detail["id"]
+    release = work / "release"
+    model = xml_snapshot(_read(work / "candidate.xml", owner_uid, MAX_XML))
+    saved = project(model, registered_ids(
+        _read(sources / "registry.sh", owner_uid, 128 * 1024)))
+    mode = saved.target_mode
+    service = root.get("service")
+    if (type(service) is not dict or root.get("schema") != binding["schema"] or
+            root.get("generation") != detail["id"] or
+            type(saved.enabled) is not bool or
+            type(service.get("enabled")) is not bool or
+            service["enabled"] is not saved.enabled or
+            service.get("target_mode") != mode or
+            binding["schema"] != (2 if mode == "auto" and saved.enabled else 1)):
+        raise OriginalSourceGateRefused("S10_PINNED_MODEL_MISMATCH")
+    # The original template's heredoc is loaded by shell command
+    # substitution; it strips trailing LF. The original builder then
+    # writes one LF. The portable original loader can preserve trailing LF.
+    # Permit ONLY that insignificant trailing-LF difference from the sealed
+    # model; never trust unsealed traffic.input as independent provenance.
+    strategy = model["strategy"].get("trafficargs")
+    if type(strategy) is not str:
+        raise OriginalSourceGateRefused("S10_PINNED_STRATEGY_MISSING")
+    traffic = _read(work / "traffic.input", owner_uid, 262145)
+    if (not traffic.endswith(b"\n") or
+            traffic.rstrip(b"\n") != strategy.encode("utf-8").rstrip(b"\n")):
+        raise OriginalSourceGateRefused("S10_PINNED_STRATEGY_MISMATCH")
+    targets = compile_target_profiles(saved, traffic, parse_original_policy(
+        _read(sources / "target_mode.sh", owner_uid, 128 * 1024)))
+    storage = parse_original_storage(
+        _read(sources / "storage.sh", owner_uid, 128 * 1024))
+    locators = {row.locator for row in storage.entries
+                if row.provider == "managed"} | {
+                    "hostlist-exclude.txt", "ipset-exclude.txt"}
+    managed = release / "managed"
+    _stat(managed, owner_uid, directory=True)
+    observed = {name: hashlib.sha256(_read(
+        managed / name, owner_uid, MAX_FILE, allow_empty=True)).hexdigest()
+        for name in sorted(locators)}
+    schema3 = binding["schema"] == 2
+    args = _read(release / ("dvtws.original.args" if schema3 else "dvtws.args"),
+                 owner_uid, 262144)
+    source_map = None
+    if mode == "auto":
+        source_map = json.loads(_read(release / "auto-detect-source-map.json",
+                                      owner_uid, MAX_FILE))
+    rows = (None if source_map is None else [
+        [row["role"], row["status"], row.get("selector"), row.get("hostlist"),
+         row.get("native_number")] for row in source_map["profiles"]])
+    capture = json.loads(_read(release / "voice-plan.json",
+                               owner_uid, MAX_FILE))["capture"]
+    effective = snapshot(
+        original_native_args=args, target_mode=mode,
+        original_source_rows=rows,
+        authored_selectors=tuple(
+            tuple(f"<{kind}:{key}>" for kind, key in row.authored)
+            for row in targets.profiles),
+        saved_wan=saved.saved_wan, resolved_wan=capture["wan"],
+        engine_version=engine_version, original_capture=capture,
+        original_tcp=_read(release / "tcp-ports.txt", owner_uid, 8192,
+                           allow_empty=True),
+        original_udp=_read(release / "udp-ports.txt", owner_uid, 8192,
+                           allow_empty=True),
+        managed_sha256=observed)
+    original_key = ("original_structural_sha256" if schema3
+                    else "structural_sha256")
+    if (service.get(original_key) != effective.structural_sha256 or
+            root["resources"]["mutable_refs"] != _proof(effective, args) or
+            _verify_original_pinned_root(
+                detail=detail, binding=binding, parent=parent,
+                owner_uid=owner_uid) != raw):
+        raise OriginalSourceGateRefused("S10_PINNED_EFFECTIVE_MISMATCH")
+    return effective, saved.enabled
+
+
+@dataclass(frozen=True)
+class OriginalSemanticReceipt:
+    generation: str
+    previous_generation: str
+    candidate_root_sha256: str
+    previous_root_sha256: str | None
+    decision: EffectiveDecision
+    previous_physical: object
+    status: str = "ORIGINAL_PREPARED_SEMANTIC_PROPOSAL_ONLY"
+    authorization: str = "NONE"
+    physical_transition_allowed: bool = False
+    promotion_allowed: bool = False
+    final_original_fd9_reattest_required: bool = True
+
+
+def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSemanticReceipt:
+    """Compare a bound ordinary PREPARED to its genuine RUNNING old owner.
+
+    Reuse the same original physical, Config/WAN, kernel/argv and root
+    witnesses for all/list/auto. Never treat a legacy unbound old owner
+    as NO_CHANGE or a reload candidate; the first conversion must be
+    structural. Cold/stopped and Found paths stay separately fenced.
+    """
+    from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
+    from shared_apply_seal import WORK
+    from neutral_schema3_previous_physical import (
+        CompletePriorPreimage, attest_previous_physical_under_fd9)
+    from voice_ipfw_adapter import require_lifecycle_lock
+    require_lifecycle_lock()
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(source) is not SourceGateReceipt or
+                source.status != "ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY" or
+                source.authorization != "NONE" or source.physical_transition_allowed or
+                type(source.native) is not NativeParity or
+                type(source.effective) is not EffectiveSnapshot or
+                source.requested_enabled is not True):
+            raise OriginalSourceGateRefused("S10_SEMANTIC_NATIVE_SOURCE_REQUIRED")
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        before = store.read()
+        if (type(before) is not dict or before["phase"] != "prepared" or
+                "found" in before or "previous" not in before or
+                "manifest" not in before or
+                before["detail"]["id"] != source.generation or
+                before["manifest"]["seal_sha256"] != source.original_seal_sha256 or
+                before["previous"]["candidate"] != before["detail"]["base"]):
+            raise OriginalSourceGateRefused("S10_SEMANTIC_ORIGINAL_PREPARED_REQUIRED")
+        current_pin = before["manifest"]
+        old_pin = before.get("previous_manifest")
+        engine = _s10_native_bound_engine_readback()
+        read = dict(parent=WORK, sources=Path(__file__).parent, owner_uid=0,
+                    engine_version=engine["engine_version"])
+        candidate = _read_pinned_effective(
+            detail=before["detail"], binding=current_pin, **read)
+        if candidate != (source.effective, True):
+            raise OriginalSourceGateRefused("S10_SEMANTIC_CANDIDATE_CHANGED")
+        old = None if old_pin is None else _read_pinned_effective(
+            detail=before["previous"], binding=old_pin, **read)
+        if old is not None and old[1] is not True:
+            raise OriginalSourceGateRefused("S10_SEMANTIC_OLD_RUNNING_DISABLED")
+        physical = attest_previous_physical_under_fd9(
+            generation=source.generation, native=source.native,
+            effective=source.effective, enabled=True)
+        if (type(physical) is not CompletePriorPreimage or
+                physical.authorization != "NONE" or physical.physical_transition_allowed or
+                physical.promotion_allowed or
+                physical.root_sha256 != current_pin["root_sha256"] or
+                physical.previous_generation != before["previous"]["id"] or
+                physical.saved_config_base_sha256 != before["detail"]["base"]):
+            raise OriginalSourceGateRefused("S10_SEMANTIC_PHYSICAL_UNQUALIFIED")
+        # The original semantic planner owns classification. A pre-S10
+        # predecessor has no structural pin: don't claim equal/reload-safe
+        # on the basis of a display version or a native argv coincidence.
+        decision = (EffectiveDecision("RESTART_REQUIRED", (), ())
+                    if old is None else plan(old[0], candidate[0]))
+        if (candidate != _read_pinned_effective(
+                detail=before["detail"], binding=current_pin, **read) or
+                (old is not None and old != _read_pinned_effective(
+                    detail=before["previous"], binding=old_pin, **read)) or
+                engine != _s10_native_bound_engine_readback() or
+                store.read() != before):
+            raise OriginalSourceGateRefused("S10_SEMANTIC_ORIGINAL_OWNER_CHANGED")
+        require_lifecycle_lock()
+        return OriginalSemanticReceipt(
+            source.generation, before["previous"]["id"],
+            current_pin["root_sha256"],
+            None if old_pin is None else old_pin["root_sha256"],
+            decision, physical)
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+        raise OriginalSourceGateRefused("S10_SEMANTIC_PREPARED_REFUSED") from None
 
 
 def main(argv: list[str] | None = None) -> int:
