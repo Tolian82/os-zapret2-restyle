@@ -501,16 +501,108 @@ def native_original_fd9(operation: str, raw_pipe: bytes,
     return receipt
 
 
+
+def _s10_native_bound_engine_readback() -> dict:
+    """Reuse the original setup guard under inherited FD9, not a new reader.
+
+    The guard lives immediately above this backend directory. Do not use a
+    caller-provided version, display-only tag, env override or new lock.
+    """
+    parent = str(Path(__file__).resolve().parent.parent)
+    sys.path.insert(0, parent)
+    try:
+        from extra_resources_upstream_guard import native_bound_engine_for_s10_readback
+        return native_bound_engine_for_s10_readback()
+    except (ImportError, ValueError, RuntimeError, OSError):
+        raise OriginalSourceGateRefused("S10_BOUND_ENGINE_UNQUALIFIED") from None
+    finally:
+        sys.path.pop(0)
+
+
+def native_original_bound_effective_fd9(
+        operation: str, raw_pipe: bytes,
+        candidate_sha256: str | None = None) -> SourceGateReceipt:
+    """Strict opt-in S10 source → genuine bound engine → S08d, read-only.
+
+    No original Apply path calls this automatically: current legacy Apply and
+    the S10 activation fence are unchanged. This original-FD9 bridge refuses
+    before producing an effective witness unless the ORIGINAL setup record
+    and real sealed original source both qualify.
+    """
+    from voice_ipfw_adapter import require_lifecycle_lock
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation)):
+        raise OriginalSourceGateRefused("NATIVE_ORIGINAL_FD9_REQUIRED")
+    require_lifecycle_lock()
+    bound = _s10_native_bound_engine_readback()
+    keys = {"engine_version", "source_commit", "engine_sha256", "status",
+            "authorization", "physical_transition_allowed",
+            "build_provenance_verified"}
+    if (type(bound) is not dict or set(bound) != keys or
+            bound["status"] != "S10_ORIGINAL_BOUND_ENGINE_VERSION_READ_ONLY" or
+            bound["authorization"] != "NONE" or
+            bound["physical_transition_allowed"] is not False or
+            bound["build_provenance_verified"] is not False or
+            type(bound["engine_version"]) is not str or
+            re.fullmatch(r"v[0-9]+(?:\.[0-9]+)+", bound["engine_version"]) is None or
+            type(bound["source_commit"]) is not str or
+            re.fullmatch(r"[a-f0-9]{40}", bound["source_commit"]) is None or
+            type(bound["engine_sha256"]) is not str or
+            re.fullmatch(r"[a-f0-9]{64}", bound["engine_sha256"]) is None):
+        raise OriginalSourceGateRefused("S10_BOUND_ENGINE_UNQUALIFIED")
+    source = native_original_fd9(
+        operation, raw_pipe, candidate_sha256, sealed=True,
+        engine_version=bound["engine_version"])
+    if (type(source) is not SourceGateReceipt or
+            source.generation != operation or
+            source.status != "ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY" or
+            source.authorization != "NONE" or
+            source.physical_transition_allowed is not False or
+            type(source.native) is not NativeParity or
+            type(source.effective) is not EffectiveSnapshot or
+            source.effective.status != "DETACHED_EFFECTIVE_INPUT_ONLY" or
+            source.effective.authorization != "NONE" or
+            source.effective.physical_transition_allowed is not False or
+            source.effective.argv_sha256 != source.original_args_sha256 or
+            source.native.original_args_sha256 != source.original_args_sha256 or
+            not re.fullmatch(r"[a-f0-9]{64}", source.original_seal_sha256)):
+        raise OriginalSourceGateRefused("S10_EFFECTIVE_SOURCE_UNQUALIFIED")
+    if bound != _s10_native_bound_engine_readback():
+        raise OriginalSourceGateRefused("S10_BOUND_ENGINE_CHANGED")
+    require_lifecycle_lock()
+    return source
+
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if (len(args) not in (1, 2, 3) or
-            (len(args) == 3 and args[2] != "--sealed")):
+    # Legacy original parity requests retain their exact old protocol.
+    # Explicit S10 accepts only an exact sealed source, never a free-form
+    # version argument or an unsealed/legacy-effective fallback.
+    s10 = bool(args) and args[-1] == "--s10-effective"
+    if "--s10-effective" in args and not s10:
         return 64
-    sealed = args[-1] == "--sealed"
-    digest = args[1] if len(args) >= 2 and args[1] != "--sealed" else None
+    if s10:
+        if (len(args) not in (3, 4) or args[-2] != "--sealed"):
+            return 64
+        digest = args[1] if len(args) == 4 else None
+        sealed = True
+    else:
+        if (len(args) not in (1, 2, 3) or
+                (len(args) == 3 and args[2] != "--sealed")):
+            return 64
+        sealed = args[-1] == "--sealed"
+        digest = args[1] if len(args) >= 2 and args[1] != "--sealed" else None
     try:
         raw = sys.stdin.buffer.read(MAX_PIPE + 1)
-        native_original_fd9(args[0], raw, digest, sealed=sealed)
+        if s10:
+            result = native_original_bound_effective_fd9(args[0], raw, digest)
+            # No native argv, Config, hostlists, WAN or file paths in stdout.
+            # A digest-only observation is NOT an activation permit.
+            print("S10_ORIGINAL_EFFECTIVE_INPUT_READ_ONLY=" +
+                  result.effective.structural_sha256)
+        else:
+            native_original_fd9(args[0], raw, digest, sealed=sealed)
         return 0
     except (ValueError, RuntimeError, OSError, TypeError, UnicodeError,
             KeyError, IndexError, json.JSONDecodeError) as error:
@@ -548,6 +640,9 @@ def main(argv: list[str] | None = None) -> int:
             "INCOMPLETE_ORIGINAL_FOUND_PLAN",
             "INVALID_ORIGINAL_FOUND_INTENT",
             "NATIVE_ORIGINAL_FD9_REQUIRED",
+            "S10_BOUND_ENGINE_UNQUALIFIED",
+            "S10_BOUND_ENGINE_CHANGED",
+            "S10_EFFECTIVE_SOURCE_UNQUALIFIED",
             "P1_OWNER_PRESENT_BUT_GUI_LOCK_ABSENT",
         }
         approved.update({

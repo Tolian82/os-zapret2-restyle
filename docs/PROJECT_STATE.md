@@ -1,3 +1,11 @@
+## 25 November 2026 — CURRENT S10c2b3j: original sealed S08d engine input
+
+**Accepted `main v0.6.5_224`:** `cb5a3f47dbc512374223ac75afefef8fe56c2c17` from [PR #1345](https://github.com/Tolian82/os-zapret2-restyle/pull/1345). [Postmerge CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45662835132) SUCCESS and [postmerge Stage5](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45662835271) **5/5 SUCCESS**, same package SHA, disposable clean/Voice RUNNING/reboot/no-git. No owner router or public package.
+
+**Current source candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=225`, `v0.6.5_225` (`os-zapret2-restyle-0.6.5_225.pkg` prospective CI-only, NOT published). [S10c2b3j read-only contract](architecture/ZAPRET2_TZ6V5_S10C2B3J_ORIGINAL_BOUND_S08D_INPUT.md): strict final original seal + S08d observed engine version from the existing original FD9 setup-bound reader; repeated marker/Git/ELF identity checks; no arbitrary version, no new journals/lock/writer, no activation. Legacy Apply remains unchanged. **Next:** exact-head source and native CI, then original PREPARED root binding + old-owner/Found P1/physical rollback. [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN/NO-GO; S11 blocked.
+
+---
+
 ## 25 November 2026 — CURRENT S10c2b3i: bounded installed engine readback
 
 **Accepted main:** `v0.6.5_223` / `c7779b7ef0b4c870edd15637d868856cdf9b4f40`, [PR #1344](https://github.com/Tolian82/os-zapret2-restyle/pull/1344) merged. Genuine [OPNsense G03](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45657082626) first installation + native make `v1.0.7`, exact three-line original release marker, same-version reinstall, Chromium five-editor F5 and original FD9 PREPARED recovery PASS. [PR Stage5](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45657082650) 5/5 PASS (clean/Voice RUNNING/reboot/no-git/one SHA); [postmerge CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45658729823) PASS. Public testing package remains last recorded `_117`; `os-zapret2-restyle-0.6.5_223.pkg` was CI-only, NOT published/owner-installed.

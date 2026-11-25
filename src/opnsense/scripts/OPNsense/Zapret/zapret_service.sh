@@ -2149,7 +2149,7 @@ shared_apply_finalize_release_modes()
 # This does not act on Config, P1, runtime, IPFW or any engine process.
 shared_apply_original_source_gate()
 {
-    [ "$#" -ge 1 ] && [ "$#" -le 3 ] &&
+    [ "$#" -ge 1 ] && [ "$#" -le 4 ] &&
     [ -x "${PYTHON_RUNTIME}" ] &&
     [ -r "${BACKEND_DIR}/neutral_shared_apply_source_gate.py" ] || return 69
     _shared_original_gate_reason=UNCLASSIFIED_PARITY_REFUSAL
