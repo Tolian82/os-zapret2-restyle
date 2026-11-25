@@ -188,7 +188,7 @@ def _attest_previous_physical(*, generation: str,
         if (type(before) is not dict or
                 before.get("phase") != "prepared" or
                 type(before.get("manifest")) is not dict or
-                before["manifest"].get("schema") != 2 or
+                before["manifest"].get("schema") not in (1, 2) or
                 type(before.get("previous")) is not dict or
                 type(before.get("detail")) is not dict or
                 before["detail"]["id"] != generation or

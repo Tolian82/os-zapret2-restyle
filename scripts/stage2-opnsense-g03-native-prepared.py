@@ -194,7 +194,8 @@ sys.path.insert(0, "/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
 from shared_apply_operation import SharedApplyOperation, SharedOperationError
 from shared_apply_seal import WORK, verify_seal
 from neutral_schema3_saved_wan_preimage import _native_preflight
-from neutral_shared_apply_source_gate import native_bind_original_prepared_fd9, MAX_PIPE
+from neutral_shared_apply_source_gate import (
+    native_bind_original_prepared_fd9, native_plan_original_prepared_fd9, MAX_PIPE)
 from voice_ipfw_adapter import require_lifecycle_lock
 op = sys.argv[1]
 try:
@@ -220,6 +221,17 @@ try:
             bound.authorization != "NONE" or bound.physical_transition_allowed or
             bound.promotion_allowed):
         raise RuntimeError("bound")
+    # First conversion is not a reload/no-op, even if the original saved
+    # model is unchanged. The old legacy generation has no structural pin.
+    semantic = native_plan_original_prepared_fd9(source)
+    if (semantic.decision.kind != "RESTART_REQUIRED" or
+            semantic.previous_generation != prior["previous"]["id"] or
+            semantic.previous_root_sha256 is not None or
+            semantic.candidate_root_sha256 != bound.root_sha256 or
+            semantic.authorization != "NONE" or
+            semantic.physical_transition_allowed or semantic.promotion_allowed or
+            store.read() != record):
+        raise RuntimeError("semantic")
     try:
         store.advance("activating", detail)
     except SharedOperationError:
@@ -249,6 +261,7 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
          pinned.split("=", 1)[1] and
          snapshot() == original,
          "G03_BOUND_ROOT_PREPARED_OR_PHYSICAL_DRIFT")
+    print("G03_S10_SEMANTIC=PASS_REAL_RUNNING_LEGACY_OWNER_RESTART_PROPOSAL", flush=True)
     recovered = call([str(script / "python_runtime.sh"),
                       str(backend / "shared_apply_operation.py"),
                       "recover-prepared", op], locked=True)
