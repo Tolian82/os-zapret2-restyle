@@ -122,14 +122,37 @@ def _original_plan_matches(*, parent: Path, generation: str,
 def _original_preflight(*, generation: str, root_bytes: bytes,
                         effective: EffectiveSnapshot, native: NativeParity,
                         mode: str, enabled: bool, parent: Path,
-                        journal_root: Path, owner_uid: int):
+                        journal_root: Path, owner_uid: int, schema3: bool = False,
+                        allow_bound_schema3: bool = False):
+    if (type(schema3) is not bool or type(allow_bound_schema3) is not bool or
+            (allow_bound_schema3 and not schema3)):
+        raise RootStageRefused("ORIGINAL_ROOT_SOURCE_MODE_INVALID")
     before, candidate_sha = _journal(generation, journal_root=journal_root,
                                      owner_uid=owner_uid)
     try:
-        attested = attest_sealed_original(
-            shared_work_parent=parent, generation=generation, root_bytes=root_bytes,
-            effective=effective, native=native, mode=mode, enabled=enabled,
-            owner_uid=owner_uid)
+        if schema3:
+            # Same S10a writer and one original seal, with the REAL final
+            # promoted source instead of pretending that S08d is final argv.
+            # The pinned schema-2 bytes MUST equal the actual typed proposal.
+            from neutral_schema3_physical_refs import (
+                _attest_physical_schema3, PhysicalSchema3Refused,
+            )
+            if mode != "auto":
+                raise RootStageRefused("ORIGINAL_SCHEMA3_AUTO_ONLY")
+            source = _attest_physical_schema3(
+                generation=generation, native=native, effective=effective,
+                enabled=enabled, parent=parent, journal_root=journal_root,
+                owner_uid=owner_uid, allow_bound_schema3=allow_bound_schema3)
+            if root_bytes != source.candidate.json_bytes:
+                raise RootStageRefused("ORIGINAL_SCHEMA3_ROOT_BYTES_MISMATCH")
+            attested = PreparedRootReceipt(
+                generation, source.root_sha256, source.seal_sha256,
+                source.candidate_sha256)
+        else:
+            attested = attest_sealed_original(
+                shared_work_parent=parent, generation=generation, root_bytes=root_bytes,
+                effective=effective, native=native, mode=mode, enabled=enabled,
+                owner_uid=owner_uid)
         original = verify_seal(parent / generation, owner=owner_uid)
     except (SealedRefsRefused, SharedBundleError, OSError, ValueError):
         raise RootStageRefused("ORIGINAL_SEALED_REFS_UNQUALIFIED") from None
@@ -190,7 +213,8 @@ def _read_staged(wfd: int, owner_uid: int) -> bytes:
 def _stage_candidate(*, generation: str, candidate: RootCandidate,
                      effective: EffectiveSnapshot, native: NativeParity,
                      mode: str, enabled: bool, parent: Path,
-                     journal_root: Path, owner_uid: int) -> PreparedRootReceipt:
+                     journal_root: Path, owner_uid: int,
+                     schema3: bool = False) -> PreparedRootReceipt:
     # Internal writer. Public entry must have already attested ORIGINAL FD9.
     if (type(candidate) is not RootCandidate or
             candidate.status != "DETACHED_CANDIDATE_ONLY" or
@@ -202,7 +226,8 @@ def _stage_candidate(*, generation: str, candidate: RootCandidate,
     witness, candidate_sha, journal = _original_preflight(
         generation=generation, root_bytes=candidate.json_bytes,
         effective=effective, native=native, mode=mode, enabled=enabled,
-        parent=parent, journal_root=journal_root, owner_uid=owner_uid)
+        parent=parent, journal_root=journal_root, owner_uid=owner_uid,
+        schema3=schema3)
     pfd = wfd = None
     try:
         pfd = _open_parent(parent, owner_uid)
@@ -246,7 +271,8 @@ def _stage_candidate(*, generation: str, candidate: RootCandidate,
         after, after_sha, _ = _original_preflight(
             generation=generation, root_bytes=candidate.json_bytes,
             effective=effective, native=native, mode=mode, enabled=enabled,
-            parent=parent, journal_root=journal_root, owner_uid=owner_uid)
+            parent=parent, journal_root=journal_root, owner_uid=owner_uid,
+            schema3=schema3)
         if after != witness or after_sha != candidate_sha or (
                 _read_staged(wfd, owner_uid) != candidate.json_bytes):
             raise RootStageRefused("STAGED_ROOT_PROOF_CHANGED")
@@ -282,7 +308,9 @@ def stage_manifest(*, generation: str, candidate: RootCandidate,
 def attest_staged_candidate(*, generation: str,
                             effective: EffectiveSnapshot, native: NativeParity,
                             mode: str, enabled: bool, parent: Path,
-                            journal_root: Path, owner_uid: int) -> PreparedRootReceipt:
+                            journal_root: Path, owner_uid: int,
+                            schema3: bool = False,
+                            allow_bound_schema3: bool = False) -> PreparedRootReceipt:
     """Strict read-only detached preflight, no physical authorization."""
     pfd = wfd = None
     try:
@@ -295,7 +323,8 @@ def attest_staged_candidate(*, generation: str,
         witness, candidate_sha, journal = _original_preflight(
             generation=generation, root_bytes=root, effective=effective,
             native=native, mode=mode, enabled=enabled, parent=parent,
-            journal_root=journal_root, owner_uid=owner_uid)
+            journal_root=journal_root, owner_uid=owner_uid,
+            schema3=schema3, allow_bound_schema3=allow_bound_schema3)
         if (_read_staged(wfd, owner_uid) != root or
                 _journal(generation, journal_root=journal_root, owner_uid=owner_uid)[0] != journal):
             raise RootStageRefused("STAGED_ROOT_PROOF_CHANGED")
@@ -309,3 +338,38 @@ def attest_staged_candidate(*, generation: str,
             os.close(pfd)
     return PreparedRootReceipt(generation, hashlib.sha256(root).hexdigest(),
                                witness.original_seal_sha256, candidate_sha)
+
+def stage_schema3_manifest(*, generation: str, candidate: RootCandidate,
+                           effective: EffectiveSnapshot, native: NativeParity,
+                           enabled: bool) -> PreparedRootReceipt:
+    """Same original FD9 and S10a atomic sibling writer, final schema3 source.
+
+    Stages an immutable root only. NEVER binds, starts or advances the journal.
+    """
+    try:
+        require_lifecycle_lock()
+    except (OSError, ValueError, RuntimeError):
+        raise RootStageRefused("ORIGINAL_FD9_REQUIRED") from None
+    return _stage_candidate(
+        generation=generation, candidate=candidate, effective=effective,
+        native=native, mode="auto", enabled=enabled, parent=WORK,
+        journal_root=DEFAULT_ROOT, owner_uid=0, schema3=True)
+
+
+def attest_staged_schema3_candidate(*, generation: str,
+                                    effective: EffectiveSnapshot,
+                                    native: NativeParity, enabled: bool,
+                                    parent: Path, journal_root: Path,
+                                    owner_uid: int,
+                                    allow_bound_schema3: bool = False
+                                    ) -> PreparedRootReceipt:
+    """Same S10a original staged byte reader, with actual final schema3 refs.
+
+    Allow bound receipts only for the original postjournal reattestation path,
+    after strict source/map/seal/manifest SHA cross-check. Not an activator.
+    """
+    return attest_staged_candidate(
+        generation=generation, effective=effective, native=native,
+        mode="auto", enabled=enabled, parent=parent,
+        journal_root=journal_root, owner_uid=owner_uid,
+        schema3=True, allow_bound_schema3=allow_bound_schema3)

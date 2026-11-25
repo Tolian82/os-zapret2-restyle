@@ -16,7 +16,8 @@ from pathlib import Path
 from neutral_effective_diff import EffectiveSnapshot
 from neutral_native_parity import NativeParity
 from neutral_root_stage import (
-    attest_staged_candidate, PreparedRootReceipt, RootStageRefused,
+    attest_staged_candidate, attest_staged_schema3_candidate,
+    PreparedRootReceipt, RootStageRefused,
 )
 from shared_apply_operation import (
     SharedApplyOperation, SharedOperationError, _validate_manifest_binding,
@@ -47,7 +48,7 @@ class BoundRootReceipt:
 def _attest_bound_candidate(*, generation: str, effective: EffectiveSnapshot,
                             native: NativeParity, mode: str, enabled: bool,
                             parent: Path, journal_root: Path,
-                            owner_uid: int) -> BoundRootReceipt:
+                            owner_uid: int, schema3: bool = False) -> BoundRootReceipt:
     """Detached testable physical/source proof, always nonauthorizing.
 
     Do not pass untrusted paths from a root JSON/GUI. Production uses only
@@ -63,10 +64,21 @@ def _attest_bound_candidate(*, generation: str, effective: EffectiveSnapshot,
             raise BoundRootRefused("ORIGINAL_BOUND_PREPARED_REQUIRED")
         binding = _validate_manifest_binding(
             before["manifest"], before["detail"])
-        witness = attest_staged_candidate(
+        if (type(schema3) is not bool or
+                binding["schema"] != (2 if schema3 else 1) or
+                (schema3 and mode != "auto")):
+            raise BoundRootRefused("ORIGINAL_BOUND_SOURCE_SCHEMA_MISMATCH")
+        verifier = (attest_staged_schema3_candidate if schema3
+                    else attest_staged_candidate)
+        source = dict(
             generation=generation, effective=effective, native=native,
-            mode=mode, enabled=enabled, parent=parent, journal_root=journal_root,
+            enabled=enabled, parent=parent, journal_root=journal_root,
             owner_uid=owner_uid)
+        if schema3:
+            source["allow_bound_schema3"] = True
+        else:
+            source["mode"] = mode
+        witness = verifier(**source)
         if (type(witness) is not PreparedRootReceipt or
                 witness.generation != generation or
                 witness.authorization != "NONE" or
@@ -78,10 +90,7 @@ def _attest_bound_candidate(*, generation: str, effective: EffectiveSnapshot,
             raise BoundRootRefused("ORIGINAL_BOUND_ROOT_IDENTITY_CHANGED")
         # A second S10a read after the pinned journal read eliminates
         # passing a stale physical root or an asynchronously advanced phase.
-        again = attest_staged_candidate(
-            generation=generation, effective=effective, native=native,
-            mode=mode, enabled=enabled, parent=parent, journal_root=journal_root,
-            owner_uid=owner_uid)
+        again = verifier(**source)
         if again != witness or original.read() != before:
             raise BoundRootRefused("ORIGINAL_BOUND_ROOT_CHANGED_DURING_ATTEST")
         return BoundRootReceipt(
@@ -103,3 +112,17 @@ def attest_bound_under_fd9(*, generation: str, effective: EffectiveSnapshot,
         generation=generation, effective=effective, native=native,
         mode=mode, enabled=enabled, parent=WORK, journal_root=DEFAULT_ROOT,
         owner_uid=0)
+
+def attest_bound_schema3_under_fd9(*, generation: str,
+                                   effective: EffectiveSnapshot,
+                                   native: NativeParity,
+                                   enabled: bool) -> BoundRootReceipt:
+    """Same original FD9 bound PREPARED reader with schema-2 source, no Start."""
+    try:
+        require_lifecycle_lock()
+    except (OSError, RuntimeError, ValueError):
+        raise BoundRootRefused("ORIGINAL_FD9_REQUIRED") from None
+    return _attest_bound_candidate(
+        generation=generation, effective=effective, native=native,
+        mode="auto", enabled=enabled, parent=WORK,
+        journal_root=DEFAULT_ROOT, owner_uid=0, schema3=True)

@@ -79,15 +79,18 @@ def _pinned_ref(fd: int, name: str, mode: int, owner_uid: int) -> bytes:
 def _attest_physical_schema3(*, generation: str, native: NativeParity,
                              effective: EffectiveSnapshot, enabled: bool,
                              parent: Path, journal_root: Path,
-                             owner_uid: int) -> PhysicalSchema3Receipt:
+                             owner_uid: int,
+                             allow_bound_schema3: bool = False) -> PhysicalSchema3Receipt:
     """Testable original-artifact preflight. Paths are fixed by FD9 wrapper."""
     if (type(enabled) is not bool or type(owner_uid) is not int or
-            not isinstance(parent, Path) or not isinstance(journal_root, Path)):
+            not isinstance(parent, Path) or not isinstance(journal_root, Path) or
+            type(allow_bound_schema3) is not bool):
         raise PhysicalSchema3Refused("ORIGINAL_SCHEMA3_PHYSICAL_INPUT_REQUIRED")
     try:
         original = _attest_original_schema3(
             generation=generation, native=native, effective=effective,
-            parent=parent, journal_root=journal_root, owner_uid=owner_uid)
+            parent=parent, journal_root=journal_root, owner_uid=owner_uid,
+            allow_bound_schema3=allow_bound_schema3)
         journal, candidate_sha = _journal(
             generation, journal_root=journal_root, owner_uid=owner_uid)
         work = parent / generation
@@ -116,6 +119,16 @@ def _attest_physical_schema3(*, generation: str, native: NativeParity,
                 enabled=enabled, owner_uid=owner_uid,
             )
             proposal = compile_final_schema3(**inputs)
+            if "manifest" in journal:
+                # A bound PREPARED must pin the EXACT freshly recomputed
+                # final physical schema3 root, not a plausible detached SHA.
+                binding = journal["manifest"]
+                if (not allow_bound_schema3 or binding["schema"] != 2 or
+                        binding["generation"] != generation or
+                        binding["root_sha256"] != proposal.candidate.sha256 or
+                        binding["seal_sha256"] != original.seal_sha256 or
+                        binding["candidate_sha256"] != candidate_sha):
+                    raise PhysicalSchema3Refused("ORIGINAL_SCHEMA3_BOUND_ROOT_CHANGED")
             if validate_final_schema3(proposal.candidate.json_bytes, **inputs) != proposal:
                 raise PhysicalSchema3Refused("ORIGINAL_SCHEMA3_ROOT_UNSTABLE")
             # One original seal, not an invented second authority. All opened
@@ -134,7 +147,8 @@ def _attest_physical_schema3(*, generation: str, native: NativeParity,
         if _attest_original_schema3(
                 generation=generation, native=native, effective=effective,
                 parent=parent, journal_root=journal_root,
-                owner_uid=owner_uid) != original:
+                owner_uid=owner_uid,
+                allow_bound_schema3=allow_bound_schema3) != original:
             raise PhysicalSchema3Refused("ORIGINAL_SCHEMA3_SOURCE_CHANGED")
         return PhysicalSchema3Receipt(
             generation, proposal.candidate.sha256, original.seal_sha256,

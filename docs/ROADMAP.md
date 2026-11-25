@@ -1,10 +1,10 @@
-## Current priority — TZ6v5 S10b2b2b1 original physical schema3 proof → FD9 bound activation → S10c rollback
+## Current priority — TZ6v5 S10b2b2b2 one original schema3 stage/bind → positive FD9 gate → S10c rollback
 
-**GO baseline:** `main v0.6.5_203 c1c19fb5`, [S10b2b2a #1324](https://github.com/Tolian82/os-zapret2-restyle/pull/1324) merged, main CI #45541930928 and classifier #45541930863 SUCCESS; S09 through S10b2b2a GO. [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN. Next source-only `v0.6.5_204`, no public package or owner-appliance action.
+**GO baseline:** `main v0.6.5_204 bbbe2611`, [PR #1325](https://github.com/Tolian82/os-zapret2-restyle/pull/1325), exact head CI #45543993449 and postmerge CI #45544690157 plus classifier #45544689986 successful. S09 through S10b2b2b1 GO; [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN. Next source-only `v0.6.5_205` not published/owner installed.
 
-**S10b2b2b1:** [original physical schema3 refs](architecture/ZAPRET2_TZ6V5_S10B2B2B1_PHYSICAL_SOURCE_REFS.md) — reattest exact final/old argv and original/active maps under original FD9, one seal and PREPARED journal, with physical modes/UID/inodes; compile the truthful schema-2 proposal with no physical authorization. Original genuine source/negative CI required.
+**Current S10b2b2b2:** [same original S10a root writer / original S10b1 durable journal](architecture/ZAPRET2_TZ6V5_S10B2B2B2_ORIGINAL_SCHEMA3_STAGE_BIND.md), reattest genuine schema-2 old/final argv and source/active maps before/after PREPARED immutable root bind, no second writer/seal and no activation. Genuine original generator negative tests and CI required.
 
-**Next S10b2b2b2:** one original root staging and existing FD9 journal binding plus positive preactivation guarded by saved WAN/Config/previous PID+IPFW+root; no second writer, no separate seal. **S10c:** interrupted atomic promotion, uncertainty of Config::save, old active owner restore and mutable P1 CAS/ACK. **S11:** original single Start/Stop/Reload. WAN-only Save/prestart Lab unaffected.
+**Next S10b2b2b3:** saved WAN/Config/process/IPFW/previous active immutable root preimages and positive original FD9 `PREPARED→ACTIVATING`. **S10c:** interrupted atomic promotion, uncertain `Config::save`, old owner rollback and P1 CAS/ACK. **S11:** single physical Start/Stop/Reload, with WAN-only Save and prestart Lab independent.
 
 ---
 
