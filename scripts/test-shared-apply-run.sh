@@ -139,14 +139,17 @@ fi
 sed -n '/^shared_apply_prepare_service()$/,/^}$/p' "$SOURCE" > "$TMP/prepare.sh"
 awk '/orchestrator_build_release / { build=NR }
      /_shared_auto_digest=\$\(/ { digest=NR }
-     /shared_apply_original_source_gate "\$1" "\$_shared_auto_digest"/ { auto_gate=NR }
+     /shared_apply_original_source_gate "\$1" "\$_shared_auto_digest" \|\|/ { auto_gate=NR }
      /shared_apply_original_source_gate "\$1" \|\|/ { nonauto_gate=NR }
      /shared_apply_finalize_release_modes "\$_shared_work\/release"/ { modes=NR }
      /shared_apply_bundle_service seal / { seal=NR }
+     /shared_apply_original_source_gate "\$1" "\$_shared_auto_digest" --sealed/ { final_auto=NR }
+     /shared_apply_original_source_gate "\$1" --sealed/ { final_nonautos=NR }
      END { exit !(build > 0 && digest > build && auto_gate > digest &&
                   nonauto_gate > auto_gate && modes > nonauto_gate &&
-                  seal > modes) }' "$TMP/prepare.sh" ||
-    fail "one source gate per path must follow real PHP preflight and precede Auto/SEAL"
+                  seal > modes && final_auto > seal &&
+                  final_nonautos > final_auto) }' "$TMP/prepare.sh" ||
+    fail "original source gate preseal and postseal must bracket original promotion/seal"
 
 # Stream the original shell scalars through the installed gate, without
 # generating a second file-backed Config or passing user data in argv.
@@ -177,6 +180,10 @@ WAN_IF='opt0'
 shared_apply_original_source_gate "$ID" || fail "same-operation source gate pipe failed"
 shared_apply_original_source_gate "$ID" "$(printf '%064d' 0)" ||
     fail "same-operation Auto source digest forwarding failed"
+shared_apply_original_source_gate "$ID" --sealed ||
+    fail "same-operation sealed nonauto source forwarding failed"
+shared_apply_original_source_gate "$ID" "$(printf '%064d' 0)" --sealed ||
+    fail "same-operation sealed Auto source forwarding failed"
 python3 - "$TMP/source-gate.stdin" <<'PY'
 import pathlib, sys
 data = pathlib.Path(sys.argv[1]).read_bytes()

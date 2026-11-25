@@ -2149,7 +2149,7 @@ shared_apply_finalize_release_modes()
 # This does not act on Config, P1, runtime, IPFW or any engine process.
 shared_apply_original_source_gate()
 {
-    [ "$#" -ge 1 ] && [ "$#" -le 2 ] &&
+    [ "$#" -ge 1 ] && [ "$#" -le 3 ] &&
     [ -x "${PYTHON_RUNTIME}" ] &&
     [ -r "${BACKEND_DIR}/neutral_shared_apply_source_gate.py" ] || return 69
     {
@@ -2312,6 +2312,20 @@ shared_apply_prepare_service()
         printf '%s\n' preflight-rejected=seal
         return 0
     }
+    # S10c2b3a: verify the SAME source + final ORIGINAL native refs AFTER
+    # schema3 promotion and the one original seal, before returning the
+    # candidate to the existing FD9 Apply. No journal, Config or IPFW write.
+    if [ -f "$_shared_work/release/auto-detect-source-map.json" ]; then
+        shared_apply_original_source_gate "$1" "$_shared_auto_digest" --sealed || {
+            printf '%s\n' preflight-rejected=seal
+            return 0
+        }
+    else
+        shared_apply_original_source_gate "$1" --sealed || {
+            printf '%s\n' preflight-rejected=seal
+            return 0
+        }
+    fi
 }
 # Original common owner is defined by the one shared Apply journal. Before
 # Remove Stop, independently attest saved Config, sealed release, exact active

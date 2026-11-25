@@ -1,8 +1,8 @@
-## Current priority — TZ6v5 S10c2 original producer/S08 parity → original physical executor → S11
+## Current priority — TZ6v5 S10c2b3 original sealed refs → one bound original FD9 executor → S11
 
-**Accepted main `v0.6.5_210 6a0358f6`** via [PR #1331](https://github.com/Tolian82/os-zapret2-restyle/pull/1331), postmerge CI PASS. Latest published testing package `_117`; S10 [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN/NO-GO. Documentation-only `_211` fixes the owner-approved S10c2 approach, not the running code.
+**Accepted main `v0.6.5_214 60e625fc`** via [merged PR #1335](https://github.com/Tolian82/os-zapret2-restyle/pull/1335), with postmerge CI, release classification and native Chromium OPNsense RU/EN SUCCESS. S10 [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) remains OPEN/NO-GO; latest published testing package is `_117`.
 
-**Next:** one original `orchestrator_build_release` and one original FD9/Apply; S08 pure verified source→generated parity for HOSTLIST/IPSET independent strategies, registered resource scaling, Auto OFF List/All and exact native Auto attribution, then original seal/rollback/physical integration and S11. [TZ6v5 §4.2](architecture/TZ_6v5.md), [S10 detailed plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md). No second generator, GUI lifecycle route, state owner or package.
+**Next:** source-only `v0.6.5_215` S10c2b3a adds genuine source/managed/native postpromotion readback of the original one-sealed bundle using the existing FD9 gate. Then bind exact final sealed refs, sibling immutable root and original journal with native prior-owner/Config/IPFW proof before any original executor activation, rollback and S11 physical lifecycle. Preserve one `orchestrator_build_release`, one original FD9/Apply, manual HOSTLIST/IPSET order/Voice/Auto, the existing `manifest-unbound` refusal until positive authorization, and no second writer, journal, root authority or package. [TZ6v5 §4.2](architecture/TZ_6v5.md) · [S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) · [current bounded source contract](architecture/ZAPRET2_TZ6V5_S10C2B3A_ORIGINAL_SEALED_REF_READBACK.md).
 
 ---
 
