@@ -1,8 +1,8 @@
-## Current priority — TZ6v5 S10c2b3d original setup-bound release draft → rollback → S11
+## Current priority — TZ6v5 S10c2b3e sealed upstream marker preimage → original writer → S11
 
-**Accepted main `v0.6.5_217` / e7718019** via [PR #1338](https://github.com/Tolian82/os-zapret2-restyle/pull/1338), main CI/classifier PASS. S10 OPEN/NO-GO, public package _117.
+**Accepted main `v0.6.5_218` / e4ff3581** via [PR #1339](https://github.com/Tolian82/os-zapret2-restyle/pull/1339), exact-head and postmerge CI PASS. S10 OPEN/NO-GO, public package _117.
 
-**Next:** _218 extends original read-only engine observer with a strict future single-marker format (unchanged release first line, Git commit, actual ELF SHA), no new installed write. Integrate only in original setup transaction after actual make, verify existing recovery/rollback exact old bytes/absence; native physical + Found/P1 afterward. Avoid second writer/lock/marker and any automatic Stop. [Approved S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+**Next:** _219 seals original runtime.release exact bytes/absence inside existing original backup-attestation schema3 before PREPARED, reusing one original FD9, no second journal/writer. Then integrate original setup writer's post-build binding and exact old-marker recovery in the original transaction. Found/P1/physical executor remain later. [S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
 
 
 ---
