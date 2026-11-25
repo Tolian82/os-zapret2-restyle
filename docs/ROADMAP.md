@@ -1,10 +1,10 @@
-## Current priority — TZ6v5 S10b2b2b3b1 actual saved Config/WAN → b3b2 final FD9 gate → S10c
+## Current priority — TZ6v5 S10b2b2b3b2a full old root/PID → b3b2b first-install/retirement → S10c
 
-**GO baseline:** `main v0.6.5_206 5263b376`, merged [PR #1327](https://github.com/Tolian82/os-zapret2-restyle/pull/1327), source CI #45552230412, postmerge main CI #45553026492 and classifier #45553026525 SUCCESS. S09 through S10b2b2b3a GO, [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) remains OPEN. New `v0.6.5_207` source-only candidate not a public/owner-installed release.
+**GO baseline:** `main v0.6.5_207 6ce28fb4`, merged [PR #1328](https://github.com/Tolian82/os-zapret2-restyle/pull/1328), source CI #45555486761, postmerge main CI #45556293600 + classifier #45556293542 SUCCESS. S09 through S10b2b2b3b1 GO; [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN. Source-only `v0.6.5_208` is not a public/owner installed package.
 
-**Current S10b2b2b3b1:** [original Config/WAN source read-only gate](architecture/ZAPRET2_TZ6V5_S10B2B2B3B1_SAVED_CONFIG_WAN_SOURCE.md), unchanged original Config-locked PHP preflight and WAN-first require/device commands inherited from FD9, twice checked against original bound schema-2 PREPARED/old runtime/IPFW/one root. Genuine original generator and fast negative CI required. No physical phase transition, user router action or new writer.
+**Current S10b2b2b3b2a:** [actual full previous active release and original P2c PID/birth/kernel-argv read-only preimage](architecture/ZAPRET2_TZ6V5_S10B2B2B3B2A_PRIOR_FULL_TREE_PID.md), under one bound PREPARED journal and original FD9, twice-checked after native Config/WAN and old IPFW proof; unchanged original root hash and exact P2c process helpers. Source CI required; stopped/cold previous not authorized.
 
-**Next S10b2b2b3b2:** complete old active root and actual PID birth/epoch, first-install kernel baseline and atomic original FD9 positive preactivation with fresh Config/WAN/runtime/IPFW. **S10c:** interrupted physical promotion, uncertain Config::save and old owner rollback/P1 CAS/ACK. **S11:** physical Start/Stop/Reload. WAN-only Save and prestart Strategy Lab remain independent.
+**Next S10b2b2b3b2b:** original stopped retired epoch+P1 ACK, genuine first-install physical cold kernel, executable inode and final positive FD9 preactivation with native rechecks. **S10c:** partial atomic promotion, uncertain `Config::save` and old-owner/P1 CAS/ACK rollback. **S11:** single physical Start/Stop/Reload.
 
 ---
 
