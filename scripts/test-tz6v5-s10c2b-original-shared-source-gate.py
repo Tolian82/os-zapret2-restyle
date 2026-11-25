@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
@@ -23,6 +24,9 @@ from neutral_shared_apply_source_gate import (
 from neutral_resource_compiler import ResourceCompileError
 from neutral_native_parity import NativeParityRefused
 from shared_apply_seal import create_seal, verify_seal
+from neutral_root_stage import attest_prepared_source_root, _stage_candidate, RootStageRefused
+from neutral_root_bound_preflight import _attest_bound_candidate
+from shared_apply_operation import SharedApplyOperation, SharedOperationError
 import auto_detect_origin_map as origin
 import hashlib
 
@@ -223,6 +227,52 @@ class OriginalFd9SourceGate(unittest.TestCase):
                         self.assertNotEqual(sealed.final_args_sha256, before.original_args_sha256)
                     else:
                         self.assertEqual(sealed.final_args_sha256, before.original_args_sha256)
+
+    def test_same_original_source_to_prepared_and_bound_root(self):
+        for mode in ("all", "list", "auto"):
+            with self.subTest(mode=mode):
+                fixture, kw = self.original(mode=mode, voice=True)
+                self.original_plan(fixture)
+                digest = "d" * 64
+                if mode == "auto":
+                    origin.promote_learning_release(fixture.work, digest)
+                create_seal(fixture.work, owner=os.geteuid())
+                source = qualify_source_to_managed(
+                    **dict(kw, sealed=True, engine_version="v1.0.7"))
+                self.assertEqual(source.effective.argv_sha256, source.original_args_sha256)
+                self.assertEqual(source.native.original_args_sha256, source.original_args_sha256)
+                journal_root = fixture.work.parent / "journal"
+                journal = SharedApplyOperation(journal_root, owner=os.geteuid())
+                detail = {"id": fixture.work.name, "page": "strategies",
+                          "base": "a" * 64, "candidate": digest, "changed_fields": []}
+                journal.advance("prepared", detail)
+                before = journal.read()
+                args = dict(source=source, candidate_sha256=digest, enabled=True,
+                            parent=fixture.work.parent, journal_root=journal_root,
+                            owner_uid=os.geteuid())
+                with self.assertRaises(RootStageRefused):
+                    attest_prepared_source_root(**dict(args, candidate_sha256="c" * 64))
+                candidate = attest_prepared_source_root(**args)
+                self.assertEqual(journal.read(), before)
+                self.assertFalse((fixture.work / "manifest.json").exists())
+                self.assertFalse(candidate.physical_transition_allowed)
+                common = dict(generation=fixture.work.name, native=source.native,
+                              effective=source.effective, mode=mode, enabled=True,
+                              parent=fixture.work.parent, journal_root=journal_root,
+                              owner_uid=os.geteuid(), schema3=mode == "auto")
+                staged = _stage_candidate(candidate=candidate, **common)
+                with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None):
+                    bound = journal.bind_prepared_manifest(
+                        generation=fixture.work.name, effective=source.effective,
+                        native=source.native, mode=mode, enabled=True,
+                        shared_work_parent=fixture.work.parent, schema3=mode == "auto")
+                recheck = _attest_bound_candidate(**common)
+                self.assertEqual(staged.root_sha256, candidate.sha256)
+                self.assertEqual(bound["manifest"]["root_sha256"], candidate.sha256)
+                self.assertEqual(recheck.root_sha256, candidate.sha256)
+                self.assertEqual(journal.read()["phase"], "prepared")
+                with self.assertRaises(SharedOperationError):
+                    journal.advance("activating", detail)
 
     def test_final_seal_ref_and_native_drift_refuse_without_action(self):
         fixture, kw = self.original(mode="auto", voice=True)
