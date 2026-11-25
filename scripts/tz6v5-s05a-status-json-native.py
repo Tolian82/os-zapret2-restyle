@@ -31,6 +31,50 @@ def existing():
 s04 = existing()
 
 
+def state_drift_classes(before, after):
+    # Fixed resource classes only: no paths, values, argv or PID contents.
+    classes = []
+    for name in ("config", "engine", "process"):
+        if before[name] != after[name]:
+            classes.append(name)
+    for name in ("rules", "tables", "ipfw_module", "ipdivert_module"):
+        if before["kernel"][name] != after["kernel"][name]:
+            classes.append("kernel_" + name)
+    original, current = before["tree"], after["tree"]
+    keys = set(original) | set(current)
+    for category, root in (
+        ("pkgdb", "/var/db/pkg"),
+        ("shared", "/var/db/zapret2"),
+        ("active", "/usr/local/etc/zapret2/runtime-v2"),
+        ("setup", "/var/db/zapret2-restyle"),
+        ("backend", str(BACKEND)),
+        ("pid", "/var/run"),
+    ):
+        changed = [k for k in keys if (k == root or k.startswith(root + "/"))
+                   and original.get(k) != current.get(k)]
+        if changed:
+            added = sum(k not in original for k in changed)
+            removed = sum(k not in current for k in changed)
+            fields = set()
+            for k in changed:
+                a, b = original.get(k), current.get(k)
+                if isinstance(a, list) and isinstance(b, list):
+                    fields.update(n for i, n in enumerate(
+                        ("type", "device", "inode", "uid", "gid", "mode",
+                         "nlink", "size", "mtime", "content"))
+                        if i < len(a) and i < len(b) and a[i] != b[i])
+                    if len(a) != len(b):
+                        fields.add("shape")
+                else:
+                    fields.add("type")
+            classes.append("tree_" + category + "_" + str(len(changed)) +
+                           "_new" + str(added) + "_del" + str(removed) +
+                           "_" + "-".join(sorted(fields)))
+    if original != current and not any(s.startswith("tree_") for s in classes):
+        classes.append("tree_other")
+    return classes
+
+
 def reload_preflight_witness(label, runtime):
     """Strict native physical no-write: reuse existing S05a OPNsense guests."""
     expected = "NOT_RUNNING" if runtime == "STOPPED" else "REFUSE"
@@ -40,6 +84,11 @@ def reload_preflight_witness(label, runtime):
         response = s04.run([str(SERVICE), "reload", "--check"] +
                            (["--json"] if json_mode else []), timeout=90)
         after = s04.snapshot()
+        if before != after:
+            print("S05F1_NATIVE_RELOAD_DRIFT=" + json.dumps({
+                "case": label, "format": "json" if json_mode else "plain",
+                "classes": state_drift_classes(before, after),
+            }, sort_keys=True, separators=(",", ":")), file=sys.stderr)
         s04.need(before == after, "S05F1_NATIVE_RELOAD_WROTE_" + label)
         s04.need(response.returncode == exit_code and response.stderr.strip() == "",
                  "S05F1_NATIVE_RELOAD_RC_" + label)
@@ -81,47 +130,8 @@ def status_witness(label, expected, *, preinstall=False, setup_refused=False):
     p = s04.run(argv, timeout=90)
     after = s04.snapshot()
     if before != after:
-        # Report fixed resource classes only, never Config values, file paths,
-        # IPFW rules, executable argv, PID values or untrusted log bytes.
-        classes = []
-        for name in ("config", "engine", "process"):
-            if before[name] != after[name]:
-                classes.append(name)
-        for name in ("rules", "tables", "ipfw_module", "ipdivert_module"):
-            if before["kernel"][name] != after["kernel"][name]:
-                classes.append("kernel_" + name)
-        original, current = before["tree"], after["tree"]
-        if original != current:
-            keys = set(original) | set(current)
-            for category, prefix in (
-                ("pkgdb", "/var/db/pkg/"),
-                ("shared", "/var/db/zapret2/"),
-                ("active", "/usr/local/etc/zapret2/runtime-v2/"),
-                ("setup", "/var/db/zapret2-restyle/"),
-                ("backend", str(BACKEND) + "/"),
-                ("pid", "/var/run/"),
-            ):
-                changed = [k for k in keys if k.startswith(prefix)
-                           and original.get(k) != current.get(k)]
-                if changed:
-                    added = sum(k not in original for k in changed)
-                    removed = sum(k not in current for k in changed)
-                    fields = set()
-                    for k in changed:
-                        a, b = original.get(k), current.get(k)
-                        if isinstance(a, list) and isinstance(b, list):
-                            fields.update(n for i, n in ((2, "inode"), (7, "size"),
-                                                          (8, "mtime"), (9, "content"))
-                                          if i < len(a) and i < len(b) and a[i] != b[i])
-                        else:
-                            fields.add("type")
-                    classes.append("tree_" + category + "_" + str(len(changed)) +
-                                   "_new" + str(added) + "_del" + str(removed) +
-                                   "_" + "-".join(sorted(fields)))
-            if not any(s.startswith("tree_") for s in classes):
-                classes.append("tree_root")
         raise s04.Refusal("S05A_JSON_STATUS_STATE_DRIFT_" + label + "__" +
-                          "_".join(classes[:12]))
+                          "_".join(state_drift_classes(before, after)[:12]))
     try:
         row = json.loads(p.stdout)
     except ValueError:
@@ -281,6 +291,20 @@ def hot():
     return rows
 
 
+def drift_self_test():
+    before = {"config": "a", "engine": "b", "process": [],
+              "kernel": dict.fromkeys(("rules", "tables", "ipfw_module", "ipdivert_module"), 0),
+              "tree": {"/var/db/pkg": [0] * 10}}
+    after = {**before, "config": "secret-config", "kernel": {**before["kernel"], "rules": 1},
+             "tree": {"/var/db/pkg": [0] * 8 + [1, 0],
+                      str(BACKEND) + "/private-name": "secret-bytes"}}
+    s04.need(state_drift_classes(before, before) == [] and
+             state_drift_classes(before, after) == [
+                 "config", "kernel_rules", "tree_pkgdb_1_new0_del0_mtime",
+                 "tree_backend_1_new1_del0_type"],
+             "S05A_DRIFT_DIAGNOSTIC_WRONG")
+
+
 def main(argv):
     if argv == ["--self-test"]:
         # AST-based safety: do not reject string literals in this self-test.
@@ -291,6 +315,7 @@ def main(argv):
                          node.func.attr in forbidden
                          for node in ast.walk(tree)),
                  "S05A_NATIVE_TEST_MUTATING")
+        drift_self_test()
         print("PASS_S05A_NATIVE_SOURCE_GATE")
         return 0
     if len(argv) != 1 or argv[0] not in ("cold", "hot"):
