@@ -320,7 +320,7 @@ def verify_prepared_recovery_pin(*, record: dict, parent: Path,
 
 
 def _verify_original_pinned_root(*, detail: dict, binding: dict,
-                                parent: Path, owner_uid: int) -> None:
+                                parent: Path, owner_uid: int) -> bytes:
     """Read exact original durable pin; NOT live runtime authorization."""
     from neutral_root_refs import _read_file
     from shared_apply_operation import _validate_manifest_binding
@@ -351,6 +351,7 @@ def _verify_original_pinned_root(*, detail: dict, binding: dict,
         _verify_dir_still(pfd, generation, wfd)
         if _identity(parent.lstat()) != _identity(os.fstat(pfd)):
             raise RootStageRefused("RECOVERY_BOUND_PARENT_CHANGED")
+        return root
     except (SharedOperationError, SharedBundleError, SealedRefsRefused,
             OSError, ValueError, TypeError, KeyError):
         raise RootStageRefused("RECOVERY_BOUND_PIN_REFUSED") from None

@@ -146,7 +146,7 @@ def _attest_saved_wan(*, generation: str, effective: EffectiveSnapshot,
         if (type(before) is not dict or
                 before.get("phase") != "prepared" or
                 type(before.get("manifest")) is not dict or
-                before["manifest"].get("schema") != 2 or
+                before["manifest"].get("schema") not in (1, 2) or
                 before.get("detail", {}).get("id") != generation or
                 before["detail"].get("page") not in ("voice", "strategies")):
             raise SavedWanPreimageRefused("ORIGINAL_BOUND_PREPARED_REQUIRED")

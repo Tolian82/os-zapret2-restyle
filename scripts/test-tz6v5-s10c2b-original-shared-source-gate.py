@@ -525,6 +525,8 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 tree = ET.parse(xml)
                 ET.SubElement(tree.find("./OPNsense/Zapret/general"),
                               "enabled").text = "1"
+                strategy = ET.SubElement(tree.find("./OPNsense/Zapret"), "strategy")
+                ET.SubElement(strategy, "trafficargs").text = STRATEGY
                 tree.write(xml, encoding="utf-8")
                 self.original_plan(fixture)
                 digest = "d" * 64
@@ -565,6 +567,28 @@ class OriginalFd9SourceGate(unittest.TestCase):
                                      hashlib.sha256(root.read_bytes()).hexdigest())
                     self.assertEqual(bound["manifest"]["root_sha256"],
                                      receipt.root_sha256)
+                    pinned = dict(detail=detail, binding=bound["manifest"],
+                                  parent=fixture.work.parent, sources=BACKEND,
+                                  owner_uid=os.geteuid(), engine_version="v1.0.7")
+                    old = gate._read_pinned_effective(**pinned)
+                    self.assertEqual(old, (source.effective, True))
+                    self.assertEqual(gate.plan(old[0], source.effective).kind,
+                                     "NO_CHANGE")
+                    with self.assertRaises(OriginalSourceGateRefused):
+                        gate._read_pinned_effective(**dict(
+                            pinned, engine_version="v99.0.1"))
+                    # traffic.input is outside the original seal; the
+                    # old semantic read must still reject source drift.
+                    traffic = fixture.work / "traffic.input"
+                    original_traffic = traffic.read_bytes()
+                    try:
+                        traffic.write_bytes(b"--filter-tcp=1234\n")
+                        with self.assertRaisesRegex(OriginalSourceGateRefused,
+                                                    "PINNED_STRATEGY_MISMATCH"):
+                            gate._read_pinned_effective(**pinned)
+                    finally:
+                        traffic.write_bytes(original_traffic)
+                    self.assertEqual(gate._read_pinned_effective(**pinned), old)
                     self.assertEqual(receipt.authorization, "NONE")
                     self.assertFalse(receipt.physical_transition_allowed)
                     with self.assertRaises(OriginalSourceGateRefused):
