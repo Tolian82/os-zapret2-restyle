@@ -357,8 +357,14 @@ class OriginalFd9SourceGate(unittest.TestCase):
                              sealed=False, engine_version=None):
                     calls.append((operation, payload, digest,
                                   sealed, engine_version))
-                    return qualify_source_to_managed(**dict(
-                        kw, sealed=sealed, engine_version=engine_version))
+                    # The outer native-entry check must see synthetic
+                    # FreeBSD uid=0. This disposable P2e tree is actually
+                    # owned by the CI user: restore THAT real owner while
+                    # the genuine Auto promoter reattests its file inodes.
+                    with patch.object(gate.os, "geteuid",
+                                      return_value=kw["owner_uid"]):
+                        return qualify_source_to_managed(**dict(
+                            kw, sealed=sealed, engine_version=engine_version))
 
                 args = (fixture.work.name, wire,
                         kw["candidate_sha256"] if mode == "auto" else None)
