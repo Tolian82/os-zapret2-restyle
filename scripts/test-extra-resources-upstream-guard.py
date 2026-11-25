@@ -507,7 +507,7 @@ class ExactReleaseSwitch(unittest.TestCase):
 
     def test_same_original_release_marker_bytes_are_in_existing_backup(self):
         marker = self.state.parent / "runtime.release"
-        original = b"v1.0.4\\n"
+        original = b"v1.0.4\n"
         marker.write_bytes(original)
         guard.snapshot()
         guard.snapshot_untracked()
@@ -518,23 +518,23 @@ class ExactReleaseSwitch(unittest.TestCase):
         self.assertEqual(evidence["state"], "present")
         self.assertEqual(guard._verified_original_release_preimage(evidence), original)
         self.assertEqual(evidence["sha256"], guard.sha256(original))
-        marker.write_bytes(b"v1.0.3\\n")  # Future new release does not rewrite saved old evidence.
+        marker.write_bytes(b"v1.0.3\n")  # Future new release does not rewrite saved old evidence.
         guard.verify_backup_attestation(False)
         self.assertEqual(guard._verified_original_release_preimage(
             json.loads(guard.ATTESTATION.read_text())["original_release_marker"]), original)
 
     def test_original_release_preimage_tamper_refuses_without_touching_live(self):
         marker = self.state.parent / "runtime.release"
-        marker.write_bytes(b"v1.0.4\\n")
+        marker.write_bytes(b"v1.0.4\n")
         guard.snapshot()
         guard.snapshot_untracked()
         guard.create_backup_attestation(False)
         saved = json.loads(guard.ATTESTATION.read_text())
-        saved["original_release_marker"]["raw"] = "v1.0.3\\n"
+        saved["original_release_marker"]["raw"] = "v1.0.3\n"
         guard.ATTESTATION.write_text(json.dumps(saved))
         with self.assertRaisesRegex(guard.TransactionError, "preimage digest mismatch"):
             guard.verify_backup_attestation(False)
-        self.assertEqual(marker.read_bytes(), b"v1.0.4\\n")
+        self.assertEqual(marker.read_bytes(), b"v1.0.4\n")
 
     def test_original_release_preimage_refuses_link_and_invalid_bytes(self):
         marker = self.state.parent / "runtime.release"
@@ -545,7 +545,7 @@ class ExactReleaseSwitch(unittest.TestCase):
             guard.create_backup_attestation(False)
         self.assertFalse(guard.ATTESTATION.exists())
         marker.unlink()
-        marker.write_bytes(b"v1.0.4\\nforged\\n")
+        marker.write_bytes(b"v1.0.4\nforged\n")
         with self.assertRaises(guard.TransactionError):
             guard.create_backup_attestation(False)
         self.assertFalse(guard.ATTESTATION.exists())
