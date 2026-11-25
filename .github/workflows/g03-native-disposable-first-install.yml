@@ -65,6 +65,10 @@ jobs:
       - name: Run setup/frontend/old-rollback regressions
         run: |
           set -eu
+          # Git mode is an installed runtime contract: "sh -n" alone missed
+          # the original 100755 -> 100644 regression before native configd.
+          test -x src/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh
+          test -x scripts/test-setup-runtime-transaction.sh
           sh -n src/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh
           sh -n src/opnsense/scripts/OPNsense/Zapret/setup.sh
           sh -n scripts/test-g03-first-install.sh
