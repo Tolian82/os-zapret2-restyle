@@ -650,5 +650,170 @@ class OriginalFd9SourceGate(unittest.TestCase):
         self.assertIn(b"--port=19899", (fixture.release / "dvtws.args").read_bytes())
 
 
+    def test_s10_running_enabled_off_stop_overrides_legacy_restart_and_pinned_no_change(self):
+        """Injected old running process: identical S08d can NEVER suppress STOP.
+
+        Actual P2e source/native/effective data is used, but the disabled
+        bound candidate, previous pinned snapshot and physical old-owner
+        observation are injected: this is NOT installed FreeBSD proof.
+        """
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from neutral_schema3_previous_physical import CompletePriorPreimage
+
+        fixture, kw = self.original(mode="list", voice=True)
+        import xml.etree.ElementTree as ET
+        xml = fixture.work / "candidate.xml"
+        tree = ET.parse(xml)
+        ET.SubElement(tree.find("./OPNsense/Zapret/general"), "enabled").text = "1"
+        strategy = ET.SubElement(tree.find("./OPNsense/Zapret"), "strategy")
+        ET.SubElement(strategy, "trafficargs").text = STRATEGY
+        tree.write(xml, encoding="utf-8")
+        self.original_plan(fixture)
+        create_seal(fixture.work, owner=os.geteuid())
+        genuine = qualify_source_to_managed(
+            **dict(kw, sealed=True, engine_version="v1.0.7"))
+        self.assertEqual(genuine.status, "ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY")
+        self.assertIs(genuine.requested_enabled, True)
+        disabled = replace(genuine, requested_enabled=False)
+        old_id = "e" * 32 if genuine.generation != "e" * 32 else "f" * 32
+        old = {"id": old_id, "candidate": "a" * 64}
+        detail = {"id": genuine.generation, "base": old["candidate"]}
+        manifest = {"root_sha256": "4" * 64,
+                    "seal_sha256": genuine.original_seal_sha256}
+        physical = CompletePriorPreimage(
+            genuine.generation, manifest["root_sha256"], old_id,
+            "5" * 64, "5" * 64, old["candidate"], None,
+            5432, "native-child-birth", 6543, "native-monitor-birth",
+            "6" * 64)
+        original_files = {
+            file.name: file.read_bytes()
+            for file in (fixture.work / "candidate.xml",
+                         fixture.work / "bundle-seal.json")}
+        for pinned in (False, True):
+            with self.subTest(old_pinned=pinned), ExitStack() as stack:
+                before = {"phase": "prepared", "detail": detail,
+                          "previous": old, "manifest": manifest}
+                if pinned:
+                    before["previous_manifest"] = {"root_sha256": "8" * 64}
+                store = Mock(read=Mock(return_value=before))
+                stack.enter_context(patch(
+                    "shared_apply_operation.SharedApplyOperation",
+                    return_value=store))
+                stack.enter_context(patch(
+                    "voice_ipfw_adapter.require_lifecycle_lock"))
+                stack.enter_context(patch.object(gate.sys, "platform", "freebsd"))
+                stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+                engine = stack.enter_context(patch.object(
+                    gate, "_s10_native_bound_engine_readback",
+                    return_value={"engine_version": "v1.0.7"}))
+                def pinned_read(*, detail, **unused):
+                    return genuine.effective, detail["id"] != genuine.generation
+                read = stack.enter_context(patch.object(
+                    gate, "_read_pinned_effective", side_effect=pinned_read))
+                native = stack.enter_context(patch(
+                    "neutral_schema3_previous_physical.attest_previous_physical_under_fd9",
+                    return_value=physical))
+                result = gate.native_plan_original_prepared_fd9(disabled)
+                self.assertEqual(result.lifecycle_proposal, "STOP")
+                self.assertEqual(result.decision.kind,
+                                 "NO_CHANGE" if pinned else "RESTART_REQUIRED")
+                self.assertEqual(result.previous_generation, old_id)
+                self.assertEqual(result.candidate_root_sha256,
+                                 manifest["root_sha256"])
+                self.assertIs(result.previous_physical, physical)
+                self.assertEqual(result.authorization, "NONE")
+                self.assertFalse(result.physical_transition_allowed)
+                self.assertFalse(result.promotion_allowed)
+                self.assertTrue(result.final_original_fd9_reattest_required)
+                self.assertGreaterEqual(read.call_count, 2)
+                self.assertEqual(engine.call_count, 2)
+                native.assert_called_once_with(
+                    generation=genuine.generation,
+                    native=genuine.native,
+                    effective=genuine.effective, enabled=False)
+                self.assertEqual(store.read(), before)
+        self.assertEqual({
+            file.name: file.read_bytes()
+            for file in (fixture.work / "candidate.xml",
+                         fixture.work / "bundle-seal.json")}, original_files)
+
+    def test_s10_running_off_refuses_incomplete_owner_and_active_wan_forgery(self):
+        """Synthetic seams refuse before any lifecycle dispatcher/action."""
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from neutral_schema3_previous_physical import (
+            CompletePriorPreimage, PreviousPhysicalRefused)
+        from neutral_effective_diff import EffectiveSnapshot
+        from neutral_native_parity import NativeParity
+        # Strict exact-type check runs before any filesystem or physical probe.
+        malformed = gate.SourceGateReceipt(
+            mode="list", candidate_input_sha256="a" * 64,
+            managed_locators=(),
+            status="ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY",
+            generation="d" * 32, original_seal_sha256="e" * 64,
+            native=NativeParity(
+                "list", "a" * 64, "a" * 64, "ORIGINAL_NONAUTO_NO_SOURCE_MAP",
+                0, 1, 0, (), (), "a" * 64, 19000, 19099),
+            effective=EffectiveSnapshot("a" * 64, "a" * 64, (), (), 0),
+            requested_enabled="0")
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+             patch.object(gate.sys, "platform", "freebsd"), \
+             patch.object(gate.os, "geteuid", return_value=0), \
+             patch.object(gate, "_s10_native_bound_engine_readback") as engine, \
+             self.assertRaises(OriginalSourceGateRefused):
+            gate.native_plan_original_prepared_fd9(malformed)
+        engine.assert_not_called()
+
+        # No running-owner physical proof means no STOP proposal. The
+        # original stopped/cold reader is NOT a fallback for this route.
+        genuine = gate.SourceGateReceipt(
+            mode="list", candidate_input_sha256="a" * 64,
+            managed_locators=(),
+            status="ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY",
+            generation="d" * 32, original_seal_sha256="e" * 64,
+            native=NativeParity(
+                "list", "a" * 64, "a" * 64, "ORIGINAL_NONAUTO_NO_SOURCE_MAP",
+                0, 1, 0, (), (), "a" * 64, 19000, 19099),
+            effective=EffectiveSnapshot("a" * 64, "a" * 64, (), (), 0),
+            requested_enabled=False)
+        previous = {"id": "f" * 32, "candidate": "b" * 64}
+        before = {"phase": "prepared",
+                  "detail": {"id": genuine.generation, "base": "b" * 64},
+                  "previous": previous,
+                  "manifest": {"root_sha256": "c" * 64,
+                               "seal_sha256": genuine.original_seal_sha256}}
+        def pinned_read(*, detail, **unused):
+            return genuine.effective, False
+        for case in ("old-owner-failed", "unexpected-wan", "journal-raced"):
+            with self.subTest(case=case), ExitStack() as stack:
+                store = Mock(read=Mock(return_value=before))
+                if case == "journal-raced":
+                    store.read.side_effect = [before, {**before, "phase": "restored"}]
+                stack.enter_context(patch(
+                    "shared_apply_operation.SharedApplyOperation", return_value=store))
+                stack.enter_context(patch(
+                    "voice_ipfw_adapter.require_lifecycle_lock"))
+                stack.enter_context(patch.object(gate.sys, "platform", "freebsd"))
+                stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+                stack.enter_context(patch.object(
+                    gate, "_s10_native_bound_engine_readback",
+                    return_value={"engine_version": "v1.0.7"}))
+                stack.enter_context(patch.object(
+                    gate, "_read_pinned_effective", side_effect=pinned_read))
+                witness = CompletePriorPreimage(
+                    genuine.generation, "c" * 64, previous["id"],
+                    "d" * 64, "d" * 64, previous["candidate"],
+                    "tun0", 1, "birth", 2, "birth", "e" * 64)
+                native = stack.enter_context(patch(
+                    "neutral_schema3_previous_physical.attest_previous_physical_under_fd9",
+                    side_effect=(PreviousPhysicalRefused("unsafe")
+                                 if case == "old-owner-failed" else None),
+                    return_value=witness))
+                with self.assertRaises(OriginalSourceGateRefused):
+                    gate.native_plan_original_prepared_fd9(genuine)
+                if case == "journal-raced":
+                    native.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

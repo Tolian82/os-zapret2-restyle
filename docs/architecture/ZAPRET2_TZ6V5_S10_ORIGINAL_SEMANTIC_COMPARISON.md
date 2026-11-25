@@ -1,3 +1,13 @@
+## Candidate v0.6.5_230 — verified RUNNING owner, Enabled OFF → STOP proposal only
+
+Accepted main v0.6.5_229 / `7b44abdd17a701df875da74b9bd2ac1472e7d0b7`, [PR #1350](https://github.com/Tolian82/os-zapret2-restyle/pull/1350), exact-head CI, FreeBSD policy, source-only native archive build and postmerge CI all SUCCESS. Candidate `v0.6.5_230` is **not yet accepted**. It does not change the engine, GUI, launcher or runtime.
+
+The **same** original `native_plan_original_prepared_fd9` now accepts exact boolean `source.requested_enabled`, reads current and previous pinned S08d, reuses the existing original fully attested *RUNNING* previous process/IPFW/full active tree/PID-birth/Config double read. Enabled OFF passes that same native check with `verified_wan_device=None` (no active WAN prerequisite), rejects any forged nonempty OFF WAN receipt and produces separate `lifecycle_proposal="STOP"` regardless of whether the strictly analytical original S08d classification is NO_CHANGE, SAVE_ONLY or RESTART_REQUIRED. For Enabled ON, the lifecycle proposal is mapped from the unmodified S08d decision. This is **not** authorization or a Stop call. Previous pinned owner must be enabled to count as genuine RUNNING; an unpinned legacy owner can never grant reload/no-op. Full original FD9, engine, root, Config and WAL rechecks remain mandatory. A failed running-owner attestation refuses: it never silently becomes a quiescent/foreign/cold state.
+
+New portable tests reuse an actually qualified original P2e/Voice/List source but **inject** a proposed disabled pinned root, prior owner process and source readbacks; they do not claim genuine installed ON→OFF native execution. Negative tests exercise non-boolean enabled, absent prior native process, fake active WAN on OFF and journal race; original genuine native G03 RUNNING ON behavior remains unchanged. Next separately gated tasks: physically attested committed STOPPED+OFF SAVE_ONLY, STOPPED+ON ready START, true pristine first-install and INCOMPLETE/FOREIGN REFUSE; single original FD9 physical implementation/rollback and Found CAS. Do not introduce a second planner, journal or physical executor. Preserve WAN-only no-engine Save.
+
+---
+
 # S10 grouped task 2 — original pinned S08d and genuine prior-owner comparison
 
 Accepted main v0.6.5_227, `162df156c67e83262d6c6d44c55ca95c9d6764fb` (PR #1348, all seven workflows SUCCESS). Candidate v0.6.5_228. **Not yet qualified.** The prepared semantic source is now based on the accepted identical tree; exact-head source/native checks required.

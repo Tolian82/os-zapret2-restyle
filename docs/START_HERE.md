@@ -1,3 +1,9 @@
+## 25 November 2026 — S10 RUNNING→OFF semantic STOP proposal candidate
+
+**Accepted main:** `v0.6.5_229` / `7b44abdd17a701df875da74b9bd2ac1472e7d0b7`, [PR #1350](https://github.com/Tolian82/os-zapret2-restyle/pull/1350), exact-head/postmerge CI SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=230`, `v0.6.5_230`, prospective CI-only `os-zapret2-restyle-0.6.5_230.pkg`. Same original FD9 RUNNING owner/Config/root/PID/IPFW attestation; Enabled OFF always proposes STOP independently of pure S08d, without an active WAN requirement; all actions remain nonauthorizing. See [S10 comparison contract](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md) and [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Portable previous owner inputs for new OFF case are injected, not native acceptance. Exact-head CI still needed; no physical Stop or owner package; S10 OPEN, S11 blocked.
+
+---
+
 ## 25 November 2026 — S10 quiescent All/List/Auto/OFF witness candidate
 
 **Accepted main:** `v0.6.5_228` / `8c899b6ba19f975673d981a4f2663b2d525202cd`; postmerge Stage 5 [#45677766616](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45677766616) **5/5 SUCCESS**. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=229`, `v0.6.5_229`, prospective CI-only `os-zapret2-restyle-0.6.5_229.pkg`; read-only schema1 All/List/Auto OFF and original stopped/cold preimage extension; no S11 physical action, WAN-only first-install preservation, no new writer/journal/lock. See [quiescent contract](architecture/ZAPRET2_TZ6V5_S10B2B2B3B2B_QUIESCENT_PREIMAGE.md) and [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Exact-head CI/native qualification is pending; no owner package. S10 OPEN, S11 blocked.
