@@ -205,6 +205,23 @@ if [ "${1:-}" = verify-evidence ]; then
     grep -Fqx '{"schema":1,"mock":"original backups"}' "${TEST_ROLLBACK_DIR}/backup-attestation.json" || exit 70
     exit 0
 fi
+# Legacy attestation mock mirrors the old schema-1/2 evidence reader.
+# Exact schema-3 bytes and absence are verified with the real Python guard
+# in scripts/test-upstream-interruption-recovery.py, never mocked here.
+if [ "${1:-}" = export-original-release ] ||
+   [ "${1:-}" = verify-prepared-original-release ]; then
+    [ "$#" -eq 4 ] && [ "$2" = 1 ] || exit 70
+    grep -Fqx '{"schema":1,"mock":"original backups"}' \
+        "${TEST_ROLLBACK_DIR}/backup-attestation.json" || exit 70
+    if [ "$1" = verify-prepared-original-release ]; then
+        [ -f "${TEST_ACTIVE_RELEASE_FILE}" ] &&
+        [ ! -L "${TEST_ACTIVE_RELEASE_FILE}" ] &&
+        [ "$(cat "${TEST_ACTIVE_RELEASE_FILE}")" = "$3" ] || exit 70
+    else
+        printf 'LEGACY\n'
+    fi
+    exit 0
+fi
 # Prepared cleanup requires live-resource verification as well as a saved
 # backup verification, even though a mutating checkout may remove live files.
 if [ "${1:-}" = verify ] && [ "${TEST_EXTRA_GUARD_VERIFY_FAIL}" = 1 ]; then
@@ -278,6 +295,7 @@ run_setup_action()
     EXTRA_PYTHON="$(command -v sh)" \
     EXTRA_GUARD="${EXTRA_GUARD_MOCK}" \
     TEST_ROLLBACK_DIR="${ROLLBACK_DIR}" \
+    TEST_ACTIVE_RELEASE_FILE="${ACTIVE_RELEASE_FILE}" \
     TEST_EXTRA_GUARD_FAIL="${EXTRA_GUARD_FAIL}" \
     TEST_EXTRA_GUARD_VERIFY_FAIL="${EXTRA_GUARD_VERIFY_FAIL}" \
     TEST_EXTRA_GUARD_EVIDENCE_FAIL="${EXTRA_GUARD_EVIDENCE_FAIL}" \

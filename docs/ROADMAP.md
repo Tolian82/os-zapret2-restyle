@@ -1,8 +1,8 @@
-## Current priority — TZ6v5 S10c2b3e sealed upstream marker preimage → original writer → S11
+## Current priority — TZ6v5 S10c2b3f original upstream marker rollback → build binding
 
-**Accepted main `v0.6.5_218` / e4ff3581** via [PR #1339](https://github.com/Tolian82/os-zapret2-restyle/pull/1339), exact-head and postmerge CI PASS. S10 OPEN/NO-GO, public package _117.
+**Accepted main `v0.6.5_219` / cc654071** via [PR #1340](https://github.com/Tolian82/os-zapret2-restyle/pull/1340), exact-head and postmerge CI PASS; S10 OPEN/NO-GO, public package _117.
 
-**Next:** _219 seals original runtime.release exact bytes/absence inside existing original backup-attestation schema3 before PREPARED, reusing one original FD9, no second journal/writer. Then integrate original setup writer's post-build binding and exact old-marker recovery in the original transaction. Found/P1/physical executor remain later. [S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+**Next:** candidate _220 consumes the exact original marker bytes or absence from existing schema3 preimage for the existing single setup writer's automatic rollback and stopped-only cold recovery; PREPARED requires unchanged original bytes. Legacy backups restore only unbound tag. Later connect original post-make build evidence and first-install completion; P1/Found/physical Apply remain separate ordered gates. [S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
 
 
 ---

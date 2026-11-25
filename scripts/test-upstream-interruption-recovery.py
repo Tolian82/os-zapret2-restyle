@@ -92,6 +92,7 @@ class UpstreamInterrupted(unittest.TestCase):
             "files": {"lua/managed.lua": digest(self.managed)},
         }))
         (self.state / "runtime.release").write_text("v1.0.4\n")
+        self.expected_original_marker = b"v1.0.4\n"
         self.service_state = self.root / "service-state"
         self.service_state.write_text("running\n")
         self.originally_running = True
@@ -275,7 +276,11 @@ fi
             self.assertEqual((self.runtime / name).read_bytes(), raw)
         self.assertEqual((self.runtime / "binaries/my/dvtws2").read_bytes(),
                          self.old_binary)
-        self.assertEqual((self.state / "runtime.release").read_text(), "v1.0.4\n")
+        marker = self.state / "runtime.release"
+        if self.expected_original_marker is None:
+            self.assertFalse(marker.exists() or marker.is_symlink())
+        else:
+            self.assertEqual(marker.read_bytes(), self.expected_original_marker)
         self.assertEqual(self.service_state.read_text(),
                          "running\n" if originally_running else "stopped\n")
         self.assertFalse((self.state / "runtime-rollback").exists())
@@ -297,6 +302,57 @@ fi
         self.assert_original()
         self.assertIn("RECOVERY_FD9", self.log.read_text())
         self.assertIn("START", self.log.read_text())
+
+    def test_original_bound_record_is_restored_byte_for_byte_after_hard_cut(self) -> None:
+        # Existing original record is an exact preimage, not rebuilt after
+        # interruption from the restored tag alone.
+        self.expected_original_marker = (
+            f"v1.0.4\ncommit={self.old_sha}\n"
+            f"engine_sha256={digest(self.old_binary)}\n").encode("ascii")
+        marker = self.state / "runtime.release"
+        marker.write_bytes(self.expected_original_marker)
+        self.cut("checkout")
+        sealed = json.loads((self.state / "runtime-rollback/backup-attestation.json").read_text())
+        self.assertEqual(sealed["schema"], 3)
+        self.assertEqual(sealed["original_release_marker"]["raw"],
+                         self.expected_original_marker.decode("ascii"))
+        self.recover("checkout", True)
+        self.assert_original()
+
+    def test_original_bound_record_survives_failed_candidate_activation(self) -> None:
+        self.expected_original_marker = (
+            f"v1.0.4\ncommit={self.old_sha}\n"
+            f"engine_sha256={digest(self.old_binary)}\n").encode("ascii")
+        marker = self.state / "runtime.release"
+        marker.write_bytes(self.expected_original_marker)
+        self.cut("start")
+        self.assertEqual(marker.read_text(), "v1.0.3\n")
+        self.recover("start", False)
+        self.service_state.write_text("stopped\n")
+        self.recover("start", True)
+        self.assert_original()
+
+    def test_original_absent_marker_remains_absent_after_failed_target(self) -> None:
+        marker = self.state / "runtime.release"
+        marker.unlink()
+        self.expected_original_marker = None
+        self.cut("start")
+        self.assertTrue(marker.is_file())
+        self.assertEqual(marker.read_text(), "v1.0.3\n")
+        self.service_state.write_text("stopped\n")
+        self.recover("start", True)
+        self.assert_original()
+
+    def test_modified_sealed_original_marker_refuses_before_runtime_restore(self) -> None:
+        self.cut("checkout")
+        saved = self.state / "runtime-rollback/backup-attestation.json"
+        data = json.loads(saved.read_text())
+        data["original_release_marker"]["raw"] = "v1.0.2\n"
+        saved.write_text(json.dumps(data))
+        before_head = self.git_out("rev-parse", "HEAD")
+        self.recover("checkout", False)
+        self.assertEqual(self.git_out("rev-parse", "HEAD"), before_head)
+        self.assertTrue((self.state / "runtime-rollback/checkpoint").is_file())
 
     def test_stopped_original_stays_stopped_after_prune_cut(self) -> None:
         self.service_state.write_text("stopped\n")

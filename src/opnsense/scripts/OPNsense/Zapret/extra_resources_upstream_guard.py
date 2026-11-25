@@ -323,6 +323,61 @@ def _verified_original_release_preimage(evidence: object) -> bytes | None:
     return raw
 
 
+
+def _original_release_evidence_frame(expected_binaries: bool,
+                                     previous_release: str, previous_commit: str) -> bytes:
+    """Pure read of the EXISTING attested rollback; no live marker write.
+
+    The original setup shell alone interprets this framed byte stream and
+    performs its original atomic marker operation under inherited FD9.
+    """
+    if (not re.fullmatch(r"v[0-9]+(?:\.[0-9]+)+", previous_release)
+            or not re.fullmatch(r"[0-9a-f]{40}", previous_commit)):
+        raise TransactionError("original release checkpoint identity invalid")
+    verify_backup_attestation(expected_binaries)
+    evidence = json.loads(ATTESTATION.read_text(encoding="utf-8"))
+    if evidence["schema"] < 3:
+        # Read-only legacy compatibility. Never infer compiled provenance.
+        return b"LEGACY\n"
+    raw = _verified_original_release_preimage(evidence["original_release_marker"])
+    if raw is None:
+        return b"ABSENT\n"
+    release, commit, digest = parse_original_setup_release_record(raw)
+    if release != previous_release or (commit is not None and commit != previous_commit):
+        raise TransactionError("sealed original release disagrees with original checkpoint")
+    if digest is not None:
+        files = evidence["binaries"].get("files", {})
+        if files.get("dvtws2") != digest:
+            raise TransactionError("sealed original engine digest differs from backed-up binary")
+    return b"PRESENT\n" + raw
+
+
+def verify_prepared_original_release(expected_binaries: bool,
+                                     previous_release: str, previous_commit: str) -> None:
+    """PREPARED may be discarded only if the original marker is still exact."""
+    frame = _original_release_evidence_frame(
+        expected_binaries, previous_release, previous_commit)
+    marker = STATE.parent / "runtime.release"
+    if frame == b"ABSENT\n":
+        try:
+            marker.lstat()
+        except FileNotFoundError:
+            return
+        raise TransactionError("prepared original release unexpectedly appeared")
+    try:
+        raw, _ = _read_original_release_marker_bytes(marker, os.geteuid())
+    except (OSError, ValueError) as exc:
+        raise TransactionError("prepared original release marker is unsafe or missing") from exc
+    if frame.startswith(b"PRESENT\n"):
+        if raw != frame[len(b"PRESENT\n"):]:
+            raise TransactionError("prepared original release changed before mutation")
+    elif frame == b"LEGACY\n":
+        if raw != (previous_release + "\n").encode("ascii"):
+            raise TransactionError("prepared legacy release changed before mutation")
+    else:
+        raise TransactionError("unknown sealed original release frame")
+
+
 def create_backup_attestation(expected_binaries: bool) -> None:
     """Commit saved binary/manifest identity before a prepared checkpoint."""
     if BACKUP_ROOT.is_symlink() or not BACKUP_ROOT.is_dir():
@@ -840,7 +895,7 @@ def preflight_exact(ref: str = "FETCH_HEAD") -> None:
     preflight_switch(ref)
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence", "bind-target", "verify-target", "inspect-target", "inspect-checkout"}:
+    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence", "export-original-release", "verify-prepared-original-release", "bind-target", "verify-target", "inspect-target", "inspect-checkout"}:
         print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|preflight-exact [COMMIT]|verify-exact|snapshot|verify|verify-snapshot|restore|snapshot-evidence 0|1|verify-evidence 0|1}", file=sys.stderr)
         return 64
     try:
@@ -881,6 +936,15 @@ def main(argv: list[str]) -> int:
             if len(argv) != 2:
                 return 64
             verify_exact()
+        elif argv[1] in {"export-original-release", "verify-prepared-original-release"}:
+            if (len(argv) != 5 or argv[2] not in {"0", "1"}):
+                return 64
+            if argv[1] == "export-original-release":
+                # Never print the generic PASS banner on a binary payload.
+                sys.stdout.buffer.write(_original_release_evidence_frame(
+                    argv[2] == "1", argv[3], argv[4]))
+                return 0
+            verify_prepared_original_release(argv[2] == "1", argv[3], argv[4])
         elif argv[1] in {"snapshot-evidence", "verify-evidence"}:
             if len(argv) != 3 or argv[2] not in {"0", "1"}:
                 return 64
