@@ -95,12 +95,16 @@ class InstalledEngineObservation(unittest.TestCase):
                record + b"extra\n",
                record.replace(b"commit=", b"commit=0"),
                record.replace(b"engine_sha256=", b"engine_sha256=0"),
-               record.replace(b"v1.0.7", b"v1.0.8"),
                b"v1.0.7\nengine_sha256=" + b"a"*64 + b"\n")
         for raw in bad:
             with self.subTest(raw=raw[:24]):
                 with self.assertRaises(guard.TransactionError):
                     guard.parse_original_setup_release_record(raw)
+        # A forged *well-formed* version is rejected by the consumer,
+        # not by the record's grammar alone.
+        self.marker.write_bytes(record.replace(b"v1.0.7", b"v1.0.8"))
+        with self.assertRaises(guard.TransactionError):
+            self.observe()
         self.marker.write_bytes(record)
         self.engine.write_bytes(self.binary + b"X")
         with self.assertRaises(guard.TransactionError):
