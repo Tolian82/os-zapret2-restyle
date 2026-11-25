@@ -1,3 +1,9 @@
+## 25 November 2026 — S10 original ordinary PREPARED root binding candidate
+
+**Accepted main** `v0.6.5_225` / `6edc10205b450aa4c5d6613cf9bc6ab6e2eda2a9`, [PR #1346](https://github.com/Tolian82/os-zapret2-restyle/pull/1346), [postmerge CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45667203188) SUCCESS. **Candidate identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=226`, `v0.6.5_226`, prospective CI-only `os-zapret2-restyle-0.6.5_226.pkg`. **Scope:** [original ordinary PREPARED root binding](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_PREPARED_SOURCE_BINDING.md) reuses authentic installed bound engine, real original PHP Config digest+Enabled, original source, existing sibling writer and existing PREPARED WAL bind+readback. Genuine installed G03 exercise of binding and recovery without active-state mutation; pending exact-head CI. Found must not bypass its own WAL; ordinary Apply is not switched until semantic decision and physical rollback are qualified. [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) OPEN; S11 blocked; prospective CI-only package, no public release or owner-router action.
+
+---
+
 ## 25 November 2026 — CURRENT S10c2b3j: original sealed S08d engine input
 
 **Accepted `main v0.6.5_224`:** `cb5a3f47dbc512374223ac75afefef8fe56c2c17` from [PR #1345](https://github.com/Tolian82/os-zapret2-restyle/pull/1345). [Postmerge CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45662835132) SUCCESS and [postmerge Stage5](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45662835271) **5/5 SUCCESS**, same package SHA, disposable clean/Voice RUNNING/reboot/no-git. No owner router or public package.

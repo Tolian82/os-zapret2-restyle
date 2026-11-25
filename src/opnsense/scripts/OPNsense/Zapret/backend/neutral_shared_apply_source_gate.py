@@ -60,6 +60,7 @@ class SourceGateReceipt:
     native_candidate_sha256: str | None = None
     native: NativeParity | None = None
     effective: EffectiveSnapshot | None = None
+    requested_enabled: bool | None = None
 
 
 def _fixed_unclassified_reason(error: BaseException) -> str:
@@ -422,7 +423,8 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
         original_seal_sha256=(hashlib.sha256(original_seal).hexdigest()
                               if original_seal is not None else ""),
         generation=work.name, native_candidate_sha256=candidate_sha256,
-        native=native if effective is not None else None, effective=effective)
+        native=native if effective is not None else None, effective=effective,
+        requested_enabled=saved.enabled)
 
 
 def _owned_under_original_p2(work: Path, uid: int, *, mode: bytes) -> dict[str, bytes] | None:
@@ -572,6 +574,135 @@ def native_original_bound_effective_fd9(
     require_lifecycle_lock()
     return source
 
+
+
+
+def _bind_original_prepared_source(*, store, parent: Path, before: dict,
+                                   source: SourceGateReceipt,
+                                   read_config, config_receipt: dict):
+    """One original WAL + sibling writer, with the same source in memory.
+
+    The native wrapper fixes the work/journal paths and uses the original
+    locked PHP preflight. The parameters here permit disposable tests of
+    the same original atomic staging and binding, never another writer.
+    Found has its own durable phase family and is deliberately excluded
+    until that existing WAL can bind before its first P1/Config mutation.
+    """
+    from neutral_root_stage import attest_prepared_source_root, _stage_candidate
+    from neutral_root_bound_preflight import _attest_bound_candidate
+    from neutral_schema3_saved_wan_preimage import _qualified_config
+    from voice_ipfw_adapter import require_lifecycle_lock
+    require_lifecycle_lock()
+    if (type(before) is not dict or before.get("phase") != "prepared" or
+            "found" in before or "manifest" in before or
+            store.read() != before or type(source) is not SourceGateReceipt or
+            source.generation != before["detail"]["id"] or
+            type(source.requested_enabled) is not bool):
+        raise OriginalSourceGateRefused("S10_ORIGINAL_PREPARED_REQUIRED")
+    detail = before["detail"]
+    enabled = source.requested_enabled
+    generation = detail["id"]
+    identity = _qualified_config(config_receipt, detail, enabled)
+    # A Found plan without its original Found WAL must not be treated as
+    # ordinary merely because the outer PREPARED record has no found key.
+    plan = json.loads(_read(parent / generation / "plan.json",
+                            store.owner, MAX_FILE))
+    if type(plan) is not dict or "found_intent" in plan or "found_batch" in plan:
+        raise OriginalSourceGateRefused("S10_FOUND_PREPARED_NOT_ORDINARY")
+    schema3 = (source.mode == "auto" and
+               source.final_args_sha256 != source.original_args_sha256)
+    if schema3 != (source.mode == "auto" and enabled):
+        raise OriginalSourceGateRefused("S10_ORIGINAL_PROMOTION_MISMATCH")
+
+    def recheck_config(expected_record):
+        require_lifecycle_lock()
+        if (store.read() != expected_record or
+                _qualified_config(read_config(), detail, enabled) != identity or
+                store.read() != expected_record):
+            raise OriginalSourceGateRefused("S10_PREPARED_CONFIG_CHANGED")
+
+    # Original S10a compiler authenticates exact original plan/XML/seal and
+    # actual S08c/S08d bytes, not a caller-created root or extra receipt file.
+    candidate = attest_prepared_source_root(
+        source=source, candidate_sha256=detail["candidate"], enabled=enabled,
+        parent=parent, journal_root=store.root, owner_uid=store.owner)
+    recheck_config(before)
+    common = dict(generation=generation, effective=source.effective,
+                  native=source.native, mode=source.mode, enabled=enabled,
+                  parent=parent, journal_root=store.root, owner_uid=store.owner,
+                  schema3=schema3)
+    staged = _stage_candidate(candidate=candidate, **common)
+    # If any proof is lost after staging, leave its actual evidence for the
+    # original PREPARED recovery. Never delete it or silently activate old.
+    recheck_config(before)
+    bound = store.bind_prepared_manifest(
+        generation=generation, effective=source.effective,
+        native=source.native, mode=source.mode, enabled=enabled,
+        shared_work_parent=parent, schema3=schema3)
+    expected = dict(before, manifest={
+        "schema": 2 if schema3 else 1, "generation": generation,
+        "root_sha256": staged.root_sha256,
+        "seal_sha256": staged.original_seal_sha256,
+        "candidate_sha256": detail["candidate"]})
+    if bound != expected:
+        raise OriginalSourceGateRefused("S10_ORIGINAL_BINDING_CHANGED")
+    receipt = _attest_bound_candidate(**common)
+    if (receipt.root_sha256 != candidate.sha256 or
+            receipt.original_seal_sha256 != source.original_seal_sha256 or
+            receipt.original_candidate_sha256 != detail["candidate"] or
+            receipt.authorization != "NONE" or
+            receipt.physical_transition_allowed is not False or
+            receipt.promotion_allowed is not False):
+        raise OriginalSourceGateRefused("S10_ORIGINAL_BOUND_ROOT_UNQUALIFIED")
+    recheck_config(bound)
+    return receipt
+
+
+def native_bind_original_prepared_fd9(operation: str, raw_pipe: bytes):
+    """Bind the actual original sealed source to the actual PREPARED owner.
+
+    Import-only transaction step for the existing Apply owner; no public
+    command, configd verb, second FD9, Config writer or activation. The
+    ordinary unbound Apply dispatcher is not switched until its physical
+    rollback and the separate Found phase are qualified.
+    """
+    from shared_apply_operation import SharedApplyOperation
+    from shared_apply_seal import WORK
+    from neutral_schema3_saved_wan_preimage import _native_preflight, _qualified_config
+    from voice_ipfw_adapter import require_lifecycle_lock
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation)):
+        raise OriginalSourceGateRefused("NATIVE_ORIGINAL_FD9_REQUIRED")
+    require_lifecycle_lock()
+    inputs = decode_pipe(raw_pipe)
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    if (type(before) is not dict or before.get("phase") != "prepared" or
+            "found" in before or "manifest" in before or
+            before["detail"]["id"] != operation):
+        raise OriginalSourceGateRefused("S10_ORIGINAL_PREPARED_REQUIRED")
+    detail = before["detail"]
+
+    def read_config():
+        return _native_preflight(operation, detail["page"])
+
+    # Reuse original native PHP under native Config lock and inherited FD9.
+    # Derive the logical digest from PHP, not XML hashing or user arguments.
+    config = read_config()
+    if type(config) is not dict or config.get("enabled") not in ("0", "1"):
+        raise OriginalSourceGateRefused("S10_PREPARED_CONFIG_UNQUALIFIED")
+    enabled = config["enabled"] == "1"
+    _qualified_config(config, detail, enabled)
+    source = native_original_bound_effective_fd9(
+        operation, raw_pipe, detail["candidate"] if inputs["mode"] == b"auto" else None)
+    if source.requested_enabled is not enabled:
+        raise OriginalSourceGateRefused("S10_PREPARED_CONFIG_ENABLED_MISMATCH")
+    receipt = _bind_original_prepared_source(
+        store=store, parent=WORK, before=before, source=source,
+        read_config=read_config, config_receipt=config)
+    # Retain this same typed source in memory for the future existing owner
+    # semantic preflight; do not turn the immutable pin into a Start permit.
+    return source, receipt
 
 
 def main(argv: list[str] | None = None) -> int:

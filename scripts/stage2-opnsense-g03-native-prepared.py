@@ -38,7 +38,7 @@ def call(argv, *, locked=False, timeout=180, expected_rc=0):
         action = (argv[2] if argv[0] == PHP and len(argv) > 2 else
                   argv[1] if len(argv) > 1 and argv[0] == SERVICE else
                   "unknown")
-        allowed = {"stage", "stage-partial", "stage-config", "durable",
+        allowed = {"stage", "stage-partial", "stage-config", "stage-ordinary", "durable",
                    "crash-partial", "crash-config-save", "shared-apply-prepare",
                    "found-cold", "found-recover", "found-recover-prepared"}
         if action not in allowed:
@@ -147,6 +147,123 @@ def main():
          "G03_COLD_RESTORED_PREVIOUS_OWNER_UNPROVEN")
     print("G03_COLD_PREPARED=PASS_ORIGINAL_FD9_CONFIG_FD4_P2_NO_WRITES",
           flush=True)
+
+
+def bound_manifest_main():
+    """Actual installed source + original FD9 PREPARED pin, then recover."""
+    script = Path(SERVICE).parent
+    backend = script / "backend"
+    previous = json.loads(WAL.read_bytes())
+    prior = previous.get("previous")
+    need(previous.get("phase") == "restored" and isinstance(prior, dict) and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 0,
+         "G03_BOUND_PREVIOUS_RUNNING_OWNER_UNPROVEN")
+    original = snapshot()
+    staged = call([PHP, NATIVE, "stage-ordinary"], locked=True)
+    need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_ORDINARY_STAGE_DRIFT")
+    op = staged.split("=", 1)[1]
+    prepared = call([SERVICE, "shared-apply-prepare", op])
+    need(not prepared.startswith("preflight-rejected=") and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_ORIGINAL_SEAL_BUILD_REFUSED")
+    # The test uses the actual native rendered template / original loader
+    # and exact NUL wire under the existing original FreeBSD FD9. The
+    # installed backend, PHP Config, setup marker, Git/ELF, root and WAL
+    # writer are all real; there is no fixture replacement of them.
+    shell = r'''
+set -eu
+script=/usr/local/opnsense/scripts/OPNsense/Zapret
+work="/var/db/zapret2/shared-work/$1"
+. "$script/backend/config.sh"
+config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
+{
+    printf 'S10C2B1_ORIGINAL_INPUT_V1\0'
+    printf '%s\0' "${TRAFFIC_ARGS:-}" "${YOUTUBE_DOMAINS:-}" "${USER_DOMAINS:-}" \
+        "${TELEGRAM_IPS:-}" "${DISCORD_IPS:-}" "${X_IPS:-}" \
+        "${SIP_IPS:-}" "${CUSTOM_IPS:-}" "${EXCLUDE_DOMAINS:-}" \
+        "${EXCLUDE_IPSET:-}" "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
+} | "$script/python_runtime.sh" -c "$2" "$1"
+'''
+    child = r'''
+import sys
+from pathlib import Path
+sys.path.insert(0, "/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
+from shared_apply_operation import SharedApplyOperation, SharedOperationError
+from shared_apply_seal import WORK, verify_seal
+from neutral_schema3_saved_wan_preimage import _native_preflight
+from neutral_shared_apply_source_gate import native_bind_original_prepared_fd9, MAX_PIPE
+from voice_ipfw_adapter import require_lifecycle_lock
+op = sys.argv[1]
+try:
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    prior = store.read()
+    if prior["phase"] != "restored" or not prior.get("previous"):
+        raise RuntimeError("previous")
+    verify_seal(WORK / op, owner=0)
+    native = _native_preflight(op, "strategies")
+    if native["enabled"] != "1" or native["result"] != "prepared":
+        raise RuntimeError("candidate")
+    detail = {"id": op, "page": "strategies", "base": native["base"],
+              "candidate": native["candidate"], "changed_fields": native["fields"]}
+    store.advance("prepared", detail)
+    source, bound = native_bind_original_prepared_fd9(
+        op, sys.stdin.buffer.read(MAX_PIPE + 1))
+    record = store.read()
+    if (source.mode != "list" or source.requested_enabled is not True or
+            record["phase"] != "prepared" or record["previous"] != prior["previous"] or
+            record["manifest"]["root_sha256"] != bound.root_sha256 or
+            record["manifest"]["seal_sha256"] != source.original_seal_sha256 or
+            bound.authorization != "NONE" or bound.physical_transition_allowed or
+            bound.promotion_allowed):
+        raise RuntimeError("bound")
+    try:
+        store.advance("activating", detail)
+    except SharedOperationError:
+        pass
+    else:
+        raise RuntimeError("activation-fence")
+    if store.read() != record:
+        raise RuntimeError("journal")
+    print("G03_BOUND_NATIVE_PIN=" + bound.root_sha256)
+except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
+    # Fixed exception type only: native user content is never exposed.
+    import re
+    reason = str(exc)
+    if not re.fullmatch(r"[A-Z0-9_]{1,100}", reason):
+        reason = type(exc).__name__.upper()
+    print("G03_BOUND_NATIVE_REFUSED_" + reason, file=sys.stderr)
+    raise SystemExit(69)
+'''
+    pinned = call(["/bin/sh", "-c", shell, "g03-bound-native", op, child],
+                  locked=True)
+    record = json.loads(WAL.read_bytes())
+    root = Path("/var/db/zapret2/shared-work") / op / "manifest.json"
+    need(re.fullmatch(r"G03_BOUND_NATIVE_PIN=[a-f0-9]{64}", pinned) is not None and
+         record.get("phase") == "prepared" and record.get("previous") == prior and
+         record.get("manifest", {}).get("root_sha256") ==
+         hashlib.sha256(root.read_bytes()).hexdigest() ==
+         pinned.split("=", 1)[1] and
+         snapshot() == original,
+         "G03_BOUND_ROOT_PREPARED_OR_PHYSICAL_DRIFT")
+    recovered = call([str(script / "python_runtime.sh"),
+                      str(backend / "shared_apply_operation.py"),
+                      "recover-prepared", op], locked=True)
+    restored = json.loads(WAL.read_bytes())
+    need(recovered == "prepared-restored" and
+         restored.get("phase") == "restored" and
+         restored.get("previous") == prior and
+         restored.get("manifest") == record["manifest"] and
+         snapshot() == original and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 0,
+         "G03_BOUND_PREPARED_RECOVERY_DRIFT")
+    print("G03_S10_BOUND_PREPARED=PASS_REAL_ENGINE_CONFIG_FD9_WAL_ROOT_RECOVERY",
+          flush=True)
+
 
 def partial_main():
     """Exercise real first-file crash, NOT a mock journal or second writer."""
@@ -297,6 +414,7 @@ if __name__ == "__main__":
         else:
             need(sys.argv[1:] == [], "G03_COLD_UNEXPECTED_ARGUMENTS")
             main()
+            bound_manifest_main()
     except (RuntimeError, OSError, ValueError, KeyError,
             subprocess.TimeoutExpired) as exc:
         label = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__

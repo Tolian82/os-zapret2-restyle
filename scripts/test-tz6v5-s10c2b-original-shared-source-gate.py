@@ -510,6 +510,77 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 native.assert_not_called()
 
 
+
+    def test_one_original_prepared_source_binding_all_list_auto(self):
+        """Same original P2e tree, root writer and WAL; no activator."""
+        import xml.etree.ElementTree as ET
+        from neutral_schema3_saved_wan_preimage import SavedWanPreimageRefused
+        for mode in ("all", "list", "auto"):
+            with self.subTest(mode=mode):
+                fixture, kw = self.original(mode=mode, voice=True)
+                # This existing portable P2e fixture omits general.enabled
+                # from XML, although its original rendered shell uses "1".
+                # Supply the corresponding model scalar before sealing.
+                xml = fixture.work / "candidate.xml"
+                tree = ET.parse(xml)
+                ET.SubElement(tree.find("./OPNsense/Zapret/general"),
+                              "enabled").text = "1"
+                tree.write(xml, encoding="utf-8")
+                self.original_plan(fixture)
+                digest = "d" * 64
+                if mode == "auto":
+                    origin.promote_learning_release(fixture.work, digest)
+                create_seal(fixture.work, owner=os.geteuid())
+                source = qualify_source_to_managed(
+                    **dict(kw, sealed=True, engine_version="v1.0.7"))
+                self.assertIs(source.requested_enabled, True)
+                store = SharedApplyOperation(fixture.work.parent / "journal",
+                                             owner=os.geteuid())
+                detail = {"id": fixture.work.name, "page": "strategies",
+                          "base": "a" * 64, "candidate": digest, "changed_fields": []}
+                before = store.advance("prepared", detail)
+                config = {"result": "prepared", "base": detail["base"],
+                          "snapshot": digest, "candidate": digest,
+                          "enabled": "1", "changes": 0, "fields": []}
+                root = fixture.work / "manifest.json"
+                args = dict(store=store, parent=fixture.work.parent,
+                            before=before, source=source,
+                            read_config=lambda: config, config_receipt=config)
+                with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+                    with self.assertRaises(SavedWanPreimageRefused):
+                        gate._bind_original_prepared_source(
+                            **dict(args, config_receipt={**config, "enabled": "0"}))
+                    self.assertFalse(root.exists())
+                    with self.assertRaises(SavedWanPreimageRefused):
+                        gate._bind_original_prepared_source(
+                            **dict(args, read_config=lambda: {**config, "base": "b" * 64}))
+                    self.assertEqual(store.read(), before)
+                    self.assertFalse(root.exists())
+                    receipt = gate._bind_original_prepared_source(**args)
+                    bound = store.read()
+                    self.assertEqual(bound["phase"], "prepared")
+                    self.assertEqual(bound["manifest"]["schema"],
+                                     2 if mode == "auto" else 1)
+                    self.assertEqual(bound["manifest"]["root_sha256"],
+                                     hashlib.sha256(root.read_bytes()).hexdigest())
+                    self.assertEqual(bound["manifest"]["root_sha256"],
+                                     receipt.root_sha256)
+                    self.assertEqual(receipt.authorization, "NONE")
+                    self.assertFalse(receipt.physical_transition_allowed)
+                    with self.assertRaises(OriginalSourceGateRefused):
+                        gate._bind_original_prepared_source(**args)
+                    self.assertEqual(store.read(), bound)
+                    with self.assertRaises(SharedOperationError):
+                        store.advance("activating", detail)
+                    self.assertEqual(store.read(), bound)
+                    recovered = store.recover_prepared(
+                        fixture.work.name, lambda: bool(verify_seal(
+                            fixture.work, owner=os.geteuid())),
+                        shared_work_parent=fixture.work.parent)
+                    self.assertEqual(recovered["phase"], "restored")
+                    self.assertEqual(recovered["manifest"], bound["manifest"])
+                    self.assertTrue(root.is_file())
+
     def test_final_seal_ref_and_native_drift_refuse_without_action(self):
         fixture, kw = self.original(mode="auto", voice=True)
         self.assertEqual(qualify_source_to_managed(**kw).mode, "auto")

@@ -270,9 +270,9 @@ try {
              getenv('ZAPRET2_G03_COLD_PREPARED') === '1' &&
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
              in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config',
-                                         'durable','crash-partial','crash-config-save'], true) &&
+                                         'durable','crash-partial','crash-config-save','stage-ordinary'], true) &&
              count($argv) === (in_array(($argv[1] ?? ''),
-                ['stage','stage-partial','stage-config'], true) ? 2 : 3),
+                ['stage','stage-partial','stage-config','stage-ordinary'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
     SharedApplyLifecycleLock::assertHeld();
     require_once 'script/load_phalcon.php';
@@ -284,7 +284,17 @@ try {
     } else {
         $config->lock();
         try {
-            if (in_array($argv[1], ['stage','stage-partial','stage-config'], true)) {
+            if ($argv[1] === 'stage-ordinary') {
+                $current = (new \OPNsense\Zapret\Zapret())->getNodes();
+                $xml = @file_get_contents('/conf/config.xml');
+                required(is_string($xml), 'G03_BOUND_NATIVE_CONFIG_UNREADABLE');
+                $prepared = SharedApplyRequest::prepareSavedUnchanged($current, $xml);
+                required(!isset($prepared['plan']['found_intent']) &&
+                         !isset($prepared['plan']['found_batch']) &&
+                         $prepared['plan']['page'] === 'strategies',
+                         'G03_BOUND_NATIVE_ORDINARY_PLAN_REQUIRED');
+                echo 'prepared-id=' . SharedApplyRequest::materialize($prepared) . "\n";
+            } elseif (in_array($argv[1], ['stage','stage-partial','stage-config'], true)) {
                 echo 'prepared-id=' . stage($config,
                     $argv[1] !== 'stage', $argv[1] === 'stage-config') . "\n";
             } elseif ($argv[1] === 'durable') {
