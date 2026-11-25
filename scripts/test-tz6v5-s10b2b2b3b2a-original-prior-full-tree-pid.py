@@ -157,7 +157,8 @@ class FullPreviousOwnerReadOnly(unittest.TestCase):
 
     def test_changed_original_journal_during_pid_read_refused(self):
         def race(*args, **kwargs):
-            self.f.f.f.original.advance("restored", self.f.f.f.detail)
+            # Simulated external writer/race, not an original recovery.
+            self.f.f.f.original._persist_record({**self.f.f.f.original.read(), "phase": "restored"})
             return self.prior
         a, _ = self.patches()
         with a, patch.object(gate, "_running_native", side_effect=race), \

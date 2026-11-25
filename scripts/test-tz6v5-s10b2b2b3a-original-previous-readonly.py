@@ -170,7 +170,8 @@ class OriginalSchema3PreviousReadOnly(unittest.TestCase):
         with self.assertRaises(OriginalPredecessorRefused):
             self.attest()
         self.stage_and_bind()
-        self.f.original.advance("restored", self.f.detail)
+        self.f.original.recover_prepared(
+            self.f.generation, lambda: True, shared_work_parent=self.f.parent)
         with self.assertRaises(OriginalPredecessorRefused):
             self.attest()
 
@@ -229,7 +230,8 @@ class OriginalSchema3PreviousReadOnly(unittest.TestCase):
         self.prepare_with_previous()
         self.stage_and_bind()
         def injected_old(record, *, work_root):
-            self.f.original.advance("restored", self.f.detail)
+            # Simulated external writer/race, never an allowed recovery.
+            self.f.original._persist_record({**self.f.original.read(), "phase": "restored"})
             return self.observed()
         with patch.object(previous, "examine_shared", side_effect=injected_old):
             with self.assertRaises(OriginalPredecessorRefused):

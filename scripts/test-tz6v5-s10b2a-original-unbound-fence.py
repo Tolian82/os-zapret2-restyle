@@ -128,7 +128,8 @@ class OriginalBoundPreactivation(unittest.TestCase):
                 self.attest(**change)
 
     def test_terminal_phase_cannot_be_misread_as_prepared(self):
-        self.owner.advance("restored", self.detail)
+        self.owner.recover_prepared(self.detail["id"], lambda: True,
+                                    shared_work_parent=self.case.case.fx.parent)
         with self.assertRaises(BoundRootRefused):
             self.attest()
 
@@ -139,7 +140,8 @@ class OriginalBoundPreactivation(unittest.TestCase):
             proof = original(**kwargs)
             count.append(True)
             if len(count) == 1:
-                self.owner.advance("restored", self.detail)
+                # Deliberate external journal race, not a valid recovery call.
+                self.owner._persist_record({**self.owner.read(), "phase": "restored"})
             return proof
         with patch.object(guard, "attest_staged_candidate", side_effect=race):
             with self.assertRaises(BoundRootRefused):

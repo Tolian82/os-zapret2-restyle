@@ -660,6 +660,9 @@ class SharedApplyOperation:
             # Ordinary legacy unbound Apply retains its established path.
             if phase == "activating" and "manifest" in before:
                 raise SharedOperationError("immutable root preactivation gate not implemented")
+            if (phase == "restored" and before["phase"] == "prepared" and
+                    "manifest" in before):
+                raise SharedOperationError("bound prepared requires original pinned recovery")
             previous = before.get("previous")
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
         if previous is not None:
@@ -954,7 +957,8 @@ class SharedApplyOperation:
             completed["previous"] = prior
         return self._persist_record(completed)
 
-    def recover_prepared(self, identity: str, attest) -> dict:
+    def recover_prepared(self, identity: str, attest, *,
+                         shared_work_parent: Path | None = None) -> dict:
         """Only PREPARED can be closed without touching runtime/Config/IPFW.
 
         The journal write precedes the mutating transition; an executor can
@@ -968,6 +972,34 @@ class SharedApplyOperation:
             # physical sources remained untouched after an interrupted
             # found transaction. Do not grant cold recovery by old rules.
             raise SharedOperationError("prepared-only recovery refused")
+        if "manifest" in record:
+            # The root is a sibling, deliberately outside the original bundle
+            # seal. Boot's legacy seal callback cannot authenticate its pin.
+            # Recover only the exact previously bound PREPARED record; never
+            # authorize activation or downgrade to the old unbound path.
+            from shared_apply_seal import WORK
+            from neutral_root_stage import (
+                verify_prepared_recovery_pin, RootStageRefused,
+            )
+            parent = WORK if shared_work_parent is None else shared_work_parent
+            if not isinstance(parent, Path):
+                raise SharedOperationError("original shared-work parent required")
+            try:
+                verify_prepared_recovery_pin(record=record, parent=parent,
+                                             owner_uid=self.owner)
+                if not callable(attest) or attest() is not True:
+                    raise SharedOperationError("shared candidate attestation refused")
+                verify_prepared_recovery_pin(record=record, parent=parent,
+                                             owner_uid=self.owner)
+            except RootStageRefused:
+                raise SharedOperationError("bound prepared recovery pin refused") from None
+            if self.read() != record:
+                raise SharedOperationError("shared Apply phase changed during recovery")
+            # Same original atomic/fsynced operation.json writer. Preserve
+            # previous owner AND manifest pin for review; no physical effect.
+            restored = dict(record)
+            restored["phase"] = "restored"
+            return self._persist_record(restored)
         if not callable(attest) or attest() is not True:
             raise SharedOperationError("shared candidate attestation refused")
         if self.read() != record:

@@ -176,7 +176,8 @@ class SavedWanOriginalFd9(unittest.TestCase):
 
     def test_original_prepared_journal_race_refuses_even_if_php_ready(self):
         def racing_config(*args):
-            self.f.f.original.advance("restored", self.f.f.detail)
+            # Simulated external writer/race, not an original recovery.
+            self.f.f.original._persist_record({**self.f.f.original.read(), "phase": "restored"})
             return self.config(*args)
         a, b, c = self.guard(config=racing_config)
         with a, b, c, self.assertRaises(gate.SavedWanPreimageRefused):
