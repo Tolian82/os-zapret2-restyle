@@ -138,8 +138,51 @@ if shared_apply_finalize_release_modes "$TMP/private/release"; then
 fi
 sed -n '/^shared_apply_prepare_service()$/,/^}$/p' "$SOURCE" > "$TMP/prepare.sh"
 awk '/orchestrator_build_release / { build=NR }
+     /shared_apply_original_source_gate "\$1"/ { gate=NR }
+     /if \[ -f "\$_shared_work\/release\/auto-detect-source-map.json"/ { auto=NR }
      /shared_apply_finalize_release_modes "\$_shared_work\/release"/ { modes=NR }
      /shared_apply_bundle_service seal / { seal=NR }
-     END { exit !(build > 0 && modes > build && seal > modes) }' "$TMP/prepare.sh" ||
-    fail "release mode finalizer must run after build and before bundle seal"
-echo 'PASS: original-FD9 one-request shared Voice/Strategies transaction and configd action'
+     END { exit !(build > 0 && gate > build && auto > gate &&
+                  modes > auto && seal > modes) }' "$TMP/prepare.sh" ||
+    fail "original source gate must be after build and before Auto/SEAL"
+
+# Stream the original shell scalars through the installed gate, without
+# generating a second file-backed Config or passing user data in argv.
+sed -n '/^shared_apply_original_source_gate()$/,/^}$/p' "$SOURCE" > "$TMP/source-gate.sh"
+sh -n "$TMP/source-gate.sh" || fail "source gate shell syntax"
+. "$TMP/source-gate.sh"
+cat > "$TMP/source-gate-python-stub" <<EOF
+#!/bin/sh
+cat > "$TMP/source-gate.stdin"
+EOF
+chmod 0755 "$TMP/source-gate-python-stub"
+BACKEND_DIR="$ROOT/src/opnsense/scripts/OPNsense/Zapret/backend"
+PYTHON_RUNTIME="$TMP/source-gate-python-stub"
+TRAFFIC_ARGS='--filter-tcp=443
+--lua-desync=fake'
+YOUTUBE_DOMAINS='youtube.com'
+USER_DOMAINS='example.org'
+TELEGRAM_IPS='91.108.13.10'
+DISCORD_IPS=''
+X_IPS=''
+SIP_IPS=''
+CUSTOM_IPS=''
+EXCLUDE_DOMAINS='ads.example.org'
+EXCLUDE_IPSET='203.0.113.0/24'
+HOSTLIST_MODE='list'
+DIVERT_PORT='989'
+WAN_IF='opt0'
+shared_apply_original_source_gate "$ID" || fail "same-operation source gate pipe failed"
+python3 - "$TMP/source-gate.stdin" <<'PY'
+import pathlib, sys
+data = pathlib.Path(sys.argv[1]).read_bytes()
+assert data.endswith(b'\x00')
+fields = data[:-1].split(b'\x00')
+assert len(fields) == 14, len(fields)
+assert fields[0] == b'S10C2B1_ORIGINAL_INPUT_V1'
+assert fields[1] == b'--filter-tcp=443\n--lua-desync=fake'
+assert fields[2] == b'youtube.com' and fields[3] == b'example.org'
+assert fields[10] == b'203.0.113.0/24'
+assert fields[11:] == [b'list', b'989', b'opt0']
+PY
+echo 'PASS: original-FD9 one-request shared Voice/Strategies transaction, source gate and configd action'

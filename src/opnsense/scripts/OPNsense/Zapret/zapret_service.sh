@@ -2142,6 +2142,25 @@ shared_apply_finalize_release_modes()
     common_set_directory_mode "$1" 0755 || return 69
     validator_validate_runtime_modes "$1" || return 69
 }
+# S10c2b1: the ORIGINAL FD9 Shared Apply streams the original loaded
+# template scalars directly to a read-only source->managed parity witness.
+# Nothing is retained in a second input directory or passed in process argv.
+# This does not act on Config, P1, runtime, IPFW or any engine process.
+shared_apply_original_source_gate()
+{
+    [ "$#" -eq 1 ] && [ -x "${PYTHON_RUNTIME}" ] &&
+    [ -r "${BACKEND_DIR}/neutral_shared_apply_source_gate.py" ] || return 69
+    {
+        printf 'S10C2B1_ORIGINAL_INPUT_V1\0'
+        printf '%s\0' \
+            "${TRAFFIC_ARGS:-}" \
+            "${YOUTUBE_DOMAINS:-}" "${USER_DOMAINS:-}" \
+            "${TELEGRAM_IPS:-}" "${DISCORD_IPS:-}" "${X_IPS:-}" \
+            "${SIP_IPS:-}" "${CUSTOM_IPS:-}" \
+            "${EXCLUDE_DOMAINS:-}" "${EXCLUDE_IPSET:-}" \
+            "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
+    } | "${PYTHON_RUNTIME}" "${BACKEND_DIR}/neutral_shared_apply_source_gate.py" "$1" >/dev/null
+}
 # Prepare one complete Voice+Strategies release from the detached OPNsense
 # candidate. This is an INTERNAL FD9 operation, not a Config/runtime Apply.
 # Caller must have placed its root-owned candidate.xml in the fixed private
@@ -2186,6 +2205,13 @@ shared_apply_prepare_service()
         "$_shared_template" "$ZAPRET_DIR" "$ACTIVE_DIR" \
         "$_shared_work" "$_shared_work/release" "$STAGE_FILE" \
         shared-candidate "$_shared_work/candidate.xml" "$_shared_found_build_id" || {
+        printf '%s\n' preflight-rejected=runtime-build
+        return 0
+    }
+    # One read-only S07/S08a/S08b source-to-generated-file check under the
+    # already-held original FD9, BEFORE Auto promotion and bundle seal.
+    # Failure keeps the previous active runtime intact.
+    shared_apply_original_source_gate "$1" || {
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }

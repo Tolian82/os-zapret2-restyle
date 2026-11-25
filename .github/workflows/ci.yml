@@ -580,6 +580,10 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s08c-original-native-parity.py
+      - name: S10c2b1 original FD9 source-to-managed read-only parity
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10c2b-original-shared-source-gate.py
       - name: S08d pure structural fingerprint and detached semantic action refusal
         run: |
           set -euo pipefail

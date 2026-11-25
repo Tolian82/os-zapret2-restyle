@@ -43,11 +43,12 @@ from shared_apply_seal import create_seal, SharedBundleError
 from unittest.mock import patch
 
 
-def write_xml(dest: Path, *, voice_on: bool) -> None:
+def write_xml(dest: Path, *, voice_on: bool, mode: str = "auto", divert_port: str = "19899") -> None:
     root = ET.Element("opnsense")
     model = ET.SubElement(ET.SubElement(root, "OPNsense"), "Zapret")
     general = ET.SubElement(model, "general")
     ET.SubElement(general, "waninterface").text = "lo0"
+    ET.SubElement(general, "divertport").text = divert_port
     voice = ET.SubElement(model, "voice")
     ET.SubElement(voice, "waninterface").text = "lo0"
     telegram = ET.SubElement(voice, "telegram")
@@ -57,6 +58,7 @@ def write_xml(dest: Path, *, voice_on: bool) -> None:
         "--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2"
     ) if voice_on else ""
     hostlist = ET.SubElement(model, "hostlist")
+    ET.SubElement(hostlist, "mode").text = mode
     ET.SubElement(hostlist, "telegramips").text = "91.108.13.10"
     ET.SubElement(hostlist, "discordips").text = "198.51.100.0/24"
     ET.ElementTree(root).write(dest, encoding="utf-8")
@@ -99,7 +101,8 @@ class OriginalSharedGeneration(unittest.TestCase):
             "EXCLUDE_IPSET": exclude_ipset, "EXTRA_ARGS": "",
         }
         config.write_text("".join(k + "=" + shlex.quote(v) + "\n" for k, v in values.items()))
-        write_xml(self.work / "candidate.xml", voice_on=voice_on)
+        write_xml(self.work / "candidate.xml", voice_on=voice_on,
+                  mode=mode, divert_port=divert_port)
         sources = "\n".join(". " + shlex.quote(str(BACKEND / (name + ".sh"))) for name in MODS)
         # Native configuration is source-only. The fake physical interface
         # avoids requiring any real WAN, Config daemon or packet processing.
