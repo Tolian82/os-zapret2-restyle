@@ -149,16 +149,20 @@ def main():
           flush=True)
 
 
-def bound_manifest_main():
-    """Actual installed source + original FD9 PREPARED pin, then recover."""
+def bound_manifest_main(*, stopped=False):
+    """One genuine original bound FD9 PREPARED proof for running/stopped owner.
+
+    The STOPPED branch runs only after an explicit service stop on the
+    disposable G03 guest. It does not grant product activation or mutation.
+    """
     script = Path(SERVICE).parent
     backend = script / "backend"
     previous = json.loads(WAL.read_bytes())
     prior = previous.get("previous")
     need(previous.get("phase") == "restored" and isinstance(prior, dict) and
          subprocess.run([SERVICE, "status"], capture_output=True,
-                        timeout=30).returncode == 0,
-         "G03_BOUND_PREVIOUS_RUNNING_OWNER_UNPROVEN")
+                        timeout=30).returncode == (1 if stopped else 0),
+         "G03_BOUND_PREVIOUS_OWNER_STATE_UNPROVEN")
     original = snapshot()
     staged = call([PHP, NATIVE, "stage-ordinary"], locked=True)
     need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
@@ -185,7 +189,7 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
         "${TELEGRAM_IPS:-}" "${DISCORD_IPS:-}" "${X_IPS:-}" \
         "${SIP_IPS:-}" "${CUSTOM_IPS:-}" "${EXCLUDE_DOMAINS:-}" \
         "${EXCLUDE_IPSET:-}" "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
-} | "$script/python_runtime.sh" -c "$2" "$1"
+} | "$script/python_runtime.sh" -c "$2" "$1" "$3"
 '''
     child = r'''
 import sys
@@ -194,15 +198,16 @@ sys.path.insert(0, "/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
 from shared_apply_operation import SharedApplyOperation, SharedOperationError
 from shared_apply_seal import WORK, verify_seal
 from neutral_schema3_saved_wan_preimage import _native_preflight
+from neutral_schema3_quiescent_preimage import QuiescentPreimage
 from neutral_shared_apply_source_gate import (
     native_bind_original_prepared_fd9, native_plan_original_prepared_fd9, MAX_PIPE)
 from voice_ipfw_adapter import require_lifecycle_lock
-op = sys.argv[1]
+op, mode = sys.argv[1:]
 try:
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     prior = store.read()
-    if prior["phase"] != "restored" or not prior.get("previous"):
+    if mode not in ("running", "stopped") or prior["phase"] != "restored" or not prior.get("previous"):
         raise RuntimeError("previous")
     verify_seal(WORK / op, owner=0)
     native = _native_preflight(op, "strategies")
@@ -230,6 +235,18 @@ try:
             semantic.candidate_root_sha256 != bound.root_sha256 or
             semantic.authorization != "NONE" or
             semantic.physical_transition_allowed or semantic.promotion_allowed or
+            semantic.final_original_fd9_reattest_required is not True or
+            (mode == "running" and semantic.lifecycle_proposal != "RESTART") or
+            (mode == "stopped" and (
+                semantic.lifecycle_proposal != "START" or
+                type(semantic.previous_physical) is not QuiescentPreimage or
+                semantic.previous_physical.old_state != "committed-stopped" or
+                semantic.previous_physical.kernel_state not in (
+                    "native-kernel-absent", "native-managed-kernel-empty") or
+                semantic.previous_physical.retirement_state not in (
+                    "original-epoch-ack-retired", "inert-no-producer-data") or
+                semantic.previous_physical.authorization != "NONE" or
+                semantic.previous_physical.physical_transition_allowed)) or
             store.read() != record):
         raise RuntimeError("semantic")
     try:
@@ -250,8 +267,8 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
     print("G03_BOUND_NATIVE_REFUSED_" + reason, file=sys.stderr)
     raise SystemExit(69)
 '''
-    pinned = call(["/bin/sh", "-c", shell, "g03-bound-native", op, child],
-                  locked=True)
+    pinned = call(["/bin/sh", "-c", shell, "g03-bound-native", op,
+                   child, "stopped" if stopped else "running"], locked=True)
     record = json.loads(WAL.read_bytes())
     root = Path("/var/db/zapret2/shared-work") / op / "manifest.json"
     need(re.fullmatch(r"G03_BOUND_NATIVE_PIN=[a-f0-9]{64}", pinned) is not None and
@@ -261,7 +278,10 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
          pinned.split("=", 1)[1] and
          snapshot() == original,
          "G03_BOUND_ROOT_PREPARED_OR_PHYSICAL_DRIFT")
-    print("G03_S10_SEMANTIC=PASS_REAL_RUNNING_LEGACY_OWNER_RESTART_PROPOSAL", flush=True)
+    print(("G03_S10_SEMANTIC=PASS_REAL_STOPPED_LEGACY_OWNER_START_PROPOSAL"
+           if stopped else
+           "G03_S10_SEMANTIC=PASS_REAL_RUNNING_LEGACY_OWNER_RESTART_PROPOSAL"),
+          flush=True)
     recovered = call([str(script / "python_runtime.sh"),
                       str(backend / "shared_apply_operation.py"),
                       "recover-prepared", op], locked=True)
@@ -272,11 +292,52 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
          restored.get("manifest") == record["manifest"] and
          snapshot() == original and
          subprocess.run([SERVICE, "status"], capture_output=True,
-                        timeout=30).returncode == 0,
+                        timeout=30).returncode == (1 if stopped else 0),
          "G03_BOUND_PREPARED_RECOVERY_DRIFT")
     print("G03_S10_BOUND_PREPARED=PASS_REAL_ENGINE_CONFIG_FD9_WAL_ROOT_RECOVERY",
           flush=True)
 
+
+
+def stopped_native_main():
+    """G03 disposable: actual service STOP then repeat ORIGINAL FD9/S08d proof.
+
+    No synthetic state, Config rewrite, kill, orphan deletion, or IPFW bypass.
+    It is deliberate only in the discarded guest, never a live auto-detect
+    pause. The original STOPPED read-only preimage must qualify completely.
+    """
+    need(os.environ.get("GITHUB_ACTIONS") == "true" and
+         os.environ.get("ZAPRET2_G03_COLD_PREPARED") == "1" and
+         sys.platform.startswith("freebsd") and os.geteuid() == 0 and
+         json.loads(WAL.read_bytes()).get("phase") == "restored" and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 0,
+         "G03_STOPPED_DISPOSABLE_RUNNING_BASELINE_REQUIRED")
+    stopped = subprocess.run([SERVICE, "stop"], capture_output=True,
+                             timeout=120)
+    need(stopped.returncode == 0,
+         "G03_STOPPED_ORIGINAL_EXPLICIT_STOP_FAILED")
+    native_status = subprocess.run([SERVICE, "status"], capture_output=True,
+                                   text=True, timeout=30)
+    # The actual zapret_service.sh status contract is 0 RUNNING, 1 STOPPED,
+    # 2 INCOMPLETE. Do not treat INCOMPLETE as evidence of clean STOP.
+    need(native_status.returncode == 1 and
+         native_status.stdout.strip() == "zapret is not running" and
+         not PIDFILE.exists() and not PIDFILE.is_symlink(),
+         "G03_STOPPED_ORIGINAL_EXPLICIT_STOP_NOT_CONFIRMED")
+    prior = json.loads(WAL.read_bytes())
+    base = snapshot()
+    bound_manifest_main(stopped=True)
+    final = json.loads(WAL.read_bytes())
+    need(final.get("phase") == "restored" and
+         final.get("previous") == prior.get("previous") and
+         base == snapshot() and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 1 and
+         not PIDFILE.exists() and not PIDFILE.is_symlink(),
+         "G03_STOPPED_ORIGINAL_FD9_PROOF_CHANGED_OWNER")
+    print("G03_S10_STOPPED=PASS_NATIVE_OLD_OWNER_START_PROPOSAL_NO_PHYSICAL_ACTION",
+          flush=True)
 
 def partial_main():
     """Exercise real first-file crash, NOT a mock journal or second writer."""
@@ -424,6 +485,11 @@ if __name__ == "__main__":
             partial_main()
         elif sys.argv[1:] == ["config-uncertain"]:
             config_save_uncertain_main()
+        elif sys.argv[1:] == ["stopped"]:
+            # Only after the baseline has finished; Stage5 Guest D still
+            # requires a genuinely RUNNING predecessor for partial/Config
+            # crash tests, and must never execute this destructive scenario.
+            stopped_native_main()
         else:
             need(sys.argv[1:] == [], "G03_COLD_UNEXPECTED_ARGUMENTS")
             main()
@@ -433,6 +499,7 @@ if __name__ == "__main__":
         label = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
         prefix = ("G03_COLD_PARTIAL" if sys.argv[1:] == ["partial"] else
                   "G03_COLD_CONFIG" if sys.argv[1:] == ["config-uncertain"] else
+                  "G03_COLD_STOPPED" if sys.argv[1:] == ["stopped"] else
                   "G03_COLD_PREPARED")
         print(prefix + "=REFUSED:" + label, file=sys.stderr)
         raise SystemExit(1)

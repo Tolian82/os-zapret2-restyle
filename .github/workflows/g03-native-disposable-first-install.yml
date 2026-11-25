@@ -73,6 +73,7 @@ jobs:
           sh -n src/opnsense/scripts/OPNsense/Zapret/setup.sh
           sh -n scripts/test-g03-first-install.sh
           python3.13 -m py_compile scripts/stage2-opnsense-g03-first-install.py
+          python3.13 -m py_compile scripts/stage2-opnsense-g03-native-prepared.py
           node scripts/test-gui-upstream-progress.mjs
           sh scripts/test-g03-first-install.sh
           sh scripts/test-setup-runtime-transaction.sh
@@ -190,4 +191,4 @@ jobs:
             -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile="$RUNNER_TEMP/g03-readonly-browser-ssh/known_hosts" \
             root@127.0.0.1 \
-            'env GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 /usr/local/bin/python3 /root/g03-native-prepared.py'
+            'env GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 /usr/local/bin/python3 /root/g03-native-prepared.py && env GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 /usr/local/bin/python3 /root/g03-native-prepared.py stopped'

@@ -1,3 +1,9 @@
+## 25 November 2026 — G03 real STOPPED old-owner semantic qualification candidate
+
+**Accepted main:** `v0.6.5_231` / `6bdffec5312e79c72b718fa2df9c01a3d22d5a69`; exact-head and postmerge CI SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=232`, `v0.6.5_232`, prospective CI-only `os-zapret2-restyle-0.6.5_232.pkg`. Extend existing disposable G03 under actual FreeBSD 15 original FD9: deliberately stopped old native owner, same bound source, START *proposal only* plus no-action recovered WAL and unchanged stopped image. See [S10 comparison](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md) and [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Real native G03 required; until then unaccepted, no owner package, S10 OPEN/S11 blocked.
+
+---
+
 ## 25 November 2026 — S10 STOPPED/cold semantic decision candidate
 
 **Accepted main:** `v0.6.5_230` / `bacda86721d3df2d0d120c10ff57471ec12e3ee9`, [PR #1351](https://github.com/Tolian82/os-zapret2-restyle/pull/1351), exact-head and postmerge CI SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=231`, `v0.6.5_231`, prospective CI-only `os-zapret2-restyle-0.6.5_231.pkg`. Existing original FD9 planner selects genuine READY / committed STOPPED / pristine cold evidence, with START or SAVE_ONLY only as nonauthorizing proposals. No guess from failed physical proof, no duplicate actor/journal or owner operation. See [S10 semantic contract](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md) and [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Native exact-head qualification pending, S10 OPEN/S11 blocked.
