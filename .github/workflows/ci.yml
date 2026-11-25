@@ -617,6 +617,11 @@ jobs:
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_final_root.py scripts/test-tz6v5-s10b2b2a-final-schema3-root.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2b2a-final-schema3-root.py
+      - name: S10b2b2b1 original FD9 physical schema3 reference proof (no activation)
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_physical_refs.py scripts/test-tz6v5-s10b2b2b1-original-physical-schema3-refs.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2b2b1-original-physical-schema3-refs.py
       - name: Validate fast path routing and strict private-curl source mismatch
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test
