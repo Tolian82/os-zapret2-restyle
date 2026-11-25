@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S10c2b1: read-only ORIGINAL FD9 source -> managed-file preseal witness.
+"""S10c2b2: read-only ORIGINAL FD9 source -> managed + native preseal witness.
 
 The existing shared_apply_prepare_service is the only installed caller.
 This module never creates a Config writer, journal, release, PID, or IPFW
@@ -22,6 +22,7 @@ from neutral_config_model import project
 from neutral_target_compiler import compile_target_profiles, parse_original_policy
 from neutral_resource_compiler import (
     compile_resources, compare_original_managed_bytes, parse_original_storage)
+from neutral_native_parity import inspect_original
 from shared_apply_seal import _stat
 from voice_profile_compiler import SERVICES
 
@@ -47,6 +48,10 @@ class SourceGateReceipt:
     status: str = "ORIGINAL_NONACTIVATING_SOURCE_MANAGED_PARITY"
     authorization: str = "NONE"
     physical_transition_allowed: bool = False
+    original_args_sha256: str = ""
+    native_source_map_status: str = ""
+    native_profile_count: int = 0
+    known_learning_count: int = 0
 
 
 def decode_pipe(raw: bytes) -> dict[str, bytes]:
@@ -101,6 +106,7 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
                               inputs: dict[str, bytes],
                               owned_known: dict[str, bytes] | None,
                               runtime_auto: bytes | None = None,
+                              candidate_sha256: str | None = None,
                               owner_uid: int = 0,
                               active_managed: Path = Path(
                                   "/usr/local/etc/zapret2/runtime-v2/managed")) -> SourceGateReceipt:
@@ -175,6 +181,43 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
     for filename in ("hostlist-exclude.txt", "ipset-exclude.txt"):
         observed[filename] = _read(managed / filename, owner_uid, MAX_FILE, allow_empty=True)
     matched = compare_original_managed_bytes(resources, storage, observed)
+
+    # S10c2b2: S08c consumes the very SAME pure S07/S08a/S08b projections,
+    # only original producer bytes (never a second argv/Voice generator).
+    # Auto's candidate SHA is supplied exclusively by original native PHP
+    # preflight under FD9. It is not guessed from detached XML or test data.
+    args = _read(release / "dvtws.args", owner_uid, 262144)
+    voice_conf = _read(release / "voice.conf", owner_uid, 262144, allow_empty=True)
+    voice_plan = json.loads(_read(release / "voice-plan.json", owner_uid, MAX_FILE))
+    source_file = release / "auto-detect-source-map.json"
+    if saved.target_mode == "auto":
+        if (type(candidate_sha256) is not str or
+                re.fullmatch(r"[a-f0-9]{64}", candidate_sha256) is None):
+            raise OriginalSourceGateRefused("ORIGINAL_NATIVE_CANDIDATE_DIGEST_REQUIRED")
+        source_map = json.loads(_read(source_file, owner_uid, MAX_FILE))
+        generation = work.name
+    else:
+        if (candidate_sha256 is not None or source_file.exists() or
+                source_file.is_symlink()):
+            raise OriginalSourceGateRefused("ORIGINAL_NONAUTO_MAP_OR_DIGEST_FORBIDDEN")
+        source_map = None
+        generation = None
+    native = inspect_original(
+        requested=saved, targets=targets, resources=resources,
+        strategy=traffic, original_args=args, voice_conf=voice_conf,
+        voice_plan=voice_plan, source_map=source_map,
+        generation=generation, candidate_sha256=candidate_sha256,
+        rule_base=19000, rule_max=19099)
+    if native.authorization != "NONE" or native.physical_transition_allowed:
+        raise OriginalSourceGateRefused("ORIGINAL_NATIVE_PROOF_NOT_READONLY")
+    # Recheck actual ORIGINAL producer file bytes after the entire pure
+    # inspection; later original seal independently hashes this same release.
+    if (args != _read(release / "dvtws.args", owner_uid, 262144) or
+            voice_conf != _read(release / "voice.conf", owner_uid, 262144,
+                               allow_empty=True) or
+            (saved.target_mode == "auto" and
+             source_map != json.loads(_read(source_file, owner_uid, MAX_FILE)))):
+        raise OriginalSourceGateRefused("ORIGINAL_NATIVE_ARTIFACT_CHANGED")
     # Re-attest the two independent input source locations and strategy file
     # before handing control to original Auto/schema2 and eventual seal.
     if (xml != _read(work / "candidate.xml", owner_uid, MAX_XML) or
@@ -182,7 +225,12 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
             original_storage != _read(sources / "storage.sh", owner_uid, 128 * 1024) or
             expected_registry != _read(work / "target-registry.tsv", owner_uid, 128 * 1024)):
         raise OriginalSourceGateRefused("ORIGINAL_INPUT_CHANGED_DURING_CHECK")
-    return SourceGateReceipt(saved.target_mode, hashlib.sha256(xml).hexdigest(), matched)
+    return SourceGateReceipt(
+        saved.target_mode, hashlib.sha256(xml).hexdigest(), matched,
+        original_args_sha256=native.original_args_sha256,
+        native_source_map_status=native.source_map_status,
+        native_profile_count=native.ordinary_native_count,
+        known_learning_count=native.learning_native_count)
 
 
 def _owned_under_original_p2(work: Path, uid: int) -> dict[str, bytes] | None:
@@ -217,7 +265,8 @@ def _owned_under_original_p2(work: Path, uid: int) -> dict[str, bytes] | None:
             name: known[name].encode("utf-8") for name in KNOWN_HOSTLISTS}
 
 
-def native_original_fd9(operation: str, raw_pipe: bytes) -> SourceGateReceipt:
+def native_original_fd9(operation: str, raw_pipe: bytes,
+                        candidate_sha256: str | None = None) -> SourceGateReceipt:
     """Only the installed original FD9 wrapper can invoke this native action."""
     from voice_ipfw_adapter import require_lifecycle_lock
     from shared_apply_seal import WORK
@@ -236,18 +285,19 @@ def native_original_fd9(operation: str, raw_pipe: bytes) -> SourceGateReceipt:
                            0, MAX_FILE, allow_empty=True)
     receipt = qualify_source_to_managed(
         work=work, sources=Path(__file__).parent, inputs=inputs,
-        owned_known=known, runtime_auto=auto_bytes, owner_uid=0)
+        owned_known=known, runtime_auto=auto_bytes,
+        candidate_sha256=candidate_sha256, owner_uid=0)
     require_lifecycle_lock()
     return receipt
 
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) != 1:
+    if len(args) not in (1, 2):
         return 64
     try:
         raw = sys.stdin.buffer.read(MAX_PIPE + 1)
-        native_original_fd9(args[0], raw)
+        native_original_fd9(args[0], raw, args[1] if len(args) == 2 else None)
         return 0
     except (ValueError, RuntimeError, OSError, TypeError, UnicodeError,
             KeyError, IndexError, json.JSONDecodeError):

@@ -580,7 +580,7 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s08c-original-native-parity.py
-      - name: S10c2b1 original FD9 source-to-managed read-only parity
+      - name: S10c2b2 exact original FD9 source-to-native argv Voice IPFW Auto parity
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10c2b-original-shared-source-gate.py
