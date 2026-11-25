@@ -22,7 +22,8 @@ sys.path.insert(0, str(BACKEND))
 from config_projection_opnsense import registered_ids
 from neutral_config_model import project
 from neutral_target_compiler import parse_original_policy, compile_target_profiles
-from neutral_resource_compiler import parse_original_storage, compile_resources
+from neutral_resource_compiler import (parse_original_storage, compile_resources,
+                                       compare_original_managed_bytes, ResourceCompileError)
 from neutral_native_parity import inspect_original, NativeParityRefused
 from voice_profile_compiler import SERVICES
 from global_exclusions import segments
@@ -244,6 +245,25 @@ class RealNativeSourceParity(unittest.TestCase):
         with self.assertRaisesRegex(NativeParityRefused,
                                     "UNEXPECTED_NONAUTO_SOURCE_MAP"):
             inspect_original(**dict(kw, source_map={"schema": 1}))
+
+    def test_original_managed_bytes_are_checked_without_second_generator(self):
+        for mode in ("all", "list", "auto"):
+            with self.subTest(mode=mode):
+                fixture, kw, _ = self.real(TWO, mode=mode)
+                catalog = self.storage
+                observed = {x.locator: (fixture.release / "managed" / x.locator).read_bytes()
+                            for x in catalog.entries if x.provider == "managed"}
+                for name in ("hostlist-exclude.txt", "ipset-exclude.txt"):
+                    observed[name] = (fixture.release / "managed" / name).read_bytes()
+                matched = compare_original_managed_bytes(
+                    kw["resources"], catalog, observed)
+                self.assertEqual(len(matched), len(kw["resources"].resources) - 1 + 2)
+                key = "ipset-telegram.txt"
+                with self.assertRaisesRegex(ResourceCompileError,
+                                            "ORIGINAL_MANAGED_BYTES_MISMATCH"):
+                    compare_original_managed_bytes(
+                        kw["resources"], catalog,
+                        dict(observed, **{key: observed[key] + b"198.51.100.9\n"}))
 
 
 if __name__ == "__main__":
