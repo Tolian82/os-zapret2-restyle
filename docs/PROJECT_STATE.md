@@ -4,6 +4,8 @@
 
 **Proposed next source-only revision:** `v0.6.5_203` (`VERSION=0.6.5`, `PLUGIN_REVISION=203`), [S10b2b2a schema3 final proposal](architecture/ZAPRET2_TZ6V5_S10B2B2A_FINAL_SCHEMA3_PROPOSAL.md). A pure bounded schema-2 root proposal binds final and original args and both original-produced maps, native typed first-match/learning counts, original S08d structural witness and the same seal; existing schema-1 S09a/S10a remains intentionally incompatible. Original P1/Found content remains mutable CAS/ACK, not pinned as immutable root data. Proposal has `authorization=NONE`; no source-only test qualifies original FD9 transition. Existing unbound-root fence stays unchanged.
 
+**Prospective package identity only:** `os-zapret2-restyle-0.6.5_203.pkg` is NOT built, published or installed.
+
 **Remaining:** exact-head S10b2b2a genuine P2e/Voice test + applicable CI. Then **S10b2b2b** original FD9 physical pinned root + positive PREPARED→ACTIVATING gate with saved WAN/Config/old process/IPFW/active root; **S10c** crash/Config::save ambiguity/P1 CAS/ACK/restore; **S11** single physical Start/Stop/Reload. No public `_203.pkg` or owner appliance changes. [Handoff](START_HERE.md), [roadmap](ROADMAP.md), [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319).
 
 ---

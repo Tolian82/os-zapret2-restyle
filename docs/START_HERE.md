@@ -4,6 +4,8 @@
 
 **Current candidate:** `v0.6.5_203` (`VERSION=0.6.5`, `PLUGIN_REVISION=203`), [S10b2b2a detached final schema3 proposal](architecture/ZAPRET2_TZ6V5_S10B2B2A_FINAL_SCHEMA3_PROPOSAL.md). The genuine original promoter has two distinct old/final argv SHA values. New pure schema-2 root binds exact final argv + old argv + original source map + promoted active map and unchanged original S08d witness, without falsely treating final argv as an S08d snapshot. Legacy schema-1 root remains fail-closed. **This is not native positive FD9 activation, does not stage/bind an active root, and does not mutate traffic, Config, P1, IPFW or process.** Original S10b2a unbound-root fence remains in force. Candidate testing in exact-head CI, not yet accepted.
 
+**Prospective package identity only:** `os-zapret2-restyle-0.6.5_203.pkg` is NOT built, published or installed.
+
 **ONE NEXT ACTION:** qualify this source-only genuine original generator/Voice negative test and exact-head relevant CI. Then **S10b2b2b** physically pin the final schema3 root and positively attest the original FD9 bound PREPARED→ACTIVATING gate with WAN/Config/previous active process+IPFW preimages, followed by S10c crash/P1 rollback and S11 physical lifecycle. No package publication or owner-router action.
 
 **Navigation:** [PROJECT_STATE](PROJECT_STATE.md), [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md), [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md), [CHAT_RULES](CHAT_RULES.md), [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md), [ROADMAP](ROADMAP.md), [INDEX](INDEX.md), [TZ6v5 S00–S20 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
