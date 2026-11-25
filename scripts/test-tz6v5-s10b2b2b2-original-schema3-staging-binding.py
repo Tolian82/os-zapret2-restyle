@@ -221,6 +221,7 @@ class GenuineOriginalSchema3StagingAndBinding(unittest.TestCase):
         from contextlib import redirect_stdout, redirect_stderr
         from io import StringIO
         import shared_apply_operation as operation
+        from shared_apply_seal import verify_seal as real_verify_seal
 
         self.staging()
         bound = self.bind()
@@ -232,7 +233,9 @@ class GenuineOriginalSchema3StagingAndBinding(unittest.TestCase):
         with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None), \
              patch.object(operation, "SharedApplyOperation", return_value=self.original), \
              patch("shared_apply_seal.WORK", self.f.parent), \
-             redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()):
+             patch("shared_apply_seal.verify_seal", side_effect=lambda work, owner: \
+                   real_verify_seal(work, owner=os.geteuid())), \
+             redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as stderr:
             self.assertEqual(operation.main(record_argv), 69)
             root.write_bytes(raw + b" ")
             self.assertEqual(operation.main(
@@ -240,7 +243,7 @@ class GenuineOriginalSchema3StagingAndBinding(unittest.TestCase):
             self.assertEqual(self.original.read(), bound)
             root.write_bytes(raw)
             self.assertEqual(operation.main(
-                ["operation", "recover-prepared", self.f.generation]), 0)
+                ["operation", "recover-prepared", self.f.generation]), 0, stderr.getvalue())
         self.assertEqual(stdout.getvalue(), "prepared-restored\n")
         self.assertEqual(self.original.read()["phase"], "restored")
         self.assertEqual(self.original.read()["manifest"], bound["manifest"])
