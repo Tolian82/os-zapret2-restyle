@@ -87,6 +87,24 @@ write_active_release()
                 return 69
             fi
             ;;
+        first-bound)
+            # Original built intent is the provenance; Python only re-reads.
+            if [ "${ACTIVE_RELEASE_FILE}" != "${STATE_DIR}/runtime.release" ] ||
+               [ -L "${STATE_DIR}" ] || [ -L "${ACTIVE_RELEASE_FILE}" ] ||
+               [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" != 1 ] ||
+               [ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" != 1 ] ||
+               [ "${STRATEGY_LAB_LIFECYCLE_OWNER:-0}" != 1 ] ||
+               ! ( : >&9 ) 2>/dev/null ||
+               ! first_install_record_matches "${ZAPRET_DIR}"; then
+                rm -f "${_temporary}"
+                return 69
+            fi
+            printf '%s\ncommit=%s\nengine_sha256=%s\n' \
+                "${_release}" "${FIRST_INSTALL_COMMIT}" "${FIRST_INSTALL_SHA}" > "${_temporary}" || {
+                rm -f "${_temporary}"
+                return 69
+            }
+            ;;
         *)
             rm -f "${_temporary}"
             return 64
@@ -97,7 +115,7 @@ write_active_release()
         rm -f "${_temporary}"
         return 1
     fi
-    if [ "${2:-legacy}" = bound ]; then
+    if [ "${2:-legacy}" = bound ] || [ "${2:-legacy}" = first-bound ]; then
         sync || return 1
     fi
 }
@@ -882,6 +900,160 @@ first_install_validate()
     printf '%s\n' "${_fresh_head}" | grep -Eq '^[0-9a-f]{40}$' || return 69
     [ "${_fresh_head}" = "${_fresh_release}" ]
 }
+
+# Original parent owns the sole first-install intent and active release writer.
+# The shared guard below is read-only, and never certifies make on its own.
+first_install_read_record()
+{
+    _fi_root="$1"
+    [ -x "${EXTRA_PYTHON}" ] && [ -r "${EXTRA_GUARD}" ] &&
+    [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] &&
+    [ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" = 1 ] &&
+    [ "${STRATEGY_LAB_LIFECYCLE_OWNER:-0}" = 1 ] &&
+    ( : >&9 ) 2>/dev/null || return 69
+    ZAPRET_DIR="${_fi_root}" GIT_BIN="${GIT_BIN}" STATE_DIR="${STATE_DIR}" \
+    FIRST_INSTALL_ACTIVE_ROOT="${ZAPRET_DIR}" \
+    FIRST_INSTALL_STAGE_ROOT="${FIRST_INSTALL_STAGE}" \
+    FIRST_INSTALL_ORIGINAL_PRODUCER=1 \
+        "${EXTRA_PYTHON}" "${EXTRA_GUARD}" first-install-read-record "${VERSION}"
+}
+first_install_intent_matches()
+{
+    [ -f "${FIRST_INSTALL_MARKER}" ] && [ ! -L "${FIRST_INSTALL_MARKER}" ] || return 69
+    if [ "${FIRST_INSTALL_BUILT}" = 1 ]; then
+        {
+            printf 'version=%s\noriginal=%s\nstate=built\n' \
+                "${VERSION}" "${FIRST_INSTALL_HAD_TEMPLATE}"
+            printf 'commit=%s\nengine_sha256=%s\n' \
+                "${FIRST_INSTALL_COMMIT}" "${FIRST_INSTALL_SHA}"
+        } | cmp -s "${FIRST_INSTALL_MARKER}" -
+    else
+        printf 'version=%s\noriginal=%s\n' "${VERSION}" \
+            "${FIRST_INSTALL_HAD_TEMPLATE}" | cmp -s "${FIRST_INSTALL_MARKER}" -
+    fi
+}
+first_install_read_intent()
+{
+    FIRST_INSTALL_BUILT=0
+    FIRST_INSTALL_COMMIT=""
+    FIRST_INSTALL_SHA=""
+    [ -f "${FIRST_INSTALL_MARKER}" ] && [ ! -L "${FIRST_INSTALL_MARKER}" ] || return 69
+    _fi_count=$(wc -l < "${FIRST_INSTALL_MARKER}" | tr -d '[:space:]') || return 69
+    case "${_fi_count}" in 2|5) ;; *) return 69 ;; esac
+    [ "$(sed -n '1p' "${FIRST_INSTALL_MARKER}")" = "version=${VERSION}" ] || return 69
+    case "$(sed -n '2p' "${FIRST_INSTALL_MARKER}")" in
+        original=0) FIRST_INSTALL_HAD_TEMPLATE=0 ;;
+        original=1) FIRST_INSTALL_HAD_TEMPLATE=1 ;;
+        *) return 69 ;;
+    esac
+    if [ "${_fi_count}" = 5 ]; then
+        [ "$(sed -n '3p' "${FIRST_INSTALL_MARKER}")" = state=built ] || return 69
+        _fi_commit=$(sed -n '4p' "${FIRST_INSTALL_MARKER}") || return 69
+        _fi_digest=$(sed -n '5p' "${FIRST_INSTALL_MARKER}") || return 69
+        printf '%s\n' "${_fi_commit}" | grep -Eq '^commit=[0-9a-f]{40}$' || return 69
+        printf '%s\n' "${_fi_digest}" | grep -Eq '^engine_sha256=[0-9a-f]{64}$' || return 69
+        FIRST_INSTALL_COMMIT="${_fi_commit#commit=}"
+        FIRST_INSTALL_SHA="${_fi_digest#engine_sha256=}"
+        FIRST_INSTALL_BUILT=1
+    fi
+    first_install_intent_matches
+}
+first_install_record_matches()
+{
+    [ "${FIRST_INSTALL_BUILT}" = 1 ] && first_install_intent_matches &&
+        first_install_validate "$1" || return 69
+    _fi_current=$(first_install_read_record "$1") || return 69
+    _fi_expected=$(printf '%s\ncommit=%s\nengine_sha256=%s\n' \
+        "${VERSION}" "${FIRST_INSTALL_COMMIT}" "${FIRST_INSTALL_SHA}")
+    [ "${_fi_current}" = "${_fi_expected}" ] || return 69
+    first_install_intent_matches
+}
+first_install_seal_built()
+{
+    # Never called by recovery; only original successful child make reaches it.
+    [ "${FIRST_INSTALL_BUILT}" = 0 ] && first_install_intent_matches &&
+    [ ! -e "${ACTIVE_RELEASE_FILE}" ] && [ ! -L "${ACTIVE_RELEASE_FILE}" ] &&
+        first_install_validate "${FIRST_INSTALL_STAGE}/runtime" || return 69
+    _fi_record=$(first_install_read_record "${FIRST_INSTALL_STAGE}/runtime") || return 69
+    [ "$(printf '%s\n' "${_fi_record}" | wc -l | tr -d '[:space:]')" = 3 ] || return 69
+    _fi_tag=$(printf '%s\n' "${_fi_record}" | sed -n '1p')
+    _fi_oid=$(printf '%s\n' "${_fi_record}" | sed -n '2p')
+    _fi_hash=$(printf '%s\n' "${_fi_record}" | sed -n '3p')
+    [ "${_fi_tag}" = "${VERSION}" ] &&
+    printf '%s\n' "${_fi_oid}" | grep -Eq '^commit=[0-9a-f]{40}$' &&
+    printf '%s\n' "${_fi_hash}" | grep -Eq '^engine_sha256=[0-9a-f]{64}$' || return 69
+    FIRST_INSTALL_COMMIT="${_fi_oid#commit=}"
+    FIRST_INSTALL_SHA="${_fi_hash#engine_sha256=}"
+    _fi_tmp=$(mktemp "${STATE_DIR}/first-install.intent.XXXXXXXX") || return 69
+    if ! {
+        printf 'version=%s\noriginal=%s\nstate=built\n' \
+            "${VERSION}" "${FIRST_INSTALL_HAD_TEMPLATE}"
+        printf 'commit=%s\nengine_sha256=%s\n' \
+            "${FIRST_INSTALL_COMMIT}" "${FIRST_INSTALL_SHA}"
+    } > "${_fi_tmp}" || ! chmod 0600 "${_fi_tmp}" ||
+       ! mv -f "${_fi_tmp}" "${FIRST_INSTALL_MARKER}"; then
+        rm -f "${_fi_tmp}"
+        return 69
+    fi
+    sync || return 69
+    FIRST_INSTALL_BUILT=1
+    first_install_record_matches "${FIRST_INSTALL_STAGE}/runtime"
+}
+first_install_active_marker_matches()
+{
+    [ -f "${ACTIVE_RELEASE_FILE}" ] && [ ! -L "${ACTIVE_RELEASE_FILE}" ] || return 69
+    if [ "${FIRST_INSTALL_BUILT}" = 1 ]; then
+        printf '%s\ncommit=%s\nengine_sha256=%s\n' \
+            "${VERSION}" "${FIRST_INSTALL_COMMIT}" "${FIRST_INSTALL_SHA}" |
+            cmp -s "${ACTIVE_RELEASE_FILE}" -
+    else
+        printf '%s\n' "${VERSION}" | cmp -s "${ACTIVE_RELEASE_FILE}" -
+    fi
+}
+first_install_publish_built()
+{
+    [ "${FIRST_INSTALL_BUILT}" = 1 ] && first_install_stage_safe &&
+        first_install_record_matches "${FIRST_INSTALL_STAGE}/runtime" || return 69
+    if [ "${FIRST_INSTALL_HAD_TEMPLATE}" -eq 1 ]; then
+        if [ -d "${FIRST_INSTALL_STAGE}/original" ] &&
+           [ ! -L "${FIRST_INSTALL_STAGE}/original" ]; then
+            [ ! -e "${ZAPRET_DIR}" ] && [ ! -L "${ZAPRET_DIR}" ] || return 69
+            first_install_templates_equal "${FIRST_INSTALL_STAGE}/original" \
+                "${FIRST_INSTALL_STAGE}/runtime" || return 69
+        else
+            first_install_template_root_safe "${ZAPRET_DIR}" || return 69
+            for _fi_name in zapret.conf hostlist.txt hostlist-exclude.txt; do
+                _fi_src="${ZAPRET_DIR}/${_fi_name}"
+                _fi_dest="${FIRST_INSTALL_STAGE}/runtime/${_fi_name}"
+                if [ -f "${_fi_src}" ]; then
+                    if [ -e "${_fi_dest}" ] || [ -L "${_fi_dest}" ]; then
+                        [ -f "${_fi_dest}" ] && [ ! -L "${_fi_dest}" ] &&
+                            cmp -s "${_fi_src}" "${_fi_dest}" || return 69
+                    else
+                        cp -p "${_fi_src}" "${_fi_dest}" || return 69
+                    fi
+                elif [ -e "${_fi_dest}" ] || [ -L "${_fi_dest}" ]; then
+                    return 69
+                fi
+            done
+            first_install_templates_equal "${ZAPRET_DIR}" \
+                "${FIRST_INSTALL_STAGE}/runtime" || return 69
+            mv "${ZAPRET_DIR}" "${FIRST_INSTALL_STAGE}/original" || return 69
+            first_install_templates_equal "${FIRST_INSTALL_STAGE}/original" \
+                "${FIRST_INSTALL_STAGE}/runtime" || return 69
+        fi
+    else
+        [ ! -e "${FIRST_INSTALL_STAGE}/original" ] &&
+        [ ! -L "${FIRST_INSTALL_STAGE}/original" ] &&
+        [ ! -e "${ZAPRET_DIR}" ] && [ ! -L "${ZAPRET_DIR}" ] || return 69
+    fi
+    first_install_record_matches "${FIRST_INSTALL_STAGE}/runtime" || return 69
+    mv "${FIRST_INSTALL_STAGE}/runtime" "${ZAPRET_DIR}" || {
+        echo "ERROR: RECOVERY_REQUIRED: initial runtime promotion failed" >&2
+        return 69
+    }
+    first_install_finish
+}
 first_install_finish()
 {
     first_install_validate "${ZAPRET_DIR}" || {
@@ -899,8 +1071,7 @@ first_install_finish()
         else
             # A previous attempt may have verified and retired the backup,
             # but only AFTER committing the exact active release marker.
-            [ -f "${ACTIVE_RELEASE_FILE}" ] && [ ! -L "${ACTIVE_RELEASE_FILE}" ] &&
-            [ "$(cat "${ACTIVE_RELEASE_FILE}")" = "${VERSION}" ] || return 69
+            first_install_active_marker_matches || return 69
         fi
     else
         [ ! -e "${FIRST_INSTALL_STAGE}/original" ] &&
@@ -913,10 +1084,22 @@ first_install_finish()
     else
         [ "$?" -eq 1 ] || return 69
     fi
-    write_active_release "${VERSION}" || {
-        echo "ERROR: RECOVERY_REQUIRED: installed runtime marker not committed" >&2
-        return 69
-    }
+    first_install_intent_matches || return 69
+    if [ "${FIRST_INSTALL_BUILT}" = 1 ]; then
+        first_install_record_matches "${ZAPRET_DIR}" || return 69
+    fi
+    if [ -e "${ACTIVE_RELEASE_FILE}" ] || [ -L "${ACTIVE_RELEASE_FILE}" ]; then
+        first_install_active_marker_matches || return 69
+    else
+        _fi_marker_mode=legacy
+        [ "${FIRST_INSTALL_BUILT}" != 1 ] || _fi_marker_mode=first-bound
+        write_active_release "${VERSION}" "${_fi_marker_mode}" || {
+            echo "ERROR: RECOVERY_REQUIRED: installed runtime marker not committed" >&2
+            return 69
+        }
+    fi
+    first_install_active_marker_matches || return 69
+    sync || return 69
     if [ -d "${FIRST_INSTALL_STAGE}/original" ]; then
         first_install_template_root_safe "${FIRST_INSTALL_STAGE}/original" || return 69
         rm -rf "${FIRST_INSTALL_STAGE}/original" || return 69
@@ -942,30 +1125,32 @@ install_first_runtime()
         echo "ERROR: RECOVERY_REQUIRED: old rollback or managed resources still exist" >&2
         return 69
     }
+    FIRST_INSTALL_BUILT=0
+    FIRST_INSTALL_COMMIT=""
+    FIRST_INSTALL_SHA=""
     if [ -e "${FIRST_INSTALL_MARKER}" ] || [ -L "${FIRST_INSTALL_MARKER}" ]; then
-        [ -f "${FIRST_INSTALL_MARKER}" ] && [ ! -L "${FIRST_INSTALL_MARKER}" ] || return 69
-        [ "$(wc -l < "${FIRST_INSTALL_MARKER}" | tr -d '[:space:]')" = 2 ] || return 69
-        [ "$(sed -n '1p' "${FIRST_INSTALL_MARKER}")" = "version=${VERSION}" ] || return 69
-        case "$(sed -n '2p' "${FIRST_INSTALL_MARKER}")" in
-            original=0) FIRST_INSTALL_HAD_TEMPLATE=0 ;;
-            original=1) FIRST_INSTALL_HAD_TEMPLATE=1 ;;
-            *) return 69 ;;
-        esac
+        first_install_read_intent || return 69
         if [ -e "${ZAPRET_DIR}" ] || [ -L "${ZAPRET_DIR}" ]; then
             if first_install_validate "${ZAPRET_DIR}"; then
-                # Interrupted after verified new checkout publication.
+                # A verified published old two-line intent stays unbound.
                 first_install_finish
                 return $?
             fi
-            # Previous build failed before the package-created template root
-            # was renamed. Do not erase any preexisting template content.
+            if [ "${FIRST_INSTALL_BUILT}" = 1 ]; then
+                first_install_template_root_safe "${ZAPRET_DIR}" || return 69
+                first_install_publish_built
+                return $?
+            fi
             [ "${FIRST_INSTALL_HAD_TEMPLATE}" -eq 1 ] &&
             first_install_template_root_safe "${ZAPRET_DIR}" &&
             [ ! -e "${FIRST_INSTALL_STAGE}/original" ] &&
             [ ! -L "${FIRST_INSTALL_STAGE}/original" ] || return 69
+        elif [ "${FIRST_INSTALL_BUILT}" = 1 ]; then
+            # Interrupted original build: exact source re-attestation before
+            # the existing stage->root promotion; no new make inference.
+            first_install_publish_built
+            return $?
         elif [ "${FIRST_INSTALL_HAD_TEMPLATE}" -eq 1 ]; then
-            # Interrupted after moving native template outputs aside but
-            # before publishing the new checkout; restore original bytes.
             first_install_stage_safe || return 69
             first_install_template_root_safe "${FIRST_INSTALL_STAGE}/original" || return 69
             mv "${FIRST_INSTALL_STAGE}/original" "${ZAPRET_DIR}" || return 69
@@ -1046,40 +1231,18 @@ operation=${SETUP_OPERATION_ID}"
         return 69
     }
 
-    if [ "${FIRST_INSTALL_HAD_TEMPLATE}" -eq 1 ]; then
-        # A normal OPNsense package install has already rendered these
-        # native configd output files. Preserve their exact original bytes.
-        first_install_template_root_safe "${ZAPRET_DIR}" || return 69
-        for _template_name in zapret.conf hostlist.txt hostlist-exclude.txt; do
-            if [ -f "${ZAPRET_DIR}/${_template_name}" ]; then
-                [ ! -e "${FIRST_INSTALL_STAGE}/runtime/${_template_name}" ] &&
-                [ ! -L "${FIRST_INSTALL_STAGE}/runtime/${_template_name}" ] || return 69
-                cp -p "${ZAPRET_DIR}/${_template_name}" \
-                    "${FIRST_INSTALL_STAGE}/runtime/${_template_name}" || return 69
-            fi
-        done
-        first_install_templates_equal "${ZAPRET_DIR}" "${FIRST_INSTALL_STAGE}/runtime" || return 69
-        # Move the original template-only root to the same owned stage
-        # before exposing the new checkout. If interrupted, recovery puts
-        # it back without deleting or changing anything foreign.
-        mv "${ZAPRET_DIR}" "${FIRST_INSTALL_STAGE}/original" || return 69
-        first_install_templates_equal "${FIRST_INSTALL_STAGE}/original" \
-            "${FIRST_INSTALL_STAGE}/runtime" || {
-                echo "ERROR: RECOVERY_REQUIRED: template bytes changed during publication" >&2
-                return 69
-            }
-    else
-        [ ! -e "${ZAPRET_DIR}" ] && [ ! -L "${ZAPRET_DIR}" ] || return 69
-    fi
-    if ! mv "${FIRST_INSTALL_STAGE}/runtime" "${ZAPRET_DIR}"; then
-        echo "ERROR: RECOVERY_REQUIRED: initial runtime promotion failed" >&2
+    # Only original parent after successful child make can mint this intent;
+    # durable intent publication precedes EVERY original filesystem rename.
+    first_install_seal_built || {
+        status_write failed || true
+        echo "ERROR: RECOVERY_REQUIRED: original first-install make proof unverified" >&2
+        return 69
+    }
+    if ! first_install_publish_built; then
         status_write failed || true
         return 69
     fi
-    if ! first_install_finish; then
-        status_write failed || true
-        return 69
-    fi
+    return 0
 }
 
 

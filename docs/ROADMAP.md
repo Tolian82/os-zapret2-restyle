@@ -1,8 +1,8 @@
-## Current priority — TZ6v5 S10c2b3h first-install crash-safe provenance
+## Current priority — TZ6v5 S10c2b3h first-install provenance and recovery
 
-Accepted `main v0.6.5_221 / ff032d36` ([PR #1342](https://github.com/Tolian82/os-zapret2-restyle/pull/1342)): original post-make three-line bound marker for upgrade/reinstall and the narrow original All/List Voice Auto-GUI absence fix; exact-head CI and disposable native gates PASS. [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) remains OPEN/NO-GO; no public `_221.pkg`, owner appliance unchanged. Source-only documentation candidate `v0.6.5_222` records the next original producer-binding gate, not new runtime behavior.
+Accepted `main v0.6.5_222 / d035dde8` ([PR #1343](https://github.com/Tolian82/os-zapret2-restyle/pull/1343)) is a source-only design checkpoint after accepted `_221`. The present `v0.6.5_223` product source candidate implements the bounded original parent post-make durable first-install receipt and protected staged/published recovery, under the same setup.lock, FD9 and one runtime.release writer. It does not publish `os-zapret2-restyle-0.6.5_223.pkg`, change the owner appliance or claim physical S10 GO.
 
-**Next executable scope:** [S10c2b3h original first-install proven build handoff](architecture/ZAPRET2_TZ6V5_S10C2B3H_FIRST_INSTALL_PROVENANCE_GATE.md): use existing first-install intent, held original setup.lock+FD9, exact staged make/result + Git/tag/ELF attestation and one original runtime.release writer; refuse an unproven resumed checkout rather than inferring success. Qualify original first-install/interrupt crash states in scoped local and genuine native G03. Then return to S10 immutable root/Found P1/physical promotion and rollback gates before S11. No new FD9 owner, journal, Config writer or unrequested package publication.
+**Next executable gate:** exact-head source G03/guard tests and the existing genuine native OPNsense 26.7 G03 first-install/interrupt fixture, then only after their acceptance return to [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) immutable root/Found P1/physical promotion/rollback. S11 remains blocked. [Contract](architecture/ZAPRET2_TZ6V5_S10C2B3H_FIRST_INSTALL_PROVENANCE_GATE.md); no new journal, FD9/Config writer or extra VM matrix.
 
 ---
 

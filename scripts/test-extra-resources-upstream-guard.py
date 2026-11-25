@@ -87,6 +87,39 @@ class InstalledEngineObservation(unittest.TestCase):
         self.assertEqual(self.observe()["record_schema"], "exact-bound-candidate")
         self.assertFalse(self.observe()["build_provenance_verified"])
 
+    def test_first_install_original_reader_is_strictly_read_only(self):
+        """Fixture FD9 is simulated; real native setup is qualified by G03."""
+        env = {
+            "SETUP_TRANSACTION_LOCK_OWNER": "1",
+            "UPSTREAM_RUNTIME_LIFECYCLE_OWNER": "1",
+            "STRATEGY_LAB_LIFECYCLE_OWNER": "1",
+            "FIRST_INSTALL_ORIGINAL_PRODUCER": "1",
+            "FIRST_INSTALL_ACTIVE_ROOT": str(self.runtime),
+            "FIRST_INSTALL_STAGE_ROOT": str(self.runtime) + ".first-install",
+        }
+        # A nonexistent original FD9 may not accidentally authorize a reader.
+        with patch.dict(os.environ, {**env, "FIRST_INSTALL_ORIGINAL_PRODUCER": "0"}):
+            with self.assertRaises(guard.TransactionError):
+                guard.original_setup_first_install_read_record("v1.0.7")
+        original_fstat = os.fstat
+        def controlled_fd9(fd):
+            if fd == 9:
+                return self.engine.stat()
+            return original_fstat(fd)
+        before = self.marker.read_bytes()
+        with patch.dict(os.environ, env), patch.object(guard, "RUNTIME", self.runtime), \
+             patch.object(guard, "GIT", self.git), \
+             patch.object(guard.os, "fstat", side_effect=controlled_fd9):
+            expected = guard.draft_original_setup_release_record(
+                runtime=self.runtime, release="v1.0.7",
+                git=self.git, owner_uid=os.geteuid())
+            self.assertEqual(guard.original_setup_first_install_read_record("v1.0.7"), expected)
+            with patch.dict(os.environ, {"FIRST_INSTALL_STAGE_ROOT": "/tmp/unrelated-root"}):
+                with self.assertRaises(guard.TransactionError):
+                    guard.original_setup_first_install_read_record("v1.0.7")
+        self.assertEqual(self.marker.read_bytes(), before)
+        self.assertEqual(self.observe()["record_schema"], "legacy-display-only")
+
     def test_drafted_record_rejects_binary_drift_and_forged_data(self):
         record = guard.draft_original_setup_release_record(
             runtime=self.runtime, release="v1.0.7",

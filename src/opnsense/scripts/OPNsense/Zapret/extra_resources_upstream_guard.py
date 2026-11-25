@@ -575,6 +575,31 @@ def original_setup_built_release_record(release: str) -> bytes:
     return draft_original_setup_release_record(
         runtime=RUNTIME, release=release, git=GIT, owner_uid=os.geteuid())
 
+def original_setup_first_install_read_record(release: str) -> bytes:
+    """Read-only first-install witness; only its original parent may commit.
+
+    The parent calls this after genuine child make; recovery calls it again
+    to compare immutable bytes. Observation alone is never build provenance.
+    """
+    if (os.environ.get("SETUP_TRANSACTION_LOCK_OWNER") != "1"
+            or os.environ.get("UPSTREAM_RUNTIME_LIFECYCLE_OWNER") != "1"
+            or os.environ.get("STRATEGY_LAB_LIFECYCLE_OWNER") != "1"
+            or os.environ.get("FIRST_INSTALL_ORIGINAL_PRODUCER") != "1"):
+        raise TransactionError("FIRST_INSTALL_ORIGINAL_FD9_REQUIRED")
+    try:
+        os.fstat(9)
+    except OSError as exc:
+        raise TransactionError("FIRST_INSTALL_ORIGINAL_FD9_REQUIRED") from exc
+    active = Path(os.environ.get("FIRST_INSTALL_ACTIVE_ROOT", ""))
+    stage = Path(os.environ.get("FIRST_INSTALL_STAGE_ROOT", ""))
+    if (not active.is_absolute() or not stage.is_absolute()
+            or stage != Path(str(active) + ".first-install")
+            or RUNTIME not in {active, stage / "runtime"}):
+        raise TransactionError("FIRST_INSTALL_ORIGINAL_ROOT_INVALID")
+    return draft_original_setup_release_record(
+        runtime=RUNTIME, release=release, git=GIT, owner_uid=os.geteuid())
+
+
 def _read_original_release_marker_bytes(path: Path, owner: int) -> tuple[bytes, tuple]:
     """Original marker inode + exact bytes, no symlinks or speculative fallback."""
     identity = _engine_identity_stat(path, owner)
@@ -920,7 +945,7 @@ def preflight_exact(ref: str = "FETCH_HEAD") -> None:
     preflight_switch(ref)
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence", "write-built-release-record", "export-original-release", "verify-prepared-original-release", "bind-target", "verify-target", "inspect-target", "inspect-checkout"}:
+    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence", "write-built-release-record", "first-install-read-record", "export-original-release", "verify-prepared-original-release", "bind-target", "verify-target", "inspect-target", "inspect-checkout"}:
         print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|preflight-exact [COMMIT]|verify-exact|snapshot|verify|verify-snapshot|restore|snapshot-evidence 0|1|verify-evidence 0|1}", file=sys.stderr)
         return 64
     try:
@@ -966,6 +991,12 @@ def main(argv: list[str]) -> int:
                 return 64
             # Data-only output; no PASS banner and no extra state writer.
             sys.stdout.buffer.write(original_setup_built_release_record(argv[2]))
+            return 0
+        elif argv[1] == "first-install-read-record":
+            if len(argv) != 3:
+                return 64
+            # Data only. The original parent seals intent, not this reader.
+            sys.stdout.buffer.write(original_setup_first_install_read_record(argv[2]))
             return 0
         elif argv[1] in {"export-original-release", "verify-prepared-original-release"}:
             if (len(argv) != 5 or argv[2] not in {"0", "1"}):

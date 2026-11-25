@@ -1,6 +1,6 @@
 # TZ6v5 S10c2b3h — original first-install make provenance and crash-resume gate
 
-**Status:** source-route and acceptance design only; **no implementation, runtime authorization or physical GO**. Baseline: accepted [PR #1342](https://github.com/Tolian82/os-zapret2-restyle/pull/1342), `main v0.6.5_221 ff032d36`, [S10 tracker #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319), [TZ6v5 S10](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), [declarative owner contract](ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md), [canonical original lifecycle](ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md). The `v0.6.5_222` documentation checkpoint is source-only and does not publish an OPNsense package.
+**Status:** design contract approved; original first-install producer/intent implementation is the `v0.6.5_223` source candidate, pending exact-head native acceptance. **No physical S10 runtime authorization or GO**. Baseline: accepted [PR #1342](https://github.com/Tolian82/os-zapret2-restyle/pull/1342), `main v0.6.5_221 ff032d36`, [S10 tracker #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319), [TZ6v5 S10](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md), [declarative owner contract](ZAPRET2_DECLARATIVE_RUNTIME_MANIFEST.md), [canonical original lifecycle](ZAPRET2_CANONICAL_SERVICE_LIFECYCLE.md). The `v0.6.5_222` documentation checkpoint is source-only and does not publish an OPNsense package.
 
 ## Original producer trace and observed gap
 
@@ -26,3 +26,8 @@ For an upgrade/reinstall, the original parent already sees genuine child success
 - Acceptance requires fixed original-stage receipts, precise failure rc, no Config/IPFW/process writes during proof construction, bounded restored state, exact-head applicable CI and postmerge verification. No positive physical S10 or owner-appliance success assertion is permitted from this documentation or a pure fixture.
 
 **Next implementation boundary:** make the original prepared→built intent proof and legacy/strict recovery classification **in the existing producer transaction**, with red→green local and genuine native G03 evidence, then return to S10 immutable physical promotion and P1/Found crash recovery. No other stage is implicitly accepted.
+
+
+## S10c2b3h original producer implementation candidate (_223)
+
+The original shell now seals an exact five-line `first-install.intent` (`version`, `original`, `state=built`, `commit`, `engine_sha256`) only after its genuine `setup.sh` child exits successfully and the parent verifies the safe staged Git/engine. The existing parent owns the only intent promotion and sole `write_active_release`; the read-only `first-install-read-record` guard is deliberately not a standalone make witness. The original filesystem rename follows the durable built intent. Subsequent original resume with a five-line built intent re-attests staged/promoted source before either promotion or original bound marker, including the package-created configd templates. Old two-line interrupted intents remain legacy/unbound. Check the original G03 fast suite and real FreeBSD 15 native G03 before treating these source changes as accepted. Source-only implementation does not authorize physical S10 Apply/Start, Found P1, a public package or owner-live acceptance.
