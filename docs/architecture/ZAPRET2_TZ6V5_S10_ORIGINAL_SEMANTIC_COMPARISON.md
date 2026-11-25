@@ -1,3 +1,13 @@
+## Candidate v0.6.5_232 — genuine stopped old owner under original G03 FD9 (no production action)
+
+Accepted main `v0.6.5_231` / `6bdffec5312e79c72b718fa2df9c01a3d22d5a69`; [PR #1352](https://github.com/Tolian82/os-zapret2-restyle/pull/1352) and exact-head/postmerge CI SUCCESS. New candidate is **not qualified** until native G03 on exact PR SHA passes.
+
+The *same existing G03 disposable OPNsense 26.7 guest*, after its genuine running sealed bound-root semantic comparison and recovery, now runs an explicit `stopped` test-only command and performs a **deliberate** original service Stop, verifies real service status and absence of PID, snapshots the new stopped Config/WAL/three protected lists/scoped kernel observations, and repeats the real **unchanged** native sealed source/PHP Config/preflight, PREPARED root, original FD9 binding, original native-common previous owner and quiescent proof. It requires actual `committed-stopped` receipt and analytical `START` proposal, never `NO_CHANGE` or a disguised `RESTART`. The original pre-activation fence still rejects `activating`. Original `recover-prepared` must close the same bound journal with the engine **still stopped**, no Config/IPFW/owner changes. This is test-only code, not packaged, and no new read-only runtime observer. **Stage5 Guest D must run the default RUNNING mode unchanged:** first the earlier `partial` protected-file crash/recovery and then `config-uncertain` actual Config::save crash, both require a running predecessor. Its Config crash deliberately ends INCOMPLETE, so the STOPPED scenario is only run as a separately requested final operation in G03, not before or after those two Guest D tests.
+
+No fake old PID/IPFW/epoch/Config or site-specific WAN values; if native original retirement or any other preimage gate cannot prove old STOPPED, the test fails and PR remains unmerged. This is NOT native pristine first-install/no-upstream OFF evidence, not actual START/STOP authorization, and not the original physical commit/rollback. Further native G03 cold scenario and Found CAS remain open; S10 OPEN, S11/S12 blocked.
+
+---
+
 ## Candidate v0.6.5_231 — one original semantic planner distinguishes RUNNING / STOPPED / cold
 
 Based on accepted main `v0.6.5_230` / `bacda86721d3df2d0d120c10ff57471ec12e3ee9`, [PR #1351](https://github.com/Tolian82/os-zapret2-restyle/pull/1351), all exact-head and postmerge source checks SUCCESS. **Candidate not qualified until exact-head tests and policy/native package CI.**
