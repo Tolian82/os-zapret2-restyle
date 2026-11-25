@@ -63,3 +63,21 @@ or upstream reread test.
 **Not complete:** regular Apply dispatcher switch, semantic no-op/reload/restart
 decision, Found binding/P1 CAS and atomic physical root promotion/recovery.
 No public testing package or owner-router mutation.
+
+## Next grouped task: preserve the actual old root in the SAME operation
+
+The current original `committed_owner()` returns only a detail record
+(id/page/base/candidate/changed_fields). `advance("prepared", ...)` and
+`prepare_found(...)` preserve that detail as `previous`, but they do NOT
+currently preserve the preceding committed root's seal/root SHA pin.
+That is safe only while no bound root can physically activate. Before
+any positive activation, extend the same original WAL (not a second
+file or external ledger) to retain the exact qualified previous manifest
+pin, propagate it across ordinary and Found phases and select the correct
+terminal active pin on COMMITTED versus RESTORED. A previous bound root
+must never silently downgrade to an unbound legacy successor. Compare
+the already-attested old/new effective snapshots and classify under
+original FD9 before any retirement, Config/P1 write, process or IPFW
+mutation. Recovery must restore the original pinned owner, not merely its
+Config digest. Reuse the existing previous physical/cold/WAN evidence
+modules; do not reimplement their observers.

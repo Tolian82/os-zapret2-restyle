@@ -289,7 +289,8 @@ try {
                 $xml = @file_get_contents('/conf/config.xml');
                 required(is_string($xml), 'G03_BOUND_NATIVE_CONFIG_UNREADABLE');
                 $prepared = SharedApplyRequest::prepareSavedUnchanged($current, $xml);
-                required(!isset($prepared['plan']['found_intent'], $prepared['plan']['found_batch']) &&
+                required(!isset($prepared['plan']['found_intent']) &&
+                         !isset($prepared['plan']['found_batch']) &&
                          $prepared['plan']['page'] === 'strategies',
                          'G03_BOUND_NATIVE_ORDINARY_PLAN_REQUIRED');
                 echo 'prepared-id=' . SharedApplyRequest::materialize($prepared) . "\n";
