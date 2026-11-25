@@ -178,7 +178,7 @@ class FullPreviousOwnerReadOnly(unittest.TestCase):
             replace(self.saved, previous_state="stopped"),
             replace(self.saved, authorization="APPLY"),
             replace(self.saved, physical_transition_allowed=True),
-            replace(self.saved, previous_generation="f" * 32),
+            replace(self.saved, previous_generation="0" * 32),
             replace(self.saved, config_base_sha256="f" * 64),
         ):
             with self.subTest(candidate=candidate.status):
