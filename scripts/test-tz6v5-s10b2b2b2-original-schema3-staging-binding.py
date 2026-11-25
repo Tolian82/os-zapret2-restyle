@@ -137,10 +137,13 @@ class GenuineOriginalSchema3StagingAndBinding(unittest.TestCase):
         self.assertFalse(ready.promotion_allowed)
         self.assertTrue(ready.native_owner_preflight_required)
 
-    def test_unbound_staging_and_journal_never_authorize_activation(self):
+    def test_staging_keeps_prepared_and_bound_journal_refuses_activation(self):
         self.staging()
-        with self.assertRaises(SharedOperationError):
-            self.original.advance("activating", self.f.detail)
+        # The historical generic UNBOUND journal advance is retained for
+        # legacy operations. Its PHYSICAL unbound-root refusal is owned by
+        # the original S10b2a service fence, which has a separate regression.
+        # Staging alone NEVER advances the original PREPARED operation.
+        self.assertEqual(self.original.read(), self.journal_before)
         bound = self.bind()
         with self.assertRaisesRegex(SharedOperationError, "preactivation gate"):
             self.original.advance("activating", self.f.detail)
