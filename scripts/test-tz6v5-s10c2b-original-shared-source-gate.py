@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 
+import neutral_shared_apply_source_gate as gate
 from neutral_shared_apply_source_gate import (
     FIELDS, MARKER, decode_pipe, qualify_source_to_managed,
     OriginalSourceGateRefused, _fixed_unclassified_reason, _owned_under_original_p2)
@@ -325,6 +326,189 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 self.assertEqual(journal.read()["phase"], "prepared")
                 with self.assertRaises(SharedOperationError):
                     journal.advance("activating", detail)
+
+
+    def test_s10_bound_original_fd9_to_real_sealed_s08d_for_all_list_auto(self):
+        """Genuine original source with simulated native owner; NEVER a Start."""
+        from unittest.mock import patch
+        for mode in ("all", "list", "auto"):
+            with self.subTest(mode=mode):
+                fixture, kw = self.original(mode=mode, voice=True)
+                self.original_plan(fixture)
+                if mode == "auto":
+                    origin.promote_learning_release(fixture.work,
+                                                    kw["candidate_sha256"])
+                create_seal(fixture.work, owner=os.geteuid())
+                expected = qualify_source_to_managed(
+                    **dict(kw, sealed=True, engine_version="v1.0.7"))
+                wire = MARKER + b"\0" + b"\0".join(
+                    kw["inputs"][name] for name in FIELDS) + b"\0"
+                bound = {
+                    "engine_version": "v1.0.7", "source_commit": "a" * 40,
+                    "engine_sha256": "b" * 64,
+                    "status": "S10_ORIGINAL_BOUND_ENGINE_VERSION_READ_ONLY",
+                    "authorization": "NONE",
+                    "physical_transition_allowed": False,
+                    "build_provenance_verified": False,
+                }
+                calls = []
+
+                def original(operation, payload, digest=None, *,
+                             sealed=False, engine_version=None):
+                    calls.append((operation, payload, digest,
+                                  sealed, engine_version))
+                    # The outer native-entry check must see synthetic
+                    # FreeBSD uid=0. This disposable P2e tree is actually
+                    # owned by the CI user: restore THAT real owner while
+                    # the genuine Auto promoter reattests its file inodes.
+                    with patch.object(gate.os, "geteuid",
+                                      return_value=kw["owner_uid"]):
+                        return qualify_source_to_managed(**dict(
+                            kw, sealed=sealed, engine_version=engine_version))
+
+                args = (fixture.work.name, wire,
+                        kw["candidate_sha256"] if mode == "auto" else None)
+                original_bytes = ((fixture.release / "dvtws.args").read_bytes(),
+                                  (fixture.work / "bundle-seal.json").read_bytes())
+                with patch.object(gate.sys, "platform", "freebsd15"), \
+                     patch.object(gate.os, "geteuid", return_value=0), \
+                     patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                     patch.object(gate, "_s10_native_bound_engine_readback",
+                                  side_effect=[bound, bound]), \
+                     patch.object(gate, "native_original_fd9",
+                                  side_effect=original):
+                    observed = gate.native_original_bound_effective_fd9(*args)
+                self.assertEqual(observed, expected)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(calls[0],
+                                 (args[0], wire, args[2], True, "v1.0.7"))
+                self.assertEqual(observed.effective.argv_sha256,
+                                 observed.native.original_args_sha256)
+                self.assertEqual(observed.effective.authorization, "NONE")
+                self.assertFalse(observed.effective.physical_transition_allowed)
+                self.assertEqual(
+                    original_bytes,
+                    ((fixture.release / "dvtws.args").read_bytes(),
+                     (fixture.work / "bundle-seal.json").read_bytes()))
+
+    def test_s10_native_engine_recheck_and_refusal_do_not_activate(self):
+        from types import SimpleNamespace
+        id = "a" * 32
+        wire = MARKER + b"\0" + b"mock\0"
+        identity = {
+            "engine_version": "v1.0.7", "source_commit": "a" * 40,
+            "engine_sha256": "b" * 64,
+            "status": "S10_ORIGINAL_BOUND_ENGINE_VERSION_READ_ONLY",
+            "authorization": "NONE", "physical_transition_allowed": False,
+            "build_provenance_verified": False,
+        }
+        model = SimpleNamespace(
+            generation=id, status="ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY",
+            authorization="NONE", physical_transition_allowed=False,
+            native=SimpleNamespace(original_args_sha256="c" * 64),
+            effective=SimpleNamespace(argv_sha256="c" * 64),
+            original_args_sha256="c" * 64,
+            original_seal_sha256="d" * 64)
+        with patch.object(gate.sys, "platform", "linux"), \
+             patch.object(gate, "_s10_native_bound_engine_readback") as rd:
+            with self.assertRaisesRegex(OriginalSourceGateRefused,
+                                        "NATIVE_ORIGINAL_FD9_REQUIRED"):
+                gate.native_original_bound_effective_fd9(id, wire)
+            rd.assert_not_called()
+        with patch.object(gate.sys, "platform", "freebsd15"), \
+             patch.object(gate.os, "geteuid", return_value=0), \
+             patch("voice_ipfw_adapter.require_lifecycle_lock",
+                   side_effect=RuntimeError("no inherited FD9")), \
+             patch.object(gate, "_s10_native_bound_engine_readback") as rd:
+            with self.assertRaises(RuntimeError):
+                gate.native_original_bound_effective_fd9(id, wire)
+            rd.assert_not_called()
+        for altered in (
+                {"authorization": "START"},
+                {"physical_transition_allowed": True},
+                {"build_provenance_verified": True},
+                {"status": "legacy-display-only"},
+                {"engine_version": "forged=bad"},
+                {"engine_sha256": "not-a-digest"},
+                {"foreign": "unowned"},
+        ):
+            with self.subTest(altered=altered), \
+                 patch.object(gate.sys, "platform", "freebsd15"), \
+                 patch.object(gate.os, "geteuid", return_value=0), \
+                 patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                 patch.object(gate, "_s10_native_bound_engine_readback",
+                              return_value={**identity, **altered}), \
+                 patch.object(gate, "native_original_fd9") as original:
+                with self.assertRaisesRegex(OriginalSourceGateRefused,
+                                            "S10_BOUND_ENGINE_UNQUALIFIED"):
+                    gate.native_original_bound_effective_fd9(id, wire)
+                original.assert_not_called()
+        # An apparently valid original bundle is NOT a backdoor to an
+        # activating receipt; fake/wrong typed source is always rejected.
+        with patch.object(gate.sys, "platform", "freebsd15"), \
+             patch.object(gate.os, "geteuid", return_value=0), \
+             patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+             patch.object(gate, "_s10_native_bound_engine_readback",
+                          return_value=identity), \
+             patch.object(gate, "native_original_fd9", return_value=model):
+            with self.assertRaisesRegex(OriginalSourceGateRefused,
+                                        "S10_EFFECTIVE_SOURCE_UNQUALIFIED"):
+                gate.native_original_bound_effective_fd9(id, wire)
+        # Even an authentic typed source cannot pass if the original
+        # setup-bound ELF changes during the independent source recheck.
+        fixture, kw = self.original(mode="list", voice=True)
+        self.original_plan(fixture)
+        create_seal(fixture.work, owner=os.geteuid())
+        qualified = qualify_source_to_managed(
+            **dict(kw, sealed=True, engine_version="v1.0.7"))
+        changed = {**identity, "engine_sha256": "f" * 64}
+        with patch.object(gate.sys, "platform", "freebsd15"), \
+             patch.object(gate.os, "geteuid", return_value=0), \
+             patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+             patch.object(gate, "_s10_native_bound_engine_readback",
+                          side_effect=[identity, changed]), \
+             patch.object(gate, "native_original_fd9",
+                          return_value=qualified):
+            with self.assertRaisesRegex(OriginalSourceGateRefused,
+                                        "S10_BOUND_ENGINE_CHANGED"):
+                gate.native_original_bound_effective_fd9(fixture.work.name, wire)
+
+    def test_s10_cli_only_accepts_explicit_sealed_original_protocol(self):
+        import contextlib
+        import io
+        from types import SimpleNamespace
+        id = "a" * 32
+        digest = "d" * 64
+        stdout = io.StringIO()
+        receipt = SimpleNamespace(
+            effective=SimpleNamespace(structural_sha256="e" * 64))
+        for argv, expected_digest in (
+                ([id, "--sealed", "--s10-effective"], None),
+                ([id, digest, "--sealed", "--s10-effective"], digest)):
+            with self.subTest(argv=argv), \
+                 patch.object(gate.sys, "stdin",
+                              SimpleNamespace(buffer=io.BytesIO(b"input"))), \
+                 patch.object(gate, "native_original_bound_effective_fd9",
+                              return_value=receipt) as native, \
+                 contextlib.redirect_stdout(stdout):
+                self.assertEqual(gate.main(argv), 0)
+                native.assert_called_once_with(id, b"input", expected_digest)
+        self.assertEqual(stdout.getvalue(),
+                         ("S10_ORIGINAL_EFFECTIVE_INPUT_READ_ONLY=" +
+                          "e" * 64 + "\n") * 2)
+        for invalid in (
+                [id, "--s10-effective"],
+                [id, digest, "--s10-effective"],
+                [id, "--sealed", "--s10-effective", "foreign"],
+                [id, "--s10-effective", "--sealed"],
+                [id, digest, "--s10-effective", "--sealed"],
+                [id, "--sealed", digest, "--s10-effective"],
+        ):
+            with self.subTest(invalid=invalid), \
+                 patch.object(gate, "native_original_bound_effective_fd9") as native:
+                self.assertEqual(gate.main(invalid), 64)
+                native.assert_not_called()
+
 
     def test_final_seal_ref_and_native_drift_refuse_without_action(self):
         fixture, kw = self.original(mode="auto", voice=True)
