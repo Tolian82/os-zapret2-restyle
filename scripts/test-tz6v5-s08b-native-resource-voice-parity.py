@@ -285,6 +285,9 @@ storage_catalog_build "$2"
         profiles = targeted(model, strategy)
         self.assertEqual(len(profiles.profiles), 5)
         raw = prepared()
+        # Explicit required User selector cannot match an empty HOSTLIST.
+        # The original builder must refuse that; use a valid user list here.
+        raw["hostlist.user"] = b"friend.example.org\n"
         for name in extras:
             raw["hostlist." + name] = (name + ".example.org\n").encode()
         for name in names:
