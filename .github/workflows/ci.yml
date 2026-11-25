@@ -642,6 +642,11 @@ jobs:
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_previous_physical.py scripts/test-tz6v5-s10b2b2b3b2a-original-prior-full-tree-pid.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2b2b3b2a-original-prior-full-tree-pid.py
+      - name: S10b2b2b3b2b original stopped epoch ACK and strict cold FD9 preimage
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_quiescent_preimage.py scripts/test-tz6v5-s10b2b2b3b2b-quiescent-original-preimage.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2b2b3b2b-quiescent-original-preimage.py
       - name: Validate fast path routing and strict private-curl source mismatch
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test
