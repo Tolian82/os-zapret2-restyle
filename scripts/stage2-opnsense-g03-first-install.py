@@ -48,8 +48,14 @@ def status():
 def dispatch_and_poll():
     # The actual selected-release action used by ServiceController.php.
     response = run(["/usr/local/sbin/configctl", "zapret", "setup_install", RELEASE])
-    need(response.returncode == 0 and response.stdout.strip() == "OK",
-         "G03_NATIVE_CONFIGD_DISPATCH_FAILED:" + response.stderr[-250:])
+    if response.returncode != 0 or response.stdout.strip() != "OK":
+        # Strict original refusal remains. CI diagnostics expose only fixed
+        # booleans/rc, never configctl stdout, stderr, XML or user content.
+        output_kind = ("ok" if response.stdout.strip() == "OK" else
+                       "empty" if not response.stdout.strip() else "other")
+        raise Refusal("G03_NATIVE_CONFIGD_DISPATCH_FAILED:"
+                      f"rc={response.returncode}:output={output_kind}:"
+                      f"stderr_present={int(bool(response.stderr.strip()))}")
     deadline = time.monotonic() + 300
     saw_busy = False
     while time.monotonic() < deadline:
