@@ -1,3 +1,9 @@
+## 25 November 2026 — S10 quiescent All/List/Auto/OFF witness candidate
+
+**Accepted main:** `v0.6.5_228` / `8c899b6ba19f975673d981a4f2663b2d525202cd`; postmerge Stage 5 [#45677766616](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45677766616) **5/5 SUCCESS**. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=229`, `v0.6.5_229`, prospective CI-only `os-zapret2-restyle-0.6.5_229.pkg`; read-only schema1 All/List/Auto OFF and original stopped/cold preimage extension; no S11 physical action, WAN-only first-install preservation, no new writer/journal/lock. See [quiescent contract](architecture/ZAPRET2_TZ6V5_S10B2B2B3B2B_QUIESCENT_PREIMAGE.md) and [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Exact-head CI/native qualification is pending; no owner package. S10 OPEN, S11 blocked.
+
+---
+
 ## 25 November 2026 — S10 original semantic comparison candidate
 
 **Accepted main:** `v0.6.5_227`, `162df156c67e83262d6c6d44c55ca95c9d6764fb`, [PR #1348](https://github.com/Tolian82/os-zapret2-restyle/pull/1348) merged after all seven exact-head workflows succeeded. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=228`, `v0.6.5_228`, prospective CI-only `os-zapret2-restyle-0.6.5_228.pkg`. The prepared semantic comparison source is rebased onto the exact accepted main tree. Pending exact-head source and native qualification; no publication or owner action. [Semantic comparison contract](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md): reconstruct S08d from pinned sealed source, compare using original planner only after the existing actual RUNNING owner/Config/WAN/tree/PID/argv/IPFW evidence; first legacy conversion is conservative RESTART_REQUIRED, no physical permission. Cold/stopped, Found, epoch and rollback remain blocked. [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) remains OPEN; S11 blocked.

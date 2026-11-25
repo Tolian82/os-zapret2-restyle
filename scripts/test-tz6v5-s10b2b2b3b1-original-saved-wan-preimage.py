@@ -250,5 +250,72 @@ class SavedWanOriginalFd9(unittest.TestCase):
         self.assertEqual(self.f.f.original.read(), self.pinned)
 
 
+    def test_disabled_native_config_seam_preserves_original_old_owner_double_read(self):
+        # Schema1/Enabled OFF root qualification belongs to the REAL
+        # _attest_prepared_previous. Here only that prerequisite is injected
+        # because this particular genuine fixture is schema2/Enabled ON.
+        from neutral_schema3_previous_preimage import PreviousRuntimeReceipt
+        old = self.pinned["previous"]
+        def receipt(state):
+            return PreviousRuntimeReceipt(
+                self.f.f.generation, self.pinned["manifest"]["root_sha256"],
+                old["id"], old["candidate"], state, 0, 0)
+        original = self.f.f.original.read()
+        for state in ("stopped", "ready"):
+            with self.subTest(old_state=state):
+                off = {**self.config(self.f.f.generation, self.f.f.detail["page"]),
+                       "enabled": "0"}
+                with patch.object(gate, "_attest_prepared_previous",
+                                  return_value=receipt(state)) as previous_read, \
+                     patch.object(gate, "_native_preflight",
+                                  return_value=off) as config_read, \
+                     patch.object(gate, "_native_wan",
+                                  side_effect=AssertionError("OFF must not probe active WAN")) as wan:
+                    result = self.attest(enabled=False)
+                self.assertEqual(result.previous_state, state)
+                self.assertIsNone(result.verified_wan_device)
+                self.assertEqual(config_read.call_count, 2)
+                self.assertEqual(previous_read.call_count, 2)
+                wan.assert_not_called()
+                self.assertEqual(result.authorization, "NONE")
+                self.assertFalse(result.physical_transition_allowed)
+                self.assertFalse(result.promotion_allowed)
+                self.assertEqual(self.f.f.original.read(), original)
+
+    def test_disabled_config_and_predecessor_race_still_refuse(self):
+        from dataclasses import replace
+        from neutral_schema3_previous_preimage import PreviousRuntimeReceipt
+        old = self.pinned["previous"]
+        base = PreviousRuntimeReceipt(
+            self.f.f.generation, self.pinned["manifest"]["root_sha256"],
+            old["id"], old["candidate"], "stopped", 0, 0)
+        off = {**self.config(self.f.f.generation, self.f.f.detail["page"]),
+               "enabled": "0"}
+        for source in ("config", "previous"):
+            with self.subTest(source=source):
+                native_config = ([off, {**off, "enabled": "1"}] if source == "config"
+                                 else [off, off])
+                natives = ([base, base] if source == "config"
+                           else [base, replace(base, observed_previous_state="ready")])
+                with patch.object(gate, "_attest_prepared_previous",
+                                  side_effect=natives), \
+                     patch.object(gate, "_native_preflight",
+                                  side_effect=native_config), \
+                     patch.object(gate, "_native_wan") as wan, \
+                     self.assertRaises(gate.SavedWanPreimageRefused):
+                    self.attest(enabled=False)
+                wan.assert_not_called()
+
+    def test_nonboolean_enabled_refuses_before_native_read(self):
+        with patch.object(gate, "_native_preflight") as config, \
+             patch.object(gate, "_native_wan") as wan:
+            for enabled in (0, 1, None, "0", "1"):
+                with self.subTest(enabled=enabled), \
+                     self.assertRaises(gate.SavedWanPreimageRefused):
+                    self.attest(enabled=enabled)
+        config.assert_not_called()
+        wan.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -54,7 +54,7 @@ class SavedWanPreimageReceipt:
     previous_state: str
     config_base_sha256: str
     config_candidate_sha256: str
-    verified_wan_device: str
+    verified_wan_device: str | None
     status: str = "ORIGINAL_FD9_SAVED_CONFIG_WAN_READ_ONLY"
     authorization: str = "NONE"
     physical_transition_allowed: bool = False
@@ -139,8 +139,8 @@ def _attest_saved_wan(*, generation: str, effective: EffectiveSnapshot,
                       ) -> SavedWanPreimageReceipt:
     """Bounded native reader seam; never callable as an activation grant."""
     try:
-        if enabled is not True:
-            raise SavedWanPreimageRefused("ORIGINAL_SCHEMA3_ACTIVE_WAN_REQUIRED")
+        if type(enabled) is not bool:
+            raise SavedWanPreimageRefused("ORIGINAL_ENABLED_INVALID")
         store = SharedApplyOperation(journal_root, owner=owner_uid)
         before = store.read()
         if (type(before) is not dict or
@@ -163,9 +163,9 @@ def _attest_saved_wan(*, generation: str, effective: EffectiveSnapshot,
         first = _qualified_config(
             _native_preflight(generation, before["detail"]["page"]),
             before["detail"], enabled)
-        first_wan = _native_wan()
-        if (type(first_wan) is not str or first_wan in _WAN_STATE_MARKERS or
-                not _DEVICE.fullmatch(first_wan)):
+        first_wan = _native_wan() if enabled else None
+        if enabled and (type(first_wan) is not str or first_wan in _WAN_STATE_MARKERS or
+                        not _DEVICE.fullmatch(first_wan)):
             raise SavedWanPreimageRefused("ORIGINAL_WAN_DEVICE_INVALID")
         if store.read() != before:
             raise SavedWanPreimageRefused("ORIGINAL_SAVED_PREIMAGE_RACED")
@@ -173,9 +173,9 @@ def _attest_saved_wan(*, generation: str, effective: EffectiveSnapshot,
         second = _qualified_config(
             _native_preflight(generation, before["detail"]["page"]),
             before["detail"], enabled)
-        second_wan = _native_wan()
-        if (type(second_wan) is not str or second_wan in _WAN_STATE_MARKERS or
-                not _DEVICE.fullmatch(second_wan)):
+        second_wan = _native_wan() if enabled else None
+        if enabled and (type(second_wan) is not str or second_wan in _WAN_STATE_MARKERS or
+                        not _DEVICE.fullmatch(second_wan)):
             raise SavedWanPreimageRefused("ORIGINAL_WAN_DEVICE_INVALID")
         if (old != old_again or first != second or
                 first_wan != second_wan or store.read() != before):

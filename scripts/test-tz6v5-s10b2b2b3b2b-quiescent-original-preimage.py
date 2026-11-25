@@ -243,5 +243,69 @@ class OriginalQuiescentTests(unittest.TestCase):
             read.assert_not_called()
 
 
+    def test_disabled_cold_all_list_auto_schema1_mode_dispatch_without_wan(self):
+        # Genuine filesystem/process/kernel cold guards remain exercised.
+        # Inject ONLY original bound-root proof + WAL schema because this
+        # existing real candidate fixture is specifically schema2 Auto ON.
+        from types import SimpleNamespace
+        self.cold()
+        real = self.f.original.read()
+        schema1 = {**real, "manifest": {**real["manifest"], "schema": 1}}
+        for mode in ("all", "list", "auto"):
+            with self.subTest(mode=mode), ExitStack() as stack:
+                self.native_seams(stack)
+                stack.enter_context(patch.object(
+                    gate, "SharedApplyOperation",
+                    return_value=Mock(read=Mock(return_value=schema1))))
+                root = stack.enter_context(patch.object(
+                    gate, "_attest_bound_candidate",
+                    return_value=SimpleNamespace(
+                        root_sha256=schema1["manifest"]["root_sha256"])))
+                stack.enter_context(patch.object(
+                    gate, "_native_preflight",
+                    return_value={**self.config, "enabled": "0"}))
+                wan = stack.enter_context(patch.object(
+                    gate, "_native_wan",
+                    side_effect=AssertionError("OFF must not require WAN")))
+                proof = gate._attest_quiescent(
+                    generation=self.f.generation,
+                    native=replace(self.f.native, mode=mode),
+                    effective=self.f.effective, enabled=False,
+                    parent=self.f.parent, journal_root=self.f.journal_root,
+                    owner_uid=os.geteuid(), active=self.active,
+                    backups=self.backups, producer=self.producer,
+                    epochs=self.epochs, pidfiles=self.pidfiles,
+                    runner=self.runner)
+                self.assertEqual(proof.old_state, "first-install-empty")
+                self.assertIsNone(proof.verified_wan_device)
+                self.assertEqual(root.call_count, 3)
+                self.assertEqual(root.call_args.kwargs["mode"], mode)
+                self.assertFalse(root.call_args.kwargs["schema3"])
+                self.assertEqual(proof.authorization, "NONE")
+                self.assertFalse(proof.physical_transition_allowed)
+                wan.assert_not_called()
+
+    def test_disabled_schema_mismatch_refuses_before_bound_read(self):
+        self.cold()
+        with ExitStack() as stack:
+            self.native_seams(stack)
+            bound = stack.enter_context(patch.object(
+                gate, "_attest_bound_candidate"))
+            for mode, enabled in (("all", True), ("list", False),
+                                  ("auto", False)):
+                with self.subTest(mode=mode, enabled=enabled), \
+                     self.assertRaises(gate.QuiescentPreimageRefused):
+                    gate._attest_quiescent(
+                        generation=self.f.generation,
+                        native=replace(self.f.native, mode=mode),
+                        effective=self.f.effective, enabled=enabled,
+                        parent=self.f.parent, journal_root=self.f.journal_root,
+                        owner_uid=os.geteuid(), active=self.active,
+                        backups=self.backups, producer=self.producer,
+                        epochs=self.epochs, pidfiles=self.pidfiles,
+                        runner=self.runner)
+            bound.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
