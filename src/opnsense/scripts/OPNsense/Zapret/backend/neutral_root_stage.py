@@ -185,6 +185,7 @@ def attest_prepared_source_root(*, source, candidate_sha256: str,
             type(source.effective) is not EffectiveSnapshot or
             source.effective.argv_sha256 != source.original_args_sha256 or
             source.native.original_args_sha256 != source.original_args_sha256 or
+            source.native.mode != source.mode or
             type(enabled) is not bool):
         raise RootStageRefused("ORIGINAL_TYPED_SEALED_SOURCE_REQUIRED")
     generation = source.generation

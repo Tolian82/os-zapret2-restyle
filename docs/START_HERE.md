@@ -6,6 +6,8 @@
 
 **Next:** exact-head source/native CI; integrate the native FD9 owner and physical preimages/recovery without weakening the existing manifest-unbound refusal. Do not use detached proofs as activation permission.
 
+[Project state](PROJECT_STATE.md) · [rules](DOCUMENTATION_RULES.md) / [development](PROJECT_PRINCIPLES.md) / [chat](CHAT_RULES.md) / [GitHub](GITHUB_PUBLICATION.md) · [plan](ROADMAP.md) · [index](INDEX.md).
+
 ---
 
 

@@ -8,6 +8,7 @@ second runtime builder, mutable manifest, engine action or platform bypass.
 from __future__ import annotations
 
 import importlib.util
+from dataclasses import replace
 import os
 from pathlib import Path
 import sys
@@ -252,6 +253,11 @@ class OriginalFd9SourceGate(unittest.TestCase):
                             owner_uid=os.geteuid())
                 with self.assertRaises(RootStageRefused):
                     attest_prepared_source_root(**dict(args, candidate_sha256="c" * 64))
+                for altered in (replace(source, original_seal_sha256="0" * 64),
+                                replace(source, final_args_sha256="0" * 64),
+                                replace(source, candidate_input_sha256="0" * 64)):
+                    with self.assertRaises(RootStageRefused):
+                        attest_prepared_source_root(**dict(args, source=altered))
                 candidate = attest_prepared_source_root(**args)
                 self.assertEqual(journal.read(), before)
                 self.assertFalse((fixture.work / "manifest.json").exists())
