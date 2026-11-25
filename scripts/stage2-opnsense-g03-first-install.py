@@ -342,8 +342,12 @@ def main():
     need(commit.returncode == 0 and tag.returncode == 0 and
          commit.stdout.strip() == tag.stdout.strip(),
          "G03_GIT_TARGET_NOT_EXACT_RELEASE")
-    need((STATE / "runtime.release").read_text().strip() == RELEASE,
-         "G03_COMMITTED_RELEASE_MARKER_MISSING")
+    expected_first_record = (
+        f"{RELEASE}\ncommit={commit.stdout.strip()}\n"
+        f"engine_sha256={hashlib.sha256((ROOT / 'binaries/my/dvtws2').read_bytes()).hexdigest()}\n"
+    ).encode("ascii")
+    need((STATE / "runtime.release").read_bytes() == expected_first_record,
+         "G03_FIRST_INSTALL_MAKE_PROVENANCE_UNBOUND")
     need(not Path(str(ROOT) + ".first-install").exists() and
          not (STATE / "first-install.intent").exists() and
          not (STATE / "runtime-rollback").exists(),
@@ -357,9 +361,9 @@ def main():
     # not a second package build or a separate VM.
     second = dispatch_and_poll()
     need(second == first, "G03_SAME_RELEASE_REINSTALL_STATE_CHANGED")
-    # The original first install deliberately remains legacy/unbound.
-    # Same-release reinstall really runs make under native FD9 and now mints
-    # the strict build-correlated record through the one original shell writer.
+    # Both the genuine first make and same-release reinstall now bind the
+    # exact compiled binary through the same original shell marker writer.
+    # This is build provenance, not a physical S10 Apply authorization.
     expected_record = (
         f"{RELEASE}\ncommit={commit.stdout.strip()}\n"
         f"engine_sha256={hashlib.sha256((ROOT / 'binaries/my/dvtws2').read_bytes()).hexdigest()}\n"

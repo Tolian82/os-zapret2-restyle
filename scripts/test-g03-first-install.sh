@@ -58,7 +58,19 @@ EOF
 cat > "$ROOT/extra" <<'EOF'
 #!/bin/sh
 # Old-runtime rollback is tested independently by test-setup-runtime-transaction.
-exit 69
+[ "${1:-}" = first-install-read-record ] && [ "$#" -eq 2 ] || exit 69
+[ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] &&
+[ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" = 1 ] &&
+[ "${STRATEGY_LAB_LIFECYCLE_OWNER:-0}" = 1 ] &&
+[ "${FIRST_INSTALL_ORIGINAL_PRODUCER:-0}" = 1 ] &&
+( : >&9 ) 2>/dev/null || exit 75
+[ "$2" = v1.0.7 ] && [ -d "$ZAPRET_DIR/.git" ] || exit 69
+case "$ZAPRET_DIR" in
+ "$FIRST_INSTALL_ACTIVE_ROOT"|"$FIRST_INSTALL_STAGE_ROOT/runtime") ;;
+ *) exit 69 ;;
+esac
+hash=$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$ZAPRET_DIR/binaries/my/dvtws2") || exit 69
+printf 'v1.0.7\ncommit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nengine_sha256=%s\n' "$hash"
 EOF
 cat > "$ROOT/configctl" <<'EOF'
 #!/bin/sh
@@ -109,7 +121,11 @@ unset TEST_SETUP_SCRIPT
 if run 2 >/dev/null 2>&1; then fail "unrelated rc69 accepted"; fi
 [ "$(cat "$STATUS")" = failed ] || fail "unrelated rc69 inherited stale cause"
 run 0 || fail "clean setup failed"
-[ "$(cat "$MARKER")" = v1.0.7 ] || fail "no release marker"
+expected_record() {
+  hash=$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$RUNTIME/binaries/my/dvtws2") || fail "no binary hash"
+  printf 'v1.0.7\ncommit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nengine_sha256=%s\n' "$hash"
+}
+expected_record | cmp -s "$MARKER" - || fail "first make did not bind exact original marker"
 [ "$(cat "$STATUS")" = ready ] || fail "not ready"
 [ -x "$RUNTIME/binaries/my/dvtws2" ] || fail "binary not published"
 [ -L "$RUNTIME/nfq2/dvtws2" ] &&
@@ -117,7 +133,44 @@ run 0 || fail "clean setup failed"
   fail "expected upstream compiler link was not preserved"
 [ ! -e "$STAGE" ] && [ ! -e "$INTENT" ] || fail "stage not cleaned"
 [ ! -e "$STATE/runtime-rollback" ] || fail "unexpected old rollback"
-# Simulate crash after atomic promotion but before marker finalization.
+# An original sealed built intent can resume after the root rename, but
+# metadata alone must never be promoted after a changed binary.
+printf 'version=v1.0.7\noriginal=0\nstate=built\n' > "$INTENT"
+expected_record | sed -n '2,3p' >> "$INTENT"
+before=$(wc -l < "$ROOT/install.calls")
+run 0 || fail "original built-intent post-publication recovery failed"
+expected_record | cmp -s "$MARKER" - || fail "recovery lost original build digest"
+[ "$(wc -l < "$ROOT/install.calls")" -eq "$before" ] ||
+  fail "bound recovery spuriously rebuilt"
+# Crash after make proof, before moving the staged runtime.
+rm -f "$MARKER"
+mkdir -m 0700 "$STAGE"
+mv "$RUNTIME" "$STAGE/runtime"
+printf 'version=v1.0.7\noriginal=0\nstate=built\n' > "$INTENT"
+hash=$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$STAGE/runtime/binaries/my/dvtws2")
+printf 'commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nengine_sha256=%s\n' "$hash" >> "$INTENT"
+before=$(wc -l < "$ROOT/install.calls")
+run 0 || fail "sealed staged make could not resume"
+expected_record | cmp -s "$MARKER" - || fail "staged recovery did not bind record"
+[ "$(wc -l < "$ROOT/install.calls")" -eq "$before" ] || fail "staged recovery rebuilt"
+# Digest substitution with a valid tag and executable must refuse, not
+# silently publish or delete the original staged tree.
+mv "$RUNTIME" "$STAGE/runtime" 2>/dev/null || {
+  mkdir -m 0700 "$STAGE"
+  mv "$RUNTIME" "$STAGE/runtime"
+}
+rm -f "$MARKER"
+printf 'version=v1.0.7\noriginal=0\nstate=built\n' > "$INTENT"
+printf 'commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nengine_sha256=%064d\n' 0 >> "$INTENT"
+if run 0 >/dev/null 2>&1; then fail "mismatched built digest accepted"; fi
+[ ! -e "$MARKER" ] && [ -d "$STAGE/runtime" ] && [ -f "$INTENT" ] ||
+  fail "tamper refusal mutated first-install state"
+# Disposable fixture reset after intentional foreign evidence refusal.
+rm -rf "$STAGE"
+rm -f "$INTENT"
+run 0 || fail "post-tamper clean retry failed"
+# Simulate legacy pre-make crash after atomic promotion: no saved proof.
+
 rm -f "$MARKER"
 printf 'version=v1.0.7\noriginal=0\n' > "$INTENT"
 before=$(wc -l < "$ROOT/install.calls")
