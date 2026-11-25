@@ -1,3 +1,15 @@
+## Candidate v0.6.5_231 — one original semantic planner distinguishes RUNNING / STOPPED / cold
+
+Based on accepted main `v0.6.5_230` / `bacda86721d3df2d0d120c10ff57471ec12e3ee9`, [PR #1351](https://github.com/Tolian82/os-zapret2-restyle/pull/1351), all exact-head and postmerge source checks SUCCESS. **Candidate not qualified until exact-head tests and policy/native package CI.**
+
+The existing original `native_plan_original_prepared_fd9` retains its one S08d classifier, one original owner FD9 and original pinned current/previous sealed model. For a predecessor, the original native-common double observer `attest_prepared_previous_under_fd9` decides READY or STOPPED **before** the stronger mutually exclusive branch: READY must pass full previous physical PID/birth/kernel argv/IPFW/tree/Config evidence; STOPPED must pass `attest_quiescent_under_fd9` with original retirement/epoch and all 19000–19099 empty. A failure in either branch refuses; there is no fallback to the other branch, no guessing from PID absence. With no predecessor and no predecessor manifest, only a truly pristine cold proof can pass. Any residual active tree/producer/epoch/foreign IPFW refuses.
+
+Source Enabled ON + committed STOPPED or strict cold proposes `START` only when this candidate is already original sealed/bound with genuine native installed engine identity, Config and WAN ready. Source Enabled OFF + stopped or strict cold proposes `SAVE_ONLY` without requiring a live WAN; this does **not** replace the independent no-engine WAN-only save during first installation. Source RUNNING keeps OFF→STOP and ON→S08d four decisions. Old pin remains optional only for former legacy generations: no pin yields analytical S08d RESTART_REQUIRED, never a false equality/reload authorization. `OriginalSemanticReceipt` is nonauthorizing in *all* cases; no physical Start/Stop, Config save, IPFW change, journal advance or second writer/observer is introduced.
+
+The new portable cases inject an original old-state/quiescent response and disabled pinned source, and therefore **do not** prove a genuine stopped owner on native OPNsense. Existing original genuine P2e source/FD9 and installed native G03 RUNNING remain independent gates. Next S10: native STOPPED/cold original FD9 prepared test in a disposable guest, Found/P1 CAS, exact original atomic release swap, final reattest and crash/rollback. S11/S12 remain blocked.
+
+---
+
 ## Candidate v0.6.5_230 — verified RUNNING owner, Enabled OFF → STOP proposal only
 
 Accepted main v0.6.5_229 / `7b44abdd17a701df875da74b9bd2ac1472e7d0b7`, [PR #1350](https://github.com/Tolian82/os-zapret2-restyle/pull/1350), exact-head CI, FreeBSD policy, source-only native archive build and postmerge CI all SUCCESS. Candidate `v0.6.5_230` is **not yet accepted**. It does not change the engine, GUI, launcher or runtime.
