@@ -1,8 +1,8 @@
-## Current priority — TZ6v5 S10c2b3 original sealed refs → one bound original FD9 executor → S11
+## Current priority — TZ6v5 S10c2b3b same-source typed root → original bound executor → S11
 
-**Accepted main `v0.6.5_214 60e625fc`** via [merged PR #1335](https://github.com/Tolian82/os-zapret2-restyle/pull/1335), with postmerge CI, release classification and native Chromium OPNsense RU/EN SUCCESS. S10 [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319) remains OPEN/NO-GO; latest published testing package is `_117`.
+**Accepted main v0.6.5_215 / 68ae002b** via [PR #1336](https://github.com/Tolian82/os-zapret2-restyle/pull/1336); full S10 OPEN/NO-GO, published testing package _117.
 
-**Next:** source-only `v0.6.5_215` S10c2b3a adds genuine source/managed/native postpromotion readback of the original one-sealed bundle using the existing FD9 gate. Then bind exact final sealed refs, sibling immutable root and original journal with native prior-owner/Config/IPFW proof before any original executor activation, rollback and S11 physical lifecycle. Preserve one `orchestrator_build_release`, one original FD9/Apply, manual HOSTLIST/IPSET order/Voice/Auto, the existing `manifest-unbound` refusal until positive authorization, and no second writer, journal, root authority or package. [TZ6v5 §4.2](architecture/TZ_6v5.md) · [S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) · [current bounded source contract](architecture/ZAPRET2_TZ6V5_S10C2B3A_ORIGINAL_SEALED_REF_READBACK.md).
+**Next:** candidate _216 connects actual S10c2 postseal source observations to original typed effective and PREPARED immutable root refs. Qualify source integration, then native installed engine identity, Found/P1 and physical original FD9 activation/rollback. No second generator, journal, writer, root authority, or new physical route. [TZ6v5 §4.2](architecture/TZ_6v5.md) · [S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
 
 ---
 

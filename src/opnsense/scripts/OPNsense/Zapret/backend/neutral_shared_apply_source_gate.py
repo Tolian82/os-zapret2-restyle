@@ -22,7 +22,8 @@ from neutral_config_model import project
 from neutral_target_compiler import compile_target_profiles, parse_original_policy
 from neutral_resource_compiler import (
     compile_resources, compare_original_managed_bytes, parse_original_storage)
-from neutral_native_parity import inspect_original
+from neutral_native_parity import NativeParity, inspect_original
+from neutral_effective_diff import EffectiveSnapshot, snapshot
 from shared_apply_seal import _stat, verify_seal
 from voice_profile_compiler import SERVICES
 
@@ -54,6 +55,10 @@ class SourceGateReceipt:
     known_learning_count: int = 0
     final_args_sha256: str = ""
     original_seal_sha256: str = ""
+    generation: str = ""
+    native_candidate_sha256: str | None = None
+    native: NativeParity | None = None
+    effective: EffectiveSnapshot | None = None
 
 
 def decode_pipe(raw: bytes) -> dict[str, bytes]:
@@ -112,7 +117,8 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
                               owner_uid: int = 0,
                               active_managed: Path = Path(
                                   "/usr/local/etc/zapret2/runtime-v2/managed"),
-                              sealed: bool = False) -> SourceGateReceipt:
+                              sealed: bool = False,
+                              engine_version: str | None = None) -> SourceGateReceipt:
     """Pure observational witness of actual producer staged files.
 
     The original native wrapper supplies P2-qualified owned after-images.
@@ -259,6 +265,32 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
             original_storage != _read(sources / "storage.sh", owner_uid, 128 * 1024) or
             expected_registry != _read(work / "target-registry.tsv", owner_uid, 128 * 1024)):
         raise OriginalSourceGateRefused("ORIGINAL_INPUT_CHANGED_DURING_CHECK")
+    # S08d must use the same S07/S08a/S08b/S08c observation. A native
+    # caller must supply its independently qualified installed engine version;
+    # never substitute the plugin version or an assumed upstream version.
+    effective = None
+    if engine_version is not None:
+        if not sealed:
+            raise OriginalSourceGateRefused("EFFECTIVE_SOURCE_REQUIRES_FINAL_SEAL")
+        rows = (None if source_map is None else [
+            [row["role"], row["status"], row.get("selector"),
+             row.get("hostlist"), row.get("native_number")]
+            for row in source_map["profiles"]])
+        capture = voice_plan["capture"]
+        effective = snapshot(
+            original_native_args=args, target_mode=saved.target_mode,
+            original_source_rows=rows,
+            authored_selectors=tuple(
+                tuple(f"<{kind}:{key}>" for kind, key in row.authored)
+                for row in targets.profiles),
+            saved_wan=saved.saved_wan, resolved_wan=capture["wan"],
+            engine_version=engine_version, original_capture=capture,
+            original_tcp=_read(release / "tcp-ports.txt", owner_uid, 8192,
+                               allow_empty=True),
+            original_udp=_read(release / "udp-ports.txt", owner_uid, 8192,
+                               allow_empty=True),
+            managed_sha256={name: hashlib.sha256(raw).hexdigest()
+                            for name, raw in observed.items()})
     if sealed:
         if (verify_seal(work, owner=owner_uid) != initial_seal or
                 _read(work / "bundle-seal.json", owner_uid, 1024) != original_seal or
@@ -276,7 +308,9 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
                 "ORIGINAL_NONACTIVATING_SOURCE_MANAGED_PARITY"),
         final_args_sha256=hashlib.sha256(final_args).hexdigest(),
         original_seal_sha256=(hashlib.sha256(original_seal).hexdigest()
-                              if original_seal is not None else ""))
+                              if original_seal is not None else ""),
+        generation=work.name, native_candidate_sha256=candidate_sha256,
+        native=native if effective is not None else None, effective=effective)
 
 
 def _owned_under_original_p2(work: Path, uid: int) -> dict[str, bytes] | None:
@@ -313,7 +347,8 @@ def _owned_under_original_p2(work: Path, uid: int) -> dict[str, bytes] | None:
 
 def native_original_fd9(operation: str, raw_pipe: bytes,
                         candidate_sha256: str | None = None,
-                        *, sealed: bool = False) -> SourceGateReceipt:
+                        *, sealed: bool = False,
+                        engine_version: str | None = None) -> SourceGateReceipt:
     """Only the installed original FD9 wrapper can invoke this native action."""
     from voice_ipfw_adapter import require_lifecycle_lock
     from shared_apply_seal import WORK
@@ -333,7 +368,8 @@ def native_original_fd9(operation: str, raw_pipe: bytes,
     receipt = qualify_source_to_managed(
         work=work, sources=Path(__file__).parent, inputs=inputs,
         owned_known=known, runtime_auto=auto_bytes,
-        candidate_sha256=candidate_sha256, owner_uid=0, sealed=sealed)
+        candidate_sha256=candidate_sha256, owner_uid=0, sealed=sealed,
+        engine_version=engine_version)
     require_lifecycle_lock()
     return receipt
 

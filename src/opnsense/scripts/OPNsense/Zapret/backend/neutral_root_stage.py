@@ -164,6 +164,94 @@ def _original_preflight(*, generation: str, root_bytes: bytes,
     return attested, candidate_sha, before
 
 
+def attest_prepared_source_root(*, source, candidate_sha256: str,
+                                enabled: bool, parent: Path,
+                                journal_root: Path, owner_uid: int) -> RootCandidate:
+    """Connect the actual S10c2 sealed readback to existing PREPARED refs.
+
+    Import-only, read-only. Candidate SHA/enabled come from the original PHP
+    preflight; caller must qualify installed engine version and FD9 separately.
+    No physical permission, no root or journal write, no Found phase bypass.
+    """
+    from neutral_shared_apply_source_gate import SourceGateReceipt
+    from neutral_root_manifest import compile_candidate
+    from neutral_schema3_physical_refs import _attest_physical_schema3
+    from neutral_root_refs import _read_file
+
+    if (type(source) is not SourceGateReceipt or
+            source.status != "ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY" or
+            source.authorization != "NONE" or source.physical_transition_allowed or
+            type(source.native) is not NativeParity or
+            type(source.effective) is not EffectiveSnapshot or
+            source.effective.argv_sha256 != source.original_args_sha256 or
+            source.native.original_args_sha256 != source.original_args_sha256 or
+            source.native.mode != source.mode or
+            type(enabled) is not bool):
+        raise RootStageRefused("ORIGINAL_TYPED_SEALED_SOURCE_REQUIRED")
+    generation = source.generation
+    record, digest = _journal(generation, journal_root=journal_root,
+                              owner_uid=owner_uid)
+    if (digest != candidate_sha256 or "manifest" in record or
+            not _original_plan_matches(parent=parent, generation=generation,
+                                       journal=record, owner_uid=owner_uid)):
+        raise RootStageRefused("ORIGINAL_PREPARED_SOURCE_IDENTITY_MISMATCH")
+    if source.mode == "auto" and source.native_candidate_sha256 != digest:
+        raise RootStageRefused("ORIGINAL_AUTO_CANDIDATE_IDENTITY_MISMATCH")
+    work = parent / generation
+    try:
+        if verify_seal(work, owner=owner_uid)["sha256"]["candidate.xml"] != source.candidate_input_sha256:
+            raise RootStageRefused("ORIGINAL_SOURCE_XML_CHANGED")
+        if source.mode == "auto" and source.final_args_sha256 != source.original_args_sha256:
+            proof = _attest_physical_schema3(
+                generation=generation, native=source.native, effective=source.effective,
+                enabled=enabled, parent=parent, journal_root=journal_root,
+                owner_uid=owner_uid)
+            if (proof.seal_sha256 != source.original_seal_sha256 or
+                    dict(proof.native_ref_sha256)["dvtws.args"] != source.final_args_sha256 or
+                    proof.candidate_sha256 != digest):
+                raise RootStageRefused("ORIGINAL_FINAL_SOURCE_IDENTITY_CHANGED")
+            candidate = proof.candidate
+        else:
+            pfd = _open_parent(parent, owner_uid)
+            try:
+                wfd = _open_dir(pfd, generation, owner_uid)
+                try:
+                    _require_only_sibling_root(wfd, owner_uid)
+                    rfd = _open_dir(wfd, "release", owner_uid)
+                    try:
+                        args = _read_file(rfd, "dvtws.args", owner_uid)
+                        origin = (_read_file(rfd, "auto-detect-source-map.json", owner_uid)
+                                  if source.mode == "auto" else None)
+                        seal_sha = hashlib.sha256(
+                            _read_file(wfd, "bundle-seal.json", owner_uid)).hexdigest()
+                        if (seal_sha != source.original_seal_sha256 or
+                                hashlib.sha256(args).hexdigest() != source.final_args_sha256):
+                            raise RootStageRefused("ORIGINAL_FINAL_SOURCE_IDENTITY_CHANGED")
+                        candidate = compile_candidate(
+                            effective=source.effective, generation=generation,
+                            target_mode=source.mode, enabled=enabled, original_args=args,
+                            original_source_map=origin, seal_sha256=seal_sha,
+                            owner_uid=owner_uid)
+                    finally:
+                        os.close(rfd)
+                finally:
+                    os.close(wfd)
+            finally:
+                os.close(pfd)
+            witness = attest_sealed_original(
+                shared_work_parent=parent, generation=generation,
+                root_bytes=candidate.json_bytes, effective=source.effective,
+                native=source.native, mode=source.mode, enabled=enabled,
+                owner_uid=owner_uid)
+            if witness.original_seal_sha256 != source.original_seal_sha256:
+                raise RootStageRefused("ORIGINAL_SOURCE_SEAL_CHANGED")
+        if _journal(generation, journal_root=journal_root, owner_uid=owner_uid)[0] != record:
+            raise RootStageRefused("ORIGINAL_PREPARED_SOURCE_JOURNAL_CHANGED")
+        return candidate
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+        raise RootStageRefused("ORIGINAL_PREPARED_SOURCE_ROOT_UNQUALIFIED") from None
+
+
 def _absent(fd: int, name: str) -> bool:
     try:
         os.stat(name, dir_fd=fd, follow_symlinks=False)
