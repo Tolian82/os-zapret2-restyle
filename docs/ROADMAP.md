@@ -1,8 +1,8 @@
-## Current priority — TZ6v5 S10c2b3b same-source typed root → original bound executor → S11
+## Current priority — TZ6v5 S10c2b3c original engine identity → original bound executor → S11
 
-**Accepted main v0.6.5_215 / 68ae002b** via [PR #1336](https://github.com/Tolian82/os-zapret2-restyle/pull/1336); full S10 OPEN/NO-GO, published testing package _117.
+**Accepted main `v0.6.5_216` / e4f9c47e** via [PR #1337](https://github.com/Tolian82/os-zapret2-restyle/pull/1337), main CI/release classifier PASS. Full S10 OPEN/NO-GO, published package _117.
 
-**Next:** candidate _216 connects actual S10c2 postseal source observations to original typed effective and PREPARED immutable root refs. Qualify source integration, then native installed engine identity, Found/P1 and physical original FD9 activation/rollback. No second generator, journal, writer, root authority, or new physical route. [TZ6v5 §4.2](architecture/TZ_6v5.md) · [S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+**Next:** _217 observes original runtime.release / exact Git tag+HEAD / actual ELF SHA under existing FD9 without accepting it as build provenance. Then qualify original setup-produced identity, Found/P1, physical original FD9 activation/rollback. No additional lock, writer, launcher or public package. [TZ6v5 §4.2](architecture/TZ_6v5.md) · [S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
 
 ---
 

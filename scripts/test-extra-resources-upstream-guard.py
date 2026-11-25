@@ -3,6 +3,11 @@
 from __future__ import annotations
 import importlib.util
 import json
+import hashlib
+import os
+import shutil
+import subprocess
+from unittest.mock import patch
 from pathlib import Path
 import sys
 import tempfile
@@ -15,6 +20,101 @@ spec = importlib.util.spec_from_file_location("extra_resources_upstream_guard", 
 assert spec and spec.loader
 guard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(guard)
+
+
+class InstalledEngineObservation(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.runtime = self.root / "runtime"
+        self.state = self.root / "state"
+        self.state.mkdir()
+        self.runtime.mkdir()
+        self.git = shutil.which("git")
+        self.assertIsNotNone(self.git)
+        self.run_git("init", "-q")
+        self.run_git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                     "commit", "--allow-empty", "-qm", "test original checkout")
+        self.run_git("tag", "v1.0.7")
+        self.marker = self.state / "runtime.release"
+        self.marker.write_bytes(b"v1.0.7\n")
+        self.engine = self.runtime / "binaries/my/dvtws2"
+        self.engine.parent.mkdir(parents=True)
+        # Reuse the existing original ABI fixture; it is NOT a native build.
+        spec = importlib.util.spec_from_file_location(
+            "engine_fixture", ROOT / "scripts/test-extra-resources-engine-abi.py")
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        self.binary = fixture.native_elf("libc.so.7", "libluajit-5.1.so.2")
+        self.engine.write_bytes(self.binary)
+        self.engine.chmod(0o755)
+
+    def run_git(self, *args):
+        return subprocess.check_output([self.git, "-C", str(self.runtime), *args],
+                                       stderr=subprocess.DEVNULL).strip()
+
+    def observe(self):
+        return guard.observe_installed_engine_identity(
+            runtime=self.runtime, state_dir=self.state, git=self.git,
+            owner_uid=os.geteuid())
+
+    def test_exact_original_marker_tag_head_and_elf_observation(self):
+        before = self.marker.read_bytes(), self.engine.read_bytes()
+        receipt = self.observe()
+        self.assertEqual(receipt["release"], "v1.0.7")
+        self.assertEqual(receipt["commit"], self.run_git("rev-parse", "HEAD").decode())
+        self.assertEqual(receipt["engine_sha256"], hashlib.sha256(self.binary).hexdigest())
+        self.assertFalse(receipt["build_provenance_verified"])
+        self.assertFalse(receipt["physical_transition_allowed"])
+        self.assertEqual(receipt["authorization"], "NONE")
+        self.assertEqual(before, (self.marker.read_bytes(), self.engine.read_bytes()))
+
+    def test_no_marker_fallback_or_malformed_or_wrong_tag(self):
+        self.marker.unlink()
+        with self.assertRaises(guard.TransactionError):
+            self.observe()
+        for raw in (b"v1.0.7", b"v1.0.7\nextra\n", b"v9.9.9\n"):
+            with self.subTest(raw=raw):
+                self.marker.write_bytes(raw)
+                with self.assertRaises(guard.TransactionError):
+                    self.observe()
+        self.marker.write_bytes(b"v1.0.7\n")
+        self.run_git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                     "commit", "--allow-empty", "-qm", "different checkout")
+        with self.assertRaises(guard.TransactionError):
+            self.observe()
+
+    def test_setup_recovery_evidence_and_linked_paths_refuse(self):
+        pending = self.state / "runtime-rollback"
+        pending.mkdir()
+        with self.assertRaises(guard.TransactionError):
+            self.observe()
+        pending.rmdir()
+        self.marker.chmod(0o666)
+        with self.assertRaises(guard.TransactionError):
+            self.observe()
+        self.marker.chmod(0o644)
+        renamed = self.engine.with_name("original")
+        self.engine.rename(renamed)
+        self.engine.symlink_to(renamed)
+        with self.assertRaises(guard.TransactionError):
+            self.observe()
+
+    def test_engine_replacement_between_original_observations_refuses(self):
+        import extra_resources_engine_abi as abi
+        real = abi.inspect_installed_engine_abi
+        def replaced(path):
+            result = real(path)
+            fresh = path.with_name("replacement")
+            fresh.write_bytes(self.binary)
+            fresh.chmod(0o755)
+            os.replace(fresh, path)
+            return result
+        with patch.object(abi, "inspect_installed_engine_abi", side_effect=replaced):
+            with self.assertRaises(guard.TransactionError):
+                self.observe()
+
 
 
 class UpstreamResources(unittest.TestCase):
