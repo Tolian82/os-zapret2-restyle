@@ -163,7 +163,7 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     qualify_source_to_managed(**kw)
                 file.write_bytes(original)
                 args = fixture.release / "dvtws.args"
-                args.write_bytes(args.read_bytes().replace(b"--port=19899\\n", b"--port=19900\\n", 1))
+                args.write_bytes(args.read_bytes().replace(b"--port=19899\n", b"--port=19900\n", 1))
                 with self.assertRaises(NativeParityRefused):
                     qualify_source_to_managed(**kw)
 
