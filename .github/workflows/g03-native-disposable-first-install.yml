@@ -113,6 +113,28 @@ jobs:
             pkg update -f
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
+            # The disposable G03 guest must not treat a blocked GitHub
+            # Releases API as a failed genuine original make. Reuse the
+            # existing Stage5 pinned-upstream-tag fixture (NOT an API-success
+            # claim): Git verifies the real remote tag ref before writing the
+            # standard cache consumed by unchanged setup.sh. Clone/make,
+            # exact HEAD/tag and compiled ELF checks remain entirely real.
+            upstream_tag=$(/usr/local/bin/git ls-remote --refs \
+              https://github.com/bol-van/zapret2.git refs/tags/v1.0.7)
+            expected_tag=$(printf '038c97e5819df10f8e8c22a2f1fffe57f2f7379b\trefs/tags/v1.0.7')
+            [ "$upstream_tag" = "$expected_tag" ] || {
+              echo G03_PINNED_UPSTREAM_TAG_REFUSED >&2
+              exit 69
+            }
+            cache=/var/db/zapret2-restyle/releases.cache
+            [ ! -e "$cache" ] && [ ! -L "$cache" ] || {
+              echo G03_UNEXPECTED_RELEASE_CACHE >&2
+              exit 69
+            }
+            /bin/mkdir -p /var/db/zapret2-restyle
+            ( umask 077; printf 'v1.0.7\n' > "$cache" )
+            /bin/chmod 0644 "$cache"
+            echo G03_RELEASE_DISCOVERY=DISPOSABLE_PINNED_TAG_CACHE_NOT_API_SUCCESS
             GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
             # Guest is disposable; host Chromium gets READ-ONLY browser access
             # through a one-run SSH key. No plugin persistence or new service.
