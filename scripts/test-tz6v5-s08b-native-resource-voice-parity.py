@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError, replace
 import hashlib
 from pathlib import Path
+from unittest.mock import patch
 import subprocess
 import sys
 import tempfile
@@ -21,7 +22,8 @@ from config_projection_opnsense import registered_ids
 from neutral_config_model import project
 from neutral_target_compiler import parse_original_policy, compile_target_profiles
 from neutral_resource_compiler import (parse_original_storage, compile_resources,
-                                       ResourceCompileError)
+                                       compare_original_managed_bytes, ResourceCompileError)
+import domain_policy
 from domain_policy import normalize
 from ipset_policy import parse_ipset
 from auto_detect_effective_known import compose_known
@@ -245,6 +247,87 @@ storage_catalog_build "$2"
             compile_resources(saved(mode="list"), targeted(saved(mode="auto")),
                 parse_original_storage(STORAGE.read_bytes()), prepared(), None,
                 voice_managed_root=ROOT_MANAGED)
+
+    def test_extended_registered_sources_use_one_storage_catalog(self):
+        # Future GUI editor registration is a SEPARATE product task. This
+        # adapter-only fixture temporarily extends the existing source rows
+        # and original domain field declarations; it does not create extra
+        # production GUI/Auto/Voice entities or physical launcher entries.
+        extras = ("gaming", "streaming", "social")
+        names = ("cloud", "gamingnet")
+        registry_src = REGISTRY.read_bytes()
+        storage_src = STORAGE.read_bytes()
+        reg_anchor = b"        printf 'HOSTLIST\\tauto\\t--hostlist\\thostlist.auto\\t0\\n'"
+        storage_anchor = b"        printf 'hostlist.auto\\truntime\\tipset/auto-domains.txt\\n'"
+        self.assertEqual(registry_src.count(reg_anchor), 1)
+        self.assertEqual(storage_src.count(storage_anchor), 1)
+        registry_added = b"".join(
+            ("        printf 'HOSTLIST\\t%s\\t--hostlist\\thostlist.%s\\t1\\n'\n"
+             % (name, name)).encode("ascii") for name in extras)
+        registry_added += b"".join(
+            ("        printf 'IPSET\\t%s\\t--ipset\\tipset.%s\\t1\\n'\n"
+             % (name, name)).encode("ascii") for name in names)
+        storage_added = b"".join(
+            ("        printf 'hostlist.%s\\tmanaged\\thostlist-%s.txt\\n'\n"
+             % (name, name)).encode("ascii") for name in extras)
+        storage_added += b"".join(
+            ("        printf 'ipset.%s\\tmanaged\\tipset-%s.txt\\n'\n"
+             % (name, name)).encode("ascii") for name in names)
+        registry_src = registry_src.replace(reg_anchor, registry_added + reg_anchor)
+        storage_src = storage_src.replace(storage_anchor, storage_added + storage_anchor)
+        ids = registered_ids(registry_src)
+        catalog = parse_original_storage(storage_src)
+        model = replace(saved(mode="list"), registered_sources=ids)
+        strategy = ("--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n"
+                    + "".join("--new\n--filter-tcp=443\n<HOSTLIST:%s>\n"
+                              "--lua-desync=fake\n" % name for name in
+                              ("user", *extras))).encode()
+        profiles = targeted(model, strategy)
+        self.assertEqual(len(profiles.profiles), 5)
+        raw = prepared()
+        for name in extras:
+            raw["hostlist." + name] = (name + ".example.org\n").encode()
+        for name in names:
+            raw["ipset." + name] = b"198.51.100.25\n"
+        fields = {name: (name + "domains", name + " Domains", True)
+                  for name in extras}
+        with patch.dict(domain_policy.FIELDS, fields):
+            result = compile_resources(
+                model, profiles, catalog, raw, None,
+                voice_managed_root=ROOT_MANAGED)
+        self.assertEqual(len(result.resources), len(ids))
+        self.assertEqual(len(result.voice), len(SERVICES))
+        actual = {entry.locator: raw[entry.storage_key]
+                  for entry in catalog.entries if entry.provider == "managed"}
+        actual["hostlist-exclude.txt"] = raw["hostlist.exclude"]
+        actual["ipset-exclude.txt"] = raw["ipset.exclude"]
+        matched = compare_original_managed_bytes(result, catalog, actual)
+        self.assertEqual(len(matched), len(ids) - 1 + 2)
+        with self.assertRaisesRegex(ResourceCompileError,
+                                    "ORIGINAL_MANAGED_BYTES_MISMATCH"):
+            compare_original_managed_bytes(
+                result, catalog, dict(actual, **{"hostlist-gaming.txt": b"modified.example.org\n"}))
+        with self.assertRaisesRegex(ResourceCompileError,
+                                    "ORIGINAL_MANAGED_SET_MISMATCH"):
+            compare_original_managed_bytes(
+                result, catalog,
+                {k: v for k, v in actual.items() if k != "ipset-cloud.txt"})
+
+    def test_unregistered_new_hostlist_refuses_without_original_domain_policy(self):
+        from neutral_config_model import SourceId
+        from neutral_resource_compiler import StorageEntry, OriginalStorage
+        ids = (*saved().registered_sources,
+               SourceId("HOSTLIST", "gaming", "hostlist.gaming", True))
+        model = replace(saved(mode="list"), registered_sources=tuple(ids))
+        storage = parse_original_storage(STORAGE.read_bytes())
+        catalog = OriginalStorage(storage.source_sha256, storage.entries + (
+            StorageEntry("hostlist.gaming", "managed", "hostlist-gaming.txt"),))
+        raw = dict(prepared(), **{"hostlist.gaming": b"gaming.example.org\n"})
+        profiles = targeted(model, b"--filter-tcp=443\n<HOSTLIST:gaming>\n--lua-desync=fake\n")
+        with self.assertRaisesRegex(ResourceCompileError,
+                                    "INVALID_GAMING_DOMAINS"):
+            compile_resources(model, profiles, catalog, raw, None,
+                              voice_managed_root=ROOT_MANAGED)
 
 
 if __name__ == "__main__":

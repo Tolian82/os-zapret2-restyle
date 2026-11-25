@@ -183,8 +183,9 @@ def compile_resources(requested: RequestedConfig, targets: TargetProjection,
     """Check original-ready resource semantics and compose existing Voice producer.
 
     'prepared' contains detached RAW original GUI file-backed source bytes:
-    all seven registered managed sources + two GLOBAL exclude inputs. It is
-    not a copied XML hostlist field and does not prove filesystem ownership.
+    every managed source declared by the original registry and storage source,
+    plus two GLOBAL exclude inputs. It is not a copied XML hostlist field
+    and does not prove filesystem ownership.
     No physical read, shell, side effect, or authority is performed here.
     """
     if (type(requested) is not RequestedConfig or requested.schema != 1 or
@@ -210,7 +211,15 @@ def compile_resources(requested: RequestedConfig, targets: TargetProjection,
 
     managed = {source.storage_key for source in registry
                if mapped[source.storage_key].provider == "managed"}
-    if (len(managed) != 7 or
+    # These identities are existing Voice/Found contracts, not a fixed
+    # count of all registered managed HOSTLIST/IPSET sources. Newly declared
+    # resources must be present and independently validated; no second
+    # registry or implicit Auto/Voice eligibility is introduced here.
+    required = {"hostlist.youtube", "hostlist.user"} | {
+        "ipset." + name for name in SERVICES
+    }
+    if (not required.issubset(managed) or not managed or
+            len(managed) > 128 or
             set(prepared) != managed | set(_ROOT_REQUIRED)):
         raise ResourceCompileError("INCOMPLETE_PREPARED_RESOURCES")
     if (any(type(value) is not bytes for value in prepared.values()) or
@@ -247,8 +256,15 @@ def compile_resources(requested: RequestedConfig, targets: TargetProjection,
         "hostlist.user": known_effective["user"].encode("utf-8"),
     }
     for source in registry:
-        if source.kind == "IPSET":
+        if source.kind == "IPSET" and mapped[source.storage_key].provider == "managed":
             out[source.storage_key], _ = _canonical_ipset(
+                prepared[source.storage_key], source.name)
+        elif (source.kind == "HOSTLIST" and source.name not in KNOWN_HOSTLISTS
+              and mapped[source.storage_key].provider == "managed"):
+            # A new editor must first be registered in the ORIGINAL domain
+            # policy. Unknown names fail closed; never silently reuse User's
+            # normalization or grant Auto learning to the new source.
+            out[source.storage_key], _ = _canonical_domain(
                 prepared[source.storage_key], source.name)
     exclude_domains, exclude_count = _canonical_domain(
         prepared["hostlist.exclude"], "exclude")
@@ -317,3 +333,65 @@ def compile_resources(requested: RequestedConfig, targets: TargetProjection,
         "SNAPSHOT_SUPPLIED_NO_AUTHORITY" if owned is not None else "NO_OWNED_SNAPSHOT_SUPPLIED",
         tuple(n for n in KNOWN_HOSTLISTS if not manual[n]),
         tuple(n for n in KNOWN_HOSTLISTS if not known_effective[n]))
+
+
+
+def compare_original_managed_bytes(resources: ResourceProjection,
+                                   storage: OriginalStorage,
+                                   observed: Mapping[str, bytes]) -> tuple[str, ...]:
+    """Read-only expected-vs-actual witness for ORIGINAL built managed bytes.
+
+    Observed is populated by the ORIGINAL FD9 holder from its single
+    candidate release and keyed by ORIGINAL storage locators, not by guessed
+    paths. This function does NOT open files, validate their ownership, seal,
+    generation, or authorize any transition. The original caller must
+    independently attest exact file identity/permissions and stable snapshot.
+    """
+    if (type(resources) is not ResourceProjection or
+            resources.authorization != "NONE" or
+            resources.physical_transition_allowed or
+            type(storage) is not OriginalStorage or
+            resources.storage_source_sha256 != storage.source_sha256 or
+            type(observed) is not dict or
+            type(resources.resources) is not tuple or
+            len(resources.resources) != len(storage.entries) or
+            tuple(row.storage_key for row in resources.resources) !=
+            tuple(entry.storage_key for entry in storage.entries) or
+            len(resources.global_exclusions) != 2):
+        raise ResourceCompileError("UNQUALIFIED_MANAGED_PARITY")
+
+    expected: dict[str, tuple[str, int]] = {}
+    for row, entry in zip(resources.resources, storage.entries):
+        if (type(row) is not ResourceRecord or type(entry) is not StorageEntry or
+                row.storage_key != entry.storage_key or
+                row.provider != entry.provider or row.locator != entry.locator):
+            raise ResourceCompileError("MANAGED_REFERENCE_MISMATCH")
+        if entry.provider != "managed":
+            continue
+        if (type(row.content_sha256) is not str or
+                not _HEX.fullmatch(row.content_sha256) or
+                type(row.byte_count) is not int or row.byte_count < 0 or
+                entry.locator in expected):
+            raise ResourceCompileError("MANAGED_EXPECTATION_MISSING")
+        expected[entry.locator] = row.content_sha256, row.byte_count
+
+    for index, (kind, filename) in enumerate((
+            ("HOSTLIST", "hostlist-exclude.txt"),
+            ("IPSET", "ipset-exclude.txt"))):
+        row = resources.global_exclusions[index]
+        if (type(row) is not ExclusionRecord or row.kind != kind or
+                type(row.content_sha256) is not str or
+                not _HEX.fullmatch(row.content_sha256) or filename in expected):
+            raise ResourceCompileError("INVALID_EXCLUSION_EXPECTATION")
+        # Actual length is checked by the hash (not the domain entry count).
+        expected[filename] = row.content_sha256, -1
+
+    if not expected or set(observed) != set(expected):
+        raise ResourceCompileError("ORIGINAL_MANAGED_SET_MISMATCH")
+    for locator, (digest, length) in expected.items():
+        value = observed[locator]
+        if (type(value) is not bytes or len(value) > domain_policy.MAX_INPUT_BYTES or
+                (length >= 0 and len(value) != length) or
+                _sha(value) != digest):
+            raise ResourceCompileError("ORIGINAL_MANAGED_BYTES_MISMATCH")
+    return tuple(sorted(expected))
