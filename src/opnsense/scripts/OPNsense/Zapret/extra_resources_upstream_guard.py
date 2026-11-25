@@ -407,7 +407,7 @@ def draft_original_setup_release_record(*, runtime: Path, release: str,
     """
     from extra_resources_engine_abi import inspect_installed_engine_abi, EngineABIError
 
-    if (type(runtime) is not Path or not runtime.is_absolute()
+    if (not isinstance(runtime, Path) or not runtime.is_absolute()
             or type(git) is not str or not Path(git).is_absolute()
             or type(owner_uid) is not int or owner_uid < 0
             or type(release) is not str
