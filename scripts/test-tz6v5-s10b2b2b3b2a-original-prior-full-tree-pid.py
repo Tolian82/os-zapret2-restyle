@@ -188,7 +188,7 @@ class FullPreviousOwnerReadOnly(unittest.TestCase):
 
     def test_absent_prior_is_not_cold_authorization(self):
         prior = self.f.f.f.original.read()
-        prior["previous"] = None
+        prior.pop("previous")
         self.f.f.f.original._persist_record(prior)
         a, b = self.patches()
         with a, b, self.assertRaises(gate.PreviousPhysicalRefused):
