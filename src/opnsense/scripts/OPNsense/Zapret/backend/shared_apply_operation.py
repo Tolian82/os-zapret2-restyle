@@ -267,7 +267,7 @@ def _validate_record(record: object) -> dict:
         {"schema", "phase", "detail", "previous", "found"},
     )
     if (type(record) is not dict or
-            (keys - {"failure", "manifest"}) not in allowed or
+            (keys - {"failure", "manifest", "previous_manifest"}) not in allowed or
             ("failure" in record and (record.get("phase") not in
                                       ("committed", "requires-review") or
                                       "found" in record)) or
@@ -289,6 +289,15 @@ def _validate_record(record: object) -> dict:
         _validate_detail(record["previous"])
         if record["previous"]["id"] == record["detail"]["id"]:
             raise SharedOperationError("common Apply predecessor ID reused")
+    if "previous_manifest" in record:
+        if "previous" not in record or "found" in record:
+            raise SharedOperationError("invalid original predecessor root pin")
+        _validate_manifest_binding(record["previous_manifest"], record["previous"])
+        # Until the bound transition exists, no successor may enter a
+        # physical phase using only the previous generation's root pin.
+        if ("manifest" not in record and
+                record["phase"] not in ("prepared", "restored")):
+            raise SharedOperationError("unbound successor of immutable root")
     if "failure" in record:
         failure = record["failure"]
         late = record["phase"] == "committed"
@@ -331,6 +340,19 @@ def committed_owner(record: dict | None) -> dict | None:
     if record["phase"] == "restored":
         return record.get("previous")
     return None
+
+
+def committed_manifest(record: dict | None) -> dict | None:
+    """Select only the actual terminal owner's pin, never an aborted candidate.
+
+    An old unbound owner remains unbound. PREPARED and every nonterminal
+    phase have no current committed root authority. The caller still
+    needs original FD9, physical root and native owner preflight.
+    """
+    if committed_owner(record) is None:
+        return None
+    return record.get("manifest" if record["phase"] == "committed"
+                      else "previous_manifest")
 
 
 def native_committed_owner_witness(root: Path = DEFAULT_ROOT) -> dict:
@@ -415,6 +437,11 @@ class SharedApplyOperation:
         before = self.read()
         if before is not None and before["phase"] not in TERMINAL:
             raise SharedOperationError("unfinished original common Apply")
+        # The Found phase family cannot yet bind its successor root before
+        # the first protected file/Config write. Never downgrade a bound old
+        # owner through this legacy entry, even via direct native PHP.
+        if committed_manifest(before) is not None:
+            raise SharedOperationError("immutable predecessor requires bound Found preflight")
         if before is not None and (
                 before["detail"]["id"] == detail["id"] or
                 (committed_owner(before) is not None and
@@ -643,6 +670,7 @@ class SharedApplyOperation:
             if before is not None and before["detail"]["id"] == detail["id"]:
                 raise SharedOperationError("reused common Apply transaction ID")
             previous = committed_owner(before)
+            previous_manifest = committed_manifest(before)
             if previous is not None and previous["id"] == detail["id"]:
                 raise SharedOperationError("reused common Apply predecessor ID")
         else:
@@ -658,15 +686,19 @@ class SharedApplyOperation:
             # S10b1 never calls the launcher: a bound root must be freshly
             # attested by the actual S10b2 original owner BEFORE activating.
             # Ordinary legacy unbound Apply retains its established path.
-            if phase == "activating" and "manifest" in before:
+            if phase == "activating" and (
+                    "manifest" in before or "previous_manifest" in before):
                 raise SharedOperationError("immutable root preactivation gate not implemented")
             if (phase == "restored" and before["phase"] == "prepared" and
-                    "manifest" in before):
+                    ("manifest" in before or "previous_manifest" in before)):
                 raise SharedOperationError("bound prepared requires original pinned recovery")
             previous = before.get("previous")
+            previous_manifest = before.get("previous_manifest")
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
         if previous is not None:
             record["previous"] = previous
+        if previous_manifest is not None:
+            record["previous_manifest"] = previous_manifest
         if before is not None and "found" in before:
             record["found"] = before["found"]
         if phase != "prepared" and before is not None and "manifest" in before:
@@ -688,7 +720,8 @@ class SharedApplyOperation:
         from voice_ipfw_adapter import require_lifecycle_lock
         from neutral_root_stage import (attest_staged_candidate,
                                         attest_staged_schema3_candidate,
-                                        PreparedRootReceipt, RootStageRefused)
+                                        PreparedRootReceipt, RootStageRefused,
+                                        _verify_original_pinned_root)
         try:
             require_lifecycle_lock()  # attests existing FreeBSD root FD9
         except (OSError, RuntimeError, ValueError):
@@ -716,6 +749,10 @@ class SharedApplyOperation:
         if not schema3:
             args["mode"] = mode
         try:
+            if "previous_manifest" in before:
+                _verify_original_pinned_root(
+                    detail=before["previous"], binding=before["previous_manifest"],
+                    parent=work_parent, owner_uid=self.owner)
             receipt = verifier(**args)
         except (RootStageRefused, OSError, ValueError):
             raise SharedOperationError("original staged root cannot be attested") from None
@@ -746,6 +783,10 @@ class SharedApplyOperation:
             recheck_args = ({**args, "allow_bound_schema3": True}
                             if schema3 else args)
             rechecked = verifier(**recheck_args)
+            if "previous_manifest" in result:
+                _verify_original_pinned_root(
+                    detail=result["previous"], binding=result["previous_manifest"],
+                    parent=work_parent, owner_uid=self.owner)
         except (RootStageRefused, OSError, ValueError):
             raise SharedOperationError("post-bind S10 root reattestation refused") from None
         if rechecked != receipt or self.read() != result:
@@ -972,7 +1013,7 @@ class SharedApplyOperation:
             # physical sources remained untouched after an interrupted
             # found transaction. Do not grant cold recovery by old rules.
             raise SharedOperationError("prepared-only recovery refused")
-        if "manifest" in record:
+        if "manifest" in record or "previous_manifest" in record:
             # The root is a sibling, deliberately outside the original bundle
             # seal. Boot's legacy seal callback cannot authenticate its pin.
             # Recover only the exact previously bound PREPARED record; never
@@ -1310,6 +1351,14 @@ def native_lifecycle_gate(action: str | None = None, *,
     if record is None:
         return {"state": "clear", "safe_to_mutate": True}
     phase = record["phase"]
+    # Legacy Apply/Lab must not retire or replace an immutable owner before
+    # the new original bound preactivation path is available. A restored
+    # candidate's own pin is NOT the active predecessor's pin.
+    if committed_manifest(record) is not None or (
+            phase not in TERMINAL and
+            ("manifest" in record or "previous_manifest" in record)):
+        return {"state": "blocked", "reason": "immutable-root-preflight-required",
+                "phase": phase, "safe_to_mutate": False}
     if action == "strategy-lab-native":
         if phase in TERMINAL and committed_owner(record) is not None:
             # RESTORED with a sealed predecessor is still a native common
