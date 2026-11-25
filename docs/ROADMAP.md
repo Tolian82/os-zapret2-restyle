@@ -1,8 +1,9 @@
-## Current priority — TZ6v5 S10c2b3c original engine identity → original bound executor → S11
+## Current priority — TZ6v5 S10c2b3d original setup-bound release draft → rollback → S11
 
-**Accepted main `v0.6.5_216` / e4f9c47e** via [PR #1337](https://github.com/Tolian82/os-zapret2-restyle/pull/1337), main CI/release classifier PASS. Full S10 OPEN/NO-GO, published package _117.
+**Accepted main `v0.6.5_217` / e7718019** via [PR #1338](https://github.com/Tolian82/os-zapret2-restyle/pull/1338), main CI/classifier PASS. S10 OPEN/NO-GO, public package _117.
 
-**Next:** _217 observes original runtime.release / exact Git tag+HEAD / actual ELF SHA under existing FD9 without accepting it as build provenance. Then qualify original setup-produced identity, Found/P1, physical original FD9 activation/rollback. No additional lock, writer, launcher or public package. [TZ6v5 §4.2](architecture/TZ_6v5.md) · [S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+**Next:** _218 extends original read-only engine observer with a strict future single-marker format (unchanged release first line, Git commit, actual ELF SHA), no new installed write. Integrate only in original setup transaction after actual make, verify existing recovery/rollback exact old bytes/absence; native physical + Found/P1 afterward. Avoid second writer/lock/marker and any automatic Stop. [Approved S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+
 
 ---
 
