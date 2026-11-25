@@ -306,15 +306,28 @@ def verify_prepared_recovery_pin(*, record: dict, parent: Path,
     no caller-supplied S08 receipt, physical mutation, or new authority.
     The original journal must remain PREPARED throughout this read.
     """
+    if (record.get("phase") != "prepared" or "found" in record or
+            not ("manifest" in record or "previous_manifest" in record)):
+        raise RootStageRefused("RECOVERY_NOT_PREPARED")
+    # Reuse the same exact root/seal/plan verification for both immutable
+    # generations. Never mistake the aborted new root for the old owner.
+    for key, detail_key in (("manifest", "detail"),
+                            ("previous_manifest", "previous")):
+        if key in record:
+            _verify_original_pinned_root(detail=record[detail_key],
+                                         binding=record[key], parent=parent,
+                                         owner_uid=owner_uid)
+
+
+def _verify_original_pinned_root(*, detail: dict, binding: dict,
+                                parent: Path, owner_uid: int) -> None:
+    """Read exact original durable pin; NOT live runtime authorization."""
     from neutral_root_refs import _read_file
     from shared_apply_operation import _validate_manifest_binding
 
     pfd = wfd = None
     try:
-        if record["phase"] != "prepared" or "found" in record:
-            raise RootStageRefused("RECOVERY_NOT_PREPARED")
-        detail = record["detail"]
-        binding = _validate_manifest_binding(record["manifest"], detail)
+        binding = _validate_manifest_binding(binding, detail)
         generation = detail["id"]
         pfd = _open_parent(parent, owner_uid)
         wfd = _open_dir(pfd, generation, owner_uid)
@@ -328,7 +341,7 @@ def verify_prepared_recovery_pin(*, record: dict, parent: Path,
                 binding["candidate_sha256"] != detail["candidate"] or
                 verify_seal(parent / generation, owner=owner_uid)["id"] != generation or
                 not _original_plan_matches(parent=parent, generation=generation,
-                                           journal=record, owner_uid=owner_uid)):
+                                           journal={"detail": detail}, owner_uid=owner_uid)):
             raise RootStageRefused("RECOVERY_BOUND_ROOT_CHANGED")
         if (not _absent(wfd, PENDING_NAME) or
                 _read_staged(wfd, owner_uid) != root or

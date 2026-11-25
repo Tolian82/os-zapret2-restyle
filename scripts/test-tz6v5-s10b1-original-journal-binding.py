@@ -21,7 +21,8 @@ BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 
 from shared_apply_operation import (SharedApplyOperation, SharedOperationError,
-                                    _validate_manifest_binding, _validate_record)
+                                    _validate_manifest_binding, _validate_record,
+                                    committed_manifest, native_lifecycle_gate)
 from neutral_root_stage import (PreparedRootReceipt, RootStageRefused)
 
 _spec = importlib.util.spec_from_file_location(
@@ -136,6 +137,109 @@ class OriginalDurableRootBinding(unittest.TestCase):
         self.assertEqual(self.owner.read(), restored)
         with self.assertRaises(SharedOperationError):
             self.bind()
+
+
+    def test_restored_candidate_pin_is_not_active_owner_pin(self):
+        bound = self.bind()
+        restored = self.owner.recover_prepared(
+            self.case.detail["id"], lambda: True,
+            shared_work_parent=self.case.fx.parent)
+        self.assertIsNone(committed_manifest(restored))
+        fresh = {**self.case.detail, "id": "e" * 32}
+        self.assertNotEqual(fresh["id"], self.case.detail["id"])
+        prepared = self.owner.advance("prepared", fresh)
+        self.assertNotIn("previous_manifest", prepared)
+        self.assertNotIn("manifest", prepared)
+
+    def test_future_committed_pin_survives_successor_and_exact_abort(self):
+        bound = self.bind()
+        # Simulate the future accepted terminal owner only in the disposable
+        # original WAL fixture. Production bound activation remains fenced.
+        committed = self.owner._persist_record({**bound, "phase": "committed"})
+        self.assertEqual(committed_manifest(committed), bound["manifest"])
+        self.assertFalse(native_lifecycle_gate("common-apply",
+                         root=self.owner.root)["safe_to_mutate"])
+        self.assertFalse(native_lifecycle_gate("strategy-lab-native",
+                         root=self.owner.root)["safe_to_mutate"])
+        fresh = {**self.case.detail, "id": "e" * 32,
+                 "base": self.case.detail["candidate"]}
+        prepared = self.owner.advance("prepared", fresh)
+        self.assertEqual(prepared["previous"], committed["detail"])
+        self.assertEqual(prepared["previous_manifest"], bound["manifest"])
+        self.assertIsNone(committed_manifest(prepared))
+        with self.assertRaises(SharedOperationError):
+            self.owner.advance("activating", fresh)
+        with self.assertRaises(SharedOperationError):
+            self.owner.advance("restored", fresh)
+        path = self.case.fx.work / "manifest.json"
+        original = path.read_bytes()
+        path.write_bytes(original + b" ")
+        with self.assertRaisesRegex(SharedOperationError, "recovery pin"):
+            self.owner.recover_prepared(fresh["id"], lambda: True,
+                                       shared_work_parent=self.case.fx.parent)
+        self.assertEqual(self.owner.read(), prepared)
+        path.write_bytes(original)
+        restored = self.owner.recover_prepared(
+            fresh["id"], lambda: True, shared_work_parent=self.case.fx.parent)
+        self.assertEqual(restored["phase"], "restored")
+        self.assertEqual(committed_manifest(restored), bound["manifest"])
+        self.assertEqual(restored["previous_manifest"], bound["manifest"])
+        self.assertFalse(native_lifecycle_gate("common-apply",
+                         root=self.owner.root)["safe_to_mutate"])
+        third = self.owner.advance("prepared", {**fresh, "id": "f" * 32})
+        self.assertEqual(third["previous"], committed["detail"])
+        self.assertEqual(third["previous_manifest"], bound["manifest"])
+
+    def test_predecessor_pin_is_bound_to_exact_previous_detail(self):
+        bound = self.bind()
+        prior = self.owner._persist_record({**bound, "phase": "committed"})
+        fresh = {**self.case.detail, "id": "e" * 32}
+        prepared = self.owner.advance("prepared", fresh)
+        for bad in (
+                {k: v for k, v in prepared.items() if k != "previous"},
+                {**prepared, "previous_manifest": {**bound["manifest"],
+                                                  "generation": fresh["id"]}},
+                {**prepared, "previous_manifest": {**bound["manifest"],
+                                                  "candidate_sha256": "f" * 64}},
+                {**prepared, "phase": "activating"},
+                {**prepared, "found": {}},
+        ):
+            with self.assertRaises(SharedOperationError):
+                _validate_record(bad)
+        self.assertEqual(self.owner.read(), prepared)
+
+    def test_bound_predecessor_cannot_enter_legacy_found_writer(self):
+        bound = self.bind()
+        previous = self.owner._persist_record({**bound, "phase": "committed"})
+        fresh = {**self.case.detail, "id": "e" * 32,
+                 "base": self.case.detail["candidate"]}
+        plan = json.dumps({
+            "result": "prepared", "page": "strategies",
+            "dependencies": fresh["base"],
+            "found_intent": {"config_revision": fresh["base"],
+                             "commit_authorized": False},
+            "found_batch": {name: {} for name in ("youtube", "user", "auto")}
+        }).encode()
+        def forbidden(_):
+            self.fail("legacy Found attestation called for immutable predecessor")
+        with self.assertRaisesRegex(SharedOperationError, "bound Found preflight"):
+            self.owner.prepare_found(fresh, plan, forbidden, runtime_mode="1")
+        self.assertEqual(self.owner.read(), previous)
+
+    def test_terminal_selector_distinguishes_two_generation_pins(self):
+        bound = self.bind()
+        old = self.owner._persist_record({**bound, "phase": "committed"})
+        fresh = {**self.case.detail, "id": "e" * 32,
+                 "candidate": "c" * 64}
+        pending = self.owner.advance("prepared", fresh)
+        # Synthetic metadata for selection only, not a second physical proof.
+        new_pin = {**bound["manifest"], "generation": fresh["id"],
+                   "candidate_sha256": fresh["candidate"], "root_sha256": "b" * 64}
+        both = {**pending, "manifest": new_pin}
+        self.assertIsNone(committed_manifest(both))
+        self.assertEqual(committed_manifest({**both, "phase": "committed"}), new_pin)
+        self.assertEqual(committed_manifest({**both, "phase": "restored"}), old["manifest"])
+
 
     def test_record_validation_rejects_manifest_forgery_and_found_mix(self):
         bound = self.bind()
