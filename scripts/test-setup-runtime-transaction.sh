@@ -345,18 +345,8 @@ fi
 
 # Candidate activation fails after Stop/checkpoint and candidate checkout.
 # Original checkout and running service must both be restored.
-if run_transaction v1.0.3 >"${TMP_ROOT}/first-candidate.stdout" 2>"${TMP_ROOT}/first-candidate.stderr"; then
+if run_transaction v1.0.3 >/dev/null 2>&1; then
     fail "failed candidate activation reported success"
-fi
-if [ ! -f "${ACTIVE_RELEASE_FILE}" ]; then
-    # First-fast-G03 diagnostic is TEST-ONLY and uses synthetic tmp fixtures.
-    # Expose the original refusal stage instead of guessing rollback cause.
-    echo 'G03_SYNTHETIC_ROLLBACK_MARKER_ABSENT' >&2
-    sed -n '1,24p' "${TMP_ROOT}/first-candidate.stderr" >&2
-    sed -n '1,15p' "${TMP_ROOT}/first-candidate.stdout" >&2
-    [ ! -f "${SETUP_STATUS}" ] || printf 'G03_SETUP_STATE=%s\n' "$(head -n 2 "${SETUP_STATUS}" | tr '\n' '|')" >&2
-    [ ! -f "${SERVICE_STATE}" ] || printf 'G03_SERVICE_STATE=%s\n' "$(cat "${SERVICE_STATE}")" >&2
-    [ ! -f "${GIT_RELEASE_STATE}" ] || printf 'G03_GIT_RELEASE=%s\n' "$(cat "${GIT_RELEASE_STATE}")" >&2
 fi
 [ "$(sed -n '1p' "${ACTIVE_RELEASE_FILE}")" = v1.0.4 ] || fail "active release marker was not restored"
 [ "$(cat "${GIT_RELEASE_STATE}")" = v1.0.4 ] || fail "previous Git release was not restored"
