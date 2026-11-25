@@ -47,3 +47,18 @@ PREPARED→ACTIVATING, including rollback. The existing
 `manifest-unbound` and bound PREPARED activation refusals **stay closed**.
 Complete these inside the single original FD9 operation, not by invoking
 this detached readback as an activator.
+
+## CI correction after exact-head native observation (25.11.2026)
+
+The first candidate G03 and the previously merged `_223` postmerge no-git
+Guest D both reproduced an independent, non-mutating
+`strategies-preflight-lifecycle-guard` refusal on the second immediate
+stale-tab HTTPS Apply after the first has already returned saved. The original
+`strategy_lab_guard.sh` protects FD9 and rejects a busy owner. The disposable
+**test harness only** now waits up to 30 × 0.5s for the existing
+`configctl zapret strategy_lab_guard` to say exactly owner=none, state=idle,
+reason=available, busy=false, checking the actual original shared journal
+remains committed and the service remains STOPPED with no PID. Any unknown
+owner, Strategy Lab job, missing response, unstable runtime or held lock still
+refuses. No retry of a rejected Apply, no lock release, no new production
+behavior, no physical runtime action or extra native guest.
