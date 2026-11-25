@@ -33,6 +33,13 @@ _WAN = "/usr/local/opnsense/scripts/OPNsense/Zapret/wan_preflight.sh"
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
 _DEVICE = re.compile(r"[A-Za-z][A-Za-z0-9_.:-]{0,63}\Z")
 _SIZE = 4096
+# The existing native WAN script emits these private state markers on refusal.
+# A marker can also match the shell interface-name character class; never
+# accept one as a forged physical device on the read-only handoff.
+_WAN_STATE_MARKERS = frozenset((
+    "wan-ready", "wan-required", "wan-invalid",
+    "wan-not-required", "wan-unavailable",
+))
 
 
 class SavedWanPreimageRefused(ValueError):
@@ -93,7 +100,8 @@ def _native_wan() -> str:
         text = device.decode("ascii")
     except UnicodeError:
         raise SavedWanPreimageRefused("ORIGINAL_WAN_DEVICE_INVALID") from None
-    if not text.endswith("\n") or not _DEVICE.fullmatch(text[:-1]):
+    if (not text.endswith("\n") or text[:-1] in _WAN_STATE_MARKERS or
+            not _DEVICE.fullmatch(text[:-1])):
         raise SavedWanPreimageRefused("ORIGINAL_WAN_DEVICE_INVALID")
     return text[:-1]
 
@@ -156,7 +164,8 @@ def _attest_saved_wan(*, generation: str, effective: EffectiveSnapshot,
             _native_preflight(generation, before["detail"]["page"]),
             before["detail"], enabled)
         first_wan = _native_wan()
-        if type(first_wan) is not str or not _DEVICE.fullmatch(first_wan):
+        if (type(first_wan) is not str or first_wan in _WAN_STATE_MARKERS or
+                not _DEVICE.fullmatch(first_wan)):
             raise SavedWanPreimageRefused("ORIGINAL_WAN_DEVICE_INVALID")
         if store.read() != before:
             raise SavedWanPreimageRefused("ORIGINAL_SAVED_PREIMAGE_RACED")
@@ -165,7 +174,8 @@ def _attest_saved_wan(*, generation: str, effective: EffectiveSnapshot,
             _native_preflight(generation, before["detail"]["page"]),
             before["detail"], enabled)
         second_wan = _native_wan()
-        if type(second_wan) is not str or not _DEVICE.fullmatch(second_wan):
+        if (type(second_wan) is not str or second_wan in _WAN_STATE_MARKERS or
+                not _DEVICE.fullmatch(second_wan)):
             raise SavedWanPreimageRefused("ORIGINAL_WAN_DEVICE_INVALID")
         if (old != old_again or first != second or
                 first_wan != second_wan or store.read() != before):
