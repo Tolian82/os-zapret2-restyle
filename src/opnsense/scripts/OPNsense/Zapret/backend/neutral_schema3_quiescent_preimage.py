@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Original FD9 quiescent preimage for bound schema3 Apply (read-only).
+"""Original FD9 quiescent preimage for bound All/List/Auto Apply (read-only).
 
 Reuse the installed retirement verifier, never retire, repair, initialize
 a producer, remove PID files, load IPFW or advance the journal here.
@@ -53,7 +53,7 @@ class QuiescentPreimage:
     previous_release_sha256: str | None
     config_base_sha256: str
     config_candidate_sha256: str
-    verified_wan_device: str
+    verified_wan_device: str | None
     old_state: str
     kernel_state: str
     retirement_state: str
@@ -169,11 +169,16 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
     try:
         store = SharedApplyOperation(journal_root, owner=owner_uid)
         before = store.read()
-        if (enabled is not True or type(before) is not dict or
-                before.get("phase") != "prepared" or "found" in before or
-                before.get("manifest", {}).get("schema") != 2 or
-                before.get("detail", {}).get("id") != generation):
+        if (type(enabled) is not bool or type(native) is not NativeParity or
+                native.mode not in ("all", "list", "auto") or
+                type(before) is not dict or before.get("phase") != "prepared" or
+                "found" in before or type(before.get("manifest")) is not dict or
+                type(before.get("detail")) is not dict or
+                before["detail"].get("id") != generation):
             raise QuiescentPreimageRefused("QUIESCENT_ORIGINAL_BOUND_REQUIRED")
+        schema3 = native.mode == "auto" and enabled
+        if before["manifest"].get("schema") != (2 if schema3 else 1):
+            raise QuiescentPreimageRefused("QUIESCENT_BOUND_MODE_MISMATCH")
         detail = before["detail"]
         old = before.get("previous")
         if old is not None and old["candidate"] != detail["base"]:
@@ -184,13 +189,13 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
         def observe():
             _zero_processes(pidfiles, runner=runner)
             if old is None:
-                root = _attest_bound_candidate(**args, mode="auto", schema3=True)
+                root = _attest_bound_candidate(**args, mode=native.mode, schema3=schema3)
                 _cold_files(active, backups, producer, epochs, owner_uid)
                 if any(item.name != generation for item in parent.iterdir()):
                     raise QuiescentPreimageRefused("QUIESCENT_OLD_WORK_RESIDUE")
                 config = _qualified_config(
                     _native_preflight(generation, detail["page"]), detail, enabled)
-                wan = _native_wan()
+                wan = _native_wan() if enabled else None
                 old_hash = None
                 old_state, retirement = "first-install-empty", "no-prior-data"
             else:
@@ -229,8 +234,9 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
             else:
                 if _full_prior_tree(parent / old["id"], active, owner_uid) != old_hash:
                     raise QuiescentPreimageRefused("QUIESCENT_ACTIVE_TREE_CHANGED")
-            if (type(wan) is not str or not _DEVICE.fullmatch(wan) or
-                    wan in _WAN_STATE_MARKERS or
+            if ((enabled and (type(wan) is not str or not _DEVICE.fullmatch(wan) or
+                              wan in _WAN_STATE_MARKERS)) or
+                    (not enabled and wan is not None) or
                     root.root_sha256 != before["manifest"]["root_sha256"] or
                     config[:2] != (detail["base"], detail["candidate"]) or
                     store.read() != before):
@@ -240,7 +246,7 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                 config[0], config[1], wan, old_state, kernel, retirement)
         first = observe()
         if (observe() != first or
-                _attest_bound_candidate(**args, mode="auto", schema3=True).root_sha256 !=
+                _attest_bound_candidate(**args, mode=native.mode, schema3=schema3).root_sha256 !=
                 first.root_sha256 or store.read() != before):
             raise QuiescentPreimageRefused("QUIESCENT_PREIMAGE_RACED")
         return first
