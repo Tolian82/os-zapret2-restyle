@@ -800,7 +800,7 @@ def _read_pinned_effective(*, detail: dict, binding: dict, parent: Path,
 @dataclass(frozen=True)
 class OriginalSemanticReceipt:
     generation: str
-    previous_generation: str
+    previous_generation: str | None
     candidate_root_sha256: str
     previous_root_sha256: str | None
     decision: EffectiveDecision
@@ -814,17 +814,21 @@ class OriginalSemanticReceipt:
 
 
 def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSemanticReceipt:
-    """Propose the action for an attested RUNNING old owner, without executing.
+    """Classify an original bound PREPARED by exact old-owner state, never act.
 
-    A disabled saved candidate proposes STOP even if S08d detects identical
-    traffic args. Its previous process, full release tree, Config and IPFW
-    must still pass the same native physical proof. Cold/stopped and Found
-    paths stay separately fenced, not inferred from a running proof failure.
+    Reuse the one original FD9, pinned S08d and the existing native old-owner
+    observers. READY must pass full running P2c/Config/IPFW; STOPPED must pass
+    the separate full quiescent P2/epoch/tree/kernel proof. A failed branch
+    NEVER falls through to the other branch. First install is strictly cold.
     """
     from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
     from shared_apply_seal import WORK
+    from neutral_schema3_previous_preimage import (
+        PreviousRuntimeReceipt, attest_prepared_previous_under_fd9)
     from neutral_schema3_previous_physical import (
         CompletePriorPreimage, attest_previous_physical_under_fd9)
+    from neutral_schema3_quiescent_preimage import (
+        QuiescentPreimage, attest_quiescent_under_fd9)
     from voice_ipfw_adapter import require_lifecycle_lock
     require_lifecycle_lock()
     try:
@@ -838,15 +842,22 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
             raise OriginalSourceGateRefused("S10_SEMANTIC_NATIVE_SOURCE_REQUIRED")
         store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
         before = store.read()
-        if (type(before) is not dict or before["phase"] != "prepared" or
-                "found" in before or "previous" not in before or
-                "manifest" not in before or
-                before["detail"]["id"] != source.generation or
-                before["manifest"]["seal_sha256"] != source.original_seal_sha256 or
-                before["previous"]["candidate"] != before["detail"]["base"]):
+        if (type(before) is not dict or before.get("phase") != "prepared" or
+                "found" in before or type(before.get("detail")) is not dict or
+                type(before.get("manifest")) is not dict or
+                before["detail"].get("id") != source.generation or
+                before["manifest"].get("seal_sha256") != source.original_seal_sha256):
             raise OriginalSourceGateRefused("S10_SEMANTIC_ORIGINAL_PREPARED_REQUIRED")
-        current_pin = before["manifest"]
+        prior = before.get("previous")
         old_pin = before.get("previous_manifest")
+        if (("previous" in before and type(prior) is not dict) or
+                (prior is None and "previous_manifest" in before) or
+                ("previous_manifest" in before and type(old_pin) is not dict) or
+                (prior is not None and
+                 (prior.get("id") == source.generation or
+                  prior.get("candidate") != before["detail"].get("base")))):
+            raise OriginalSourceGateRefused("S10_SEMANTIC_PREVIOUS_PIN_INVALID")
+        current_pin = before["manifest"]
         engine = _s10_native_bound_engine_readback()
         read = dict(parent=WORK, sources=Path(__file__).parent, owner_uid=0,
                     engine_version=engine["engine_version"])
@@ -855,53 +866,106 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
         if candidate != (source.effective, source.requested_enabled):
             raise OriginalSourceGateRefused("S10_SEMANTIC_CANDIDATE_CHANGED")
         old = None if old_pin is None else _read_pinned_effective(
-            detail=before["previous"], binding=old_pin, **read)
-        if old is not None and old[1] is not True:
-            raise OriginalSourceGateRefused("S10_SEMANTIC_OLD_RUNNING_DISABLED")
-        physical = attest_previous_physical_under_fd9(
+            detail=prior, binding=old_pin, **read)
+        proof_args = dict(
             generation=source.generation, native=source.native,
             effective=source.effective, enabled=source.requested_enabled)
-        if (type(physical) is not CompletePriorPreimage or
-                physical.authorization != "NONE" or physical.physical_transition_allowed or
-                physical.promotion_allowed or
-                physical.root_sha256 != current_pin["root_sha256"] or
-                physical.previous_generation != before["previous"]["id"] or
-                physical.saved_config_base_sha256 != before["detail"]["base"] or
-                (source.requested_enabled is False and
-                 physical.resolved_wan_device is not None) or
-                (source.requested_enabled is True and
-                 type(physical.resolved_wan_device) is not str)):
-            raise OriginalSourceGateRefused("S10_SEMANTIC_PHYSICAL_UNQUALIFIED")
-        # The original semantic planner owns classification. A pre-S10
-        # predecessor has no structural pin: don't claim equal/reload-safe
-        # on the basis of a display version or a native argv coincidence.
+        observed = None
+        if prior is not None:
+            observed = attest_prepared_previous_under_fd9(**proof_args)
+            if (type(observed) is not PreviousRuntimeReceipt or
+                    observed.authorization != "NONE" or
+                    observed.physical_transition_allowed or
+                    observed.promotion_allowed or
+                    observed.generation != source.generation or
+                    observed.root_sha256 != current_pin["root_sha256"] or
+                    observed.previous_generation != prior["id"] or
+                    observed.previous_candidate_sha256 != prior["candidate"] or
+                    observed.status != "ORIGINAL_SCHEMA3_PREPARED_PREVIOUS_READ_ONLY" or
+                    observed.observed_previous_state not in ("ready", "stopped") or
+                    (observed.observed_previous_state == "stopped" and
+                     (observed.previous_rule_count != 0 or
+                      observed.previous_table_count != 0))):
+                raise OriginalSourceGateRefused("S10_SEMANTIC_PREVIOUS_UNQUALIFIED")
+        if observed is not None and observed.observed_previous_state == "ready":
+            # A prior pinned model declaring OFF cannot be a genuine
+            # verified RUNNING owner. Legacy unpinned models remain RESTART.
+            if old is not None and old[1] is not True:
+                raise OriginalSourceGateRefused("S10_SEMANTIC_OLD_RUNNING_DISABLED")
+            physical = attest_previous_physical_under_fd9(**proof_args)
+            if (type(physical) is not CompletePriorPreimage or
+                    physical.authorization != "NONE" or
+                    physical.physical_transition_allowed or physical.promotion_allowed or
+                    physical.root_sha256 != current_pin["root_sha256"] or
+                    physical.previous_generation != prior["id"] or
+                    physical.saved_config_base_sha256 != before["detail"]["base"] or
+                    (source.requested_enabled is False and
+                     physical.resolved_wan_device is not None) or
+                    (source.requested_enabled is True and
+                     type(physical.resolved_wan_device) is not str)):
+                raise OriginalSourceGateRefused("S10_SEMANTIC_PHYSICAL_UNQUALIFIED")
+            lifecycle = None  # resolved from S08d below
+        else:
+            # Genuine committed STOPPED, or no predecessor with original
+            # strict cold proof. Neither is a fallback from a READY failure.
+            physical = attest_quiescent_under_fd9(**proof_args)
+            expected = ("committed-stopped" if prior is not None
+                        else "first-install-empty")
+            if (type(physical) is not QuiescentPreimage or
+                    physical.authorization != "NONE" or
+                    physical.physical_transition_allowed or physical.promotion_allowed or
+                    physical.original_executor_recheck_required is not True or
+                    physical.generation != source.generation or
+                    physical.root_sha256 != current_pin["root_sha256"] or
+                    physical.old_state != expected or
+                    physical.previous_generation != (
+                        None if prior is None else prior["id"]) or
+                    (prior is None and
+                     (physical.previous_release_sha256 is not None or
+                      physical.retirement_state != "no-prior-data")) or
+                    (prior is not None and
+                     (type(physical.previous_release_sha256) is not str or
+                      physical.retirement_state not in (
+                          "original-epoch-ack-retired",
+                          "inert-no-producer-data"))) or
+                    physical.kernel_state not in (
+                        "native-kernel-absent", "native-managed-kernel-empty") or
+                    physical.config_base_sha256 != before["detail"]["base"] or
+                    physical.config_candidate_sha256 != before["detail"]["candidate"] or
+                    (source.requested_enabled is False and
+                     physical.verified_wan_device is not None) or
+                    (source.requested_enabled is True and
+                     (type(physical.verified_wan_device) is not str or
+                      not physical.verified_wan_device))):
+                raise OriginalSourceGateRefused("S10_SEMANTIC_QUIESCENT_UNQUALIFIED")
+            lifecycle = ("START" if source.requested_enabled else "SAVE_ONLY")
+        # S08d remains the ONE pure structural classifier. Old unpinned
+        # and true cold have no equality evidence, hence structural RESTART.
         decision = (EffectiveDecision("RESTART_REQUIRED", (), ())
                     if old is None else plan(old[0], candidate[0]))
-        # The S08d decision is deliberately unchanged and nonauthorizing.
-        # Enabled OFF dominates it at the lifecycle level: NO_CHANGE is
-        # never interpreted as permission to leave the old engine running.
-        lifecycle = ("STOP" if source.requested_enabled is False else {
-            "NO_CHANGE": "NO_CHANGE",
-            "SAVE_ONLY": "SAVE_ONLY",
-            "RELOAD_SAFE_CANDIDATE": "RELOAD",
-            "RESTART_REQUIRED": "RESTART",
-        }[decision.kind])
+        if lifecycle is None:
+            # Physical state (RUNNING) dominates OFF even if equal S08d.
+            lifecycle = ("STOP" if source.requested_enabled is False else {
+                "NO_CHANGE": "NO_CHANGE",
+                "SAVE_ONLY": "SAVE_ONLY",
+                "RELOAD_SAFE_CANDIDATE": "RELOAD",
+                "RESTART_REQUIRED": "RESTART",
+            }[decision.kind])
         if (candidate != _read_pinned_effective(
                 detail=before["detail"], binding=current_pin, **read) or
                 (old is not None and old != _read_pinned_effective(
-                    detail=before["previous"], binding=old_pin, **read)) or
+                    detail=prior, binding=old_pin, **read)) or
                 engine != _s10_native_bound_engine_readback() or
                 store.read() != before):
             raise OriginalSourceGateRefused("S10_SEMANTIC_ORIGINAL_OWNER_CHANGED")
         require_lifecycle_lock()
         return OriginalSemanticReceipt(
-            source.generation, before["previous"]["id"],
+            source.generation, None if prior is None else prior["id"],
             current_pin["root_sha256"],
             None if old_pin is None else old_pin["root_sha256"],
             decision, physical, lifecycle_proposal=lifecycle)
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_SEMANTIC_PREPARED_REFUSED") from None
-
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv

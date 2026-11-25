@@ -1,3 +1,9 @@
+## 25 November 2026 — S10 STOPPED/cold semantic decision candidate
+
+**Accepted main:** `v0.6.5_230` / `bacda86721d3df2d0d120c10ff57471ec12e3ee9`, [PR #1351](https://github.com/Tolian82/os-zapret2-restyle/pull/1351), exact-head and postmerge CI SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=231`, `v0.6.5_231`, prospective CI-only `os-zapret2-restyle-0.6.5_231.pkg`. Existing original FD9 planner selects genuine READY / committed STOPPED / pristine cold evidence, with START or SAVE_ONLY only as nonauthorizing proposals. No guess from failed physical proof, no duplicate actor/journal or owner operation. See [S10 semantic contract](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md) and [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Native exact-head qualification pending, S10 OPEN/S11 blocked.
+
+---
+
 ## 25 November 2026 — S10 RUNNING→OFF semantic STOP proposal candidate
 
 **Accepted main:** `v0.6.5_229` / `7b44abdd17a701df875da74b9bd2ac1472e7d0b7`, [PR #1350](https://github.com/Tolian82/os-zapret2-restyle/pull/1350), exact-head/postmerge CI SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=230`, `v0.6.5_230`, prospective CI-only `os-zapret2-restyle-0.6.5_230.pkg`. Same original FD9 RUNNING owner/Config/root/PID/IPFW attestation; Enabled OFF always proposes STOP independently of pure S08d, without an active WAN requirement; all actions remain nonauthorizing. See [S10 comparison contract](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md) and [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Portable previous owner inputs for new OFF case are injected, not native acceptance. Exact-head CI still needed; no physical Stop or owner package; S10 OPEN, S11 blocked.

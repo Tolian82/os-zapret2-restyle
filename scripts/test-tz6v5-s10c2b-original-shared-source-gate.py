@@ -660,6 +660,7 @@ class OriginalFd9SourceGate(unittest.TestCase):
         from contextlib import ExitStack
         from unittest.mock import Mock
         from neutral_schema3_previous_physical import CompletePriorPreimage
+        from neutral_schema3_previous_preimage import PreviousRuntimeReceipt
 
         fixture, kw = self.original(mode="list", voice=True)
         import xml.etree.ElementTree as ET
@@ -711,6 +712,12 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     return genuine.effective, detail["id"] != genuine.generation
                 read = stack.enter_context(patch.object(
                     gate, "_read_pinned_effective", side_effect=pinned_read))
+                state = PreviousRuntimeReceipt(
+                    genuine.generation, manifest["root_sha256"],
+                    old_id, old["candidate"], "ready", 5, 2)
+                previous_read = stack.enter_context(patch(
+                    "neutral_schema3_previous_preimage.attest_prepared_previous_under_fd9",
+                    return_value=state))
                 native = stack.enter_context(patch(
                     "neutral_schema3_previous_physical.attest_previous_physical_under_fd9",
                     return_value=physical))
@@ -728,6 +735,10 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 self.assertTrue(result.final_original_fd9_reattest_required)
                 self.assertGreaterEqual(read.call_count, 2)
                 self.assertEqual(engine.call_count, 2)
+                previous_read.assert_called_once_with(
+                    generation=genuine.generation,
+                    native=genuine.native,
+                    effective=genuine.effective, enabled=False)
                 native.assert_called_once_with(
                     generation=genuine.generation,
                     native=genuine.native,
@@ -744,6 +755,7 @@ class OriginalFd9SourceGate(unittest.TestCase):
         from unittest.mock import Mock
         from neutral_schema3_previous_physical import (
             CompletePriorPreimage, PreviousPhysicalRefused)
+        from neutral_schema3_previous_preimage import PreviousRuntimeReceipt
         from neutral_effective_diff import EffectiveSnapshot
         from neutral_native_parity import NativeParity
         # Strict exact-type check runs before any filesystem or physical probe.
@@ -805,6 +817,12 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     genuine.generation, "c" * 64, previous["id"],
                     "d" * 64, "d" * 64, previous["candidate"],
                     "tun0", 1, "birth", 2, "birth", "e" * 64)
+                state = PreviousRuntimeReceipt(
+                    genuine.generation, "c" * 64, previous["id"],
+                    previous["candidate"], "ready", 5, 2)
+                stack.enter_context(patch(
+                    "neutral_schema3_previous_preimage.attest_prepared_previous_under_fd9",
+                    return_value=state))
                 native = stack.enter_context(patch(
                     "neutral_schema3_previous_physical.attest_previous_physical_under_fd9",
                     side_effect=(PreviousPhysicalRefused("unsafe")
@@ -814,6 +832,207 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     gate.native_plan_original_prepared_fd9(genuine)
                 if case == "journal-raced":
                     native.assert_called_once()
+
+
+    def test_s10_stopped_and_strict_cold_proposals_never_authorize_action(self):
+        """Synthetic owner/FD9 result seams; original physical proofs stay unmodified.
+
+        This test intentionally does NOT claim an installed stopped owner.
+        The other S10 tests attest the actual P2e root in isolation.
+        """
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from neutral_effective_diff import EffectiveSnapshot
+        from neutral_native_parity import NativeParity
+        from neutral_schema3_previous_preimage import PreviousRuntimeReceipt
+        from neutral_schema3_quiescent_preimage import QuiescentPreimage
+
+        effective = EffectiveSnapshot("a" * 64, "a" * 64, (), (), 0)
+        native = NativeParity(
+            "list", "a" * 64, "a" * 64, "ORIGINAL_NONAUTO_NO_SOURCE_MAP",
+            0, 1, 0, (), (), "a" * 64, 19000, 19099)
+        source = gate.SourceGateReceipt(
+            mode="list", candidate_input_sha256="a" * 64,
+            managed_locators=(), status="ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY",
+            generation="d" * 32, original_seal_sha256="e" * 64,
+            native=native, effective=effective, requested_enabled=True)
+        detail = {"id": source.generation, "base": "b" * 64,
+                  "candidate": "c" * 64}
+        pin = {"root_sha256": "4" * 64,
+               "seal_sha256": source.original_seal_sha256}
+        former = {"id": "f" * 32, "candidate": detail["base"]}
+        cases = (
+            ("stopped-off", True, False, False, "SAVE_ONLY"),
+            ("stopped-on", True, True, False, "START"),
+            ("stopped-pinned-off", True, False, True, "SAVE_ONLY"),
+            ("stopped-pinned-on", True, True, True, "START"),
+            ("cold-off", False, False, False, "SAVE_ONLY"),
+            ("cold-on", False, True, False, "START"),
+        )
+        for name, has_prior, enabled, pinned, action in cases:
+            with self.subTest(name=name), ExitStack() as stack:
+                candidate = replace(source, requested_enabled=enabled)
+                record = {"phase": "prepared", "detail": detail,
+                          "manifest": pin}
+                if has_prior:
+                    record["previous"] = former
+                if pinned:
+                    record["previous_manifest"] = {"root_sha256": "5" * 64}
+                store = Mock(read=Mock(return_value=record))
+                stack.enter_context(patch(
+                    "shared_apply_operation.SharedApplyOperation", return_value=store))
+                lock = stack.enter_context(patch(
+                    "voice_ipfw_adapter.require_lifecycle_lock"))
+                stack.enter_context(patch.object(gate.sys, "platform", "freebsd"))
+                stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+                engine = stack.enter_context(patch.object(
+                    gate, "_s10_native_bound_engine_readback",
+                    return_value={"engine_version": "v1.0.7"}))
+                old_enabled = False  # prior STOPPED can be saved as OFF
+                def pinned_effective(*, detail, **unused):
+                    return (effective,
+                            enabled if detail["id"] == source.generation
+                            else old_enabled)
+                read = stack.enter_context(patch.object(
+                    gate, "_read_pinned_effective", side_effect=pinned_effective))
+                observed = PreviousRuntimeReceipt(
+                    candidate.generation, pin["root_sha256"],
+                    former["id"], former["candidate"], "stopped", 0, 0)
+                previous_read = stack.enter_context(patch(
+                    "neutral_schema3_previous_preimage.attest_prepared_previous_under_fd9",
+                    return_value=observed))
+                proof = QuiescentPreimage(
+                    candidate.generation, pin["root_sha256"],
+                    former["id"] if has_prior else None,
+                    "6" * 64 if has_prior else None,
+                    detail["base"], detail["candidate"],
+                    "tun0" if enabled else None,
+                    "committed-stopped" if has_prior else "first-install-empty",
+                    "native-managed-kernel-empty",
+                    "inert-no-producer-data" if has_prior else "no-prior-data")
+                quiescent = stack.enter_context(patch(
+                    "neutral_schema3_quiescent_preimage.attest_quiescent_under_fd9",
+                    return_value=proof))
+                running = stack.enter_context(patch(
+                    "neutral_schema3_previous_physical.attest_previous_physical_under_fd9"))
+                result = gate.native_plan_original_prepared_fd9(candidate)
+                self.assertEqual(result.lifecycle_proposal, action)
+                self.assertEqual(result.decision.kind,
+                                 "NO_CHANGE" if pinned else "RESTART_REQUIRED")
+                self.assertEqual(result.previous_generation,
+                                 former["id"] if has_prior else None)
+                self.assertEqual(result.previous_root_sha256,
+                                 "5" * 64 if pinned else None)
+                self.assertIs(result.previous_physical, proof)
+                self.assertEqual(result.authorization, "NONE")
+                self.assertFalse(result.physical_transition_allowed)
+                self.assertFalse(result.promotion_allowed)
+                self.assertTrue(result.final_original_fd9_reattest_required)
+                self.assertEqual(engine.call_count, 2)
+                self.assertEqual(read.call_count, 4 if pinned else 2)
+                self.assertGreaterEqual(lock.call_count, 2)
+                if has_prior:
+                    previous_read.assert_called_once()
+                else:
+                    previous_read.assert_not_called()
+                quiescent.assert_called_once_with(
+                    generation=candidate.generation, native=native,
+                    effective=effective, enabled=enabled)
+                running.assert_not_called()
+                self.assertEqual(store.read(), record)
+
+    def test_s10_wrong_state_incomplete_owner_cannot_fall_through(self):
+        """A READY failure never becomes STOPPED; bad cold cannot become START."""
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from neutral_effective_diff import EffectiveSnapshot
+        from neutral_native_parity import NativeParity
+        from neutral_schema3_previous_preimage import PreviousRuntimeReceipt
+        from neutral_schema3_previous_physical import PreviousPhysicalRefused
+        from neutral_schema3_quiescent_preimage import (
+            QuiescentPreimage, QuiescentPreimageRefused)
+
+        effective = EffectiveSnapshot("a" * 64, "a" * 64, (), (), 0)
+        native = NativeParity(
+            "list", "a" * 64, "a" * 64, "ORIGINAL_NONAUTO_NO_SOURCE_MAP",
+            0, 1, 0, (), (), "a" * 64, 19000, 19099)
+        source = gate.SourceGateReceipt(
+            "list", "a" * 64, (),
+            status="ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY",
+            generation="d" * 32, original_seal_sha256="e" * 64,
+            native=native, effective=effective, requested_enabled=True)
+        former = {"id": "f" * 32, "candidate": "b" * 64}
+        detail = {"id": source.generation, "base": former["candidate"],
+                  "candidate": "c" * 64}
+        pin = {"root_sha256": "4" * 64, "seal_sha256": source.original_seal_sha256}
+        for case in ("ready-old-owner-failed", "stopped-retirement-failed",
+                     "cold-foreign-active", "stopped-wan-forged",
+                     "stopped-unknown", "cold-has-prior-pin"):
+            with self.subTest(case=case), ExitStack() as stack:
+                cold = case.startswith("cold-")
+                record = {"phase": "prepared", "detail": detail, "manifest": pin}
+                if not cold:
+                    record["previous"] = former
+                if case == "cold-has-prior-pin":
+                    record["previous_manifest"] = {"root_sha256": "5" * 64}
+                store = Mock(read=Mock(return_value=record))
+                stack.enter_context(patch(
+                    "shared_apply_operation.SharedApplyOperation", return_value=store))
+                stack.enter_context(patch(
+                    "voice_ipfw_adapter.require_lifecycle_lock"))
+                stack.enter_context(patch.object(gate.sys, "platform", "freebsd"))
+                stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+                engine = stack.enter_context(patch.object(
+                    gate, "_s10_native_bound_engine_readback",
+                    return_value={"engine_version": "v1.0.7"}))
+                candidate = (replace(source, requested_enabled=False)
+                             if case == "stopped-wan-forged" else source)
+                stack.enter_context(patch.object(
+                    gate, "_read_pinned_effective",
+                    return_value=(effective, candidate.requested_enabled)))
+                state = ("ready" if case == "ready-old-owner-failed"
+                         else "foreign" if case == "stopped-unknown"
+                         else "stopped")
+                previous = stack.enter_context(patch(
+                    "neutral_schema3_previous_preimage.attest_prepared_previous_under_fd9",
+                    return_value=PreviousRuntimeReceipt(
+                        source.generation, pin["root_sha256"],
+                        former["id"], former["candidate"], state, 0, 0)))
+                running = stack.enter_context(patch(
+                    "neutral_schema3_previous_physical.attest_previous_physical_under_fd9",
+                    side_effect=PreviousPhysicalRefused("native-owner-missing")))
+                proof = QuiescentPreimage(
+                    source.generation, pin["root_sha256"],
+                    former["id"] if not cold else None,
+                    "6" * 64 if not cold else None,
+                    detail["base"], detail["candidate"],
+                    "tun0", "committed-stopped" if not cold else "first-install-empty",
+                    "native-managed-kernel-empty",
+                    "inert-no-producer-data" if not cold else "no-prior-data")
+                if case == "cold-foreign-active":
+                    proof = replace(proof, old_state="committed-stopped",
+                                    previous_generation=former["id"])
+                # An OFF candidate must refuse a fabricated active WAN.
+                quiescent = stack.enter_context(patch(
+                    "neutral_schema3_quiescent_preimage.attest_quiescent_under_fd9",
+                    side_effect=(QuiescentPreimageRefused("retirement-incomplete")
+                                 if case == "stopped-retirement-failed" else None),
+                    return_value=proof))
+                with self.assertRaises(OriginalSourceGateRefused):
+                    gate.native_plan_original_prepared_fd9(candidate)
+                if case == "ready-old-owner-failed":
+                    running.assert_called_once()
+                    quiescent.assert_not_called()
+                elif case in ("stopped-retirement-failed", "stopped-wan-forged"):
+                    running.assert_not_called()
+                    quiescent.assert_called_once()
+                else:
+                    running.assert_not_called()
+                if case == "cold-has-prior-pin":
+                    engine.assert_not_called()
+                    previous.assert_not_called()
+                    quiescent.assert_not_called()
+                self.assertEqual(store.read(), record)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
