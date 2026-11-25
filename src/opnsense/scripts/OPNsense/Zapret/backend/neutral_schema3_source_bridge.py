@@ -170,16 +170,25 @@ def _validate_typed_source(native: NativeParity, effective: EffectiveSnapshot,
 
 def _attest_original_schema3(*, generation: str, native: NativeParity,
                              effective: EffectiveSnapshot, parent: Path,
-                             journal_root: Path, owner_uid: int) -> OriginalSchema3Receipt:
+                             journal_root: Path, owner_uid: int,
+                             allow_bound_schema3: bool = False) -> OriginalSchema3Receipt:
     """Testable read-only source proof; paths are fixed by installed FD9 wrapper."""
     if (type(generation) is not str or not _ID.fullmatch(generation) or
             type(owner_uid) is not int or owner_uid < 0 or
-            not isinstance(parent, Path) or not isinstance(journal_root, Path)):
+            not isinstance(parent, Path) or not isinstance(journal_root, Path) or
+            type(allow_bound_schema3) is not bool):
         raise OriginalSchema3Refused("ORIGINAL_SCHEMA3_IDENTITY_REQUIRED")
     try:
         original_record, candidate_sha = _journal(
             generation, journal_root=journal_root, owner_uid=owner_uid)
-        if ("manifest" in original_record or
+        # A reattestation immediately AFTER the one original S10b1 journal
+        # writer may read a schema-2 bound PREPARED. The original record
+        # validator checks its shape; the S10b2b2b2 consumer MUST compare
+        # the exact root/seal/candidate SHA against the physically reread
+        # source before trusting even a read-only receipt.
+        if (("manifest" in original_record and not
+             (allow_bound_schema3 and
+              original_record["manifest"]["schema"] == 2)) or
                 not _SHA.fullmatch(candidate_sha) or
                 not _original_plan_matches(
                     parent=parent, generation=generation,

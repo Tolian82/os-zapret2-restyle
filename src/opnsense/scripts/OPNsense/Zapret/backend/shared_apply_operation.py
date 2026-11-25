@@ -139,7 +139,7 @@ def _validate_manifest_binding(binding: object, detail: dict) -> dict:
     if (type(binding) is not dict or
             set(binding) != {"schema", "generation", "root_sha256",
                              "seal_sha256", "candidate_sha256"} or
-            type(binding["schema"]) is not int or binding["schema"] != 1 or
+            type(binding["schema"]) is not int or binding["schema"] not in (1, 2) or
             type(binding["generation"]) is not str or
             binding["generation"] != detail["id"] or
             any(type(binding[key]) is not str or not DIGEST.fullmatch(binding[key])
@@ -672,7 +672,8 @@ class SharedApplyOperation:
 
     def bind_prepared_manifest(self, generation: str, *,
                                effective, native, mode: str, enabled: bool,
-                               shared_work_parent: Path | None = None) -> dict:
+                               shared_work_parent: Path | None = None,
+                               schema3: bool = False) -> dict:
         """Pin S10a's already-staged root in THIS fsynced original FD9 WAL.
 
         No alternate journal/seal/config/launcher, no phase advance and no
@@ -683,13 +684,16 @@ class SharedApplyOperation:
         from shared_apply_seal import WORK
         from voice_ipfw_adapter import require_lifecycle_lock
         from neutral_root_stage import (attest_staged_candidate,
+                                        attest_staged_schema3_candidate,
                                         PreparedRootReceipt, RootStageRefused)
         try:
             require_lifecycle_lock()  # attests existing FreeBSD root FD9
         except (OSError, RuntimeError, ValueError):
             raise SharedOperationError("original FD9 required for root binding") from None
-        if type(generation) is not str or not OP_ID.fullmatch(generation):
-            raise SharedOperationError("invalid original root generation")
+        if (type(generation) is not str or not OP_ID.fullmatch(generation) or
+                type(schema3) is not bool or
+                (schema3 and mode != "auto")):
+            raise SharedOperationError("invalid original root generation or schema")
         work_parent = (WORK if shared_work_parent is None else shared_work_parent)
         if not isinstance(work_parent, Path):
             raise SharedOperationError("original shared-work parent required")
@@ -698,11 +702,18 @@ class SharedApplyOperation:
                 before["detail"]["id"] != generation or
                 "found" in before or "manifest" in before):
             raise SharedOperationError("original PREPARED unbound journal required")
+        # Existing original S10a staging/attestation and the existing journal
+        # writer are shared. Only the source verifier differs: schema-2 MUST
+        # prove real postpromotion refs rather than reusing S08d's old argv.
+        verifier = (attest_staged_schema3_candidate if schema3
+                    else attest_staged_candidate)
         args = dict(generation=generation, effective=effective, native=native,
-                    mode=mode, enabled=enabled, parent=work_parent,
+                    enabled=enabled, parent=work_parent,
                     journal_root=self.root, owner_uid=self.owner)
+        if not schema3:
+            args["mode"] = mode
         try:
-            receipt = attest_staged_candidate(**args)
+            receipt = verifier(**args)
         except (RootStageRefused, OSError, ValueError):
             raise SharedOperationError("original staged root cannot be attested") from None
         if (type(receipt) is not PreparedRootReceipt or
@@ -717,7 +728,7 @@ class SharedApplyOperation:
             raise SharedOperationError("original S10 root receipt refused")
         if self.read() != before:
             raise SharedOperationError("original journal changed during root binding")
-        root = {"schema": 1, "generation": generation,
+        root = {"schema": 2 if schema3 else 1, "generation": generation,
                 "root_sha256": receipt.root_sha256,
                 "seal_sha256": receipt.original_seal_sha256,
                 "candidate_sha256": receipt.original_candidate_sha256}
@@ -729,7 +740,9 @@ class SharedApplyOperation:
         # or mark a physical generation COMMITTED here.
         self._persist_record(result)
         try:
-            rechecked = attest_staged_candidate(**args)
+            recheck_args = ({**args, "allow_bound_schema3": True}
+                            if schema3 else args)
+            rechecked = verifier(**recheck_args)
         except (RootStageRefused, OSError, ValueError):
             raise SharedOperationError("post-bind S10 root reattestation refused") from None
         if rechecked != receipt or self.read() != result:
