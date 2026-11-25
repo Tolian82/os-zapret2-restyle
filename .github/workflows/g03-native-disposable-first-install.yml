@@ -140,12 +140,12 @@ jobs:
             ( umask 077; printf 'v1.0.7\n' > "$cache" )
             /bin/chmod 0644 "$cache"
             echo G03_RELEASE_DISCOVERY=DISPOSABLE_PINNED_TAG_CACHE_NOT_API_SUCCESS
-            GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
-            # Guest is disposable; host Chromium gets READ-ONLY browser access
-            # through a one-run SSH key. No plugin persistence or new service.
-            # Only on disposable G03: test-only files outside installed pkg.
+            # Test-only files outside installed pkg, BEFORE first ordinary Apply.
             install -m 0700 scripts/stage2-opnsense-g03-native-prepared.py /root/g03-native-prepared.py
             install -m 0600 scripts/stage2-opnsense-g03-native-prepared.php /root/g03-native-prepared.php
+            GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 ZAPRET2_G03_PRISTINE_COLD=1 /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
+            # Guest is disposable; host Chromium gets READ-ONLY browser access
+            # through a one-run SSH key. No plugin persistence or new service.
             test -s g03-five-f5-ci.pub
             install -d -m 0700 /root/.ssh
             grep -Eq '^ssh-ed25519 [A-Za-z0-9+/=]+' g03-five-f5-ci.pub

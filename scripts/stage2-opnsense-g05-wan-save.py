@@ -92,7 +92,8 @@ def no_runtime_mutation(before_engine, before_ipfw, before_config=None):
 _S10_NO_ENGINE = Path("/usr/local/etc/zapret2/binaries/my/dvtws2")
 _S10_ORIGINAL_WAL = Path("/var/db/zapret2/shared-apply/operation.json")
 _S10_ORIGINAL_WORK = Path("/var/db/zapret2/shared-work")
-_S10_ACTIVE = Path("/usr/local/etc/zapret2/active")
+# Exact original zapret_service.sh ACTIVE_DIR / voice_live_inspect.COMMON_ACTIVE.
+_S10_ACTIVE = Path("/usr/local/etc/zapret2/runtime-v2")
 _S10_MANIFEST_NAMES = ("manifest.json", "dvtws.args", "voice-plan.json")
 _S10_FOUND_FILES = (
     Path("/var/db/zapret2/auto-detect-owned/youtube.txt"),
@@ -112,6 +113,10 @@ def _s10_native_cold_no_engine_witness():
                  *(_S10_ACTIVE / name for name in _S10_MANIFEST_NAMES)):
         need(not path.exists() and not path.is_symlink(),
              "S10_COLD_WAN_ORIGINAL_OWNER_OR_ENGINE_PRESENT")
+    if _S10_ACTIVE.exists() or _S10_ACTIVE.is_symlink():
+        need(_S10_ACTIVE.is_dir() and not _S10_ACTIVE.is_symlink() and
+             not any(_S10_ACTIVE.iterdir()),
+             "S10_COLD_WAN_ACTIVE_RUNTIME_RESIDUE")
     if _S10_ORIGINAL_WORK.exists() or _S10_ORIGINAL_WORK.is_symlink():
         need(_S10_ORIGINAL_WORK.is_dir() and
              not _S10_ORIGINAL_WORK.is_symlink() and

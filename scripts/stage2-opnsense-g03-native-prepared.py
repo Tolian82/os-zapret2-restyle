@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Disposable installed G03: prove original PREPARED no-write cold closure."""
+import base64
 import hashlib
 import json
 import os
@@ -7,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 NATIVE = "/root/g03-native-prepared.php"
 PHP = "/usr/local/bin/php"
@@ -149,7 +151,7 @@ def main():
           flush=True)
 
 
-def bound_manifest_main(*, stopped=False):
+def bound_manifest_main(*, stopped=False, cold=False):
     """One genuine original bound FD9 PREPARED proof for running/stopped owner.
 
     The STOPPED branch runs only after an explicit service stop on the
@@ -157,21 +159,48 @@ def bound_manifest_main(*, stopped=False):
     """
     script = Path(SERVICE).parent
     backend = script / "backend"
-    previous = json.loads(WAL.read_bytes())
-    prior = previous.get("previous")
-    need(previous.get("phase") == "restored" and isinstance(prior, dict) and
-         subprocess.run([SERVICE, "status"], capture_output=True,
-                        timeout=30).returncode == (1 if stopped else 0),
+    def journal():
+        return (None if not WAL.exists() and not WAL.is_symlink()
+                else json.loads(WAL.read_bytes()))
+
+    previous = journal()
+    prior = None if previous is None else previous.get("previous")
+    expected_status = 1 if stopped or cold else 0
+    native_status = subprocess.run([SERVICE, "status"], capture_output=True,
+                                   text=True, timeout=30)
+    need(not (cold and stopped) and
+         (previous is None if cold else (
+             isinstance(previous, dict) and previous.get("phase") == "restored"
+             and isinstance(prior, dict))) and
+         native_status.returncode == expected_status and
+         (not cold or native_status.stdout.strip() == "zapret is not running"),
          "G03_BOUND_PREVIOUS_OWNER_STATE_UNPROVEN")
     original = snapshot()
-    staged = call([PHP, NATIVE, "stage-ordinary"], locked=True)
+    if cold:
+        # G03's existing native lo0 fixture, before the first ordinary Apply.
+        # Use the actual original native request worker, not a fabricated XML.
+        model = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
+        need(model is not None and
+             model.findtext("general/enabled") == "1" and
+             model.findtext("general/waninterface") == "lo0" and
+             model.findtext("hostlist/mode", "all") == "all",
+             "G03_PRISTINE_COLD_NATIVE_SAVED_MODEL_UNPROVEN")
+        request = {"page": "strategies", "fields": {"hostlist": {"mode": "list"}},
+                   "sync": {"telegramips_baseline":
+                            model.findtext("hostlist/telegramips") or ""}}
+        encoded = base64.urlsafe_b64encode(json.dumps(
+            request, separators=(",", ":")).encode()).decode().rstrip("=")
+        staged = call([PHP, str(script / "shared_apply_request.php"), "stage",
+                       encoded], locked=True)
+    else:
+        staged = call([PHP, NATIVE, "stage-ordinary"], locked=True)
     need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
-         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         snapshot() == original and journal() == previous,
          "G03_BOUND_ORDINARY_STAGE_DRIFT")
     op = staged.split("=", 1)[1]
     prepared = call([SERVICE, "shared-apply-prepare", op])
     need(not prepared.startswith("preflight-rejected=") and
-         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         snapshot() == original and journal() == previous,
          "G03_BOUND_ORIGINAL_SEAL_BUILD_REFUSED")
     # The test uses the actual native rendered template / original loader
     # and exact NUL wire under the existing original FreeBSD FD9. The
@@ -207,8 +236,16 @@ try:
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     prior = store.read()
-    if mode not in ("running", "stopped") or prior["phase"] != "restored" or not prior.get("previous"):
-        raise RuntimeError("previous")
+    if mode not in ("running", "stopped", "cold"):
+        raise RuntimeError("mode")
+    if mode == "cold":
+        if prior is not None:
+            raise RuntimeError("G03_PRISTINE_COLD_WAL_ALREADY_PRESENT")
+        old_owner = None
+    else:
+        if not isinstance(prior, dict) or prior["phase"] != "restored" or not prior.get("previous"):
+            raise RuntimeError("previous")
+        old_owner = prior["previous"]
     verify_seal(WORK / op, owner=0)
     native = _native_preflight(op, "strategies")
     if native["enabled"] != "1" or native["result"] != "prepared":
@@ -220,7 +257,8 @@ try:
         op, sys.stdin.buffer.read(MAX_PIPE + 1))
     record = store.read()
     if (source.mode != "list" or source.requested_enabled is not True or
-            record["phase"] != "prepared" or record["previous"] != prior["previous"] or
+            record["phase"] != "prepared" or record.get("previous") != old_owner or
+            (mode == "cold" and ("previous" in record or "previous_manifest" in record)) or
             record["manifest"]["root_sha256"] != bound.root_sha256 or
             record["manifest"]["seal_sha256"] != source.original_seal_sha256 or
             bound.authorization != "NONE" or bound.physical_transition_allowed or
@@ -230,13 +268,27 @@ try:
     # model is unchanged. The old legacy generation has no structural pin.
     semantic = native_plan_original_prepared_fd9(source)
     if (semantic.decision.kind != "RESTART_REQUIRED" or
-            semantic.previous_generation != prior["previous"]["id"] or
+            semantic.previous_generation != (None if old_owner is None else old_owner["id"]) or
             semantic.previous_root_sha256 is not None or
             semantic.candidate_root_sha256 != bound.root_sha256 or
             semantic.authorization != "NONE" or
             semantic.physical_transition_allowed or semantic.promotion_allowed or
             semantic.final_original_fd9_reattest_required is not True or
             (mode == "running" and semantic.lifecycle_proposal != "RESTART") or
+            (mode == "cold" and (
+                semantic.lifecycle_proposal != "START" or
+                type(semantic.previous_physical) is not QuiescentPreimage or
+                semantic.previous_physical.old_state != "first-install-empty" or
+                semantic.previous_physical.previous_generation is not None or
+                semantic.previous_physical.previous_release_sha256 is not None or
+                semantic.previous_physical.retirement_state != "no-prior-data" or
+                semantic.previous_physical.verified_wan_device != "lo0" or
+                semantic.previous_physical.kernel_state not in (
+                    "native-kernel-absent", "native-managed-kernel-empty") or
+                semantic.previous_physical.authorization != "NONE" or
+                semantic.previous_physical.physical_transition_allowed or
+                semantic.previous_physical.promotion_allowed or
+                semantic.previous_physical.original_executor_recheck_required is not True)) or
             (mode == "stopped" and (
                 semantic.lifecycle_proposal != "START" or
                 type(semantic.previous_physical) is not QuiescentPreimage or
@@ -268,7 +320,7 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
     raise SystemExit(69)
 '''
     pinned = call(["/bin/sh", "-c", shell, "g03-bound-native", op,
-                   child, "stopped" if stopped else "running"], locked=True)
+                   child, "cold" if cold else ("stopped" if stopped else "running")], locked=True)
     record = json.loads(WAL.read_bytes())
     root = Path("/var/db/zapret2/shared-work") / op / "manifest.json"
     need(re.fullmatch(r"G03_BOUND_NATIVE_PIN=[a-f0-9]{64}", pinned) is not None and
@@ -278,9 +330,11 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
          pinned.split("=", 1)[1] and
          snapshot() == original,
          "G03_BOUND_ROOT_PREPARED_OR_PHYSICAL_DRIFT")
-    print(("G03_S10_SEMANTIC=PASS_REAL_STOPPED_LEGACY_OWNER_START_PROPOSAL"
-           if stopped else
-           "G03_S10_SEMANTIC=PASS_REAL_RUNNING_LEGACY_OWNER_RESTART_PROPOSAL"),
+    print(("G03_S10_SEMANTIC=PASS_REAL_PRISTINE_FIRST_INSTALL_START_PROPOSAL"
+           if cold else
+           ("G03_S10_SEMANTIC=PASS_REAL_STOPPED_LEGACY_OWNER_START_PROPOSAL"
+            if stopped else
+            "G03_S10_SEMANTIC=PASS_REAL_RUNNING_LEGACY_OWNER_RESTART_PROPOSAL")),
           flush=True)
     recovered = call([str(script / "python_runtime.sh"),
                       str(backend / "shared_apply_operation.py"),
@@ -292,11 +346,42 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
          restored.get("manifest") == record["manifest"] and
          snapshot() == original and
          subprocess.run([SERVICE, "status"], capture_output=True,
-                        timeout=30).returncode == (1 if stopped else 0),
+                        timeout=30).returncode == expected_status and
+         (not cold or ("previous" not in restored and "previous_manifest" not in restored)),
          "G03_BOUND_PREPARED_RECOVERY_DRIFT")
     print("G03_S10_BOUND_PREPARED=PASS_REAL_ENGINE_CONFIG_FD9_WAL_ROOT_RECOVERY",
           flush=True)
 
+
+
+def pristine_cold_native_main():
+    """Test-only before first ordinary Apply: no fabricated cold owner."""
+    engine = Path("/usr/local/etc/zapret2/binaries/my/dvtws2")
+    release = Path("/var/db/zapret2-restyle/runtime.release")
+    work = Path("/var/db/zapret2/shared-work")
+    need(os.environ.get("GITHUB_ACTIONS") == "true" and
+         os.environ.get("ZAPRET2_G03_COLD_PREPARED") == "1" and
+         os.environ.get("ZAPRET2_G03_PRISTINE_COLD") == "1" and
+         sys.platform.startswith("freebsd") and os.geteuid() == 0 and
+         Path(SERVICE).is_file() and engine.is_file() and
+         not engine.is_symlink() and release.is_file() and
+         not WAL.exists() and not WAL.is_symlink() and
+         not work.is_symlink() and
+         (not work.exists() or (work.is_dir() and not any(work.iterdir()))),
+         "G03_PRISTINE_COLD_DISPOSABLE_BASELINE_REQUIRED")
+    original = snapshot()
+    engine_sha = hashlib.sha256(engine.read_bytes()).hexdigest()
+    release_bytes = release.read_bytes()
+    bound_manifest_main(cold=True)
+    final = json.loads(WAL.read_bytes())
+    need(final.get("phase") == "restored" and "previous" not in final and
+         "previous_manifest" not in final and isinstance(final.get("manifest"), dict) and
+         snapshot() == original and
+         hashlib.sha256(engine.read_bytes()).hexdigest() == engine_sha and
+         release.read_bytes() == release_bytes,
+         "G03_PRISTINE_COLD_RESTORED_OWNER_DRIFT")
+    print("G03_S10_PRISTINE_COLD=PASS_NATIVE_FIRST_INSTALL_START_PROPOSAL_NO_PHYSICAL_ACTION",
+          flush=True)
 
 
 def stopped_native_main():
@@ -485,6 +570,8 @@ if __name__ == "__main__":
             partial_main()
         elif sys.argv[1:] == ["config-uncertain"]:
             config_save_uncertain_main()
+        elif sys.argv[1:] == ["pristine-cold"]:
+            pristine_cold_native_main()
         elif sys.argv[1:] == ["stopped"]:
             # Only after the baseline has finished; Stage5 Guest D still
             # requires a genuinely RUNNING predecessor for partial/Config
@@ -499,6 +586,7 @@ if __name__ == "__main__":
         label = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
         prefix = ("G03_COLD_PARTIAL" if sys.argv[1:] == ["partial"] else
                   "G03_COLD_CONFIG" if sys.argv[1:] == ["config-uncertain"] else
+                  "G03_PRISTINE_COLD" if sys.argv[1:] == ["pristine-cold"] else
                   "G03_COLD_STOPPED" if sys.argv[1:] == ["stopped"] else
                   "G03_COLD_PREPARED")
         print(prefix + "=REFUSED:" + label, file=sys.stderr)

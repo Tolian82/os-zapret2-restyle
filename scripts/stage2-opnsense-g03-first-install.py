@@ -179,7 +179,25 @@ def five_hostlist_native_apply(config_path: Path):
 
     # Establish the prior owner independently of configctl's output. Check
     # the durable owner, saved mode and service status before any test edit.
-    need(not journal.exists(), "FIVE_HOSTLIST_LIST_BASELINE_ALREADY_PRESENT")
+    need(not journal.exists() and not journal.is_symlink(),
+         "FIVE_HOSTLIST_LIST_BASELINE_ALREADY_PRESENT")
+    # Only the G03 workflow opts in. Stage5 Guest D retains its old sequence.
+    if os.environ.get("ZAPRET2_G03_PRISTINE_COLD") == "1":
+        checked = subprocess.run(
+            [sys.executable, "/root/g03-native-prepared.py", "pristine-cold"],
+            env={**os.environ, "ZAPRET2_G03_COLD_PREPARED": "1"},
+            timeout=240, check=False)
+        need(checked.returncode == 0,
+             "G03_PRISTINE_COLD_ORIGINAL_FD9_PROOF_REFUSED")
+        aborted = json.loads(journal.read_bytes())
+        need(aborted.get("phase") == "restored" and
+             "previous" not in aborted and "previous_manifest" not in aborted and
+             isinstance(aborted.get("manifest"), dict) and
+             status()["service"] == "stopped" and not pidfile.exists(),
+             "G03_PRISTINE_COLD_TERMINAL_OWNER_UNPROVEN")
+        # Retain the original WAL and aborted work; never manufacture a
+        # first install by deleting either. The legacy Apply must proceed
+        # from this genuinely restored no-predecessor terminal record.
     apply({"hostlist": {"mode": "list"}})
     record = json.loads(journal.read_bytes())
     detail = record.get("detail", {})

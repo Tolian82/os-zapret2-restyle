@@ -1,3 +1,9 @@
+## 26 November 2026 — S10 genuine engine-qualified cold START proposal candidate
+
+**Accepted main:** `v0.6.5_233` / `85c2fad5ee7cd8b9b652b78cefe501a5b43ccbe6`; exact-head 4/4 and main CI/release SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=234`, `v0.6.5_234`, prospective CI-only `os-zapret2-restyle-0.6.5_234.pkg`. Existing G03 actual setup + saved lo0/Enabled ON test fixture, original no-predecessor sealed PREPARED, START proposal only, recovery without activation/deletion and ordinary Apply regression retained. [S10](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md), [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Native qualification pending; S10 OPEN/S11 blocked.
+
+---
+
 ## 26 November 2026 — S10 genuine no-engine cold WAN-only Save candidate
 
 **Accepted main:** `v0.6.5_232` / `c539eee9d9e74ecc58046cea8ec5f08e5129808c`; [PR #1353](https://github.com/Tolian82/os-zapret2-restyle/pull/1353) exact-head 5/5 plus after-merge CI/Stage5/release SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=233`, `v0.6.5_233`, prospective disposable CI-only `os-zapret2-restyle-0.6.5_233.pkg`. Extend existing genuine G05 no-upstream WAN-only Save/GET/F5 + empty user strategy + same archive reinstall with additional original S10 root/WAL/P1/census absence gates, leaving `SharedConfigCommit` and original FD9 unchanged. See [G05](verification/G05_WAN_ONLY_NATIVE.md) and [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Native exact-head qualification required; no physical START or owner appliance installation; S10 OPEN/S11 blocked.
