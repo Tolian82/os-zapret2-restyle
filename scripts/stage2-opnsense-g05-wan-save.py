@@ -84,6 +84,93 @@ def no_runtime_mutation(before_engine, before_ipfw, before_config=None):
     need(now == before_ipfw, "G05_WAN_ONLY_MODIFIED_IPFW_OR_LOADED_KERNEL")
 
 
+# S10/LC-06 is NOT an engine-qualified START/SAVE_ONLY planning route.
+# First Save with no upstream may only reuse the already deployed WAN-only
+# Config writer under the existing original FD9. Prove the original immutable
+# root, journal and ordinary process owner were never created, without
+# inventing an alternate transaction or calling native_plan_original_prepared_fd9.
+_S10_NO_ENGINE = Path("/usr/local/etc/zapret2/binaries/my/dvtws2")
+_S10_ORIGINAL_WAL = Path("/var/db/zapret2/shared-apply/operation.json")
+_S10_ORIGINAL_WORK = Path("/var/db/zapret2/shared-work")
+_S10_ACTIVE = Path("/usr/local/etc/zapret2/active")
+_S10_MANIFEST_NAMES = ("manifest.json", "dvtws.args", "voice-plan.json")
+_S10_FOUND_FILES = (
+    Path("/var/db/zapret2/auto-detect-owned/youtube.txt"),
+    Path("/var/db/zapret2/auto-detect-owned/user.txt"),
+    Path("/usr/local/etc/zapret2/ipset/auto-domains.txt"),
+)
+
+
+def _s10_native_cold_no_engine_witness():
+    """Read-only original S10 absence and P1 ownership witness; no new writer.
+
+    Refuses an already staged/committed previous owner or unknown runtime.
+    Comparing before/after permits only the native WAN leaf/Config revision
+    change, not an ordinary immutable-root build or Found hot-write.
+    """
+    for path in (_S10_NO_ENGINE, _S10_ORIGINAL_WAL,
+                 *(_S10_ACTIVE / name for name in _S10_MANIFEST_NAMES)):
+        need(not path.exists() and not path.is_symlink(),
+             "S10_COLD_WAN_ORIGINAL_OWNER_OR_ENGINE_PRESENT")
+    if _S10_ORIGINAL_WORK.exists() or _S10_ORIGINAL_WORK.is_symlink():
+        need(_S10_ORIGINAL_WORK.is_dir() and
+             not _S10_ORIGINAL_WORK.is_symlink() and
+             not any(_S10_ORIGINAL_WORK.iterdir()),
+             "S10_COLD_WAN_STAGED_GENERATION_PRESENT")
+    native = run([
+        "/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh", "status"
+    ], timeout=30)
+    need(native.returncode == 1 and
+         native.stdout.strip() == "zapret is not running",
+         "S10_COLD_WAN_UNKNOWN_OR_INCOMPLETE_OWNER")
+    preserved = []
+    for path in _S10_FOUND_FILES:
+        need(not path.is_symlink(), "S10_COLD_WAN_FOUND_SYMLINK")
+        if path.exists():
+            need(path.is_file(), "S10_COLD_WAN_FOUND_NONREGULAR")
+            preserved.append(path.read_bytes())
+        else:
+            preserved.append(None)
+    return tuple(preserved)
+
+
+def _s10_native_model_without_wan(web):
+    """Original authenticated Settings getNodes() model, excluding ONLY WAN.
+
+    Config::save may materialize native default XML nodes or format the
+    subtree without an effective user-setting change. Comparing raw XML
+    bytes, or even its root child count, is not an admissible proof that
+    another setting changed. Compare *all* original typed GUI model fields,
+    preserving list text and profile order, except the one approved WAN leaf.
+    """
+    reply = web.api("GET", "/api/zapret/settings/get")
+    model = reply.get("zapret") if isinstance(reply, dict) else None
+    need(isinstance(model, dict) and
+         isinstance(model.get("general"), dict) and
+         isinstance(model.get("hostlist"), dict) and
+         isinstance(model.get("strategy"), dict),
+         "S10_COLD_WAN_NATIVE_MODEL_UNAVAILABLE")
+    copy_model = copy.deepcopy(model)
+    need("waninterface" in copy_model["general"],
+         "S10_COLD_WAN_MODEL_FIELD_MISSING")
+    del copy_model["general"]["waninterface"]
+    return copy_model
+
+
+def _s10_no_other_model_change(web, before, expected_wan):
+    """Read real native Config WAN and compare all other typed user fields."""
+    need(node().findtext("general/waninterface", "") == expected_wan,
+         "S10_COLD_WAN_NOT_SAVED")
+    current = _s10_native_model_without_wan(web)
+    if current != before:
+        # No private list contents or tokens ever appear in native CI logs.
+        names = sorted(set(current).union(before))
+        changed = [name for name in names if current.get(name) != before.get(name)]
+        print("S10_G05_TYPED_MODEL_CHANGED_SECTIONS=" +
+              json.dumps(changed[:8]), file=sys.stderr)
+        raise Refusal("S10_COLD_WAN_MODIFIED_UNRELATED_PLUGIN_FIELD")
+
+
 def request(web, wan, baseline):
     return web.api("POST", "/api/zapret/settings/apply", [
         ("zapret[sync][telegramips_baseline]", baseline),
@@ -438,8 +525,12 @@ def main():
     old, baseline = gui_wan(web)
     need(old in ("", None), "G05_FIRST_WAN_NOT_EMPTY")
 
-    # Existing no-engine native guest: WAN-first GUI/configd/Voice/Lab matrix.
+    # An actual clean package has no original S10 WAL/root/old owner.
+    # No-engine WAN-only Save must not be diverted into the S10 planner.
+    s10_cold = _s10_native_cold_no_engine_witness()
     _wan_first_cold_matrix(web, baseline, ipfw_before)
+    need(_s10_native_cold_no_engine_witness() == s10_cold,
+         "S10_COLD_WAN_PREFLIGHT_CREATED_RUNTIME_OWNER")
 
     # Stale tab + unknown logical interface must refuse with no mutation.
     initial = CONF.read_bytes()
@@ -455,6 +546,7 @@ def main():
     no_runtime_mutation(False, ipfw_before, initial)
 
     # Actual first GUI/API Save with NO upstream engine and original FD9.
+    pre_wan_model = _s10_native_model_without_wan(web)
     result = request(web, "lo0", baseline)
     need(result.get("result") == "saved" and
          result.get("status") == "ok" and
@@ -462,7 +554,12 @@ def main():
          "G05_COLD_FIRST_WAN_CONFIG_ONLY_APPLY_FAILED:" +
          str(result.get("message", "no-message"))[:150])
     exact_saved_wan("lo0")
+    _s10_no_other_model_change(web, pre_wan_model, "lo0")
     no_runtime_mutation(False, ipfw_before)
+    need(_s10_native_cold_no_engine_witness() == s10_cold,
+         "S10_COLD_WAN_FIRST_SAVE_CREATED_S10_OWNER_OR_CHANGED_P1")
+    print("S10_G05_NO_ENGINE_WAN_FIRST=PASS_REAL_ORIGINAL_FD9_CONFIG_ONLY_NO_S10_ROOT",
+          flush=True)
     reread, baseline = gui_wan(web)
     need(reread == "lo0", "G05_WAN_NOT_VISIBLE_AFTER_FRESH_GET")
 
@@ -476,12 +573,18 @@ def main():
     need((saved_empty.findtext("strategy/trafficargs") or "") == "" and
          (saved_empty.findtext("hostlist/youtubedomains") or "") == "",
          "G05_EMPTY_SAVED_FIELDS_NOT_PRESERVED")
+    pre_empty_wan_model = _s10_native_model_without_wan(web)
     result = request(web, "wan", baseline)
     need(result.get("result") == "saved" and
          result.get("applied") is False,
          "G05_EMPTY_STRATEGY_WAN_ONLY_SAVE_FAILED")
     exact_saved_wan("wan")
+    _s10_no_other_model_change(web, pre_empty_wan_model, "wan")
     no_runtime_mutation(False, ipfw_before)
+    need(_s10_native_cold_no_engine_witness() == s10_cold,
+         "S10_COLD_WAN_EMPTY_STRATEGY_CREATED_S10_OWNER_OR_CHANGED_P1")
+    print("S10_G05_NO_ENGINE_WAN_EMPTY=PASS_SAVED_EMPTY_FIELDS_NO_S10_ROOT",
+          flush=True)
     after, _ = gui_wan(web)
     need(after == "wan", "G05_SECOND_WAN_NOT_VISIBLE_AFTER_F5_GET")
     need((node().findtext("strategy/trafficargs") or "") == "" and
@@ -498,6 +601,8 @@ def main():
     need(hashlib.sha256(package.read_bytes()).hexdigest() == sha and
          ET.tostring(node(), encoding="utf-8") == previous,
          "G05_REINSTALL_MODIFIED_USER_WAN_OR_EMPTY_FIELDS")
+    need(_s10_native_cold_no_engine_witness() == s10_cold,
+         "S10_COLD_WAN_SAME_ARCHIVE_REINSTALL_CREATED_S10_OWNER_OR_CHANGED_P1")
     # S06: same genuine G05 guest and same native package, ordinary delete,
     # not a force reinstall; preserve saved Config and all three Found files.
     s06_preserved = verify_s06_ordinary_remove_reinstall(web, package, sha, ipfw_before)
@@ -506,6 +611,7 @@ def main():
         "status": "PASS_G05_COLD_NO_ENGINE_WAN_ONLY_HTTPS_CONFIG_AND_REINSTALL",
         "first_api_authenticated": True,
         "first_save_without_upstream_engine": True,
+        "s10_no_engine_original_root_absent_across_saves_and_reinstall": True,
         "wan_first_gui_configd_voice_lab_ru_en": True,
         "wan_first_engine_second_before_job": True,
         "empty_strategy_and_domains_preserved": True,
