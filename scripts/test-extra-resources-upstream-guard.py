@@ -70,6 +70,55 @@ class InstalledEngineObservation(unittest.TestCase):
         self.assertEqual(receipt["authorization"], "NONE")
         self.assertEqual(before, (self.marker.read_bytes(), self.engine.read_bytes()))
 
+    def test_original_build_draft_is_read_only_and_legacy_stays_unbound(self):
+        original_marker = self.marker.read_bytes()
+        candidate = guard.draft_original_setup_release_record(
+            runtime=self.runtime, release="v1.0.7",
+            git=self.git, owner_uid=os.geteuid())
+        self.assertEqual(self.marker.read_bytes(), original_marker)
+        release, commit, digest = guard.parse_original_setup_release_record(candidate)
+        self.assertEqual(release, "v1.0.7")
+        self.assertEqual(commit, self.run_git("rev-parse", "HEAD").decode())
+        self.assertEqual(digest, hashlib.sha256(self.binary).hexdigest())
+        self.assertEqual(guard.parse_original_setup_release_record(original_marker),
+                         ("v1.0.7", None, None))
+        self.assertEqual(self.observe()["record_schema"], "legacy-display-only")
+        self.marker.write_bytes(candidate)
+        self.assertEqual(self.observe()["record_schema"], "exact-bound-candidate")
+        self.assertFalse(self.observe()["build_provenance_verified"])
+
+    def test_drafted_record_rejects_binary_drift_and_forged_data(self):
+        record = guard.draft_original_setup_release_record(
+            runtime=self.runtime, release="v1.0.7",
+            git=self.git, owner_uid=os.geteuid())
+        bad = (record.replace(b"engine_sha256=", b"engine_SHA256="),
+               record + b"extra\n",
+               record.replace(b"commit=", b"commit=0"),
+               record.replace(b"engine_sha256=", b"engine_sha256=0"),
+               record.replace(b"v1.0.7", b"v1.0.8"),
+               b"v1.0.7\nengine_sha256=" + b"a"*64 + b"\n")
+        for raw in bad:
+            with self.subTest(raw=raw[:24]):
+                with self.assertRaises(guard.TransactionError):
+                    guard.parse_original_setup_release_record(raw)
+        self.marker.write_bytes(record)
+        self.engine.write_bytes(self.binary + b"X")
+        with self.assertRaises(guard.TransactionError):
+            self.observe()
+
+    def test_drafted_record_rejects_wrong_tag_and_linked_binary(self):
+        with self.assertRaises(guard.TransactionError):
+            guard.draft_original_setup_release_record(
+                runtime=self.runtime, release="v1.0.8",
+                git=self.git, owner_uid=os.geteuid())
+        renamed = self.engine.with_name("engine.original")
+        self.engine.rename(renamed)
+        self.engine.symlink_to(renamed)
+        with self.assertRaises(guard.TransactionError):
+            guard.draft_original_setup_release_record(
+                runtime=self.runtime, release="v1.0.7",
+                git=self.git, owner_uid=os.geteuid())
+
     def test_no_marker_fallback_or_malformed_or_wrong_tag(self):
         self.marker.unlink()
         with self.assertRaises(guard.TransactionError):

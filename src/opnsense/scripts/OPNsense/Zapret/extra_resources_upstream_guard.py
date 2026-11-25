@@ -377,20 +377,85 @@ def _engine_identity_stat(path: Path, owner: int, *, directory: bool = False):
             info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_nlink)
 
 
-def _installed_release_marker(path: Path, owner: int) -> tuple[str, tuple]:
+_RELEASE_LINE = re.compile(rb"v[0-9]+(?:\.[0-9]+)+\n\Z")
+_BOUND_RELEASE = re.compile(
+    rb"(?P<release>v[0-9]+(?:\.[0-9]+)+)\n"
+    rb"commit=(?P<commit>[0-9a-f]{40})\n"
+    rb"engine_sha256=(?P<sha>[0-9a-f]{64})\n\Z")
+
+
+def parse_original_setup_release_record(raw: bytes) -> tuple[str, str | None, str | None]:
+    """Pure exact parser; legacy one-line release is NEVER binary provenance."""
+    if type(raw) is not bytes or not 0 < len(raw) <= 192:
+        raise TransactionError("ORIGINAL_RELEASE_RECORD_INVALID")
+    if _RELEASE_LINE.fullmatch(raw):
+        return raw[:-1].decode("ascii"), None, None
+    match = _BOUND_RELEASE.fullmatch(raw)
+    if match is None:
+        raise TransactionError("ORIGINAL_RELEASE_RECORD_INVALID")
+    return (match["release"].decode("ascii"), match["commit"].decode("ascii"),
+            match["sha"].decode("ascii"))
+
+
+def draft_original_setup_release_record(*, runtime: Path, release: str,
+                                        git: str, owner_uid: int) -> bytes:
+    """Read-only candidate to hand to the ONE original setup marker writer.
+
+    Must eventually be called after original make + exact resource verification
+    under inherited setup+FD9 locks. This helper neither writes the marker
+    nor claims that a detached observer proved the build's provenance.
+    """
+    from extra_resources_engine_abi import inspect_installed_engine_abi, EngineABIError
+
+    if (type(runtime) is not Path or not runtime.is_absolute()
+            or type(git) is not str or not Path(git).is_absolute()
+            or type(owner_uid) is not int or owner_uid < 0
+            or type(release) is not str
+            or re.fullmatch(r"v[0-9]+(?:\.[0-9]+)+", release) is None
+            or len(release) > 60):
+        raise TransactionError("ORIGINAL_SETUP_BUILD_CONTEXT_INVALID")
+    directories = (runtime, runtime / ".git", runtime / "binaries", runtime / "binaries/my")
+    engine = runtime / "binaries/my/dvtws2"
+    try:
+        before = tuple(_engine_identity_stat(path, owner_uid, directory=True)
+                       for path in directories)
+        engine_before = _engine_identity_stat(engine, owner_uid)
+        commit = _commit_sha("HEAD", runtime=runtime, git=git)
+        if _commit_sha("refs/tags/" + release, runtime=runtime, git=git) != commit:
+            raise TransactionError("ORIGINAL_SETUP_BUILD_GIT_TAG_MISMATCH")
+        elf = inspect_installed_engine_abi(engine)
+        digest = elf.get("engine_sha256")
+        if (elf.get("state") != "engine-elf-abi-hint-only"
+                or type(digest) is not str
+                or re.fullmatch(r"[0-9a-f]{64}", digest) is None):
+            raise TransactionError("ORIGINAL_SETUP_BUILD_ELF_UNQUALIFIED")
+        if (commit != _commit_sha("HEAD", runtime=runtime, git=git)
+                or commit != _commit_sha("refs/tags/" + release, runtime=runtime, git=git)
+                or engine_before != _engine_identity_stat(engine, owner_uid)
+                or before != tuple(_engine_identity_stat(path, owner_uid, directory=True)
+                                   for path in directories)):
+            raise TransactionError("ORIGINAL_SETUP_BUILD_CHANGED_DURING_READ")
+        candidate = (f"{release}\ncommit={commit}\nengine_sha256={digest}\n").encode("ascii")
+        if parse_original_setup_release_record(candidate) != (release, commit, digest):
+            raise TransactionError("ORIGINAL_SETUP_BUILD_RECORD_MISMATCH")
+        return candidate
+    except (OSError, ValueError, subprocess.SubprocessError, EngineABIError):
+        raise TransactionError("ORIGINAL_SETUP_BUILD_SOURCE_UNQUALIFIED") from None
+
+
+def _installed_release_marker(path: Path, owner: int) -> tuple[str, tuple, str | None, str | None]:
     identity = _engine_identity_stat(path, owner)
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
-        raw = os.read(fd, 129)
+        raw = os.read(fd, 193)
         info = os.fstat(fd)
         observed = (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
                     info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_nlink)
         if (identity != observed or identity != _engine_identity_stat(path, owner)
-                or len(raw) != info.st_size
-                or re.fullmatch(rb"v[0-9]+(?:\.[0-9]+)+\n", raw) is None
-                or len(raw) > 64):
+                or len(raw) != info.st_size):
             raise TransactionError("INSTALLED_ENGINE_RELEASE_MARKER_INVALID")
-        return raw[:-1].decode("ascii"), identity
+        release, commit, digest = parse_original_setup_release_record(raw)
+        return release, identity, commit, digest
     finally:
         os.close(fd)
 
@@ -429,7 +494,7 @@ def observe_installed_engine_identity(*, runtime: Path, state_dir: Path,
         assert_quiescent_setup()
         before = tuple(_engine_identity_stat(path, owner_uid, directory=True)
                        for path in dirs)
-        release, marker_id = _installed_release_marker(marker, owner_uid)
+        release, marker_id, bound_commit, bound_digest = _installed_release_marker(marker, owner_uid)
         head = _commit_sha("HEAD", runtime=runtime, git=git)
         if _commit_sha("refs/tags/" + release, runtime=runtime, git=git) != head:
             raise TransactionError("INSTALLED_ENGINE_TAG_HEAD_MISMATCH")
@@ -439,9 +504,15 @@ def observe_installed_engine_identity(*, runtime: Path, state_dir: Path,
         if (type(digest) is not str or re.fullmatch(r"[a-f0-9]{64}", digest) is None
                 or abi.get("state") != "engine-elf-abi-hint-only"):
             raise TransactionError("INSTALLED_ENGINE_ELF_UNQUALIFIED")
+        # Strictly validate any later original-setup-owned bound record.
+        # It is NOT created here; a legacy marker remains observable only.
+        if (bound_commit is not None and
+                (bound_commit != head or bound_digest != digest)):
+            raise TransactionError("INSTALLED_ENGINE_BOUND_RECORD_MISMATCH")
         if (head != _commit_sha("HEAD", runtime=runtime, git=git)
                 or head != _commit_sha("refs/tags/" + release, runtime=runtime, git=git)
-                or (release, marker_id) != _installed_release_marker(marker, owner_uid)
+                or (release, marker_id, bound_commit, bound_digest) !=
+                    _installed_release_marker(marker, owner_uid)
                 or engine_id != _engine_identity_stat(engine, owner_uid)
                 or before != tuple(_engine_identity_stat(path, owner_uid, directory=True)
                                    for path in dirs)):
@@ -450,6 +521,7 @@ def observe_installed_engine_identity(*, runtime: Path, state_dir: Path,
     except (OSError, ValueError, subprocess.SubprocessError, EngineABIError):
         raise TransactionError("INSTALLED_ENGINE_IDENTITY_UNQUALIFIED") from None
     return {"release": release, "commit": head, "engine_sha256": digest,
+            "record_schema": "exact-bound-candidate" if bound_commit else "legacy-display-only",
             "status": "ORIGINAL_INSTALLED_ENGINE_OBSERVATION_ONLY",
             "build_provenance_verified": False, "authorization": "NONE",
             "physical_transition_allowed": False}
