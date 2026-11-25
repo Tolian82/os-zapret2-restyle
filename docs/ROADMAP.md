@@ -1,8 +1,8 @@
-## Current priority — TZ6v5 S10c2b3f original upstream marker rollback → build binding
+## Current priority — TZ6v5 S10c2b3g original successful make → build record
 
-**Accepted main `v0.6.5_219` / cc654071** via [PR #1340](https://github.com/Tolian82/os-zapret2-restyle/pull/1340), exact-head and postmerge CI PASS; S10 OPEN/NO-GO, public package _117.
+**Accepted main `v0.6.5_220` / 2537f116** via PR #1341, source/native CI + postmerge PASS; S10 OPEN/NO-GO, public testing pkg _117.
 
-**Next:** candidate _220 consumes the exact original marker bytes or absence from existing schema3 preimage for the existing single setup writer's automatic rollback and stopped-only cold recovery; PREPARED requires unchanged original bytes. Legacy backups restore only unbound tag. Later connect original post-make build evidence and first-install completion; P1/Found/physical Apply remain separate ordered gates. [S10 plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md).
+**Candidate _221:** original FD9 setup/reinstall publishes exact release/Git OID/dvtws2 digest through its single original shell writer after actual successful make and all original checks. First install remains unbound until crash-resume evidence is designed. Recheck source/installed native G03 and regressions; then Found/P1 and physical executor gates. No second service writer/owner/lock.
 
 
 ---
