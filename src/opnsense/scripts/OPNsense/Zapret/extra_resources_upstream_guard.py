@@ -180,7 +180,7 @@ def snapshot_untracked() -> None:
 
 
 def _attested_untracked() -> dict[str, str] | None:
-    """Schema 1 is legacy; schema 2 attests the complete non-Git file set."""
+    """Existing schema 2 and source-bound schema 3 attest complete non-Git files."""
     if ATTESTATION.is_symlink() or not ATTESTATION.is_file():
         raise TransactionError("upstream backup attestation missing or linked")
     try:
@@ -194,8 +194,13 @@ def _attested_untracked() -> dict[str, str] | None:
         if set(evidence) != old_keys or (BACKUP_ROOT / "untracked-resources").exists():
             raise TransactionError("invalid legacy attestation or foreign backup")
         return None
-    if evidence.get("schema") != 2 or set(evidence) != old_keys | {"untracked"}:
+    schema = evidence.get("schema")
+    allowed = (old_keys | {"untracked"} if schema == 2 else
+               old_keys | {"untracked", "original_release_marker"} if schema == 3 else None)
+    if allowed is None or set(evidence) != allowed:
         raise TransactionError("unsupported upstream attestation schema")
+    if schema == 3:
+        _verified_original_release_preimage(evidence["original_release_marker"])
     expected = evidence["untracked"]
     if not isinstance(expected, dict) or len(expected) > 4096:
         raise TransactionError("invalid untracked snapshot inventory")
@@ -279,6 +284,45 @@ def _manifest_identity() -> str | None:
     return sha256(metadata.read_bytes())
 
 
+def _snapshot_original_release_marker() -> dict:
+    """Same setup checkpoint only: record original exact bytes OR exact absence."""
+    parent = STATE.parent
+    if parent.is_symlink() or not parent.is_dir():
+        raise TransactionError("unsafe original release marker parent")
+    marker = parent / "runtime.release"
+    try:
+        raw, _ = _read_original_release_marker_bytes(marker, os.geteuid())
+    except FileNotFoundError:
+        if marker.exists() or marker.is_symlink():
+            raise TransactionError("unsafe original release marker absence")
+        return {"state": "absent"}
+    except (OSError, ValueError) as exc:
+        raise TransactionError("unsafe original release marker") from exc
+    return {"state": "present", "raw": raw.decode("ascii"), "sha256": sha256(raw)}
+
+
+def _verified_original_release_preimage(evidence: object) -> bytes | None:
+    """Verify sealed JSON source bytes; NEVER re-read candidate/live marker."""
+    if not isinstance(evidence, dict):
+        raise TransactionError("invalid original release preimage")
+    if evidence == {"state": "absent"}:
+        return None
+    if (set(evidence) != {"state", "raw", "sha256"}
+            or evidence.get("state") != "present"
+            or type(evidence.get("raw")) is not str
+            or type(evidence.get("sha256")) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", evidence["sha256"]) is None):
+        raise TransactionError("invalid original release preimage")
+    try:
+        raw = evidence["raw"].encode("ascii")
+        parse_original_setup_release_record(raw)
+    except (UnicodeError, ValueError) as exc:
+        raise TransactionError("invalid original release preimage") from exc
+    if sha256(raw) != evidence["sha256"]:
+        raise TransactionError("original release preimage digest mismatch")
+    return raw
+
+
 def create_backup_attestation(expected_binaries: bool) -> None:
     """Commit saved binary/manifest identity before a prepared checkpoint."""
     if BACKUP_ROOT.is_symlink() or not BACKUP_ROOT.is_dir():
@@ -295,10 +339,15 @@ def create_backup_attestation(expected_binaries: bool) -> None:
         raise TransactionError("untracked snapshot is linked")
     evidence = {"schema": 1, "binaries": inventory, "managed_manifest_sha256": _manifest_identity()}
     if resource_root.exists():
-        evidence["schema"] = 2
+        evidence["schema"] = 3
         evidence["untracked"] = _untracked_inventory()
+        evidence["original_release_marker"] = _snapshot_original_release_marker()
     _write_atomic(ATTESTATION, (json.dumps(evidence, sort_keys=True, separators=(",", ":")) + "\n").encode())
     _sync_dir(BACKUP_ROOT)
+    # Fail pre-mutation on a marker change during evidence publication.
+    if evidence["schema"] == 3 and (
+            evidence["original_release_marker"] != _snapshot_original_release_marker()):
+        raise TransactionError("original release marker changed during snapshot")
 
 
 def verify_backup_attestation(expected_binaries: bool) -> None:
@@ -309,13 +358,16 @@ def verify_backup_attestation(expected_binaries: bool) -> None:
         evidence = json.loads(ATTESTATION.read_text(encoding="utf-8"))
     except (UnicodeError, ValueError) as exc:
         raise TransactionError("invalid upstream backup attestation") from exc
-    if not isinstance(evidence, dict) or evidence.get("schema") not in (1, 2):
+    if not isinstance(evidence, dict) or evidence.get("schema") not in (1, 2, 3):
         raise TransactionError("unsupported upstream backup attestation")
-    if (evidence["schema"] == 1 and set(evidence) !=
-            {"schema", "binaries", "managed_manifest_sha256"}) or (
-            evidence["schema"] == 2 and set(evidence) !=
-            {"schema", "binaries", "managed_manifest_sha256", "untracked"}):
+    common = {"schema", "binaries", "managed_manifest_sha256"}
+    expected = (common if evidence["schema"] == 1 else
+                common | {"untracked"} if evidence["schema"] == 2 else
+                common | {"untracked", "original_release_marker"})
+    if set(evidence) != expected:
         raise TransactionError("unrecognized upstream backup attestation entries")
+    if evidence["schema"] == 3:
+        _verified_original_release_preimage(evidence["original_release_marker"])
     _attested_untracked()
     manifest = evidence["managed_manifest_sha256"]
     if manifest is not None and (not isinstance(manifest, str) or re.fullmatch(r"[0-9a-f]{64}", manifest) is None):
@@ -443,7 +495,8 @@ def draft_original_setup_release_record(*, runtime: Path, release: str,
         raise TransactionError("ORIGINAL_SETUP_BUILD_SOURCE_UNQUALIFIED") from None
 
 
-def _installed_release_marker(path: Path, owner: int) -> tuple[str, tuple, str | None, str | None]:
+def _read_original_release_marker_bytes(path: Path, owner: int) -> tuple[bytes, tuple]:
+    """Original marker inode + exact bytes, no symlinks or speculative fallback."""
     identity = _engine_identity_stat(path, owner)
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
@@ -454,10 +507,16 @@ def _installed_release_marker(path: Path, owner: int) -> tuple[str, tuple, str |
         if (identity != observed or identity != _engine_identity_stat(path, owner)
                 or len(raw) != info.st_size):
             raise TransactionError("INSTALLED_ENGINE_RELEASE_MARKER_INVALID")
-        release, commit, digest = parse_original_setup_release_record(raw)
-        return release, identity, commit, digest
+        parse_original_setup_release_record(raw)
+        return raw, identity
     finally:
         os.close(fd)
+
+
+def _installed_release_marker(path: Path, owner: int) -> tuple[str, tuple, str | None, str | None]:
+    raw, identity = _read_original_release_marker_bytes(path, owner)
+    release, commit, digest = parse_original_setup_release_record(raw)
+    return release, identity, commit, digest
 
 
 def observe_installed_engine_identity(*, runtime: Path, state_dir: Path,
