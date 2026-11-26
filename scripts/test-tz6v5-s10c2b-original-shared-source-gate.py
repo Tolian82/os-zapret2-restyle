@@ -832,6 +832,7 @@ class OriginalFd9SourceGate(unittest.TestCase):
         from contextlib import ExitStack
         import io
         import subprocess
+        import json
         from unittest.mock import Mock
         from neutral_effective_diff import EffectiveSnapshot
         from neutral_schema3_previous_physical import CompletePriorPreimage
