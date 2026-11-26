@@ -151,6 +151,21 @@ class OriginalQuiescentTests(unittest.TestCase):
             gate.attest_inert_bound_cold_recovery(record, restored=True)
             self.assertEqual(pins.call_count, 4)
             artifact.assert_called_with(stage, 0)
+            # An inert candidate can roll back to an already retired Auto
+            # owner, but only on its full immutable history and idle proof.
+            retired = {**record, "previous_manifest": {**record["previous_manifest"], "schema": 2}}
+            store = gate.SharedApplyOperation.return_value
+            store.read.return_value = retired
+            with patch.object(gate, "_observe_cold_retired_predecessor",
+                              return_value=("a" * 64, ((1, 2, 0, "b" * 64),
+                                                       (1, 3, 0, "b" * 64)))) as epoch:
+                gate.attest_inert_bound_cold_recovery(retired, restored=False)
+                gate.attest_inert_bound_cold_recovery(retired, restored=True)
+                self.assertEqual(epoch.call_count, 4)
+                epoch.side_effect = ValueError("missing retirement")
+                with self.assertRaises(ValueError):
+                    gate.attest_inert_bound_cold_recovery(retired, restored=False)
+            store.read.return_value = record
             # A partial/corrupted stage is not terminal old-owner evidence.
             artifact.side_effect = lambda path, uid: old_hash if path == self.active else "3" * 64
             for restored in (False, True):
@@ -167,6 +182,60 @@ class OriginalQuiescentTests(unittest.TestCase):
                     {**record, "found": {}}, {**record, "phase": "config-saved"}):
                 with self.assertRaises(gate.QuiescentPreimageRefused):
                     gate.attest_inert_bound_cold_recovery(forbidden, restored=False)
+
+    def test_cold_retired_predecessor_requires_existing_queue_and_complete_history(self):
+        from contextlib import contextmanager
+        record = {"previous": {"id": "a" * 32, "candidate": "b" * 64},
+                  "previous_manifest": {"schema": 2}}
+        queue = Mock(root=gate.PRODUCER_ROOT, uid=0)
+        receipts = Mock(root=gate.EPOCH_ROOT)
+        held = [False]
+
+        @contextmanager
+        def lock(*, existing_only):
+            self.assertTrue(existing_only)
+            self.assertFalse(held[0])
+            held[0] = True
+            try:
+                yield
+            finally:
+                held[0] = False
+
+        queue.exclusive.side_effect = lock
+        ready = "c" * 64
+        idle = ((1, 2, 0, "d" * 64), (1, 3, 0, "d" * 64))
+        def verify(*args):
+            self.assertTrue(held[0])
+            self.assertEqual(args, (record, queue, receipts, ready))
+        with ExitStack() as stack:
+            stack.enter_context(patch("auto_detect_post_drop._original_epoch_queue",
+                                       return_value=(queue, receipts)))
+            digest = stack.enter_context(patch.object(gate, "_retired_ready_digest",
+                                                        return_value=ready))
+            history = stack.enter_context(patch.object(gate, "_verify_retired_history",
+                                                         side_effect=verify))
+            producer = stack.enter_context(patch.object(gate, "_verify_idle_producer",
+                                                          return_value=idle))
+            self.assertEqual(gate._observe_cold_retired_predecessor(record), (ready, idle))
+            history.assert_called_once()
+            producer.assert_called_once_with(queue, receipts)
+            self.assertEqual(digest.call_count, 2)
+            digest.side_effect = (ready, "e" * 64)
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate._observe_cold_retired_predecessor(record)
+            digest.side_effect = None
+            history.side_effect = ValueError("missing ACK")
+            with self.assertRaises(ValueError):
+                gate._observe_cold_retired_predecessor(record)
+            history.side_effect = verify
+            producer.side_effect = ValueError("nonempty producer")
+            with self.assertRaises(ValueError):
+                gate._observe_cold_retired_predecessor(record)
+            producer.side_effect = None
+            receipts.root = Path("/foreign")
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate._observe_cold_retired_predecessor(record)
+            self.assertFalse(held[0])
 
     def test_bound_cold_atomic_images_are_checked_before_mutation(self):
         from tempfile import TemporaryDirectory

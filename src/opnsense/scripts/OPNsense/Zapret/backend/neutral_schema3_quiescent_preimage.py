@@ -584,15 +584,39 @@ def _cold_recovery_trees(active: Path, generation: str, old_hash: str,
     return active_sha, stage_sha, parked_sha, backup_sha
 
 
+def _observe_cold_retired_predecessor(record: dict) -> tuple:
+    """Read-only cold recovery proof for an already retired learning owner.
+
+    Called before any Config lock is retained. Borrow only the existing
+    P2a lock; never create a queue, finalize an epoch or reclaim history.
+    The original historical verifier checks the sealed prior generation,
+    full terminal ACK chain and every archived source inode and byte.
+    """
+    from auto_detect_post_drop import _original_epoch_queue
+
+    prior = record["previous"]
+    queue, receipts = _original_epoch_queue()
+    if queue.root != PRODUCER_ROOT or queue.uid != 0 or receipts.root != EPOCH_ROOT:
+        raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_SCOPE_REQUIRED")
+    with queue.exclusive(existing_only=True):
+        ready = _retired_ready_digest(EPOCH_ROOT, prior["id"], 0)
+        _verify_retired_history(record, queue, receipts, ready)
+        idle = _verify_idle_producer(queue, receipts)
+        if _retired_ready_digest(EPOCH_ROOT, prior["id"], 0) != ready:
+            raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_READY_CHANGED")
+        return ready, idle
+
+
 def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
     """Qualify only the existing original ordinary cold rollback route.
 
     Before the shell's existing parked/pristine/installed recovery, require
-    exact pinned work, saved predecessor Config and no live process or
-    producer. The original shell alone verifies and restores the native
-    staged IPFW and rename artifacts. Before terminal WAL restore, require
-    the whole restored old tree and empty managed kernel. Never infer an
-    Auto epoch or a Found rollback from inert bytes.
+    exact pinned work, saved predecessor Config and no live process.
+    An inert candidate may follow a pinned, fully retired learning owner
+    only with the original archived ACK and empty producer proof. The
+    original shell alone restores native staged IPFW and rename artifacts.
+    Before terminal WAL restore require the whole old tree and empty
+    kernel. Learning candidates and Found remain outside this route.
     """
     from neutral_root_stage import (
         verify_original_operation_pins, _original_plan_matches)
@@ -605,7 +629,7 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
                 "activating", "activated") or "found" in record or
             record.get("manifest", {}).get("schema") != 1 or
             ("previous_manifest" in record and
-             record["previous_manifest"]["schema"] != 1) or
+             record["previous_manifest"]["schema"] not in (1, 2)) or
             type(record.get("previous")) is not dict or
             record["previous"]["candidate"] != record["detail"]["base"]):
         raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_OWNER_REQUIRED")
@@ -618,12 +642,18 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
         old, new = record["previous"], record["detail"]
         old_work, new_work = WORK / old["id"], WORK / new["id"]
         seals = []
+        retired = record.get("previous_manifest", {}).get("schema") == 2
         for detail, work in ((old, old_work), (new, new_work)):
             seals.append(verify_seal(work, owner=0))
-            if (not _original_plan_matches(
+            if not _original_plan_matches(
                     parent=WORK, generation=detail["id"],
-                    journal={"detail": detail}, owner_uid=0) or
-                    inspect_inert_release(work / "release", owner_uid=0) != "inactive"):
+                    journal={"detail": detail}, owner_uid=0):
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_SOURCE_CHANGED")
+            if detail == old and retired:
+                # The full historical verifier below qualifies the exact
+                # schema3 map/epoch against this already pinned release.
+                continue
+            if inspect_inert_release(work / "release", owner_uid=0) != "inactive":
                 raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_SOURCE_CHANGED")
         saved_raw = _native_call((
             "/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
@@ -633,8 +663,10 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
                 saved["result"] != "committed" or saved["snapshot"] != old["candidate"] or
                 saved["enabled"] not in ("0", "1")):
             raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_CHANGED")
-        idle = _observe_idle_producer(PRODUCER_ROOT, 0)
         _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        retired_receipt = _observe_cold_retired_predecessor(record) if retired else None
+        idle = (retired_receipt[1] if retired else
+                _observe_idle_producer(PRODUCER_ROOT, 0))
         # Refuse damaged/foreign stage, hold, backup and active trees before
         # the existing shell may mutate IPFW or rename anything. Repeat the
         # same read at terminal completion, not a separate recovery ledger.
@@ -651,7 +683,7 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
         _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
         if store.read() != record:
             raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
-        return seals, saved_raw, active_hash, kernel, idle, trees
+        return seals, saved_raw, active_hash, kernel, idle, trees, retired_receipt
 
     if observe() != observe():
         raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_PREIMAGE_CHANGED")
