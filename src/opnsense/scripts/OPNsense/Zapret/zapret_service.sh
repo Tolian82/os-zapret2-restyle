@@ -3632,7 +3632,7 @@ service_dispatch()
         shared-apply-first-enabled-physical)
             # This private action is not part of the normal service lock
             # router; it REQUIRES original inherited FD9 and Config FD4.
-            [ "$#" -eq 5 ] || return 64
+            [ "$#" -eq 4 ] || return 64
             case "$2" in ""|*[!a-f0-9]*) return 64 ;; esac
             [ "$(expr length "$2")" -eq 32 ] || return 64
             case "$3" in ""|*[!a-f0-9]*) return 64 ;; esac

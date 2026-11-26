@@ -1229,6 +1229,18 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, KeyError, TypeError):
             print("ERROR: original first enabled shell guard refused", file=sys.stderr)
             return 69
+    if argv and argv[0] == "write-first-enabled-handoff-locked":
+        if len(argv) != 3:
+            return 64
+        try:
+            from neutral_schema3_quiescent_preimage import native_write_first_enabled_handoff_locked
+            reply = native_write_first_enabled_handoff_locked(
+                argv[1], argv[2], sys.stdin.buffer, config_fd=4)
+            print(json.dumps(reply, separators=(",", ":")))
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+            print("ERROR: original first enabled handoff refused", file=sys.stderr)
+            return 69
     if argv and argv[0] == "write-first-disabled-handoff-locked":
         if len(argv) != 3:
             return 64

@@ -1464,6 +1464,60 @@ def native_install_first_disabled_bound_locked(record: dict, *, preimage: Quiesc
     return result, receipt
 
 
+def native_write_first_enabled_handoff_locked(operation: str, witness: str, stream, *,
+                                              config_fd: int) -> dict:
+    """Consume one original first-enabled PREPARED witness under PHP FD4."""
+    import json
+    import sys
+    from dataclasses import asdict, fields
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import DIGEST, OP_ID, _config_save_witness, _first_running_pin_matches
+    from shared_apply_seal import verify_seal
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(witness) is not str or not DIGEST.fullmatch(witness) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "activating" or
+            record["detail"]["id"] != operation or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 1):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_OWNER_REQUIRED")
+    detail = record["detail"]
+    plan = verify_seal(WORK / operation, owner=0)["sha256"]["plan.json"]
+    if (witness != _config_save_witness(detail, plan) or
+            detail["base"] == detail["candidate"]):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_CONFIG_CHANGED")
+    raw = stream.read(4097)
+    if (len(raw) > 4096 or not raw.endswith(b"\n") or raw.count(b"\n") != 1):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_WIRE_INVALID")
+    parsed = json.loads(raw)
+    if (type(parsed) is not dict or
+            set(parsed) != {field.name for field in fields(QuiescentPreimage)}):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_WIRE_INVALID")
+    preimage = QuiescentPreimage(**parsed)
+    exact = (json.dumps(asdict(preimage), sort_keys=True, separators=(",", ":"),
+                        ensure_ascii=True, allow_nan=False) + "\n").encode("ascii")
+    if exact != raw or store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_WIRE_CHANGED")
+    result, receipt = native_install_first_enabled_bound_locked(
+        record, preimage=preimage, config_fd=config_fd, config_digest=detail["base"])
+    pinned = result.get("first_running_sha256") if type(result) is dict else None
+    if (type(pinned) is not str or not DIGEST.fullmatch(pinned) or
+            result != {**record, "phase": "activated", "first_running_sha256": pinned} or
+            store.read() != result or type(receipt) is not StagedBoundRuntimeReceipt or
+            receipt.running is None or receipt.pretraffic_sha256 is not None or
+            receipt.kernel_state != "native-managed-kernel-staged" or
+            not _first_running_pin_matches(result, receipt.running, config_fd)):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_READBACK_REQUIRED")
+    return {"result": "first-enabled-activated", "id": operation}
+
+
 def native_write_first_disabled_handoff_locked(operation: str, witness: str, stream, *,
                                                config_fd: int) -> dict:
     """Original FD4 child consumes its FD9 parent's exact first cold proof."""
