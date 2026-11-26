@@ -1250,6 +1250,134 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
     return live, staged, kernel
 
 
+def native_guard_first_enabled_shell_locked(operation: str, candidate: str,
+                                            wan: str, *, config_fd: int = 4) -> None:
+    """Read-only FD9/FD4 gate before the single original shell actuator."""
+    import json
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import _verify_original_pinned_root
+    from neutral_schema3_saved_wan_preimage import _native_wan, _DEVICE
+    from shared_apply_operation import OP_ID, DIGEST
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(candidate) is not str or not DIGEST.fullmatch(candidate) or
+            type(wan) is not str or not _DEVICE.fullmatch(wan) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "activating" or
+            record["detail"]["id"] != operation or record["detail"]["candidate"] != candidate or
+            record["detail"]["base"] == candidate or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 1):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_OWNER_REQUIRED")
+    root = json.loads(_verify_original_pinned_root(
+        detail=record["detail"], binding=record["manifest"], parent=WORK, owner_uid=0))
+    if (root["service"]["enabled"] is not True or
+            root["service"]["target_mode"] not in ("all", "list")):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_MODE_REQUIRED")
+
+    def observe():
+        result = _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=record["detail"]["base"], queue_fd=None, store=store)
+        if (result[0] is not None or result[1] is not None or
+                result[2] not in ("native-kernel-absent", "native-managed-kernel-empty") or
+                _native_wan() != wan):
+            raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_PREIMAGE_CHANGED")
+        return result
+
+    first = observe()
+    if observe() != first or store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_PREIMAGE_CHANGED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    require_lifecycle_lock()
+
+
+def native_install_first_enabled_bound_locked(record: dict, *, preimage: QuiescentPreimage,
+                                              config_fd: int, config_digest: str) -> tuple:
+    """Invoke original apply_runtime_activate exactly once, then attest ACTIVATED."""
+    import json
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import _verify_original_pinned_root
+    from neutral_schema3_saved_wan_preimage import _native_wan, _DEVICE
+    from shared_apply_seal import _stat
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or record.get("phase") != "activating" or
+            type(preimage) is not QuiescentPreimage or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 1 or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_SCOPE_REQUIRED")
+    detail, pin = record["detail"], record["manifest"]
+    wan = preimage.verified_wan_device
+    if (config_digest != detail["base"] or detail["base"] == detail["candidate"] or
+            type(wan) is not str or not _DEVICE.fullmatch(wan) or
+            preimage != QuiescentPreimage(detail["id"], pin["root_sha256"], None, None,
+                detail["base"], detail["candidate"], wan, "first-install-empty",
+                preimage.kernel_state, "no-prior-data") or
+            preimage.kernel_state not in ("native-kernel-absent", "native-managed-kernel-empty")):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_PREIMAGE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    active = COMMON_ACTIVE
+    work = WORK / detail["id"]
+
+    def observe():
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=pin, parent=WORK, owner_uid=0))
+        if (root["service"]["enabled"] is not True or
+                root["service"]["target_mode"] not in ("all", "list") or
+                _native_wan() != wan):
+            raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_MODE_CHANGED")
+        return _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=None, store=store)
+
+    first = observe()
+    live, stage, kernel = first
+    if (kernel != preimage.kernel_state or stage is not None or
+            (live is not None and live[0] != "empty") or observe() != first):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_LAYOUT_CHANGED")
+    if live is not None:
+        info = _stat(active, 0, directory=True)
+        if ("empty", info.st_dev, info.st_ino) != live or observe() != first:
+            raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_EMPTY_CHANGED")
+        os.rmdir(active)
+        parentfd = os.open(active.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(parentfd)
+        finally:
+            os.close(parentfd)
+    if observe() != (None, None, kernel):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_LAYOUT_CHANGED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    command = ("/bin/sh", str(SCRIPT / "zapret_service.sh"),
+               "shared-apply-first-enabled-physical", detail["id"], detail["candidate"], wan)
+    reply = _run_bound_restore_joined(command, pass_fds=(9, config_fd), budget=120,
+                                      capture_output=True)
+    if (reply.returncode != 0 or
+            reply.stdout != b"first-enabled-physical=activated\n"):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_OUTCOME_UNCERTAIN")
+    # No optimistic success. The original writer independently verifies the
+    # full active tree, one engine/supervisor and reversible staged IPFW.
+    result, receipt = store._record_native_bound_activated(
+        record, preimage=preimage, config_fd=config_fd, config_digest=config_digest)
+    if (result["phase"] != "activated" or store.read() != result or
+            "first_running_sha256" not in result or receipt.running is None or
+            receipt.pretraffic_sha256 is not None or
+            receipt.kernel_state != "native-managed-kernel-staged"):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_READBACK_CHANGED")
+    return result, receipt
+
+
 def native_install_first_disabled_bound_locked(record: dict, *, preimage: QuiescentPreimage,
                                                config_fd: int, config_digest: str) -> tuple:
     """Install only a first disabled bound release under the original locks.

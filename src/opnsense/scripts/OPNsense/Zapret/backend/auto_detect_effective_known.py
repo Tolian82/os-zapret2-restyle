@@ -1218,6 +1218,17 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, KeyError, TypeError):
             print("ERROR: original managed locked Config phase refused", file=sys.stderr)
             return 69
+    if argv and argv[0] == "guard-first-enabled-shell":
+        if len(argv) != 4:
+            return 64
+        try:
+            from neutral_schema3_quiescent_preimage import native_guard_first_enabled_shell_locked
+            native_guard_first_enabled_shell_locked(argv[1], argv[2], argv[3], config_fd=4)
+            print("first-enabled-shell=qualified")
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+            print("ERROR: original first enabled shell guard refused", file=sys.stderr)
+            return 69
     if argv and argv[0] == "write-first-disabled-handoff-locked":
         if len(argv) != 3:
             return 64

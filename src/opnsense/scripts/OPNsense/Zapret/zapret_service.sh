@@ -3629,6 +3629,30 @@ service_dispatch()
             shift
             shared_apply_record_service "$@"
             ;;
+        shared-apply-first-enabled-physical)
+            # This private action is not part of the normal service lock
+            # router; it REQUIRES original inherited FD9 and Config FD4.
+            [ "$#" -eq 5 ] || return 64
+            case "$2" in ""|*[!a-f0-9]*) return 64 ;; esac
+            [ "$(expr length "$2")" -eq 32 ] || return 64
+            case "$3" in ""|*[!a-f0-9]*) return 64 ;; esac
+            [ "$(expr length "$3")" -eq 64 ] || return 64
+            [ -x "$PYTHON_RUNTIME" ] || return 69
+            _first_enabled_guard=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+                guard-first-enabled-shell "$2" "$3" "$4") || return 70
+            [ "$_first_enabled_guard" = first-enabled-shell=qualified ] || return 70
+            # FD4 must not enter the long-lived engine/supervisor. The
+            # original PHP parent still holds its Config flock, and both
+            # original daemon launches already close the original FD9.
+            apply_runtime_activate "/var/db/zapret2/shared-work/$2/release" 1 "$2" \
+                >/dev/null 4<&- || return 70
+            [ "$APPLY_PHASE" = activated ] &&
+            [ "$APPLY_NEW_RUNNING" = 1 ] && [ "$APPLY_OLD_RUNNING" = 0 ] &&
+            [ "$APPLY_IPFW_INSTALLED" = 1 ] &&
+            [ -z "$APPLY_BACKUP" ] && [ "$APPLY_OLD" = - ] &&
+            [ "$APPLY_NEW" = "$ACTIVE_DIR" ] || return 70
+            printf '%s\n' first-enabled-physical=activated
+            ;;
         extra-resources-preview-saved)
             extra_resources_preview_saved_service
             ;;
