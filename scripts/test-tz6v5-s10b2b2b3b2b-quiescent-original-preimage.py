@@ -618,6 +618,163 @@ class OriginalQuiescentTests(unittest.TestCase):
             self.assertEqual(store.read(), record)
             self.assertEqual((active / "dvtws.args").read_bytes(), b"candidate")
 
+    def test_first_running_base_recovery_joined_through_original_restored_wal(self):
+        import json
+        import subprocess
+        import tempfile
+        from copy import deepcopy
+        from hashlib import sha256
+        from shared_apply_operation import SharedApplyOperation, _config_observation_witness
+
+        detail = {"id": "a" * 32, "page": "strategies", "base": "b" * 64,
+                  "candidate": "c" * 64, "changed_fields": ["general.enabled"]}
+        record = {"schema": 1, "phase": "activated", "detail": detail,
+                  "manifest": {"schema": 1, "generation": detail["id"],
+                      "root_sha256": "d" * 64, "seal_sha256": "e" * 64,
+                      "candidate_sha256": detail["candidate"]},
+                  "first_running_sha256": "f" * 64}
+        plan = "1" * 64
+        witness = _config_observation_witness(detail, plan, detail["base"])
+        empty = {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}
+        table = "zapret2_voice_telegram"
+        uid = os.geteuid()
+        for scenario in ("running", "already-stopped", "lost-receipt", "stop-refused", "empty-kernel"):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as temp, ExitStack() as stack:
+                root = Path(temp)
+                work = root / "work"
+                release = work / detail["id"] / "release"
+                release.mkdir(parents=True)
+                (release / "dvtws.args").write_bytes(b"candidate\n")
+                active = root / "runtime-v2"
+                shutil.copytree(release, active)
+                config = root / "config.xml"
+                config.write_bytes(b"original Config bytes\n")
+                pidfiles = tuple(root / name for name in ("child.pid", "monitor.pid", "daemon.pid"))
+                running = scenario != "already-stopped"
+                if running:
+                    for path, pid in zip(pidfiles, (321, 654, 987)):
+                        path.write_text(str(pid) + "\n")
+                desired = deepcopy(empty)
+                if scenario != "empty-kernel":
+                    desired["rules"] = {19001: ["divert", "989"]}
+                    desired["tables"] = {table: ["91.108.13.10"]}
+                rules = {**deepcopy(desired["rules"]), 20000: ["unrelated"]}
+                tables = deepcopy(desired["tables"])
+                if table in tables:
+                    tables[table + "_stage"] = []
+                store = SharedApplyOperation(root / "journal", owner=uid)
+                store._persist_record(record)
+                original_wal = (store.root / "operation.json").read_bytes()
+                events = []
+                adapter = Mock()
+                adapter.rule_base, adapter.rule_max = 19000, 19099
+                adapter.list_rules.side_effect = lambda a, b: {k: v for k, v in rules.items() if a <= k <= b}
+                adapter.get_table.side_effect = tables.get
+
+                def delete(number):
+                    self.assertFalse(running)
+                    events.append(number)
+                    del rules[number]
+
+                def destroy(name):
+                    self.assertFalse(running)
+                    events.append(name)
+                    del tables[name]
+
+                adapter.delete_rule.side_effect = delete
+                adapter.destroy_table.side_effect = destroy
+                script = ROOT / "src/opnsense/scripts/OPNsense/Zapret"
+
+                def digest(path, owner=None):
+                    return sha256((path / "dvtws.args").read_bytes()).hexdigest()
+
+                def joined(command, *, pass_fds, budget, capture_output=False):
+                    nonlocal running
+                    self.assertEqual(pass_fds, (9, 4))
+                    self.assertEqual(store.read(), record)
+                    if command[0] == str(script / "zapret_service.sh"):
+                        self.assertEqual(command[1:], ("shared-apply-first-running-base-physical",
+                            detail["id"], detail["base"]))
+                        self.assertTrue(running)
+                        events.append("stop")
+                        if scenario == "stop-refused":
+                            return subprocess.CompletedProcess(command, 70, b"", b"")
+                        running = False
+                        for path in pidfiles:
+                            path.unlink()
+                        gate.native_guard_first_running_base_stopped_shell_locked(
+                            detail["id"], detail["base"], config_fd=4)
+                        if scenario == "lost-receipt":
+                            return subprocess.CompletedProcess(command, 70, b"", b"")
+                        return subprocess.CompletedProcess(command, 0,
+                            b"first-running-base-physical=stopped\n", b"")
+                    self.assertEqual(command[-1], str(active))
+                    self.assertFalse(running)
+                    self.assertEqual(rules, {20000: ["unrelated"]})
+                    self.assertEqual(tables, {})
+                    events.append("remove-tree")
+                    return subprocess.run(command, capture_output=True, check=False)
+
+                for key, value in (("WORK", work), ("COMMON_ACTIVE", active),
+                                   ("PRODUCER_ROOT", root / "producer"), ("EPOCH_ROOT", root / "epochs"),
+                                   ("CHILD_PID", pidfiles[0]), ("MONITOR_PID", pidfiles[1]),
+                                   ("DAEMON_PID", pidfiles[2]), ("SCRIPT", script)):
+                    stack.enter_context(patch.object(gate, key, value))
+                stack.enter_context(patch.object(sys, "platform", "freebsd15"))
+                stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+                stack.enter_context(patch.object(gate, "SharedApplyOperation", return_value=store))
+                stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+                stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+                stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+                stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+                stack.enter_context(patch("neutral_root_stage._original_plan_matches", return_value=True))
+                stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root", return_value=json.dumps(
+                    {"service": {"enabled": True, "target_mode": "list"}})))
+                stack.enter_context(patch.object(gate, "inspect_inert_release", return_value="inactive"))
+                stack.enter_context(patch("shared_apply_seal._stat", side_effect=lambda path, *a, **kw: path.lstat()))
+                stack.enter_context(patch("shared_apply_seal.verify_seal", return_value={"sha256": {
+                    "release": digest(release), "plan.json": plan}}))
+                stack.enter_context(patch("shared_apply_seal._release_hash", side_effect=digest))
+                stack.enter_context(patch.object(gate, "_run", return_value="1 /sbin/init\n"))
+                stack.enter_context(patch("neutral_schema3_previous_physical._running_native", return_value=object()))
+                stack.enter_context(patch.object(gate, "_first_running_digest", return_value=record["first_running_sha256"]))
+                stack.enter_context(patch.object(gate, "shared_release_manifest", return_value=desired))
+                stack.enter_context(patch.object(gate, "_ipfw_kernel_confirmed_absent", return_value=False))
+                stack.enter_context(patch.object(gate, "FreeBSDIPFWAdapter", return_value=adapter))
+                stack.enter_context(patch.object(gate, "_run_bound_restore_joined", side_effect=joined))
+
+                def recover():
+                    return gate.finish_first_config_recovery_locked(detail["id"], witness, config_fd=4)
+
+                if scenario in ("stop-refused", "lost-receipt"):
+                    with self.assertRaises(gate.QuiescentPreimageRefused):
+                        recover()
+                    self.assertEqual(events, ["stop"])
+                    self.assertEqual((store.root / "operation.json").read_bytes(), original_wal)
+                    self.assertTrue(active.is_dir())
+                    self.assertEqual(rules, {**desired["rules"], 20000: ["unrelated"]})
+                    self.assertEqual(tables, {**desired["tables"], table + "_stage": []})
+                    if scenario == "stop-refused":
+                        self.assertTrue(running)
+                        self.assertEqual(config.read_bytes(), b"original Config bytes\n")
+                        continue
+
+                self.assertEqual(recover(), {"result": "original-bound-cold-restored", "id": detail["id"]})
+                expected = [] if scenario == "already-stopped" else ["stop"]
+                if scenario != "empty-kernel":
+                    expected += [19001, table, table + "_stage"]
+                self.assertEqual(events, expected + ["remove-tree"])
+                self.assertEqual(store.read(), {**record, "phase": "restored"})
+                self.assertEqual(set(os.listdir(store.root)), {"operation.json"})
+                self.assertFalse(active.exists())
+                self.assertTrue(release.is_dir())
+                self.assertEqual(rules, {20000: ["unrelated"]})
+                self.assertEqual(tables, {})
+                self.assertEqual(config.read_bytes(), b"original Config bytes\n")
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    recover()
+                self.assertEqual(events, expected + ["remove-tree"])
+
     def test_first_running_base_stopped_empty_kernel_requires_empty_sealed_manifest(self):
         import subprocess
 
