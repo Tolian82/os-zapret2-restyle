@@ -638,7 +638,7 @@ class OriginalQuiescentTests(unittest.TestCase):
         empty = {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}
         table = "zapret2_voice_telegram"
         uid = os.geteuid()
-        for scenario in ("running", "already-stopped", "lost-receipt", "stop-refused", "empty-kernel"):
+        for scenario in ("running", "already-stopped", "lost-receipt", "stop-refused", "empty-kernel", "lost-tree-receipt"):
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as temp, ExitStack() as stack:
                 root = Path(temp)
                 work = root / "work"
@@ -713,7 +713,12 @@ class OriginalQuiescentTests(unittest.TestCase):
                     self.assertEqual(rules, {20000: ["unrelated"]})
                     self.assertEqual(tables, {})
                     events.append("remove-tree")
-                    return subprocess.run(command, capture_output=True, check=False)
+                    reply = subprocess.run(command, capture_output=True, check=False)
+                    if scenario == "lost-tree-receipt":
+                        self.assertEqual(reply.returncode, 0)
+                        self.assertFalse(active.exists())
+                        return subprocess.CompletedProcess(command, 70, b"", b"")
+                    return reply
 
                 for key, value in (("WORK", work), ("COMMON_ACTIVE", active),
                                    ("PRODUCER_ROOT", root / "producer"), ("EPOCH_ROOT", root / "epochs"),
@@ -758,6 +763,16 @@ class OriginalQuiescentTests(unittest.TestCase):
                         self.assertTrue(running)
                         self.assertEqual(config.read_bytes(), b"original Config bytes\n")
                         continue
+
+                if scenario == "lost-tree-receipt":
+                    with self.assertRaises(gate.QuiescentPreimageRefused):
+                        recover()
+                    self.assertEqual(events, ["stop", 19001, table, table + "_stage", "remove-tree"])
+                    self.assertEqual((store.root / "operation.json").read_bytes(), original_wal)
+                    self.assertFalse(active.exists())
+                    self.assertEqual(rules, {20000: ["unrelated"]})
+                    self.assertEqual(tables, {})
+                    self.assertEqual(config.read_bytes(), b"original Config bytes\n")
 
                 self.assertEqual(recover(), {"result": "original-bound-cold-restored", "id": detail["id"]})
                 expected = [] if scenario == "already-stopped" else ["stop"]
