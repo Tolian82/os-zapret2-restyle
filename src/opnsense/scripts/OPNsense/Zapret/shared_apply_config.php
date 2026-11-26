@@ -430,11 +430,26 @@ final class SharedApplyConfigWorker
         array_pop($lines); // Only complete, newline-terminated fixed markers.
         $safe = '';
         foreach (array_slice($lines, 0, 64) as $line) {
-            if (preg_match('/\AS10_FIRST_TRACE=D(?:0[3-9]|[12][0-9]|30)\z/D', $line)) {
+            if (preg_match('/\AS10_FIRST_TRACE=D(?:0[3-9]|[12][0-9]|30)\z/D', $line) ||
+                preg_match('/\AS10_MANAGED_TRACE=M(?:0[1-9]|1[0-4]):[1-9][0-9]{0,4}\z/D', $line)) {
                 $safe .= $line . "\n";
             }
         }
         return $safe;
+    }
+
+    private static function managedPhpRefusalTrace(\Throwable $error): void
+    {
+        $files = ['shared_apply_config.php'=>'P01', 'apply_settings.php'=>'P02',
+            'shared_apply_lock.php'=>'P03'];
+        for ($i = 0; $error !== null && $i < 8; ++$i) {
+            $code = $files[basename($error->getFile())] ?? null;
+            $line = $error->getLine();
+            if ($code !== null && $line > 0 && $line <= 99999) {
+                @fwrite(STDERR, "S10_MANAGED_TRACE=$code:$line\n");
+            }
+            $error = $error->getPrevious();
+        }
     }
 
     private static function originalLockedFileEvidence(
@@ -442,7 +457,11 @@ final class SharedApplyConfigWorker
         ?string $configDigest = null, ?string $runtimeMode = null,
         ?callable $whileP2Held = null, $queueStream = null, ?string $baseDigest = null
     ): array {
-        $firstTrace = $mode === 'write-first-enabled-handoff-locked';
+        $managedStep = ['write-managed-handoff-locked'=>'write',
+            'begin-managed-config-save-locked'=>'begin', 'confirm-managed-config-save-locked'=>'confirm',
+            'recover-managed-config-locked'=>'recover'][$mode] ?? null;
+        $firstTrace = $mode === 'write-first-enabled-handoff-locked' || $managedStep !== null;
+        if ($managedStep !== null) { @fwrite(STDERR, "S10_MANAGED_STEP=$managedStep\n"); }
         if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D01\n"); }
         $begin = $mode === 'begin-found-save-locked';
         $managedWrite = in_array($mode, ['write-managed-handoff-locked',
@@ -1115,9 +1134,15 @@ final class SharedApplyConfigWorker
             }
             return 0;
         } catch (SharedConfigSaveUncertain $error) {
+            if (in_array($action, ['managed-apply', 'managed-save-recover'], true)) {
+                self::managedPhpRefusalTrace($error);
+            }
             fwrite(STDERR, "ERROR: native shared Config save uncertain; retain recovery evidence\n");
             return 70;
         } catch (\Throwable $error) {
+            if (in_array($action, ['managed-apply', 'managed-save-recover'], true)) {
+                self::managedPhpRefusalTrace($error);
+            }
             if (in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply',
                     'first-disabled-apply', 'first-enabled-apply', 'ordinary-first-recover'], true)) {
                 // A joined child may have fsynced its phase before losing the receipt.

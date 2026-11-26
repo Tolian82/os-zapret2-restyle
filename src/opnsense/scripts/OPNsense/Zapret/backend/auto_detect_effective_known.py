@@ -1161,6 +1161,48 @@ def native_found_recover_original_fd9(operation: str) -> int:
     return invoke()
 
 
+def _managed_refusal_trace(error: BaseException) -> None:
+    """Report bounded source locations only, including suppressed exception context."""
+    modules = {
+        "neutral_shared_apply_source_gate": "M01",
+        "neutral_schema3_previous_physical": "M02",
+        "auto_detect_destination_commit": "M03",
+        "shared_apply_operation": "M04",
+        "auto_detect_original_lock_handoff": "M05",
+        "voice_ipfw_adapter": "M06",
+        "voice_firewall_transaction": "M07",
+        "auto_detect_owner": "M08",
+        "neutral_root_stage": "M09",
+        "shared_apply_seal": "M10",
+        "neutral_schema3_quiescent_preimage": "M11",
+        "auto_detect_owned_sources": "M12",
+        "auto_detect_minute": "M13",
+        "extra_resources_upstream_guard": "M14",
+    }
+    seen = set()
+    emitted = set()
+    try:
+        while error is not None and id(error) not in seen and len(seen) < 8:
+            seen.add(id(error))
+            tb = error.__traceback__
+            for _ in range(128):
+                if tb is None:
+                    break
+                module = modules.get(tb.tb_frame.f_globals.get("__name__"))
+                line = tb.tb_lineno
+                if module is not None and 0 < line <= 99999 and (module, line) not in emitted:
+                    print(f"S10_MANAGED_TRACE={module}:{line}", file=sys.stderr, flush=True)
+                    emitted.add((module, line))
+                    if len(emitted) >= 32:
+                        return
+                tb = tb.tb_next
+            # A deliberate 'raise ... from None' must not hide the source
+            # location from this private diagnostic; never print its text.
+            error = error.__cause__ or error.__context__
+    except (OSError, ValueError, TypeError):
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if len(argv) == 2 and argv[0] == "recover-found-original":
@@ -1201,7 +1243,8 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"result": record["phase"], "id": record["detail"]["id"]},
                              separators=(",", ":")))
             return 0
-        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+            _managed_refusal_trace(error)
             print("ERROR: original managed locked write outcome refused", file=sys.stderr)
             return 69
     if argv and argv[0] in ("begin-managed-config-save-locked", "confirm-managed-config-save-locked"):
@@ -1215,7 +1258,8 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"result": record["phase"], "id": record["detail"]["id"]},
                              separators=(",", ":")))
             return 0
-        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+            _managed_refusal_trace(error)
             print("ERROR: original managed locked Config phase refused", file=sys.stderr)
             return 69
     if argv and argv[0] in ("guard-first-running-base-shell", "guard-first-running-base-stopped"):
@@ -1297,7 +1341,9 @@ def main(argv: list[str] | None = None) -> int:
                 argv[1], argv[2], config_fd=4, queue_fd=3 if len(argv) == 4 else None)
             print(json.dumps(reply, separators=(",", ":")))
             return 0
-        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+            if argv[0] == "recover-managed-config-locked":
+                _managed_refusal_trace(error)
             print("ERROR: original ordinary locked cold restore refused", file=sys.stderr)
             return 69
     if argv and argv[0] == "begin-found-save-locked":

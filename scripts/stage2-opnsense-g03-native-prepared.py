@@ -47,10 +47,12 @@ def call(argv, *, locked=False, timeout=180, expected_rc=0):
         if action not in allowed:
             action = "unknown"
         diagnostics = re.findall(
-            r"^G03_FIRST_REPLY=rc:(?:-?[0-9]{1,3}|unknown);receipt:(?:invalid|empty|exact|mismatch);"
-            r"wal:(?:prepared|activating|activated|config-saved|committed|restored|requires-review|unknown);"
+            r"^G03_(?:FIRST|MANAGED)_REPLY=rc:(?:-?[0-9]{1,3}|unknown);receipt:(?:invalid|empty|exact|mismatch);"
+            r"wal:(?:prepared|activating|activated|config-saved|managed-writing|managed-config-saving|committed|restored|requires-review|unknown);"
             r"stderr:(?:save-uncertain|review|other|empty)$", p.stderr or "", re.MULTILINE)
-        for trace in re.findall(r"^G03_FIRST_TRACE=D(?:[012][0-9]|3[0-4])$", p.stderr or "", re.MULTILINE)[:64]:
+        for trace in re.findall(
+            r"^(?:G03_FIRST_TRACE=D(?:[012][0-9]|3[0-4])|G03_MANAGED_TRACE=(?:D(?:[012][0-9]|3[0-4])|(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4})|G03_MANAGED_STEP=(?:write|begin|confirm|recover))$",
+            p.stderr or "", re.MULTILINE)[:64]:
             print(trace, flush=True)
         if len(diagnostics) == 1:
             print(diagnostics[0], flush=True)
@@ -341,6 +343,7 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
 '''
     child = r'''
 import sys
+import json
 from hashlib import sha256
 from pathlib import Path
 sys.path.insert(0, "/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
@@ -361,10 +364,47 @@ def first_trace_lines(raw):
     allowed = {f"S10_FIRST_TRACE=D{i:02d}".encode() for i in range(35)}
     return tuple(line for line in raw.split(b"\n")[:-1] if line in allowed)[:64]
 
+def managed_trace_lines(raw):
+    import re
+    if type(raw) is not bytes or len(raw) > 16384:
+        return ()
+    return tuple(line for line in raw.split(b"\n")[:-1] if re.fullmatch(
+        rb"(?:S10_FIRST_TRACE=D(?:[012][0-9]|3[0-4])|S10_MANAGED_(?:TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4}|STEP=(?:write|begin|confirm|recover)))",
+        line))[:64]
+
+
+def coordinate_managed_diagnosed(op, raw, store, detail, coordinate):
+    # Observe the exact joined call once; never alter its reply or retry it.
+    import neutral_schema3_quiescent_preimage as quiescent
+    original_join = quiescent._run_bound_restore_joined
+
+    def diagnosed_join(command, **kwargs):
+        reply = original_join(command, **kwargs)
+        if list(command[-3:]) == ["managed-apply", op, "strategies"]:
+            try:
+                observed = store.read()
+            except (OSError, RuntimeError, ValueError):
+                observed = None
+            for line in managed_trace_lines(reply.stderr):
+                if line.startswith(b"S10_FIRST_TRACE="):
+                    print("G03_MANAGED_TRACE=" + line[-3:].decode("ascii"), file=sys.stderr)
+                else:
+                    print("G03_" + line[4:].decode("ascii"), file=sys.stderr)
+            print(first_reply_diagnostic(reply, observed, detail).replace(
+                "G03_FIRST_REPLY=", "G03_MANAGED_REPLY=", 1), file=sys.stderr)
+        return reply
+
+    quiescent._run_bound_restore_joined = diagnosed_join
+    try:
+        return coordinate(op, raw)
+    finally:
+        quiescent._run_bound_restore_joined = original_join
+
+
 def first_reply_diagnostic(reply, record, detail):
     # Never disclose Config, HOSTLIST, argv, digests or untrusted stderr.
     phase = record.get("phase") if type(record) is dict else None
-    if phase not in ("prepared", "activating", "activated", "config-saved", "committed", "restored", "requires-review"):
+    if phase not in ("prepared", "activating", "activated", "config-saved", "managed-writing", "managed-config-saving", "committed", "restored", "requires-review"):
         phase = "unknown"
     rc = reply.returncode
     rc = str(rc) if type(rc) is int and -255 <= rc <= 255 else "unknown"
@@ -385,6 +425,7 @@ def first_reply_diagnostic(reply, record, detail):
     if type(stderr) is bytes and len(stderr) <= 16384:
         import re
         stderr = re.sub(rb"(?m)^S10_FIRST_TRACE=D(?:[012][0-9]|3[0-4])\n", b"", stderr)
+        stderr = re.sub(rb"(?m)^S10_MANAGED_(?:TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4}|STEP=(?:write|begin|confirm|recover))\n", b"", stderr)
     err = {b"ERROR: native shared Config save uncertain; retain recovery evidence\n": "save-uncertain",
            b"ERROR: original managed Config outcome requires journal review\n": "review"}.get(stderr, "other")
     if stderr == b"":
@@ -443,7 +484,8 @@ try:
     store.advance("prepared", detail)
     raw = sys.stdin.buffer.read(MAX_PIPE + 1)
     if mode == "successor":
-        route, committed, source, semantic = native_coordinate_original_prepared_fd9(op, raw)
+        route, committed, source, semantic = coordinate_managed_diagnosed(
+            op, raw, store, detail, native_coordinate_original_prepared_fd9)
         if (route != "managed-committed" or store.read() != committed or
                 committed.get("phase") != "committed" or committed.get("detail") != detail or
                 committed.get("previous") != old_owner or
