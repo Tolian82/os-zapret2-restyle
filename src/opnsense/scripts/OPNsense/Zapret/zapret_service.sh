@@ -781,6 +781,20 @@ shared_apply_recover_activated_cold_service()
     fi
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 69
+    # Bound installed-new recovery uses the original PHP Config owner
+    # for physical IPFW/tree rollback and terminal WAL closure. Only an
+    # exact unbound journal (rc3) can still enter the legacy actuator.
+    if [ "$_shared_cold_phase" != config-saved ]; then
+        if [ ! -x "${PYTHON_RUNTIME}" ]; then return 70; fi
+        if "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \
+            "finish-$_shared_cold_phase" "$_shared_cold_id" "$_shared_cold_old" --bound-only; then
+            printf "recovered-%s-id=%s\n" "$_shared_cold_phase" "$_shared_cold_id"
+            return 0
+        else
+            _shared_cold_bound_rc=$?
+        fi
+        [ "$_shared_cold_bound_rc" -eq 3 ] || return 70
+    fi
     # On power loss before native Config save, ACTIVATED may contain a whole
     # new release and its exact uncommitted IPFW rules/stage tables. No
     # process may be live. Recover only a verified common predecessor: first

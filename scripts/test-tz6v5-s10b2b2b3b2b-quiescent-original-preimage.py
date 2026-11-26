@@ -234,6 +234,65 @@ class OriginalQuiescentTests(unittest.TestCase):
                 with self.assertRaises(gate.QuiescentPreimageRefused):
                     gate.attest_inert_bound_cold_recovery(forbidden, restored=False)
 
+    def test_installed_cold_rollback_uses_empty_prior_kernel_under_config(self):
+        import json
+        import tempfile
+        from unittest.mock import call
+
+        base = "b" * 64
+        record = dict(phase="activated", detail={"id": "d" * 32},
+                      previous={"id": "a" * 32}, manifest={"schema": 1})
+        empty = {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}
+        desired = {"rule_base": 19000, "rule_max": 19010, "rules": {19000: []}, "tables": {}}
+        with tempfile.TemporaryDirectory() as temp, ExitStack() as stack:
+            active = Path(temp) / "runtime-v2"
+            active.mkdir()
+            stack.enter_context(patch.object(gate, "COMMON_ACTIVE", active))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch("shared_apply_seal.verify_seal",
+                side_effect=lambda path, **kw: {"sha256": {"release":
+                    "old" if path.name == record["previous"]["id"] else "new"}}))
+            stack.enter_context(patch("shared_apply_seal._release_hash", return_value="new"))
+            stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root",
+                return_value=json.dumps({"service": {"enabled": True}}).encode()))
+            proof = stack.enter_context(patch.object(gate, "attest_inert_bound_cold_recovery"))
+            tree = stack.enter_context(patch.object(gate, "_cold_recovery_trees",
+                return_value=("new", None, None, "old")))
+            stack.enter_context(patch.object(gate, "shared_release_manifest", return_value=desired))
+            stack.enter_context(patch.object(gate, "_ipfw_kernel_confirmed_absent", return_value=False))
+            adapter = stack.enter_context(patch.object(gate, "FreeBSDIPFWAdapter"))
+            stack.enter_context(patch.object(gate, "verify_prior_state",
+                                             side_effect=gate.VoiceFirewallError("staged")))
+            staged = stack.enter_context(patch("voice_firewall_transaction.verify_staged_state"))
+            rollback = stack.enter_context(patch("voice_firewall_transaction.rollback_uncommitted"))
+            stack.enter_context(patch.object(gate, "_empty_kernel"))
+            run = stack.enter_context(patch.object(gate.subprocess, "run",
+                                                   return_value=Mock(returncode=0)))
+            self.assertTrue(gate._restore_bound_installed_cold_locked(
+                record, config_fd=4, config_digest=base, queue_fd=3))
+            self.assertEqual(adapter.call_args_list, [call(19000, 19099),
+                                                      call(19000, 19099, allow_mutations=True)])
+            staged.assert_called_once_with(adapter.return_value, empty, desired)
+            rollback.assert_called_once_with(adapter.return_value, empty, desired)
+            self.assertEqual(run.call_args.kwargs["pass_fds"], (9, 4, 3))
+            self.assertEqual(proof.call_count, 3)
+            rollback.reset_mock()
+            run.reset_mock()
+            tree.return_value = ("new", None, None, None)
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate._restore_bound_installed_cold_locked(
+                    record, config_fd=4, config_digest=base, queue_fd=3)
+            rollback.assert_not_called()
+            run.assert_not_called()
+            tree.return_value = ("new", None, None, "old")
+            staged.side_effect = gate.VoiceFirewallError("foreign")
+            with self.assertRaises(gate.VoiceFirewallError):
+                gate._restore_bound_installed_cold_locked(
+                    record, config_fd=4, config_digest=base, queue_fd=3)
+            rollback.assert_not_called()
+            run.assert_not_called()
+
     def test_pristine_stage_cleanup_uses_exact_original_atomic_helper(self):
         import subprocess
         import tempfile
@@ -349,6 +408,8 @@ class OriginalQuiescentTests(unittest.TestCase):
             config_lock = stack.enter_context(patch(
                 "auto_detect_original_lock_handoff.assert_inherited_config_fd"))
             proof = stack.enter_context(patch.object(gate, "attest_inert_bound_cold_recovery"))
+            stack.enter_context(patch.object(gate, "_restore_bound_installed_cold_locked", return_value=False))
+            stack.enter_context(patch.object(gate, "_remove_bound_pristine_stage_locked", return_value=False))
             run = stack.enter_context(patch.object(subprocess, "run", side_effect=invoke))
             store._advance_bound_ordinary.side_effect = advance
             self.assertEqual(gate.native_finish_bound_cold_restore(record), terminal)

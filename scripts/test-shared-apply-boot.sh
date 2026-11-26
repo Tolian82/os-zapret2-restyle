@@ -621,6 +621,19 @@ s=p.read_text()
 presence='    [ -x "${PYTHON_RUNTIME}" ] || return 70'
 assert s.count(presence)==1, "production root CLI presence gate missing"
 s=s.replace(presence, '    : # fixed FreeBSD root interpreter mocked')
+# Only the private native Config transport is substituted in this fixture.
+bound_start = s.index('    # Bound installed-new recovery')
+bound_end = s.index('    # On power loss before native Config save', bound_start)
+s = s[:bound_start] + '''    if [ "$_shared_cold_phase" != config-saved ]; then
+        if mock_bound_installed; then
+            printf "recovered-%s-id=%s\\n" "$_shared_cold_phase" "$_shared_cold_id"
+            return 0
+        else
+            _shared_cold_bound_rc=$?
+        fi
+        [ "$_shared_cold_bound_rc" -eq 3 ] || return 70
+    fi
+''' + s[bound_end:]
 prefix = '        "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
 for suffix, phase in (
     ('finish-remove-saved "$_shared_cold_id" "$_shared_cold_old" || return 70',
@@ -636,6 +649,7 @@ for suffix, phase in (
 p.write_text(s)
 PY
 . "$ROOT/activated-cold.sh"
+mock_bound_installed() { return "${BOUND_INSTALLED_RC:-3}"; }
 OLD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 CURRENT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 BACKUP_ROOT="$ROOT/backups"

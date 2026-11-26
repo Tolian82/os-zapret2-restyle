@@ -1772,9 +1772,10 @@ def main(argv: list[str]) -> int:
     pristine = (len(argv) == 4 or pristine_bound_only) and argv[1] == "recover-activating" and all(
         OP_ID.fullmatch(value) for value in argv[2:4]
     )
-    cold_restore = len(argv) == 4 and argv[1] in (
+    cold_bound_only = pristine_bound_only and argv[1] in ("finish-activated", "finish-activating")
+    cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
-    ) and all(OP_ID.fullmatch(value) for value in argv[2:])
+    ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
     if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
@@ -1949,6 +1950,14 @@ def main(argv: list[str]) -> int:
         elif cold_restore:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)
+            if cold_bound_only:
+                record = store.read()
+                if (type(record) is not dict or record["phase"] != argv[1][7:] or
+                        "found" in record or record["detail"]["id"] != argv[2] or
+                        record.get("previous", {}).get("id") != argv[3]):
+                    raise SharedOperationError("installed recovery owner mismatch")
+                if "manifest" not in record and "previous_manifest" not in record:
+                    return 3
             if argv[1] == "finish-remove-saved":
                 if (os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1" or
                         os.environ.get("EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE") != "1"):

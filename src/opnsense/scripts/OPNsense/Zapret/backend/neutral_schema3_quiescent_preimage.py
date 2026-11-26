@@ -681,7 +681,7 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool,
 
     require_lifecycle_lock()
     locked = config_fd is not None
-    if ((locked and (not restored or not sys.platform.startswith("freebsd") or
+    if ((locked and (not sys.platform.startswith("freebsd") or
                      os.geteuid() != 0 or type(config_fd) is not int or
                      config_fd < 3 or config_fd == 9 or
                      (queue_fd is not None and (type(queue_fd) is not int or
@@ -772,6 +772,95 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool,
         raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_PREIMAGE_CHANGED")
 
 
+def _restore_bound_installed_cold_locked(record: dict, *, config_fd: int,
+                                         config_digest: str, queue_fd: int | None) -> bool:
+    """Restore an exact installed inert candidate over a cold predecessor.
+
+    Only an empty kernel or the exact staged candidate from EMPTY qualifies.
+    A stopped prior's sealed rule manifest is not its physical kernel image.
+    Reuse the original IPFW rollback and atomic installer; retain backups.
+    Unknown/running-prior staged images and rename gaps remain fenced here.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import _verify_original_pinned_root
+    from shared_apply_seal import verify_seal, _release_hash
+    from voice_firewall_transaction import verify_staged_state, rollback_uncommitted
+    import json
+    import re
+
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if not _present(COMMON_ACTIVE):
+        return False
+    old, new = record["previous"], record["detail"]
+    old_work, new_work = WORK / old["id"], WORK / new["id"]
+    old_hash = verify_seal(old_work, owner=0)["sha256"]["release"]
+    new_hash = verify_seal(new_work, owner=0)["sha256"]["release"]
+    active_hash = _release_hash(COMMON_ACTIVE, 0)
+    if active_hash == old_hash:
+        return False
+    if active_hash != new_hash:
+        raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_TREE_CHANGED")
+
+    def exact():
+        attest_inert_bound_cold_recovery(
+            record, restored=False, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=queue_fd)
+        if _cold_recovery_trees(
+                COMMON_ACTIVE, new["id"], old_hash, new_hash, phase=record["phase"],
+                restored=False, owner_uid=0) != (new_hash, None, None, old_hash):
+            raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_BACKUP_REQUIRED")
+        # Do not retry across an unexplained PID-named recovery rename gap.
+        name = re.escape(COMMON_ACTIVE.name)
+        if any(re.fullmatch(r"\." + name + r"\.(?:stage|old)\.[0-9]+|" +
+                            name + r"\.rollback-old\.[0-9]+", item.name)
+               for item in COMMON_ACTIVE.parent.iterdir()):
+            raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_RECOVERY_RESIDUE")
+
+    exact()
+    release = new_work / "release"
+    root = json.loads(_verify_original_pinned_root(
+        detail=new, binding=record["manifest"], parent=WORK, owner_uid=0))
+    desired = shared_release_manifest(release)
+    if desired["rule_base"] != 19000 or desired["rule_max"] not in (19010, 19099):
+        raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_KERNEL_SCOPE_INVALID")
+    empty = {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}
+    if not _ipfw_kernel_confirmed_absent():
+        reader = FreeBSDIPFWAdapter(19000, 19099)
+        try:
+            verify_prior_state(reader, empty, desired)
+        except VoiceFirewallError:
+            if root["service"]["enabled"] is not True:
+                raise QuiescentPreimageRefused("BOUND_COLD_DISABLED_STAGED_KERNEL")
+            verify_staged_state(reader, empty, desired)
+            exact()
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            # The original rollback rechecks exact staged rules/tables
+            # itself before its first mutation, then verifies EMPTY.
+            rollback_uncommitted(
+                FreeBSDIPFWAdapter(19000, 19099, allow_mutations=True), empty, desired)
+    _empty_kernel(release)
+    exact()
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    inherited = (9, config_fd) if queue_fd is None else (9, config_fd, queue_fd)
+    try:
+        result = subprocess.run(
+            ("/bin/sh", "-c", '. "$1"; . "$2"; atomic_install_tree "$3" "$4" "$5"',
+             "zapret-bound-installed", str(SCRIPT / "backend/common.sh"),
+             str(SCRIPT / "backend/atomic.sh"), str(old_work / "release"),
+             str(COMMON_ACTIVE), str(COMMON_ACTIVE.with_name("runtime-v2-backups"))),
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, pass_fds=inherited, timeout=20, check=False)
+    except (OSError, subprocess.SubprocessError):
+        raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_RESTORE_OUTCOME_UNCERTAIN") from None
+    if result.returncode != 0:
+        raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_RESTORE_FAILED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return True
+
+
 def _remove_bound_pristine_stage_locked(record: dict, *, config_fd: int,
                                        queue_fd: int | None) -> bool:
     """Remove only the exact uninstalled stage, under original FD9/FD4.
@@ -845,6 +934,8 @@ def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
 
     def exact():
+        _restore_bound_installed_cold_locked(
+            record, config_fd=config_fd, config_digest=config_digest, queue_fd=queue_fd)
         attest_inert_bound_cold_recovery(
             record, restored=True, config_fd=config_fd,
             config_digest=config_digest, queue_fd=queue_fd)
