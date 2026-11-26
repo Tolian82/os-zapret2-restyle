@@ -256,7 +256,7 @@ class OriginalDurableRootBinding(unittest.TestCase):
                 _validate_record(bad)
         self.assertEqual(self.owner.read(), prepared)
 
-    def _pinned_found_fixture(self):
+    def _pinned_found_fixture(self, rows=None):
         bound = self.bind()
         old = self.owner._persist_record({**bound, "phase": "committed"})
         fresh = {**self.case.detail, "id": "e" * 32,
@@ -267,7 +267,8 @@ class OriginalDurableRootBinding(unittest.TestCase):
             "changed_fields": fresh["changed_fields"], "candidate": {},
             "found_intent": {"config_revision": fresh["base"],
                              "commit_authorized": False},
-            "found_batch": {name: {} for name in ("youtube", "user", "auto")}
+            "found_batch": ({name: {} for name in ("youtube", "user", "auto")}
+                            if rows is None else rows)
         }).encode()
         return bound, old, fresh, plan
 
@@ -368,14 +369,14 @@ class OriginalDurableRootBinding(unittest.TestCase):
                     with self.assertRaises(SharedOperationError):
                         _validate_record(forged)
 
-    def _staged_pinned_found_fixture(self):
+    def _staged_pinned_found_fixture(self, rows=None):
         import hashlib
         import shutil
         from neutral_root_manifest import compile_candidate
         from neutral_root_stage import _stage_candidate
         from shared_apply_seal import create_seal
 
-        old_bound, old, fresh, plan = self._pinned_found_fixture()
+        old_bound, old, fresh, plan = self._pinned_found_fixture(rows)
         parent = self.case.fx.parent
         work = parent / fresh["id"]
         work.mkdir(mode=0o700)
@@ -446,6 +447,105 @@ class OriginalDurableRootBinding(unittest.TestCase):
             self.assertNotIn("found", restored)
             self.assertEqual(restored["manifest"], bound["manifest"])
             self.assertEqual(committed_manifest(restored), old_bound["manifest"])
+
+    def test_bound_found_real_cas_and_rollback_preserve_both_immutable_pins(self):
+        import hashlib
+        from auto_detect_destination_commit import (
+            _locked_shared_found_apply_journal, _recover_found_preimages_locked,
+            _bound_found_native_witness)
+        root = self.case.fx.parent / "physical-found"
+        root.mkdir(mode=0o700)
+        targets, rows = {}, {}
+        originals = {"youtube": "example.com\n", "user": "example.org\n", "auto": ""}
+        after = {"youtube": "example.com\nfresh.com\n", "user": "", "auto": "shared.org\n"}
+        for name, old_text in originals.items():
+            path = root / (name + ".txt")
+            path.write_text(old_text)
+            path.chmod(0o600)
+            st = path.lstat()
+            targets[name] = path
+            rows[name] = dict(before=old_text, after=after[name], before_status="present",
+                before_revision=hashlib.sha256(b"present\0" + old_text.encode()).hexdigest(),
+                before_device=st.st_dev, before_inode=st.st_ino,
+                before_ctime_ns=st.st_ctime_ns, before_mtime_ns=st.st_mtime_ns,
+                before_size=st.st_size)
+        # Test fixture deliberately supplies disposable native lock witnesses;
+        # actual manifest/seal verification and file CAS are NOT mocked.
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+             patch("shared_apply_seal.WORK", self.case.fx.parent):
+            old_bound, _, fresh, raw, _, work, _, plan_sha = (
+                self._staged_pinned_found_fixture(rows))
+            bound = self.bind(generation=fresh["id"], found_plan_sha256=plan_sha)
+            qualified = _bound_found_native_witness(self.owner, bound, lambda: True)
+
+            def apply(witness):
+                return _locked_shared_found_apply_journal(
+                    rows, targets, store=self.owner, detail=fresh, plan_bytes=raw,
+                    uid=self.owner.owner, attest=lambda *_: True, bound_attest=witness)
+
+            with self.assertRaises(SharedOperationError):
+                apply(None)
+            self.assertEqual(self.owner.read(), bound)
+            self.assertEqual({n: p.read_text() for n, p in targets.items()}, originals)
+
+            # A tampered root must fail before the first physical rename.
+            sibling = work / "manifest.json"
+            original = sibling.read_bytes()
+            sibling.write_bytes(original + b"drift")
+            with self.assertRaises(SharedOperationError):
+                apply(qualified)
+            self.assertEqual(self.owner.read(), bound)
+            self.assertEqual({n: p.read_text() for n, p in targets.items()}, originals)
+            sibling.write_bytes(original)
+
+            self.assertEqual(apply(qualified)["journal_phase"], "found-files-written")
+            written = self.owner.read()
+            self.assertEqual(written["manifest"], bound["manifest"])
+            self.assertEqual(written["previous_manifest"], old_bound["manifest"])
+            self.assertEqual({n: p.read_text() for n, p in targets.items()}, after)
+            with self.assertRaises(SharedOperationError):
+                self.owner.advance_found_config("found-config-saving", fresh, raw,
+                                                lambda *_: True)
+            saving = self.owner.advance_found_config("found-config-saving", fresh, raw,
+                lambda *_: True, bound_attest=qualified)
+            self.assertEqual(saving["phase"], "found-config-saving")
+            self.assertEqual(saving["manifest"], bound["manifest"])
+            # No Config write in this portable test: simulate a proven base
+            # from native Config and use the exact same physical rollback.
+            reopened = SharedApplyOperation(self.owner.root, owner=self.owner.owner)
+            rollback = _bound_found_native_witness(reopened, saving, lambda: True)
+            def recover():
+                return _recover_found_preimages_locked(
+                    rows, targets, store=reopened, record=reopened.read(),
+                    plan_bytes=raw, uid=reopened.owner, attest=lambda: True,
+                    bound_attest=rollback)
+            sibling.write_bytes(original + b"foreign")
+            with self.assertRaises(SharedOperationError):
+                recover()
+            self.assertEqual(reopened.read(), saving)
+            self.assertEqual({n: p.read_text() for n, p in targets.items()}, after)
+            sibling.write_bytes(original)
+            # A crash after the first actual rollback rename leaves the
+            # original restore inode pin and both immutable root pins.
+            # Reopen the same WAL and resume without adopting foreign bytes.
+            rename = os.replace
+            def interrupted(temp, target):
+                rename(temp, target)
+                if Path(target) == targets["auto"]:
+                    raise OSError("bound rollback interrupted after rename")
+            with patch("auto_detect_destination_commit.os.replace", side_effect=interrupted):
+                with self.assertRaisesRegex(OSError, "bound rollback interrupted"):
+                    recover()
+            interrupted_record = reopened.read()
+            self.assertEqual(interrupted_record["phase"], "found-restoring")
+            self.assertEqual(interrupted_record["manifest"], bound["manifest"])
+            self.assertEqual(interrupted_record["previous_manifest"], old_bound["manifest"])
+            restored = recover()
+            self.assertEqual(restored["phase"], "restored")
+            self.assertNotIn("found", restored)
+            self.assertEqual(restored["manifest"], bound["manifest"])
+            self.assertEqual(committed_manifest(restored), old_bound["manifest"])
+            self.assertEqual({n: p.read_text() for n, p in targets.items()}, originals)
 
     def test_dual_found_root_interrupted_post_fsync_retains_both_pins(self):
         import neutral_root_stage as stage

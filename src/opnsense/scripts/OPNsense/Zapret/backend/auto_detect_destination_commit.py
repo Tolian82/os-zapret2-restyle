@@ -1499,7 +1499,7 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
 def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
                                        store, detail: dict, plan_bytes: bytes,
                                        uid: int, attest, replace_fn=None,
-                                       create_fn=None) -> dict:
+                                       create_fn=None, bound_attest=None) -> dict:
     """Original common WAL -> existing three-file CAS -> common WAL.
 
     Import-only. Caller MUST hold FD9 + original Config lock + original P2
@@ -1532,7 +1532,9 @@ def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
             before["detail"] != detail or "found" not in before or
             before["found"]["plan_sha256"] != _sha(plan_bytes)):
         raise DestinationRefused("shared_found_missing_original_prepared_intent")
-    store.advance_found_files("found-files-writing", detail, plan_bytes, attest)
+    bound_kwargs = {} if bound_attest is None else {"bound_attest": bound_attest}
+    store.advance_found_files("found-files-writing", detail, plan_bytes, attest,
+                              **bound_kwargs)
     # Original Config/P2 locks forbid any minute write interleaving.
     # A SIGKILL between renames leaves the journal in files-writing.
     def durable_file_stage(name: str, phase: str, pin: dict) -> None:
@@ -1540,7 +1542,8 @@ def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
             detail, plan_bytes, name, phase, pin,
             lambda stage, content, staged_name, staged_pin: (
                 staged_name == name and staged_pin == pin and
-                attest("found-stage-" + stage, content) is True))
+                attest("found-stage-" + stage, content) is True),
+            **bound_kwargs)
 
     result = _locked_shared_found_replace(
         rows, targets, uid=uid, replace_fn=replace_fn, create_fn=create_fn,
@@ -1562,7 +1565,7 @@ def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
             if observed != after or pin["status"] != "present" or identity != expected:
                 raise DestinationRefused("shared_found_writer_postimage_changed")
     store.advance_found_files("found-files-written", detail, plan_bytes,
-                              attest, post_images=post)
+                              attest, post_images=post, **bound_kwargs)
     return {**result, "journal_phase": "found-files-written",
             "config_committed": False, "commit_authorized": False}
 
@@ -1633,7 +1636,8 @@ def _observe_found_source(path: Path, name: str, row: tuple,
 
 
 def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record: dict,
-                                   plan_bytes: bytes, uid: int, attest) -> dict:
+                                   plan_bytes: bytes, uid: int, attest,
+                                   bound_attest=None) -> dict:
     """Restore only journal-attributed writes with the original Config and P2 held."""
     from shared_apply_operation import FOUND_RESTORING, FOUND_ROLLBACK_FROM
 
@@ -1662,8 +1666,10 @@ def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record:
         return out
 
     observe_all()
+    store._attest_bound_found_checkpoint(record, bound_attest)
     if record["phase"] != FOUND_RESTORING:
-        record = store.record_found_rollback(record, plan_bytes)
+        record = store.record_found_rollback(
+            record, plan_bytes, bound_attest=bound_attest)
     for name in reversed(SHARED_FOUND_NAMES):
         path = targets[name]
         before, after, _, status = verified[name]
@@ -1671,9 +1677,11 @@ def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record:
         state, identity, linked_temp = observe_all()[name]
         if attest() is not True:
             raise DestinationRefused("original_found_rollback_witness_refused")
+        store._attest_bound_found_checkpoint(record, bound_attest)
         if state == "after":
             if status == "missing":
-                record = store.record_found_rollback(record, plan_bytes, source=name)
+                record = store.record_found_rollback(
+                    record, plan_bytes, source=name, bound_attest=bound_attest)
                 # Recheck the exact attributed inode immediately before unlink.
                 if _observe_found_source(path, name, verified[name], record["found"],
                                          uid) != (state, identity, linked_temp):
@@ -1697,7 +1705,8 @@ def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record:
                             raise DestinationRefused("original_found_restore_stage_refused")
                         pin = {**_stage_pin(st, actual), "temp": item.name}
                         record = store.record_found_rollback(
-                            record, plan_bytes, source=name, pin=pin)
+                            record, plan_bytes, source=name, pin=pin,
+                            bound_attest=bound_attest)
 
                 _replace(path, after, before, uid, stage_fn=stage_restore,
                          expected_identity=identity)
@@ -1711,7 +1720,8 @@ def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record:
     if (any(state == "after" for state, _, _ in observe_all().values()) or
             attest() is not True):
         raise DestinationRefused("original_found_restore_not_attested")
-    return store.record_found_rollback(record, plan_bytes, complete=True)
+    return store.record_found_rollback(
+        record, plan_bytes, complete=True, bound_attest=bound_attest)
 
 
 def _native_found_wal_context(operation_id: str, config_fd: int):
@@ -1773,6 +1783,33 @@ def _native_found_wal_context(operation_id: str, config_fd: int):
     return store, record, raw, plan["found_batch"], targets, attest
 
 
+def _bound_found_native_witness(store, original: dict, attest):
+    """Same original FD4/FD9/P2 scope, exact immutable identity across phases.
+
+    The caller holds the existing destination lock continuously. The WAL
+    checks both roots itself; this witness additionally binds each phase to
+    the original native Config descriptor and sealed operation context.
+    No phase, caller-provided digest or semantic receipt grants lifecycle.
+    """
+    if "manifest" not in original and "previous_manifest" not in original:
+        return None
+    if "manifest" not in original or "found" not in original:
+        raise DestinationRefused("original_found_candidate_pin_required")
+    identity = tuple(original.get(key) for key in
+                     ("detail", "previous", "manifest", "previous_manifest"))
+    intent = tuple(original["found"].get(key) for key in
+                   ("schema", "kind", "plan_sha256", "sources", "runtime_mode"))
+
+    def witness(record):
+        return (type(record) is dict and "found" in record and
+                tuple(record.get(key) for key in
+                      ("detail", "previous", "manifest", "previous_manifest")) == identity and
+                tuple(record["found"].get(key) for key in
+                      ("schema", "kind", "plan_sha256", "sources", "runtime_mode")) == intent and
+                store.read() == record and attest() is True and store.read() == record)
+    return witness
+
+
 def _attest_found_after_locked(rows: dict, targets: dict, record: dict, *, uid: int) -> bool:
     """The recorded post-images belong to this Apply, including untouched sources."""
     batch = _qualified_shared_found_batch(rows)
@@ -1790,12 +1827,94 @@ def _attest_found_after_locked(rows: dict, targets: dict, record: dict, *, uid: 
     return True
 
 
+def _attest_bound_inert_found_predecessor(record: dict) -> tuple[str, str]:
+    """Original full stopped owner proof before bound file save or rollback.
+
+    No native Config or P2a queue acquisition here. The original caller
+    already holds FD9 -> Config -> P2. Retired learning needs its own
+    lock-order-correct retirement proof, so it remains explicitly refused.
+    """
+    from neutral_schema3_quiescent_preimage import (
+        _zero_processes, _safe_empty_directory, _empty_kernel,
+        CHILD_PID, MONITOR_PID, DAEMON_PID, PRODUCER_ROOT)
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from auto_detect_minute import inspect_inert_release
+    from shared_apply_seal import WORK
+    from voice_live_inspect import COMMON_ACTIVE
+
+    prior = record.get("previous")
+    if (type(prior) is not dict or
+            prior["candidate"] != record["detail"]["base"] or
+            record.get("previous_manifest", {}).get("schema") == 2):
+        raise DestinationRefused("bound_found_stopped_inert_owner_required")
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    old_work = WORK / prior["id"]
+    tree = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+    if inspect_inert_release(old_work / "release", owner_uid=0) != "inactive":
+        raise DestinationRefused("bound_found_inert_owner_required")
+    _safe_empty_directory(PRODUCER_ROOT, 0)
+    kernel = _empty_kernel(old_work / "release")
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    return tree, kernel
+
+
+def shared_apply_bound_found_files_original_fd9(operation_id: str, config_fd: int,
+                                               *, raw_pipe: bytes, config_digest: str,
+                                               before_save) -> dict:
+    """Private original PHP/FD9 file-save integration, not a lifecycle command.
+
+    Bind from the actual original source, then enter the existing three-file
+    CAS and Config-saving checkpoint while the same final semantic P2 scope
+    remains held. No alternate file or Config writer. The first supported
+    physical predecessor here is a fully inert stopped common owner; live
+    or retired learning predecessors remain fenced until their original
+    retirement proof can be joined without reversing Config/P2a lock order.
+    """
+    from neutral_shared_apply_source_gate import (
+        native_bind_found_prepared_fd9, _with_native_found_prepared_semantic)
+
+    if not callable(before_save):
+        raise DestinationRefused("bound_found_original_save_scope_required")
+    witness, _ = native_bind_found_prepared_fd9(
+        operation_id, raw_pipe, config_fd, config_digest=config_digest)
+
+    def write_locked(semantic, store, record, raw, rows, targets, attest):
+        prior = record.get("previous")
+        mode = record["found"].get("runtime_mode")
+        if (type(prior) is not dict or semantic.previous_state != "stopped" or
+                semantic.previous_generation != prior["id"] or
+                semantic.candidate_root_sha256 != record["manifest"]["root_sha256"] or
+                mode not in ("0", "1") or (mode == "1" and not semantic.candidate_enabled) or
+                record.get("previous_manifest", {}).get("schema") == 2):
+            raise DestinationRefused("bound_found_stopped_inert_owner_required")
+
+        physical = _attest_bound_inert_found_predecessor(record)
+        if (_attest_bound_inert_found_predecessor(record) != physical or
+                store.read() != record or attest() is not True):
+            raise DestinationRefused("bound_found_old_owner_changed")
+        native_witness = _bound_found_native_witness(store, record, attest)
+
+        def bound_attest(current):
+            # Recheck full old owner immediately before the first physical
+            # write and before Config::save. Between those two, original
+            # FD9+FD4+P2 and immutable pins guard every durable inode stage.
+            return (native_witness(current) and
+                    (current["phase"] not in ("prepared", "found-files-written") or
+                     _attest_bound_inert_found_predecessor(current) == physical))
+
+        return _write_shared_found_files_locked(
+            store, record, raw, rows, targets, attest,
+            before_save=before_save, bound_attest=bound_attest)
+
+    return _with_native_found_prepared_semantic(
+        witness, config_fd, config_digest=config_digest,
+        continue_locked=write_locked)
+
+
 def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int,
                                           *, before_save=None) -> dict:
     """Apply the P2 files under the original WAL and keep P2 through native save."""
-    from auto_detect_effective_known import _verify_planned_preimages_locked
     from auto_detect_gui_hostlist import AUTO_LOCK
-    from auto_detect_owned_sources import OWNED_ROOT, read_owned
 
     store, record, raw, rows, targets, attest = _native_found_wal_context(
         operation_id, config_fd)
@@ -1804,32 +1923,42 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int,
     # A verified OLD root is not a verified successor. Never enter P2 writes.
     if "previous_manifest" in record or "manifest" in record:
         raise DestinationRefused("original_found_dual_root_not_bound")
-    verified = _qualified_shared_found_batch(rows)
     with exclusive_destination_lock(AUTO_LOCK, 0):
-        _verify_planned_preimages_locked(verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+        return _write_shared_found_files_locked(
+            store, record, raw, rows, targets, attest, before_save=before_save)
 
-        def exact_original_witness(phase: str, content: bytes) -> bool:
-            if content != raw or not attest():
+
+def _write_shared_found_files_locked(store, record, raw, rows, targets, attest, *,
+                                    before_save, bound_attest=None) -> dict:
+    """One existing CAS/WAL path, already under original Config then P2."""
+    from auto_detect_effective_known import _verify_planned_preimages_locked
+    from auto_detect_owned_sources import OWNED_ROOT, read_owned
+    verified = _qualified_shared_found_batch(rows)
+    _verify_planned_preimages_locked(verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+
+    def exact_original_witness(phase: str, content: bytes) -> bool:
+        if content != raw or not attest():
+            return False
+        if phase == "found-files-writing":
+            _verify_planned_preimages_locked(
+                verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+        elif phase == "found-files-written":
+            owned = read_owned(OWNED_ROOT, owner_uid=0)
+            if (owned is None or any(owned[name].encode() != verified[name][1]
+                                      for name in ("youtube", "user"))):
                 return False
-            if phase == "found-files-writing":
-                _verify_planned_preimages_locked(
-                    verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
-            elif phase == "found-files-written":
-                owned = read_owned(OWNED_ROOT, owner_uid=0)
-                if (owned is None or any(owned[name].encode() != verified[name][1]
-                                          for name in ("youtube", "user"))):
-                    return False
-            return True
+        return True
 
-        result = _locked_shared_found_apply_journal(
-            rows, targets, store=store, detail=record["detail"],
-            plan_bytes=raw, uid=0, attest=exact_original_witness)
-        if before_save is not None:
-            store.advance_found_config(
-                "found-config-saving", record["detail"], raw,
-                lambda phase, content: attest() and _attest_found_after_locked(
-                    rows, targets, store.read(), uid=0))
-            # Config::save() can release FD4. The callback must only wait for
-            # the PHP parent's acknowledgement; never try to re-lock Config.
-            before_save()
-        return result
+    bound_kwargs = {} if bound_attest is None else {"bound_attest": bound_attest}
+    result = _locked_shared_found_apply_journal(
+        rows, targets, store=store, detail=record["detail"],
+        plan_bytes=raw, uid=0, attest=exact_original_witness, **bound_kwargs)
+    if before_save is not None:
+        store.advance_found_config(
+            "found-config-saving", record["detail"], raw,
+            lambda phase, content: attest() and _attest_found_after_locked(
+                rows, targets, store.read(), uid=0), **bound_kwargs)
+        # Config::save() can release FD4. The callback must only wait for
+        # the PHP parent's acknowledgement; never try to re-lock Config.
+        before_save()
+    return result

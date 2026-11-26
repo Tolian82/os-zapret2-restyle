@@ -276,8 +276,6 @@ def _validate_record(record: object) -> dict:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
     if "manifest" in record:
-        if "found" in record and record["phase"] != "prepared":
-            raise SharedOperationError("bound Found physical transition not implemented")
         _validate_manifest_binding(record["manifest"], record["detail"])
     # No old Voice/Strategies record may invent protected physical or
     # Config-save uncertainty checkpoints without this exact found intent.
@@ -293,15 +291,20 @@ def _validate_record(record: object) -> dict:
         if "previous" not in record:
             raise SharedOperationError("invalid original predecessor root pin")
         _validate_manifest_binding(record["previous_manifest"], record["previous"])
-        # Both Found root pins may coexist ONLY in PREPARED.
-        # Physical Found mutation remains fenced until qualified separately.
         if "found" in record and (
-                record["phase"] != "prepared" or
-                record["previous"]["candidate"] != record["detail"]["base"]):
-            raise SharedOperationError("pinned found cannot mutate before dual binding")
+                record["previous"]["candidate"] != record["detail"]["base"] or
+                (record["phase"] != "prepared" and "manifest" not in record)):
+            raise SharedOperationError("pinned found cannot mutate before candidate binding")
         if ("manifest" not in record and
                 record["phase"] not in ("prepared", "restored")):
             raise SharedOperationError("unbound successor of immutable root")
+    if "found" in record and "manifest" in record:
+        if record["phase"] in FOUND_RUNTIME_PHASES:
+            raise SharedOperationError("bound Found runtime witness not integrated")
+        prior = record.get("previous")
+        if ((prior is None and record["phase"] != "prepared") or
+                (prior is not None and prior["candidate"] != record["detail"]["base"])):
+            raise SharedOperationError("bound found predecessor Config mismatch")
     if "failure" in record:
         failure = record["failure"]
         late = record["phase"] == "committed"
@@ -490,9 +493,51 @@ class SharedApplyOperation:
             result["previous_manifest"] = previous_manifest
         return self._persist_record(result)
 
+    def _attest_bound_found_checkpoint(self, record: dict, bound_attest) -> None:
+        """Guard original file/Config WAL phases; never a launcher permit.
+
+        For a bound transaction both immutable pins are checked with the
+        existing root verifier on either side of the phase-specific native
+        Config/P2 callback. The legacy caller has no bound callback and
+        cannot enter any bound physical checkpoint. No extra WAL or lock.
+        """
+        if "manifest" not in record and "previous_manifest" not in record:
+            if bound_attest is not None:
+                raise SharedOperationError("unexpected bound found witness")
+            return
+        from shared_apply_seal import WORK
+        from neutral_root_stage import verify_original_operation_pins
+        from voice_ipfw_adapter import require_lifecycle_lock
+        if ("manifest" not in record or "found" not in record or
+                type(record.get("previous")) is not dict or
+                record["previous"]["candidate"] != record["detail"]["base"] or
+                not callable(bound_attest)):
+            raise SharedOperationError("bound found original Config/P2 witness required")
+        try:
+            require_lifecycle_lock()
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=self.owner)
+            if self.read() != record or bound_attest(record) is not True:
+                raise SharedOperationError("bound found phase witness refused")
+            require_lifecycle_lock()
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=self.owner)
+            if self.read() != record:
+                raise SharedOperationError("bound found phase owner changed")
+        except (OSError, ValueError, RuntimeError, TypeError, KeyError) as exc:
+            if isinstance(exc, SharedOperationError):
+                raise
+            raise SharedOperationError("bound found immutable proof refused") from None
+
+    def _persist_found_checkpoint(self, before: dict, after: dict, bound_attest) -> dict:
+        self._attest_bound_found_checkpoint(before, bound_attest)
+        result = self._persist_record(after)
+        if self.read() != result:
+            raise SharedOperationError("original found durable readback refused")
+        return result
+
     def advance_found_files(self, phase: str, detail: dict,
                             sealed_plan: bytes, attest, *,
-                            post_images: dict | None = None) -> dict:
+                            post_images: dict | None = None,
+                            bound_attest=None) -> dict:
         """Durable original-journal P2 file checkpoints; import-only.
 
         Caller's original FD9 + native Config FD + original P2 flock must
@@ -507,8 +552,7 @@ class SharedApplyOperation:
             raise SharedOperationError("invalid original found-files checkpoint")
         record = self.read()
         if (record is None or record["detail"] != detail or
-                "found" not in record or "previous_manifest" in record or
-                "manifest" in record or
+                "found" not in record or
                 FOUND_NEXT.get(record["phase"]) != phase or
                 record["found"]["plan_sha256"] !=
                 hashlib.sha256(sealed_plan).hexdigest()):
@@ -561,10 +605,11 @@ class SharedApplyOperation:
             advanced["found"] = {**record["found"], "stages": {}}
         if phase == "found-files-written":
             advanced["found"] = {**record["found"], "post": post_images}
-        return self._persist_record(advanced)
+        return self._persist_found_checkpoint(record, advanced, bound_attest)
 
     def advance_found_stage(self, detail: dict, sealed_plan: bytes,
-                            name: str, phase: str, pin: dict, attest) -> dict:
+                            name: str, phase: str, pin: dict, attest, *,
+                            bound_attest=None) -> dict:
         """One fsynced staged temp inode BEFORE rename, then installed proof.
 
         Called ONLY by the existing original Config->P2-held FD9 writer.
@@ -613,10 +658,11 @@ class SharedApplyOperation:
             raise SharedOperationError("original staged journal changed under locks")
         next_found = {**record["found"], "stages": {
             **stages, name: {"state": phase, "pin": pin}}}
-        return self._persist_record({**record, "found": next_found})
+        return self._persist_found_checkpoint(
+            record, {**record, "found": next_found}, bound_attest)
 
     def advance_found_config(self, phase: str, detail: dict,
-                             sealed_plan: bytes, attest) -> dict:
+                             sealed_plan: bytes, attest, *, bound_attest=None) -> dict:
         """Two durable original FD9 Config checkpoints, import-only.
 
         'found-config-saving' MUST fsync before the first native
@@ -645,11 +691,11 @@ class SharedApplyOperation:
             raise SharedOperationError("original Config journal changed under locks")
         record = dict(before)
         record["phase"] = phase
-        return self._persist_record(record)
+        return self._persist_found_checkpoint(before, record, bound_attest)
 
     def record_found_rollback(self, record: dict, sealed_plan: bytes, *,
                               source: str | None = None, pin: dict | None = None,
-                              complete: bool = False) -> dict:
+                              complete: bool = False, bound_attest=None) -> dict:
         """Persist rollback intent and each before-inode pin under Config/P2."""
         if ("found" not in record or
                 record["found"]["plan_sha256"] != hashlib.sha256(sealed_plan).hexdigest() or
@@ -657,27 +703,28 @@ class SharedApplyOperation:
             raise SharedOperationError("original found rollback record changed")
         phase = record["phase"]
         if phase in FOUND_ROLLBACK_FROM and source is None and not complete:
-            return self._persist_record({
+            return self._persist_found_checkpoint(record, {
                 **record, "phase": FOUND_RESTORING,
                 "found": {**record["found"], "restoring": {}},
-            })
+            }, bound_attest)
         if phase != FOUND_RESTORING:
             raise SharedOperationError("original found rollback phase mismatch")
         if complete and source is None:
             restored = dict(record)
             restored.pop("found")
             restored["phase"] = "restored"
-            return self._persist_record(restored)
+            return self._persist_found_checkpoint(record, restored, bound_attest)
         if source not in record["found"]["stages"] or complete:
             raise SharedOperationError("source was not written by the found transaction")
         restoring = {**record["found"]["restoring"], source: pin}
-        return self._persist_record({
+        return self._persist_found_checkpoint(record, {
             **record, "found": {**record["found"], "restoring": restoring},
-        })
+        }, bound_attest)
 
     def advance_found_runtime(self, phase: str, record: dict, sealed_plan: bytes, attest) -> dict:
         """Keep the file intent through the ordinary runtime/IPFW lifecycle."""
         if ("found" not in record or
+                "manifest" in record or "previous_manifest" in record or
                 record["found"].get("runtime_mode") not in ("0", "1") or
                 phase not in FOUND_RUNTIME_NEXT.get(record["phase"], set()) or
                 record["found"]["plan_sha256"] != hashlib.sha256(sealed_plan).hexdigest() or

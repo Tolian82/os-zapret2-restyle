@@ -959,7 +959,8 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
                                 *, config_fd: int) -> dict:
     from auto_detect_destination_commit import (
         _attest_found_after_locked, _native_found_wal_context,
-        _recover_found_preimages_locked,
+        _recover_found_preimages_locked, _bound_found_native_witness,
+        _attest_bound_inert_found_predecessor,
     )
     from shared_apply_operation import FOUND_RESTORING, FOUND_ROLLBACK_FROM
     from voice_live_inspect import examine_pending_found_previous
@@ -972,6 +973,18 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
         return recover_native_found_prepared_pristine(
             operation, config_fd=config_fd, config_digest=digest)
     with exclusive_destination_lock(AUTO_LOCK, store.owner):
+        original_bound = _bound_found_native_witness(store, record, attest)
+        bound_attest = None
+        if original_bound is not None:
+            if action not in ("recover-found-locked", "confirm-found-save-locked"):
+                raise EffectiveKnownRefused("bound_found_runtime_witness_required")
+            physical = _attest_bound_inert_found_predecessor(record)
+
+            def bound_attest(current):
+                return (original_bound(current) and
+                        _attest_bound_inert_found_predecessor(current) == physical)
+
+            store._attest_bound_found_checkpoint(record, bound_attest)
         if read_owned(OWNED_ROOT, owner_uid=store.owner) is None:
             raise EffectiveKnownRefused("found_source_owner_unavailable")
         if action == "recover-found-locked" and digest == detail["base"] and (
@@ -981,7 +994,8 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
                 raise EffectiveKnownRefused("found_rollback_predecessor_unverified")
             result = _recover_found_preimages_locked(
                 rows, targets, store=store, record=record, plan_bytes=raw, uid=store.owner,
-                attest=lambda: attest() and examine_pending_found_previous(record) == prior)
+                attest=lambda: attest() and examine_pending_found_previous(record) == prior,
+                bound_attest=bound_attest)
             return {"result": result["phase"]}
 
         if digest != detail["candidate"]:
@@ -1006,12 +1020,22 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
                 os.fsync(config_fd)
                 record = store.advance_found_config(
                     "found-config-saved", detail, raw,
-                    lambda next_phase, plan: after_images())
+                    lambda next_phase, plan: after_images(),
+                    bound_attest=bound_attest)
             elif (action != "recover-found-locked" or phase != "found-config-saved" or
                   not after_images()):
                 raise EffectiveKnownRefused("found_recovery_phase_or_files_unknown")
+            if bound_attest is not None and action == "recover-found-locked":
+                # Never hand a saved bound transaction to the unbound
+                # legacy executor. Its pending evidence remains intact.
+                raise EffectiveKnownRefused("bound_found_runtime_witness_required")
             return {"result": record["phase"], "mode": record["found"]["runtime_mode"]}
 
+        if bound_attest is not None:
+            # File/Config reconciliation is not permission to invoke the
+            # old unbound runtime route. The original bound runtime witness
+            # is required before any of these phases may advance.
+            raise EffectiveKnownRefused("bound_found_runtime_witness_required")
         next_phase = action.removeprefix("found-runtime-")
         if next_phase == "activating":
             prior = examine_pending_found_previous(record)

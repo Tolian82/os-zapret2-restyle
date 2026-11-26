@@ -1087,16 +1087,26 @@ def _found_effective_decision(old, candidate, changed_sources: int) -> Effective
 def native_plan_found_prepared_fd9(witness: FoundPreparedSourceReceipt,
                                   config_fd: int, *,
                                   config_digest: str) -> FoundSemanticReceipt:
+    """Read-only native comparison, without a write continuation."""
+    return _with_native_found_prepared_semantic(
+        witness, config_fd, config_digest=config_digest)
+
+
+def _with_native_found_prepared_semantic(witness: FoundPreparedSourceReceipt,
+                                        config_fd: int, *, config_digest: str,
+                                        continue_locked=None):
     """Read bound Found source and old native owner under original FD9/FD4/P2.
 
     The original PHP Config owner supplies its current whole-model digest
     while retaining the inherited FD4. Do NOT invoke ordinary PHP preflight
-    again from this child. No stage/bind, new journal, Config/P1 write or
-    lifecycle action. Even a reload candidate needs final original-owner
-    proof, including the commit/rollback and live mutable-reference contract.
+    again from this child. This comparison itself does not stage/bind,
+    create a journal, save Config or change P1/runtime. Even a reload
+    candidate needs the separate original commit/rollback contract.
     A running pinned Auto predecessor also needs its original immutable
     epoch. STOPPED remains observational, not full retired-epoch proof.
-    Never acquire the queue lock after Config FD4.
+    Never acquire the queue lock after Config FD4. The private original
+    file writer may continue inside this same P2 scope after all checks;
+    the public comparison never supplies that continuation.
     """
     from auto_detect_owner import attest_prepared_found_learning_predecessor
     from auto_detect_destination_commit import (
@@ -1216,13 +1226,18 @@ def native_plan_found_prepared_fd9(witness: FoundPreparedSourceReceipt,
                 raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_OBSERVATION_CHANGED")
             _, old, candidate, observed, _, _, epoch_sha = first
             decision = _found_effective_decision(old, candidate, changed_sources)
-            return FoundSemanticReceipt(
+            receipt = FoundSemanticReceipt(
                 generation, prior["id"], pin["root_sha256"],
                 None if old_pin is None else old_pin["root_sha256"],
                 plan_sha, observed["state"], source.requested_enabled, decision,
                 observed["state"] == "ready" and source.requested_enabled and
                 decision.kind == "RELOAD_SAFE_CANDIDATE",
                 previous_running_epoch_sha256=epoch_sha)
+            if continue_locked is None:
+                return receipt
+            if not callable(continue_locked):
+                raise OriginalSourceGateRefused("S10_FOUND_CONTINUATION_INVALID")
+            return continue_locked(receipt, store, before, raw, rows, targets, attest)
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_REFUSED") from None
 
