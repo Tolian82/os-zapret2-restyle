@@ -89,6 +89,65 @@ class OriginalQuiescentTests(unittest.TestCase):
             os.chown(lock, 0, 0)
         lock.chmod(0o600)
 
+    def test_first_enabled_handoff_retains_running_pin_and_rejects_replaced_owner(self):
+        import io
+        import json
+        from dataclasses import asdict
+        from shared_apply_operation import _config_save_witness
+
+        op, base, candidate, root = "a" * 32, "b" * 64, "c" * 64, "d" * 64
+        detail = {"id": op, "page": "strategies", "base": base, "candidate": candidate,
+                  "changed_fields": ["general.enabled"]}
+        record = {"phase": "activating", "detail": detail,
+                  "manifest": {"schema": 1, "root_sha256": root}}
+        witness = _config_save_witness(detail, "e" * 64)
+        preimage = gate.QuiescentPreimage(op, root, None, None, base, candidate,
+            "tun0", "first-install-empty", "native-kernel-absent", "no-prior-data")
+        wire = (json.dumps(asdict(preimage), sort_keys=True,
+            separators=(",", ":")) + "\n").encode()
+        store = Mock(read=Mock(return_value=record))
+        running = object()
+        receipt = gate.StagedBoundRuntimeReceipt(op, root, base, "f" * 64,
+            None, running, "native-managed-kernel-staged", base)
+
+        def activate(*args, **kwargs):
+            self.assertEqual(kwargs["preimage"], preimage)
+            self.assertEqual(kwargs["config_digest"], base)
+            result = {**record, "phase": "activated", "first_running_sha256": "1" * 64}
+            store.read.return_value = result
+            return result, receipt
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch.object(gate, "SharedApplyOperation", return_value=store))
+            stack.enter_context(patch("shared_apply_seal.verify_seal",
+                return_value={"sha256": {"plan.json": "e" * 64}}))
+            match = stack.enter_context(patch("shared_apply_operation._first_running_pin_matches",
+                return_value=True))
+            install = stack.enter_context(patch.object(
+                gate, "native_install_first_enabled_bound_locked", side_effect=activate))
+            def call(payload=wire, digest=witness):
+                return gate.native_write_first_enabled_handoff_locked(
+                    op, digest, io.BytesIO(payload), config_fd=4)
+            self.assertEqual(call(), {"result": "first-enabled-activated", "id": op})
+            install.assert_called_once()
+            store.read.return_value = record
+            install.reset_mock()
+            for bad in (b"{}\n", b" " + wire, wire + b"\n",
+                        wire.replace(b":", b": ", 1)):
+                with self.assertRaises((gate.QuiescentPreimageRefused, ValueError)):
+                    call(payload=bad)
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                call(digest="0" * 64)
+            install.assert_not_called()
+            match.return_value = False
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                call()
+
+
     def test_original_first_disabled_locked_wire_refuses_foreign_and_requires_activated(self):
         import io
         import json
