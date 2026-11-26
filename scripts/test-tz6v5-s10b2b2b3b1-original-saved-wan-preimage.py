@@ -82,6 +82,49 @@ class SavedWanOriginalFd9(unittest.TestCase):
             patch.object(previous, "examine_shared", return_value=old),
         )
 
+    def test_cold_config_classification_does_not_authorize_recovery(self):
+        from copy import deepcopy
+        from json import dumps
+        record = deepcopy(self.pinned)
+        record["phase"] = "activated"
+        detail = record["detail"]
+        base, candidate = detail["base"], detail["candidate"]
+        self.assertNotEqual(base, candidate)
+        row = dict(result="read-only-ordinary-config-classification",
+            image="base-image", base=base, candidate=candidate, snapshot=base,
+            enabled="1", commit_authorized=False, restore_authorized=False,
+            save_attested=False, runtime_attested=False)
+        self.assertEqual(gate._qualify_ordinary_cold_config(row, record),
+                         ("base-image", base, "1"))
+        candidate_row = dict(row, image="candidate-image", snapshot=candidate)
+        self.assertEqual(gate._qualify_ordinary_cold_config(candidate_row, record),
+                         ("candidate-image", candidate, "1"))
+        for phase in ("config-saved", "epoch-finalizing"):
+            with self.assertRaises(gate.SavedWanPreimageRefused):
+                gate._qualify_ordinary_cold_config(row, dict(record, phase=phase))
+            gate._qualify_ordinary_cold_config(candidate_row, dict(record, phase=phase))
+        with self.assertRaises(gate.SavedWanPreimageRefused):
+            gate._qualify_ordinary_cold_config(candidate_row, dict(record, phase="activating"))
+        with self.assertRaises(gate.SavedWanPreimageRefused):
+            gate._qualify_ordinary_cold_config(dict(row, save_attested=True), record)
+        with patch.object(sys, "platform", "freebsd15"), \
+                patch.object(os, "geteuid", return_value=0), \
+                patch.object(gate, "require_lifecycle_lock"), \
+                patch.object(gate, "SharedApplyOperation",
+                             return_value=Mock(read=Mock(return_value=record))) as store, \
+                patch("neutral_root_stage.verify_original_operation_pins") as pins, \
+                patch.object(gate, "_native_call",
+                             return_value=(dumps(row) + "\n").encode()) as native:
+            self.assertEqual(gate.attest_ordinary_cold_config_under_fd9(record),
+                             ("base-image", base, "1"))
+            self.assertEqual(native.call_count, 2)
+            self.assertEqual(pins.call_count, 4)
+            native.side_effect = [(dumps(row) + "\n").encode(),
+                                  (dumps(candidate_row) + "\n").encode()]
+            with self.assertRaises(gate.SavedWanPreimageRefused):
+                gate.attest_ordinary_cold_config_under_fd9(record)
+            store.return_value._persist_record.assert_not_called()
+
     def test_real_new_schema3_original_root_old_runtime_and_saved_wan(self):
         a, b, c = self.guard()
         with a as native, b as wan, c as runtime:

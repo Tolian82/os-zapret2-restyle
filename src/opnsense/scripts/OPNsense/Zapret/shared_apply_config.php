@@ -642,6 +642,50 @@ final class SharedApplyConfigWorker
         }
     }
 
+    /**
+     * Classify only the original ordinary shared model image after interruption.
+     * Equal base/candidate is deliberately ambiguous. Matching bytes are not
+     * proof of a Config::save call, runtime ownership or permission to recover.
+     */
+    public static function classifyOrdinaryConfigImage(array $plan, array $current): array
+    {
+        if (($plan['result'] ?? null) !== 'prepared' ||
+            !in_array($plan['page'] ?? null, ['strategies', 'voice'], true) ||
+            !is_array($plan['candidate'] ?? null) ||
+            !is_array($plan['changed_fields'] ?? null) ||
+            !is_string($plan['dependencies'] ?? null) ||
+            !preg_match('/^[a-f0-9]{64}$/D', $plan['dependencies']) ||
+            array_key_exists('found_intent', $plan) ||
+            array_key_exists('found_batch', $plan)) {
+            throw new \RuntimeException('Unqualified ordinary cold Config plan');
+        }
+        $base = $plan['dependencies'];
+        $candidate = VoiceSettingsSnapshot::digest($plan['candidate']);
+        $observed = VoiceSettingsSnapshot::digest($current);
+        $enabled = $current['general']['enabled'] ?? null;
+        if (!in_array($enabled, ['0', '1'], true)) {
+            throw new \RuntimeException('Unqualified ordinary cold enabled image');
+        }
+        $isBase = hash_equals($base, $observed);
+        $isCandidate = hash_equals($candidate, $observed);
+        if (!$isBase && !$isCandidate) {
+            throw new \RuntimeException('Foreign ordinary cold Config image');
+        }
+        return [
+            'result' => 'read-only-ordinary-config-classification',
+            'image' => $isBase && $isCandidate ? 'base-equals-candidate'
+                : ($isCandidate ? 'candidate-image' : 'base-image'),
+            'base' => $base,
+            'candidate' => $candidate,
+            'snapshot' => $observed,
+            'enabled' => $enabled,
+            'commit_authorized' => false,
+            'restore_authorized' => false,
+            'save_attested' => false,
+            'runtime_attested' => false,
+        ];
+    }
+
     public static function saved(array $plan, array $current): array
     {
         $expected = VoiceSettingsSnapshot::digest($plan['candidate']);
@@ -729,7 +773,7 @@ final class SharedApplyConfigWorker
             $queueFd = (int)$matches[1];
         }
         if (count($argv) !== ($action === 'found-save' || $queueFd !== null ? 5 : 4) ||
-            !in_array($action, ['preflight', 'save', 'saved', ...$foundActions], true) ||
+            !in_array($action, ['preflight', 'save', 'saved', 'ordinary-cold', ...$foundActions], true) ||
             !in_array($argv[3], $found ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
@@ -743,7 +787,9 @@ final class SharedApplyConfigWorker
             if ($queueFd !== null) {
                 $queueStream = self::openOriginalFoundQueue($queueFd);
             }
-            if ($found) {
+            if ($found || in_array($action, ['ordinary-cold', 'saved'], true)) {
+                // Core may repair unreadable Config from a backup on load.
+                // A recovery reader must not trigger such implicit mutation.
                 self::requireReadableConfig();
             }
             require_once('script/load_phalcon.php');
@@ -779,6 +825,25 @@ final class SharedApplyConfigWorker
                 echo self::postSaveReceipt(self::foundPhaseNative(
                     $action, $argv[2], $config, $factory, $queueStream
                 ));
+                return 0;
+            }
+            if ($action === 'ordinary-cold') {
+                // Internal original FD9 reader, not a configd action. The
+                // caller checks the exact bound journal and both root pins.
+                $config->lock();
+                try {
+                    self::requireReadableConfig();
+                    $result = self::classifyOrdinaryConfigImage($plan, $factory()->getNodes());
+                    $again = self::classifyOrdinaryConfigImage($plan, $factory()->getNodes());
+                    if ($again !== $result || self::readPlan($argv[2], self::ROOT, 0) !== $plan) {
+                        throw new \RuntimeException('Original ordinary cold Config changed');
+                    }
+                    self::requireReadableConfig();
+                    SharedApplyLifecycleLock::assertHeld();
+                } finally {
+                    $config->unlock();
+                }
+                echo json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
                 return 0;
             }
             if ($argv[1] === 'preflight' || $argv[1] === 'saved') {

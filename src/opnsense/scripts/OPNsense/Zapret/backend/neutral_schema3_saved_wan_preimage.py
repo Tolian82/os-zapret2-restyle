@@ -88,6 +88,80 @@ def _native_preflight(generation: str, page: str) -> object:
         raise SavedWanPreimageRefused("ORIGINAL_CONFIG_RECEIPT_INVALID") from None
 
 
+def _qualify_ordinary_cold_config(receipt: object, record: dict) -> tuple:
+    """A matched image is not an attestation of the causal save outcome."""
+    detail = record["detail"]
+    if (type(receipt) is not dict or set(receipt) != {
+            "result", "image", "base", "candidate", "snapshot", "enabled",
+            "commit_authorized", "restore_authorized", "save_attested",
+            "runtime_attested"} or
+            receipt["result"] != "read-only-ordinary-config-classification" or
+            receipt["base"] != detail["base"] or
+            receipt["candidate"] != detail["candidate"] or
+            not all(type(receipt[key]) is str and _HEX.fullmatch(receipt[key])
+                    for key in ("base", "candidate", "snapshot")) or
+            receipt["enabled"] not in ("0", "1") or
+            any(receipt[key] is not False for key in (
+                "commit_authorized", "restore_authorized", "save_attested",
+                "runtime_attested"))):
+        raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_RECEIPT_INVALID")
+    base = receipt["snapshot"] == detail["base"]
+    candidate = receipt["snapshot"] == detail["candidate"]
+    image = ("base-equals-candidate" if base and candidate else
+             "base-image" if base else "candidate-image" if candidate else None)
+    phase = record["phase"]
+    if (image is None or receipt["image"] != image or
+            phase not in ("activating", "activated", "config-saved",
+                          "epoch-finalizing", "requires-review") or
+            (phase == "activating" and not base) or
+            (phase in ("config-saved", "epoch-finalizing") and not candidate)):
+        raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_PHASE_IMAGE_MISMATCH")
+    return image, receipt["snapshot"], receipt["enabled"]
+
+
+def attest_ordinary_cold_config_under_fd9(record: dict) -> tuple:
+    """Original pinned ordinary WAL observation, never a phase writer.
+
+    Call before retaining native Config FD4: the existing PHP reader takes
+    its own original Config lock. No queue acquisition, XML repair, save,
+    recovery command or permission to infer runtime from an image match.
+    """
+    import sys
+    from neutral_root_stage import verify_original_operation_pins
+
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(record) is not dict or "found" in record or
+                record.get("phase") not in ("activating", "activated", "config-saved",
+                                           "epoch-finalizing", "requires-review") or
+                record.get("manifest", {}).get("schema") not in (1, 2)):
+            raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_SCOPE_REQUIRED")
+        require_lifecycle_lock()
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        detail = record["detail"]
+
+        def observe():
+            require_lifecycle_lock()
+            if store.read() != record:
+                raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_JOURNAL_CHANGED")
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            raw = _native_call((_PHP, _CONFIG, "ordinary-cold", detail["id"], detail["page"]))
+            if not raw.endswith(b"\n") or raw.count(b"\n") != 1:
+                raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_RECEIPT_INVALID")
+            image = _qualify_ordinary_cold_config(json.loads(raw), record)
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            if store.read() != record:
+                raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_JOURNAL_CHANGED")
+            return image
+
+        first = observe()
+        if observe() != first:
+            raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_CHANGED")
+        return first
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError, AttributeError):
+        raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_ATTEST_REFUSED") from None
+
+
 def _native_wan() -> str:
     # "require" is the original WAN-first prerequisite and "device" is
     # the existing same code's physical interface resolver (TUN/OPT allowed).

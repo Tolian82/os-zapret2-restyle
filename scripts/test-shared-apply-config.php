@@ -155,6 +155,25 @@ $drifted=$savedCandidate;
 $drifted['hostlist']['telegramips']='91.108.13.10';
 denies(fn()=>Worker::saved($plan,$drifted));
 
+// An uncertain ordinary save is classified, never authorized by digest equality.
+foreach ([
+    [$plan, $state, 'base-image'],
+    [$plan, $savedCandidate, 'candidate-image'],
+    [array_merge($noOpPlan, ['page'=>'strategies']), $optionModel, 'base-equals-candidate'],
+] as [$coldPlan, $image, $expected]) {
+    $cold = Worker::classifyOrdinaryConfigImage($coldPlan, $image);
+    must($cold['image'] === $expected, 'ordinary cold Config image mismatch');
+    foreach (['commit_authorized', 'restore_authorized', 'save_attested', 'runtime_attested'] as $flag) {
+        must($cold[$flag] === false, 'ordinary cold Config granted authority');
+    }
+}
+denies(fn()=>Worker::classifyOrdinaryConfigImage($plan, $drifted));
+denies(fn()=>Worker::classifyOrdinaryConfigImage($plan + ['found_intent'=>null], $state));
+denies(fn()=>Worker::classifyOrdinaryConfigImage($plan + ['found_batch'=>[]], $state));
+denies(fn()=>Worker::classifyOrdinaryConfigImage(
+    array_merge($plan, ['dependencies'=>'invalid']), $state
+));
+
 // Current-format candidate and live Config require the same sealed digest.
 $previousShape = $plan;
 unset($previousShape['candidate']['hostlist']['excludeipset']);
