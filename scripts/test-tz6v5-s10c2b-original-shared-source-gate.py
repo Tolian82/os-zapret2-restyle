@@ -828,6 +828,89 @@ class OriginalFd9SourceGate(unittest.TestCase):
             store.return_value._advance_bound_ordinary.assert_not_called()
             nested.assert_not_called()
 
+    def test_s10_prepared_dispatch_joins_managed_route_without_lifecycle_fallback(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from neutral_effective_diff import EffectiveSnapshot
+        from neutral_schema3_previous_physical import CompletePriorPreimage
+        from neutral_schema3_quiescent_preimage import QuiescentPreimage
+
+        op, old_id = "a" * 32, "b" * 32
+        base, candidate, seal, root, old_root = (c * 64 for c in "cdef1")
+        old = EffectiveSnapshot("2" * 64, "3" * 64,
+                                (("hostlist-youtube.txt", "4" * 64),), (), 0)
+        new = replace(old, linked=(("hostlist-youtube.txt", "5" * 64),))
+        source = gate.SourceGateReceipt("list", "6" * 64, (),
+            generation=op, original_seal_sha256=seal, effective=new, requested_enabled=True)
+        physical = CompletePriorPreimage(op, root, old_id, "7" * 64, "7" * 64,
+            base, "tun0", 5432, "birth", 6543, "monitor-birth", "8" * 64)
+        semantic = gate.OriginalSemanticReceipt(op, old_id, root, old_root,
+            gate._ordinary_effective_decision((old, True), (new, True)), physical,
+            lifecycle_proposal="RELOAD")
+        bound = {"phase": "prepared", "detail": {"id": op, "base": base,
+                 "candidate": candidate, "page": "strategies",
+                 "changed_fields": ["hostlist.youtubedomains"]},
+                 "previous": {"id": old_id, "candidate": base},
+                 "manifest": {"schema": 1, "root_sha256": root, "seal_sha256": seal},
+                 "previous_manifest": {"schema": 1, "root_sha256": old_root}}
+        unbound = {k: v for k, v in bound.items() if k != "manifest"}
+        committed = {**bound, "phase": "committed"}
+        raw = b"original"
+        store = Mock(read=Mock(return_value=unbound))
+
+        def bind(*args):
+            store.read.return_value = bound
+            return source, None
+
+        def managed(*args, **kw):
+            self.assertEqual(store.read(), bound)
+            self.assertEqual(kw, {"source": source, "semantic": semantic})
+            store.read.return_value = committed
+            return committed
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"list"}))
+            binding = stack.enter_context(patch.object(gate, "native_bind_original_prepared_fd9",
+                side_effect=bind))
+            fresh = stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
+                return_value=source))
+            plan = stack.enter_context(patch.object(gate, "native_plan_original_prepared_fd9",
+                return_value=semantic))
+            run = stack.enter_context(patch.object(gate, "native_run_managed_apply_fd9",
+                side_effect=managed))
+            promote = stack.enter_context(patch.object(gate, "native_begin_quiescent_bound_promotion_fd9"))
+
+            def dispatch():
+                return gate.native_coordinate_original_prepared_fd9(op, raw)
+
+            self.assertEqual(dispatch(), ("managed-committed", committed, source, semantic))
+            binding.assert_called_once_with(op, raw)
+            fresh.assert_not_called()
+            store.read.return_value = bound
+            self.assertEqual(dispatch()[0], "managed-committed")
+            fresh.assert_called_once_with(op, raw, None, bound_record=bound)
+
+            store.read.return_value = bound
+            run.reset_mock()
+            plan.return_value = replace(semantic, lifecycle_proposal="RESTART")
+            self.assertEqual(dispatch()[0:2], ("lifecycle-executor-required", bound))
+            run.assert_not_called()
+            plan.return_value = replace(semantic, candidate_root_sha256="0" * 64)
+            with self.assertRaises(OriginalSourceGateRefused):
+                dispatch()
+            run.assert_not_called()
+            plan.return_value = semantic
+            run.side_effect = RuntimeError("uncertain")
+            with self.assertRaisesRegex(RuntimeError, "uncertain"):
+                dispatch()
+            run.assert_called_once()
+            promote.assert_not_called()
+            self.assertEqual(store.read(), bound)
+
     def test_s10_managed_handoff_joins_original_config_owner_and_refuses_drift(self):
         from contextlib import ExitStack
         import io

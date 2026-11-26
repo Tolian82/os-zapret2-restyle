@@ -1964,6 +1964,75 @@ def native_begin_quiescent_bound_promotion_fd9(
         raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_PRECHECK_REFUSED") from None
 
 
+def native_coordinate_original_prepared_fd9(operation: str, raw_pipe: bytes) -> tuple:
+    """One original PREPARED selection; only the qualified managed route acts.
+
+    Retain the actual source and semantic witnesses for the in-flight caller.
+    Unsupported paths remain bound PREPARED, never fall through to legacy or
+    advance ACTIVATING before the physical executor is available.
+    """
+    from shared_apply_operation import SharedApplyOperation
+    from neutral_schema3_previous_physical import CompletePriorPreimage
+    from neutral_schema3_quiescent_preimage import QuiescentPreimage
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation)):
+        raise OriginalSourceGateRefused("NATIVE_ORIGINAL_FD9_REQUIRED")
+    require_lifecycle_lock()
+    inputs = decode_pipe(raw_pipe)
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    if (type(before) is not dict or before.get("phase") != "prepared" or
+            "found" in before or before["detail"]["id"] != operation):
+        raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_OWNER_REQUIRED")
+    if "manifest" not in before:
+        source, _ = native_bind_original_prepared_fd9(operation, raw_pipe)
+        bound = store.read()
+        if (type(bound) is not dict or "manifest" not in bound or
+                {k: v for k, v in bound.items() if k != "manifest"} != before):
+            raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_BIND_CHANGED")
+    else:
+        bound = before
+        digest = bound["detail"]["candidate"] if inputs["mode"] == b"auto" else None
+        source = native_original_bound_effective_fd9(operation, raw_pipe, digest,
+                                                     bound_record=bound)
+    semantic = native_plan_original_prepared_fd9(source)
+    if (type(source) is not SourceGateReceipt or type(semantic) is not OriginalSemanticReceipt or
+            source.generation != operation or semantic.generation != operation or
+            source.original_seal_sha256 != bound["manifest"]["seal_sha256"] or
+            source.mode != inputs["mode"].decode("ascii") or
+            type(semantic.previous_physical) not in (CompletePriorPreimage, QuiescentPreimage) or
+            semantic.candidate_root_sha256 != bound["manifest"]["root_sha256"] or
+            semantic.previous_generation != bound.get("previous", {}).get("id") or
+            semantic.previous_root_sha256 != bound.get("previous_manifest", {}).get("root_sha256") or
+            semantic.authorization != "NONE" or semantic.physical_transition_allowed or
+            semantic.promotion_allowed or not semantic.final_original_fd9_reattest_required or
+            store.read() != bound):
+        raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_WITNESS_CHANGED")
+    if (type(semantic.previous_physical) is CompletePriorPreimage and
+            semantic.lifecycle_proposal == "RELOAD" and
+            semantic.decision.kind == "RELOAD_SAFE_CANDIDATE" and
+            len(semantic.decision.changed_active) == 1 and not semantic.decision.changed_inactive and
+            source.requested_enabled is True and inputs["mode"] in (b"all", b"list") and
+            bound["manifest"]["schema"] == 1 and bound.get("previous_manifest", {}).get("schema") == 1 and
+            bound["detail"]["page"] == "strategies" and
+            bound["detail"]["base"] != bound["detail"]["candidate"] and bound["detail"]["changed_fields"]):
+        # No catch/retry/fallback: an uncertain Config save belongs to the
+        # original managed WAL recovery, not to another lifecycle proposal.
+        result = native_run_managed_apply_fd9(operation, raw_pipe, source=source, semantic=semantic)
+        require_lifecycle_lock()
+        if result != {**bound, "phase": "committed"} or store.read() != result:
+            raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_OUTCOME_UNCERTAIN")
+        return "managed-committed", result, source, semantic
+    route = ("quiescent-executor-required" if type(semantic.previous_physical) is QuiescentPreimage
+             else "lifecycle-executor-required")
+    require_lifecycle_lock()
+    if store.read() != bound:
+        raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_WITNESS_CHANGED")
+    return route, bound, source, semantic
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     # Legacy original parity requests retain their exact old protocol.
