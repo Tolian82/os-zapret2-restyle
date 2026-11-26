@@ -772,6 +772,55 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool,
         raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_PREIMAGE_CHANGED")
 
 
+def _remove_bound_pristine_stage_locked(record: dict, *, config_fd: int,
+                                       queue_fd: int | None) -> bool:
+    """Remove only the exact uninstalled stage, under original FD9/FD4.
+
+    Caller already proved the fully restored old tree and empty kernel
+    twice. Parked/backup recovery artifacts are deliberately preserved.
+    Reuse the original atomic shell helper, never a new tree installer.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_seal import verify_seal
+
+    if record["phase"] != "activating":
+        return False
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    generation = record["detail"]["id"]
+    name = COMMON_ACTIVE.name
+    stage = COMMON_ACTIVE.parent / f".{name}.stage.{generation}"
+    parked = COMMON_ACTIVE.parent / f".{name}.old.{generation}"
+    backup = COMMON_ACTIVE.with_name("runtime-v2-backups") / f"{name}-{generation}"
+    if not _present(stage) or _present(parked) or _present(backup):
+        return False
+    old_work = WORK / record["previous"]["id"]
+    new_work = WORK / generation
+    old_hash = verify_seal(old_work, owner=0)["sha256"]["release"]
+    new_hash = verify_seal(new_work, owner=0)["sha256"]["release"]
+    trees = _cold_recovery_trees(COMMON_ACTIVE, generation, old_hash, new_hash,
+                                 phase="activating", restored=True, owner_uid=0)
+    if trees != (old_hash, new_hash, None, None):
+        raise QuiescentPreimageRefused("BOUND_COLD_PRISTINE_STAGE_CHANGED")
+    if SharedApplyOperation(DEFAULT_ROOT, owner=0).read() != record:
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    inherited = (9, config_fd) if queue_fd is None else (9, config_fd, queue_fd)
+    try:
+        result = subprocess.run(
+            ("/bin/sh", "-c", '. "$1"; atomic_remove_tree "$2"',
+             "zapret-bound-pristine", str(SCRIPT / "backend/atomic.sh"), str(stage)),
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, pass_fds=inherited, timeout=20, check=False)
+    except (OSError, subprocess.SubprocessError):
+        raise QuiescentPreimageRefused("BOUND_COLD_PRISTINE_STAGE_OUTCOME_UNCERTAIN") from None
+    if result.returncode != 0 or _present(stage):
+        raise QuiescentPreimageRefused("BOUND_COLD_PRISTINE_STAGE_REMOVE_FAILED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return True
+
+
 def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
                                      config_fd: int, queue_fd: int | None = None) -> dict:
     """Original PHP owns the native Config lock through the restored fsync."""
@@ -799,6 +848,12 @@ def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
         attest_inert_bound_cold_recovery(
             record, restored=True, config_fd=config_fd,
             config_digest=config_digest, queue_fd=queue_fd)
+        if _remove_bound_pristine_stage_locked(record, config_fd=config_fd, queue_fd=queue_fd):
+            # The exact stage removal is the only physical mutation here.
+            # Prove the old tree, Config, producer and kernel again before WAL.
+            attest_inert_bound_cold_recovery(
+                record, restored=True, config_fd=config_fd,
+                config_digest=config_digest, queue_fd=queue_fd)
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
         return True
 

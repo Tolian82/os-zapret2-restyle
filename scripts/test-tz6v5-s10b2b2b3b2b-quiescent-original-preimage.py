@@ -234,6 +234,65 @@ class OriginalQuiescentTests(unittest.TestCase):
                 with self.assertRaises(gate.QuiescentPreimageRefused):
                     gate.attest_inert_bound_cold_recovery(forbidden, restored=False)
 
+    def test_pristine_stage_cleanup_uses_exact_original_atomic_helper(self):
+        import subprocess
+        import tempfile
+
+        # Exercise actual files and production atomic_remove_tree, while
+        # mocking the native FD9/FD4 and sealed bundle readers only.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            active = root / "runtime-v2"
+            active.mkdir()
+            generation = "d" * 32
+            old = {"id": "a" * 32}
+            record = {"phase": "activating", "detail": {"id": generation},
+                      "previous": old}
+            stage = root / f".runtime-v2.stage.{generation}"
+            parked = root / f".runtime-v2.old.{generation}"
+            stage.mkdir()
+            (stage / "sealed").write_text("candidate")
+            store = Mock(read=Mock(return_value=record))
+            actual_run = subprocess.run
+
+            def shell(argv, **kwargs):
+                self.assertEqual(kwargs.pop("pass_fds"), (9, 4, 3))
+                self.assertEqual(argv[-1], str(stage))
+                return actual_run(argv, **kwargs)
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(gate, "COMMON_ACTIVE", active))
+                stack.enter_context(patch.object(gate, "SCRIPT",
+                    ROOT / "src/opnsense/scripts/OPNsense/Zapret"))
+                stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+                lock = stack.enter_context(patch(
+                    "auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+                stack.enter_context(patch.object(gate, "SharedApplyOperation",
+                                                   return_value=store))
+                stack.enter_context(patch("shared_apply_seal.verify_seal", side_effect=[
+                    {"sha256": {"release": "old"}}, {"sha256": {"release": "new"}},
+                    {"sha256": {"release": "old"}}, {"sha256": {"release": "new"}}]))
+                trees = stack.enter_context(patch.object(gate, "_cold_recovery_trees",
+                    return_value=("old", "new", None, None)))
+                run = stack.enter_context(patch.object(subprocess, "run", side_effect=shell))
+                self.assertTrue(gate._remove_bound_pristine_stage_locked(
+                    record, config_fd=4, queue_fd=3))
+                self.assertFalse(stage.exists())
+                self.assertTrue(active.exists())
+                self.assertGreaterEqual(lock.call_count, 3)
+                run.assert_called_once()
+                stage.mkdir()
+                parked.mkdir()
+                self.assertFalse(gate._remove_bound_pristine_stage_locked(
+                    record, config_fd=4, queue_fd=3))
+                self.assertTrue(stage.exists())
+                parked.rmdir()
+                trees.return_value = ("old", "foreign", None, None)
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    gate._remove_bound_pristine_stage_locked(record, config_fd=4, queue_fd=3)
+                self.assertTrue(stage.exists())
+                run.assert_called_once()
+
     def test_bound_cold_restore_terminal_handoff_retains_native_locks(self):
         import json
         import subprocess

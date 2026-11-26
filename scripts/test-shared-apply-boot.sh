@@ -222,12 +222,12 @@ shared_apply_recover_prepared_service() {
 }
 shared_apply_recover_activating_pristine_service() {
     echo pristine-recover >> "$LOG"
-    [ "$PRISTINE_OK" = 0 ] || return 69
+    [ "$PRISTINE_OK" = 0 ] || return "${PRISTINE_RC:-69}"
     OWNER="committed $PREVIOUS voice"
 }
 shared_apply_recover_activated_cold_service() {
     echo installed-recover >> "$LOG"
-    [ "$COLD_OK" = 0 ] || return 69
+    [ "$COLD_OK" = 0 ] || return "${COLD_RC:-69}"
     OWNER="committed $PREVIOUS voice"
 }
 shared_apply_recover_activating_parked_service() {
@@ -330,11 +330,23 @@ check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = "pristine-recover common:committed $PREVIOUS voice " ] ||
     fail "pristine activating boot did not restore previous common owner"
 PRISTINE_OK=1
+PRISTINE_RC=70
+OWNER="activating $ID voice $PREVIOUS voice"
+check_route 70 start
+[ "$(cat "$LOG")" = "pristine-recover" ] ||
+    fail "uncertain pristine mutation selected another recovery actuator"
+PRISTINE_RC=69
 OWNER="activating $ID voice $PREVIOUS voice"
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = "pristine-recover installed-recover common:committed $PREVIOUS voice " ] ||
     fail "fully installed activating runtime did not use cold verified recovery"
 COLD_OK=1
+COLD_RC=70
+OWNER="activating $ID voice $PREVIOUS voice"
+check_route 70 start
+[ "$(tr '\n' ' ' < "$LOG")" = "pristine-recover installed-recover " ] ||
+    fail "uncertain installed mutation selected parked recovery"
+COLD_RC=69
 OWNER="activating $ID voice $PREVIOUS voice"
 check_route 69 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'pristine-recover installed-recover parked-recover ' ] ||
@@ -515,10 +527,16 @@ apply_runtime_attest_engine_inventory() { echo census >> "$LOG"; [ "$CENSUS_OK" 
 firewall_shared_runtime() { echo ipfw >> "$LOG"; [ "$IPFW_OK" = 0 ]; }
 launcher_is_running() { echo engine >> "$LOG"; [ "$ENGINE" = 1 ]; }
 supervisor_is_running() { echo supervisor >> "$LOG"; [ "$MONITOR" = 1 ]; }
+shared_apply_bound_pristine_service() {
+  echo bound-pristine >> "$LOG"
+  [ "$BOUND_RC" -eq 0 ] || return "$BOUND_RC"
+  # Simulate the one locked native child, not the legacy rm path.
+  rm -rf "$PRISTINE_STAGE"
+}
 reset_pristine() {
   : > "$LOG"
   TREE_OK=0 STAGE_OK=0 REMOVE_OK=0 CENSUS_OK=0 IPFW_OK=0 ENGINE=0 MONITOR=0
-  TERMINAL_OK=0 GUARD=0 SEAL=0 CONFIG=0
+  TERMINAL_OK=0 GUARD=0 SEAL=0 CONFIG=0 BOUND_RC=3
 }
 pristine_check() {
   wanted="$1"; shift
@@ -551,6 +569,23 @@ pristine_check 0 "activating $CURRENT voice $OLD voice"
 [ ! -e "$PRISTINE_STAGE" ] || fail "sealed stage not removed before terminal recovery"
 grep -Fq stage-remove "$LOG" && grep -Fq terminal-restore "$LOG" ||
     fail "pristine stage recovery skipped removal or journal"
+reset_pristine; BOUND_RC=0
+mkdir -p "$PRISTINE_STAGE"
+pristine_check 0 "activating $CURRENT voice $OLD voice"
+[ ! -e "$PRISTINE_STAGE" ] && grep -Fq bound-pristine "$LOG" ||
+    fail "bound stage did not use locked terminal child"
+! grep -Eq 'stage-remove|terminal-restore' "$LOG" ||
+    fail "bound stage used legacy delete or second terminal writer"
+reset_pristine; BOUND_RC=70
+pristine_check 70 "activating $CURRENT voice $OLD voice"
+! grep -Eq 'stage-remove|terminal-restore' "$LOG" ||
+    fail "uncertain stage-absent bound closure selected legacy writer"
+reset_pristine; BOUND_RC=70
+mkdir -p "$PRISTINE_STAGE"
+pristine_check 70 "activating $CURRENT voice $OLD voice"
+[ -e "$PRISTINE_STAGE" ] && ! grep -Eq 'stage-remove|terminal-restore' "$LOG" ||
+    fail "uncertain bound stage fell through to legacy"
+rm -rf "$PRISTINE_STAGE"
 reset_pristine
 mkdir -p "$PRISTINE_STAGE"
 STAGE_OK=1

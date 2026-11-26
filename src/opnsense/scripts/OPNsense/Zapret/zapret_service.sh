@@ -624,6 +624,22 @@ shared_apply_recover_saved_service()
 # An interrupted ACTIVATING can be closed only when every observed
 # resource is still the previous *sealed common* release, i.e. no mutation
 # took effect. Never infer safety from empty IPFW/processes alone.
+# Bound stage deletion and terminal fsync share original P2a/Config/FD9.
+# Only rc 3 from the positively identified unbound journal selects legacy.
+shared_apply_bound_pristine_service()
+{
+    [ "$#" -eq 2 ] || return 70
+    [ -x "${PYTHON_RUNTIME}" ] || return 70
+    if "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \
+        recover-activating "$1" "$2" --bound-only; then
+        return 0
+    else
+        _bound_pristine_rc=$?
+    fi
+    [ "$_bound_pristine_rc" -eq 3 ] && return 3
+    return 70
+}
+
 shared_apply_recover_activating_pristine_service()
 {
     [ "$#" -eq 1 ] || return 64
@@ -679,6 +695,18 @@ shared_apply_recover_activating_pristine_service()
         # Recheck immutable operation pins and saved old Config at the
         # existing physical stage-removal boundary, not just entry.
         preflight_shared_apply_journal common-recover-activating || return 69
+    fi
+    # A bound owner also uses this route if a prior crash already removed
+    # its stage. Never retry another actuator after an uncertain WAL write.
+    if shared_apply_bound_pristine_service "$_shared_pristine_id" "$_shared_pristine_old"; then
+        [ ! -e "$_shared_pristine_stage" ] && [ ! -L "$_shared_pristine_stage" ] || return 70
+        printf "recovered-pristine-id=%s\n" "$_shared_pristine_id"
+        return 0
+    else
+        _shared_pristine_bound_rc=$?
+    fi
+    [ "$_shared_pristine_bound_rc" -eq 3 ] || return 70
+    if [ -e "$_shared_pristine_stage" ] || [ -L "$_shared_pristine_stage" ]; then
         atomic_remove_tree "$_shared_pristine_stage" || return 70
         [ ! -e "$_shared_pristine_stage" ] && [ ! -L "$_shared_pristine_stage" ] || return 70
     fi
@@ -3978,8 +4006,18 @@ service_with_lifecycle_lock()
                             # before the phase record reached ACTIVATED.
                             # Each path independently proves Config, owner,
                             # installed tree, process census and scoped IPFW.
-                            if ! shared_apply_recover_activating_pristine_service "$_shared_owner"; then
-                                if ! shared_apply_recover_activated_cold_service "$_shared_owner"; then
+                            if shared_apply_recover_activating_pristine_service "$_shared_owner"; then
+                                :
+                            else
+                                _shared_recovery_rc=$?
+                                # A failed/uncertain physical mutation must
+                                # never select another recovery actuator.
+                                [ "$_shared_recovery_rc" -eq 69 ] || return "$_shared_recovery_rc"
+                                if shared_apply_recover_activated_cold_service "$_shared_owner"; then
+                                    :
+                                else
+                                    _shared_recovery_rc=$?
+                                    [ "$_shared_recovery_rc" -eq 69 ] || return "$_shared_recovery_rc"
                                     shared_apply_recover_activating_parked_service "$_shared_owner" || return 69
                                 fi
                             fi

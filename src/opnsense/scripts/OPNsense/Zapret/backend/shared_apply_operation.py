@@ -1768,8 +1768,9 @@ def main(argv: list[str]) -> int:
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
     finish = len(argv) == 3 and argv[1] == "finish-saved" and bool(OP_ID.fullmatch(argv[2]))
-    pristine = len(argv) == 4 and argv[1] == "recover-activating" and all(
-        OP_ID.fullmatch(value) for value in argv[2:]
+    pristine_bound_only = len(argv) == 5 and argv[4] == "--bound-only"
+    pristine = (len(argv) == 4 or pristine_bound_only) and argv[1] == "recover-activating" and all(
+        OP_ID.fullmatch(value) for value in argv[2:4]
     )
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
@@ -1929,6 +1930,16 @@ def main(argv: list[str]) -> int:
         elif pristine:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)
+            if pristine_bound_only:
+                # Exactly one private dispatch: only a positively identified
+                # unbound original owner may use the legacy shell deletion.
+                record = store.read()
+                if (type(record) is not dict or record["phase"] != "activating" or
+                        "found" in record or record["detail"]["id"] != argv[2] or
+                        record.get("previous", {}).get("id") != argv[3]):
+                    raise SharedOperationError("pristine recovery owner mismatch")
+                if "manifest" not in record and "previous_manifest" not in record:
+                    return 3
             store.recover_activating_pristine(
                 argv[2], argv[3],
                 lambda: bool(verify_seal(WORK / argv[2], owner=0) and
