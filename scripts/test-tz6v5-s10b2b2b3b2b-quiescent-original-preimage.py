@@ -130,7 +130,7 @@ class OriginalQuiescentTests(unittest.TestCase):
             stack.enter_context(patch.object(gate, "SharedApplyOperation",
                 return_value=Mock(read=Mock(return_value=record))))
             stack.enter_context(patch.object(gate, "COMMON_ACTIVE", self.active))
-            stack.enter_context(patch.object(gate, "_safe_empty_directory"))
+            stack.enter_context(patch.object(gate, "_observe_idle_producer", return_value=None))
             stack.enter_context(patch.object(gate, "_zero_processes"))
             stack.enter_context(patch.object(gate, "inspect_inert_release",
                                              return_value="inactive"))
@@ -463,21 +463,22 @@ class StagedQuiescentTests(unittest.TestCase):
             # Same original stopped predecessor, now a pinned learning
             # generation with a genuine old retirement receipt identity.
             from contextlib import nullcontext
+            idle_identity = ((1, 2, 0, "0" * 64), (1, 3, 0, "0" * 64))
             retired = replace(preimage, retirement_state="original-epoch-ack-retired",
-                              retired_ready_sha256="9" * 64)
+                              retired_ready_sha256="9" * 64, idle_producer=idle_identity)
             record["previous_manifest"] = {"schema": 2}
             queue = SimpleNamespace(inherited_exclusive=Mock(return_value=nullcontext()))
             receipts = object()
             stack.enter_context(patch("auto_detect_post_drop._original_epoch_queue",
                                       return_value=(queue, receipts)))
             history = stack.enter_context(patch.object(gate, "_verify_retired_history"))
-            idle = stack.enter_context(patch.object(gate, "_verify_idle_retired_producer",
-                                                    return_value=((1, 2), (1, 3))))
+            idle = stack.enter_context(patch.object(gate, "_verify_idle_producer",
+                                                    return_value=idle_identity))
             refuses(preimage=retired)
             self.assertEqual(run(preimage=retired, queue_fd=3).retired_ready_sha256,
                              "9" * 64)
             self.assertEqual(run(preimage=retired, queue_fd=3).idle_producer,
-                             ((1, 2), (1, 3)))
+                             idle_identity)
             queue.inherited_exclusive.assert_called_with(3)
             history.assert_called_with(record, queue, receipts, "9" * 64)
             history.side_effect = ValueError("archive drift")
@@ -486,6 +487,16 @@ class StagedQuiescentTests(unittest.TestCase):
             idle.side_effect = ValueError("retired root data")
             refuses(preimage=retired, queue_fd=3)
             idle.side_effect = None
+            # Next inert Apply still sees the same canonical idle producer;
+            # it must not require deleting it or inventing a second epoch.
+            record.pop("previous_manifest")
+            inert_idle = replace(preimage, retirement_state="inert-idle-producer",
+                                 idle_producer=idle_identity)
+            history.reset_mock()
+            self.assertEqual(run(preimage=inert_idle, queue_fd=3).idle_producer, idle_identity)
+            history.assert_not_called()
+            idle.return_value = ((1, 4, 0, "0" * 64), idle_identity[1])
+            refuses(preimage=inert_idle, queue_fd=3)
             record["phase"] = "config-saved"
             refuses(preimage=retired, queue_fd=3)
 

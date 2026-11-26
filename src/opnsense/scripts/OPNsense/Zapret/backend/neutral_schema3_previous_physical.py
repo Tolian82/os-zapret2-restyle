@@ -281,7 +281,8 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
                                            config_digest: str, enabled: bool,
                                            runtime_mode: str,
                                            retired_ready_sha256: str | None = None,
-                                           queue_fd: int | None = None) -> FinalBoundRuntimeReceipt:
+                                           queue_fd: int | None = None,
+                                           expected_idle_producer: tuple | None = None) -> FinalBoundRuntimeReceipt:
     """Final installed candidate proof, not a phase writer or activation permit.
 
     The original Config owner supplies its fresh saved digest while holding
@@ -301,7 +302,7 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
     from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
     from neutral_schema3_quiescent_preimage import (
         _zero_processes, _empty_kernel, _safe_empty_directory, DAEMON_PID,
-        _verify_retired_history, _verify_idle_retired_producer)
+        _verify_retired_history, _verify_idle_producer)
     from auto_detect_post_drop import _original_epoch_queue, _qualified_learning_sources
     from voice_ipfw_adapter import FreeBSDIPFWAdapter, shared_release_manifest
     from voice_firewall_transaction import verify_prior_state
@@ -320,10 +321,13 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
         detail, pin = record["detail"], record["manifest"]
         learning = pin["schema"] == 2
         retired = record.get("previous_manifest", {}).get("schema") == 2
+        needs_queue = retired or expected_idle_producer is not None
         if (retired != (retired_ready_sha256 is not None) or
-                (retired and (type(queue_fd) is not int or queue_fd < 3 or
-                              queue_fd in (9, config_fd))) or
-                (not retired and queue_fd is not None)):
+                (learning and expected_idle_producer is not None) or
+                (retired and not learning and expected_idle_producer is None) or
+                (needs_queue and (type(queue_fd) is not int or queue_fd < 3 or
+                                  queue_fd in (9, config_fd))) or
+                (not needs_queue and queue_fd is not None)):
             raise PreviousPhysicalRefused("BOUND_FINAL_RETIRED_QUEUE_REQUIRED")
         if (pin["schema"] not in (1, 2) or config_digest != detail["candidate"] or
                 record["phase"] != ("epoch-finalizing" if learning else "config-saved") or
@@ -350,11 +354,14 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
                 raise PreviousPhysicalRefused("BOUND_FINAL_ROOT_MODE_CHANGED")
             tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
             process = epoch_digest = pretraffic_digest = idle = None
-            if retired and not learning:
+            if expected_idle_producer is not None:
                 queue, receipts = _original_epoch_queue()
                 with queue.inherited_exclusive(queue_fd):
-                    _verify_retired_history(record, queue, receipts, retired_ready_sha256)
-                    idle = _verify_idle_retired_producer(queue, receipts)
+                    if retired:
+                        _verify_retired_history(record, queue, receipts, retired_ready_sha256)
+                    idle = _verify_idle_producer(queue, receipts)
+                    if idle != expected_idle_producer:
+                        raise PreviousPhysicalRefused("BOUND_FINAL_IDLE_PRODUCER_CHANGED")
             elif not learning:
                 _safe_empty_directory(PRODUCER, 0)
             if runtime_mode == "1":

@@ -963,7 +963,7 @@ class SharedApplyOperation:
                 record, config_fd=config_fd, config_digest=config_digest,
                 enabled=enabled, runtime_mode=runtime_mode,
                 retired_ready_sha256=activated_receipt.retired_ready_sha256,
-                queue_fd=queue_fd)
+                queue_fd=queue_fd, expected_idle_producer=activated_receipt.idle_producer)
             return (type(receipt) is FinalBoundRuntimeReceipt and
                     receipt.generation == record["detail"]["id"] and
                     receipt.root_sha256 == record["manifest"]["root_sha256"] and

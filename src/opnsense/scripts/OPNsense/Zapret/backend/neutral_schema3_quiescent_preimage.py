@@ -62,6 +62,7 @@ class QuiescentPreimage:
     promotion_allowed: bool = False
     original_executor_recheck_required: bool = True
     retired_ready_sha256: str | None = None
+    idle_producer: tuple | None = None
 
 
 def _present(path: Path) -> bool:
@@ -185,11 +186,11 @@ def _verify_retired_history(record: dict, queue, receipts, expected: str) -> Non
         expected_ready_sha256=expected)
 
 
-def _verify_idle_retired_producer(queue, receipts) -> tuple:
-    """The original retired root has empty inbox/debug, not an empty directory.
+def _verify_idle_producer(queue, receipts) -> tuple:
+    """Exact idle original root after retirement or with an inert owner.
 
-    Only called under the already held P2a, after the exact old retirement
-    has been verified. No new files, no read of mutable archive paths.
+    Caller already holds P2a, has qualified the inert or retired owner.
+    No new files, no read of mutable archive paths.
     """
     from auto_detect_learning_retirement import _image
     queue._verify()
@@ -203,6 +204,33 @@ def _verify_idle_retired_producer(queue, receipts) -> tuple:
             raise QuiescentPreimageRefused("BOUND_RETIRED_IDLE_DATA_CHANGED")
         rows.append(tuple(image))
     return tuple(rows)
+
+
+def _observe_idle_producer(producer: Path, uid: int) -> tuple | None:
+    """Before Config locking only: allow absent or exact idle original root."""
+    if not _present(producer):
+        return None
+    info = producer.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != uid or
+            info.st_mode & 0o022):
+        raise QuiescentPreimageRefused("BOUND_IDLE_PRODUCER_UNTRUSTED")
+    if not any(producer.iterdir()):
+        _safe_empty_directory(producer, uid)
+        return None
+    from auto_detect_post_drop import _original_epoch_queue
+    queue, receipts = _original_epoch_queue()
+    if queue.root != producer or queue.uid != uid:
+        raise QuiescentPreimageRefused("BOUND_IDLE_ORIGINAL_SCOPE_REQUIRED")
+    with queue.exclusive(existing_only=True):
+        return _verify_idle_producer(queue, receipts)
+
+
+def _verify_prior_idle_inode_identity(queue, expected: tuple) -> None:
+    """A later learning launch may append, never replace original idle inodes."""
+    for path, row in zip((queue.inbox, queue.root / "debug.log"), expected):
+        info = path.lstat()
+        if (info.st_dev, info.st_ino) != tuple(row[:2]):
+            raise QuiescentPreimageRefused("BOUND_PRIOR_IDLE_INODE_CHANGED")
 
 
 def _attest_quiescent(*, generation: str, native: NativeParity,
@@ -232,7 +260,7 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                     enabled=enabled, parent=parent, journal_root=journal_root,
                     owner_uid=owner_uid)
         def observe():
-            retired_digest = None
+            retired_digest = idle_producer = None
             _zero_processes(pidfiles, runner=runner)
             if old is None:
                 root = _attest_bound_candidate(**args, mode=native.mode, schema3=schema3)
@@ -264,9 +292,11 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                     if bound_learning:
                         retired_digest = _retired_ready_digest(epochs, old["id"], owner_uid)
                     _retired_ready(producer, owner_uid)
-                    if bound_learning and _retired_ready_digest(
-                            epochs, old["id"], owner_uid) != retired_digest:
-                        raise QuiescentPreimageRefused("QUIESCENT_RETIREMENT_READY_CHANGED")
+                    if bound_learning:
+                        idle_producer = _observe_idle_producer(producer, owner_uid)
+                        if (idle_producer is None or _retired_ready_digest(
+                                epochs, old["id"], owner_uid) != retired_digest):
+                            raise QuiescentPreimageRefused("QUIESCENT_RETIREMENT_READY_CHANGED")
                     retirement = "original-epoch-ack-retired"
                 else:
                     # Original inert classifier rejects native auto flags
@@ -274,8 +304,9 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                     # from List mode: require no unexplained producer bytes.
                     if inspect_inert_release(active, owner_uid=owner_uid) != "inactive":
                         raise QuiescentPreimageRefused("QUIESCENT_INERT_OWNER_INVALID")
-                    _safe_empty_directory(producer, owner_uid)
-                    retirement = "inert-no-producer-data"
+                    idle_producer = _observe_idle_producer(producer, owner_uid)
+                    retirement = ("inert-no-producer-data" if idle_producer is None else
+                                  "inert-idle-producer")
                 old_state = "committed-stopped"
             kernel = _empty_kernel(parent / generation / "release")
             _zero_processes(pidfiles, runner=runner)
@@ -296,7 +327,7 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
             return QuiescentPreimage(generation, root.root_sha256,
                 None if old is None else old["id"], old_hash,
                 config[0], config[1], wan, old_state, kernel, retirement,
-                retired_ready_sha256=retired_digest)
+                retired_ready_sha256=retired_digest, idle_producer=idle_producer)
         first = observe()
         if (observe() != first or
                 _attest_bound_candidate(**args, mode=native.mode, schema3=schema3).root_sha256 !=
@@ -367,7 +398,8 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
         detail, pin = record["detail"], record["manifest"]
         learning = pin["schema"] == 2
         retired = record.get("previous_manifest", {}).get("schema") == 2
-        needs_queue = learning or retired
+        prior_idle = preimage.idle_producer
+        needs_queue = learning or retired or prior_idle is not None
         if ((needs_queue and (type(queue_fd) is not int or queue_fd < 3 or
                               queue_fd in (9, config_fd))) or
                 (not needs_queue and queue_fd is not None)):
@@ -384,13 +416,20 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                 preimage.kernel_state not in ("native-kernel-absent", "native-managed-kernel-empty") or
                 (prior is None and (preimage.old_state != "first-install-empty" or
                                     preimage.retirement_state != "no-prior-data" or
-                                    preimage.previous_release_sha256 is not None)) or
+                                    preimage.previous_release_sha256 is not None or
+                                    prior_idle is not None)) or
                 (prior is not None and (preimage.old_state != "committed-stopped" or
                                         preimage.retirement_state != (
                                             "original-epoch-ack-retired" if retired else
-                                            "inert-no-producer-data") or
+                                            ("inert-idle-producer" if prior_idle is not None else
+                                             "inert-no-producer-data")) or
                                         prior["candidate"] != detail["base"])) or
-                (retired != (preimage.retired_ready_sha256 is not None))):
+                (retired != (preimage.retired_ready_sha256 is not None)) or
+                (retired and prior_idle is None) or
+                (prior_idle is not None and (type(prior_idle) is not tuple or
+                                             len(prior_idle) != 2 or
+                                             any(type(row) is not tuple or len(row) != 4
+                                                 for row in prior_idle)))):
             raise QuiescentPreimageRefused("BOUND_STAGED_PREIMAGE_CHANGED")
         work = WORK / detail["id"]
         release = work / "release"
@@ -436,11 +475,14 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                     raise QuiescentPreimageRefused("BOUND_STAGED_BACKUP_CHANGED")
             idle = None
             if not learning:
-                if retired:
+                if prior_idle is not None:
                     queue, receipts = _original_epoch_queue()
                     with queue.inherited_exclusive(queue_fd):
-                        _verify_retired_history(record, queue, receipts, preimage.retired_ready_sha256)
-                        idle = _verify_idle_retired_producer(queue, receipts)
+                        if retired:
+                            _verify_retired_history(record, queue, receipts, preimage.retired_ready_sha256)
+                        idle = _verify_idle_producer(queue, receipts)
+                        if idle != prior_idle:
+                            raise QuiescentPreimageRefused("BOUND_STAGED_IDLE_PRODUCER_CHANGED")
                 else:
                     _safe_empty_directory(PRODUCER_ROOT, 0)
             process = pretraffic = None
@@ -472,6 +514,8 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                                 record, queue, receipts, preimage.retired_ready_sha256)
                         pretraffic = receipts.verify_learning_running_pretraffic(
                             proof, queue, workspace=work, attest=attest)
+                        if prior_idle is not None:
+                            _verify_prior_idle_inode_identity(queue, prior_idle)
             else:
                 _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
                 kernel = _empty_kernel(release)
@@ -542,7 +586,7 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
                 saved["result"] != "committed" or saved["snapshot"] != old["candidate"] or
                 saved["enabled"] not in ("0", "1")):
             raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_CHANGED")
-        _safe_empty_directory(PRODUCER_ROOT, 0)
+        idle = _observe_idle_producer(PRODUCER_ROOT, 0)
         _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
         kernel = active_hash = None
         if restored:
@@ -566,7 +610,7 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
         _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
         if store.read() != record:
             raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
-        return seals, saved_raw, active_hash, kernel
+        return seals, saved_raw, active_hash, kernel, idle
 
     if observe() != observe():
         raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_PREIMAGE_CHANGED")

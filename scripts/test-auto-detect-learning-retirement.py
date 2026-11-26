@@ -348,7 +348,7 @@ class StoppedLearningRetirementTests(unittest.TestCase):
         from auto_detect_learning_gc import qualified_completed_learning
         from auto_detect_epoch_receipts import ReceiptRefused
         from neutral_schema3_quiescent_preimage import (
-            _verify_idle_retired_producer, QuiescentPreimageRefused)
+            _verify_idle_producer, QuiescentPreimageRefused)
         tips = self._completed_learning_history(count=1)
         gen = next(iter(tips))
         ready = self.epoch_root / gen / "learning-retirement" / "ready.json"
@@ -365,19 +365,36 @@ class StoppedLearningRetirementTests(unittest.TestCase):
                 verify(expected_candidate="b" * 64)
             with self.assertRaises(ReceiptRefused):
                 verify(expected_ready_sha256="0" * 64)
-            idle = _verify_idle_retired_producer(self.queue, self.receipts)
+            idle = _verify_idle_producer(self.queue, self.receipts)
             self.assertEqual(len(idle), 2)
             self._file(self.root / "debug.log", b"new live bytes\n")
             # Historical proof remains valid AFTER a new producer starts.
             self.assertIsInstance(verify(), int)
             with self.assertRaises(QuiescentPreimageRefused):
-                _verify_idle_retired_producer(self.queue, self.receipts)
+                _verify_idle_producer(self.queue, self.receipts)
             self._file(self.root / "debug.log", b"")
             self._file(self.root / "foreign", b"")
             with self.assertRaises(QuiescentPreimageRefused):
-                _verify_idle_retired_producer(self.queue, self.receipts)
+                _verify_idle_producer(self.queue, self.receipts)
             (self.root / "foreign").unlink()
-            self.assertEqual(_verify_idle_retired_producer(self.queue, self.receipts), idle)
+            self.assertEqual(_verify_idle_producer(self.queue, self.receipts), idle)
+
+    def test_inert_original_idle_preimage_borrows_existing_queue_only(self):
+        from neutral_schema3_quiescent_preimage import (
+            _observe_idle_producer, QuiescentPreimageRefused)
+        tips = self._completed_learning_history(count=1)
+        self.assertTrue(tips)
+        with patch("auto_detect_post_drop._original_epoch_queue",
+                   return_value=(self.queue, self.receipts)), \
+                patch.object(self.queue, "exclusive", wraps=self.queue.exclusive) as lock:
+            idle = _observe_idle_producer(self.root, self.uid)
+            self.assertEqual(len(idle), 2)
+            lock.assert_called_once_with(existing_only=True)
+            self._file(self.root / "debug.log", b"unexplained\n")
+            with self.assertRaises(QuiescentPreimageRefused):
+                _observe_idle_producer(self.root, self.uid)
+            self._file(self.root / "debug.log", b"")
+            self.assertEqual(_observe_idle_producer(self.root, self.uid), idle)
 
     def test_bound_history_pin_survives_original_gc_until_commit(self):
         tips = self._completed_learning_history()
