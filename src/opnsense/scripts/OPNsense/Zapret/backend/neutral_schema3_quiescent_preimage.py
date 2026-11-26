@@ -61,6 +61,7 @@ class QuiescentPreimage:
     physical_transition_allowed: bool = False
     promotion_allowed: bool = False
     original_executor_recheck_required: bool = True
+    retired_ready_sha256: str | None = None
 
 
 def _present(path: Path) -> bool:
@@ -160,6 +161,50 @@ def _retired_ready(producer: Path, uid: int) -> None:
         raise QuiescentPreimageRefused("QUIESCENT_ORIGINAL_RETIREMENT_INCOMPLETE")
 
 
+def _retired_ready_digest(epochs: Path, generation: str, uid: int) -> str:
+    from hashlib import sha256
+    from auto_detect_epoch_receipts import EpochReceipts, _directory, _read
+    from auto_detect_learning_retirement import RETIRE_DIR, READY
+
+    archive = EpochReceipts(epochs, owner_uid=uid)._generation(
+        generation, create=False) / RETIRE_DIR
+    _directory(archive, uid)
+    return sha256(_read(archive / READY, uid)).hexdigest()
+
+
+def _verify_retired_history(record: dict, queue, receipts, expected: str) -> None:
+    """Reuse the original historical ACK/archive verifier after promotion."""
+    from auto_detect_learning_gc import qualified_completed_learning
+    from shared_apply_operation import DIGEST
+    if (record.get("previous_manifest", {}).get("schema") != 2 or
+            type(expected) is not str or not DIGEST.fullmatch(expected)):
+        raise QuiescentPreimageRefused("BOUND_RETIRED_HISTORY_REQUIRED")
+    prior = record["previous"]
+    qualified_completed_learning(
+        receipts, queue, prior["id"], expected_candidate=prior["candidate"],
+        expected_ready_sha256=expected)
+
+
+def _verify_idle_retired_producer(queue, receipts) -> tuple:
+    """The original retired root has empty inbox/debug, not an empty directory.
+
+    Only called under the already held P2a, after the exact old retirement
+    has been verified. No new files, no read of mutable archive paths.
+    """
+    from auto_detect_learning_retirement import _image
+    queue._verify()
+    if (not queue._held or queue.segments() or
+            set(os.listdir(queue.root)) != {"pending", "worker.lock", "inbox.txt", "debug.log"}):
+        raise QuiescentPreimageRefused("BOUND_RETIRED_IDLE_LAYOUT_CHANGED")
+    rows = []
+    for path in (queue.inbox, queue.root / "debug.log"):
+        image, _, data = _image(path, receipts, queue)
+        if data:
+            raise QuiescentPreimageRefused("BOUND_RETIRED_IDLE_DATA_CHANGED")
+        rows.append(tuple(image))
+    return tuple(rows)
+
+
 def _attest_quiescent(*, generation: str, native: NativeParity,
                       effective: EffectiveSnapshot, enabled: bool,
                       parent: Path, journal_root: Path, owner_uid: int,
@@ -187,6 +232,7 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                     enabled=enabled, parent=parent, journal_root=journal_root,
                     owner_uid=owner_uid)
         def observe():
+            retired_digest = None
             _zero_processes(pidfiles, runner=runner)
             if old is None:
                 root = _attest_bound_candidate(**args, mode=native.mode, schema3=schema3)
@@ -214,7 +260,13 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                 wan = saved.verified_wan_device
                 old_hash = _full_prior_tree(parent / old["id"], active, owner_uid)
                 if _present(active / MAP_NAME):
+                    bound_learning = before.get("previous_manifest", {}).get("schema") == 2
+                    if bound_learning:
+                        retired_digest = _retired_ready_digest(epochs, old["id"], owner_uid)
                     _retired_ready(producer, owner_uid)
+                    if bound_learning and _retired_ready_digest(
+                            epochs, old["id"], owner_uid) != retired_digest:
+                        raise QuiescentPreimageRefused("QUIESCENT_RETIREMENT_READY_CHANGED")
                     retirement = "original-epoch-ack-retired"
                 else:
                     # Original inert classifier rejects native auto flags
@@ -243,7 +295,8 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                 raise QuiescentPreimageRefused("QUIESCENT_ORIGINAL_PROOF_CHANGED")
             return QuiescentPreimage(generation, root.root_sha256,
                 None if old is None else old["id"], old_hash,
-                config[0], config[1], wan, old_state, kernel, retirement)
+                config[0], config[1], wan, old_state, kernel, retirement,
+                retired_ready_sha256=retired_digest)
         first = observe()
         if (observe() != first or
                 _attest_bound_candidate(**args, mode=native.mode, schema3=schema3).root_sha256 !=
@@ -269,6 +322,8 @@ class StagedBoundRuntimeReceipt:
     kernel_state: str
     observed_config_sha256: str | None = None
     pretraffic_sha256: str | None = None
+    retired_ready_sha256: str | None = None
+    idle_producer: tuple | None = None
 
 
 def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: QuiescentPreimage,
@@ -279,8 +334,9 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
 
     Use the original in-flight quiescent preimage, not a reconstruction
     of the old state after installation. Inert and learning candidates
-    from an empty or stopped inert predecessor qualify here. Learning
-    borrows the original queue acquired BEFORE Config, not a second flock.
+    from an empty or stopped predecessor qualify here, including an exact
+    bound retired learning predecessor. Learning or retired history borrows
+    the original queue acquired BEFORE Config, not a second flock.
     No PHP calls, process signals, IPFW writes or journal mutations.
     """
     import sys
@@ -305,14 +361,16 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
         store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
         if (store.read() != record or record["phase"] not in ("activating", "activated") or
                 "found" in record or record.get("manifest", {}).get("schema") not in (1, 2) or
-                record.get("previous_manifest", {}).get("schema", 1) != 1 or
+                record.get("previous_manifest", {}).get("schema", 1) not in (1, 2) or
                 (saved and record["phase"] != "activated")):
             raise QuiescentPreimageRefused("BOUND_STAGED_ORDINARY_REQUIRED")
         detail, pin = record["detail"], record["manifest"]
         learning = pin["schema"] == 2
-        if ((learning and (type(queue_fd) is not int or queue_fd < 3 or
-                          queue_fd in (9, config_fd))) or
-                (not learning and queue_fd is not None)):
+        retired = record.get("previous_manifest", {}).get("schema") == 2
+        needs_queue = learning or retired
+        if ((needs_queue and (type(queue_fd) is not int or queue_fd < 3 or
+                              queue_fd in (9, config_fd))) or
+                (not needs_queue and queue_fd is not None)):
             raise QuiescentPreimageRefused("BOUND_STAGED_ORIGINAL_QUEUE_SCOPE_REQUIRED")
         prior = record.get("previous")
         old_id = None if prior is None else prior["id"]
@@ -328,8 +386,11 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                                     preimage.retirement_state != "no-prior-data" or
                                     preimage.previous_release_sha256 is not None)) or
                 (prior is not None and (preimage.old_state != "committed-stopped" or
-                                        preimage.retirement_state != "inert-no-producer-data" or
-                                        prior["candidate"] != detail["base"]))):
+                                        preimage.retirement_state != (
+                                            "original-epoch-ack-retired" if retired else
+                                            "inert-no-producer-data") or
+                                        prior["candidate"] != detail["base"])) or
+                (retired != (preimage.retired_ready_sha256 is not None))):
             raise QuiescentPreimageRefused("BOUND_STAGED_PREIMAGE_CHANGED")
         work = WORK / detail["id"]
         release = work / "release"
@@ -367,13 +428,21 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                 old_work = WORK / prior["id"]
                 if (not _original_plan_matches(parent=WORK, generation=prior["id"],
                                                journal={"detail": prior}, owner_uid=0) or
-                        inspect_inert_release(old_work / "release", owner_uid=0) != "inactive"):
+                        (not retired and
+                         inspect_inert_release(old_work / "release", owner_uid=0) != "inactive")):
                     raise QuiescentPreimageRefused("BOUND_STAGED_PREVIOUS_SOURCE_CHANGED")
                 old_tree = _full_prior_tree(old_work, backup, 0)
                 if old_tree != preimage.previous_release_sha256:
                     raise QuiescentPreimageRefused("BOUND_STAGED_BACKUP_CHANGED")
+            idle = None
             if not learning:
-                _safe_empty_directory(PRODUCER_ROOT, 0)
+                if retired:
+                    queue, receipts = _original_epoch_queue()
+                    with queue.inherited_exclusive(queue_fd):
+                        _verify_retired_history(record, queue, receipts, preimage.retired_ready_sha256)
+                        idle = _verify_idle_retired_producer(queue, receipts)
+                else:
+                    _safe_empty_directory(PRODUCER_ROOT, 0)
             process = pretraffic = None
             if enabled:
                 process = _running_native(release, owner_uid=0,
@@ -398,6 +467,9 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                     _, names = _qualified_learning_sources(proof.learning, PRODUCER_ROOT)
                     queue, receipts = _original_epoch_queue(names)
                     with queue.inherited_exclusive(queue_fd):
+                        if retired:
+                            _verify_retired_history(
+                                record, queue, receipts, preimage.retired_ready_sha256)
                         pretraffic = receipts.verify_learning_running_pretraffic(
                             proof, queue, workspace=work, attest=attest)
             else:
@@ -409,7 +481,8 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                 raise QuiescentPreimageRefused("BOUND_STAGED_OWNER_CHANGED")
             return StagedBoundRuntimeReceipt(detail["id"], pin["root_sha256"], detail["base"],
                                              tree, old_tree, process, kernel,
-                                             config_digest, pretraffic)
+                                             config_digest, pretraffic,
+                                             preimage.retired_ready_sha256, idle)
 
         first = observe()
         if observe() != first:

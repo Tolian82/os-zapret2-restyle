@@ -271,13 +271,17 @@ class FinalBoundRuntimeReceipt:
     epoch_sha256: str | None
     kernel_state: str
     pretraffic_sha256: str | None = None
+    retired_ready_sha256: str | None = None
+    idle_producer: tuple | None = None
     authorization: str = "NONE"
     physical_transition_allowed: bool = False
 
 
 def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
                                            config_digest: str, enabled: bool,
-                                           runtime_mode: str) -> FinalBoundRuntimeReceipt:
+                                           runtime_mode: str,
+                                           retired_ready_sha256: str | None = None,
+                                           queue_fd: int | None = None) -> FinalBoundRuntimeReceipt:
     """Final installed candidate proof, not a phase writer or activation permit.
 
     The original Config owner supplies its fresh saved digest while holding
@@ -296,7 +300,9 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
     from auto_detect_minute import inspect_inert_release
     from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
     from neutral_schema3_quiescent_preimage import (
-        _zero_processes, _empty_kernel, _safe_empty_directory, DAEMON_PID)
+        _zero_processes, _empty_kernel, _safe_empty_directory, DAEMON_PID,
+        _verify_retired_history, _verify_idle_retired_producer)
+    from auto_detect_post_drop import _original_epoch_queue, _qualified_learning_sources
     from voice_ipfw_adapter import FreeBSDIPFWAdapter, shared_release_manifest
     from voice_firewall_transaction import verify_prior_state
 
@@ -313,6 +319,12 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
             raise PreviousPhysicalRefused("BOUND_FINAL_OWNER_REQUIRED")
         detail, pin = record["detail"], record["manifest"]
         learning = pin["schema"] == 2
+        retired = record.get("previous_manifest", {}).get("schema") == 2
+        if (retired != (retired_ready_sha256 is not None) or
+                (retired and (type(queue_fd) is not int or queue_fd < 3 or
+                              queue_fd in (9, config_fd))) or
+                (not retired and queue_fd is not None)):
+            raise PreviousPhysicalRefused("BOUND_FINAL_RETIRED_QUEUE_REQUIRED")
         if (pin["schema"] not in (1, 2) or config_digest != detail["candidate"] or
                 record["phase"] != ("epoch-finalizing" if learning else "config-saved") or
                 (learning and runtime_mode != "1") or
@@ -337,7 +349,14 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
                     learning != (service["target_mode"] == "auto" and enabled)):
                 raise PreviousPhysicalRefused("BOUND_FINAL_ROOT_MODE_CHANGED")
             tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
-            process = epoch_digest = pretraffic_digest = None
+            process = epoch_digest = pretraffic_digest = idle = None
+            if retired and not learning:
+                queue, receipts = _original_epoch_queue()
+                with queue.inherited_exclusive(queue_fd):
+                    _verify_retired_history(record, queue, receipts, retired_ready_sha256)
+                    idle = _verify_idle_retired_producer(queue, receipts)
+            elif not learning:
+                _safe_empty_directory(PRODUCER, 0)
             if runtime_mode == "1":
                 process = _running_native(release, owner_uid=0,
                                           child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
@@ -356,6 +375,11 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
                         raise PreviousPhysicalRefused("BOUND_FINAL_LEARNING_OWNER_CHANGED")
                     epoch = EpochReceipts(owner_uid=0).verify_learning_stopped_epoch(
                         proof, workspace=work)
+                    if retired:
+                        _, names = _qualified_learning_sources(proof.learning, PRODUCER)
+                        queue, receipts = _original_epoch_queue(names)
+                        with queue.inherited_exclusive(queue_fd):
+                            _verify_retired_history(record, queue, receipts, retired_ready_sha256)
                     gid = pwd.getpwnam(ENGINE_USER).pw_gid
                     queue = DurableInbox(PRODUCER, owner_uid=0, writer_gid=gid)
                     queue._verify()  # read-only, FD9 excludes original minute ingress
@@ -374,14 +398,14 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
                 _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
                 if inspect_inert_release(release, owner_uid=0) != "inactive":
                     raise PreviousPhysicalRefused("BOUND_FINAL_INERT_RELEASE_REQUIRED")
-                _safe_empty_directory(PRODUCER, 0)
                 kernel = _empty_kernel(release)
             require_lifecycle_lock()
             assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
             if store.read() != record:
                 raise PreviousPhysicalRefused("BOUND_FINAL_OWNER_CHANGED")
             return FinalBoundRuntimeReceipt(detail["id"], pin["root_sha256"], config_digest,
-                                            tree, process, epoch_digest, kernel, pretraffic_digest)
+                                            tree, process, epoch_digest, kernel, pretraffic_digest,
+                                            retired_ready_sha256, idle)
 
         first = observe()
         if observe() != first:

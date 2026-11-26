@@ -926,7 +926,8 @@ class SharedApplyOperation:
 
     def _finish_native_bound_ordinary(self, record: dict, *, config_fd: int,
                                       config_digest: str, enabled: bool,
-                                      runtime_mode: str, activated_receipt) -> dict:
+                                      runtime_mode: str, activated_receipt,
+                                      queue_fd: int | None = None) -> dict:
         """Original FD9/FD4 terminal checkpoint; not a public command.
 
         Do not accept a generic callback, a synthetic committed predecessor,
@@ -960,7 +961,9 @@ class SharedApplyOperation:
         def attest():
             receipt = attest_bound_candidate_final_under_fd9(
                 record, config_fd=config_fd, config_digest=config_digest,
-                enabled=enabled, runtime_mode=runtime_mode)
+                enabled=enabled, runtime_mode=runtime_mode,
+                retired_ready_sha256=activated_receipt.retired_ready_sha256,
+                queue_fd=queue_fd)
             return (type(receipt) is FinalBoundRuntimeReceipt and
                     receipt.generation == record["detail"]["id"] and
                     receipt.root_sha256 == record["manifest"]["root_sha256"] and
@@ -968,6 +971,8 @@ class SharedApplyOperation:
                     receipt.release_sha256 == activated_receipt.release_sha256 and
                     receipt.running == activated_receipt.running and
                     receipt.pretraffic_sha256 == activated_receipt.pretraffic_sha256 and
+                    receipt.retired_ready_sha256 == activated_receipt.retired_ready_sha256 and
+                    receipt.idle_producer == activated_receipt.idle_producer and
                     (receipt.epoch_sha256 is not None) == (record["manifest"]["schema"] == 2) and
                     receipt.authorization == "NONE" and
                     receipt.physical_transition_allowed is False)

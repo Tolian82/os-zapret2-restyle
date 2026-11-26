@@ -199,9 +199,16 @@ class EpochReceipts:
                 not isinstance(protect, str) or not HEX32.fullmatch(protect) or
                 type(keep) is not int or not 1 <= keep <= 16):
             raise ReceiptRefused("original_fd9_history_maintenance_owner_required")
+        pinned_prior = None
         if sys.platform.startswith("freebsd"):
             from voice_ipfw_adapter import require_lifecycle_lock
+            from shared_apply_operation import SharedApplyOperation
             require_lifecycle_lock()
+            record = SharedApplyOperation(owner=0).read()
+            if (record is not None and record["phase"] in ("activating", "activated") and
+                    record["detail"]["id"] == protect and
+                    record.get("previous_manifest", {}).get("schema") == 2):
+                pinned_prior = record["previous"]["id"]
         _directory(self.root.parent, self.uid)
         if not self.root.exists() and not self.root.is_symlink():
             return 0
@@ -213,6 +220,14 @@ class EpochReceipts:
                          (n.startswith(".gc3-") and HEX32.fullmatch(n[5:])))
                     for n in all_names)):
             raise ReceiptRefused("foreign_historical_epoch_before_reclaim")
+
+        # The in-flight bound predecessor remains rollback evidence even
+        # if a modified directory timestamp would put it outside the last
+        # four. This temporary pin lasts only through the original WAL.
+        if pinned_prior is not None and (
+                pinned_prior not in all_names or ".gc3-" + pinned_prior in all_names or
+                ".gc-" + pinned_prior in all_names):
+            raise ReceiptRefused("pinned_previous_learning_history_missing")
 
         # Finish only exact, already-renamed root-private deletion. A .gc
         # name is never an owner, log or ACK. Its allowed children are
@@ -338,6 +353,8 @@ class EpochReceipts:
         completed.sort()
         removed = 0
         for _, name, kind in completed[:-keep]:
+            if name == pinned_prior:
+                continue
             original = self.root / name
             tombstone = self.root / (
                 (".gc3-" if kind == "learning" else ".gc-") + name)
