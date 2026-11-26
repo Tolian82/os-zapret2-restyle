@@ -335,27 +335,38 @@ def _validate_found_post(post: object) -> dict:
 
 def _first_running_pin_scope(record: dict) -> bool:
     return ("previous" not in record and "previous_manifest" not in record and
-            "found" not in record and record.get("manifest", {}).get("schema") == 1)
+            "found" not in record and record.get("manifest", {}).get("schema") in (1, 2))
 
 
 def _validate_first_running_pin(record: dict) -> None:
-    if "first_running_sha256" not in record:
+    has_running = "first_running_sha256" in record
+    has_seed = "first_pretraffic_sha256" in record
+    if not has_running and not has_seed:
         return
-    value = record["first_running_sha256"]
-    if (not _first_running_pin_scope(record) or
-            record["phase"] not in ("activated", "config-saved", "committed", "restored") or
-            type(value) is not str or not DIGEST.fullmatch(value)):
+    learning = record.get("manifest", {}).get("schema") == 2
+    phases = ("activated", "epoch-finalizing", "committed", "restored") if learning else (
+        "activated", "config-saved", "committed", "restored")
+    if (not _first_running_pin_scope(record) or record["phase"] not in phases or
+            not has_running or has_seed != learning or
+            any(type(record[key]) is not str or not DIGEST.fullmatch(record[key])
+                for key in ("first_running_sha256", "first_pretraffic_sha256") if key in record)):
         raise SharedOperationError("invalid first bound running owner pin")
 
 
-def _first_running_pin_matches(record: dict, running, config_fd: int) -> bool:
+def _first_running_pin_matches(record: dict, running, config_fd: int, *,
+                               pretraffic_sha256: str | None = None) -> bool:
     if not _first_running_pin_scope(record):
-        return "first_running_sha256" not in record
+        return "first_running_sha256" not in record and "first_pretraffic_sha256" not in record
+    learning = record["manifest"]["schema"] == 2
     if running is None:
-        return "first_running_sha256" not in record
+        return (not learning and "first_running_sha256" not in record and
+                "first_pretraffic_sha256" not in record and pretraffic_sha256 is None)
     pinned = record.get("first_running_sha256")
-    if pinned is None:
+    if (pinned is None or (learning and (pretraffic_sha256 is None or
+            pretraffic_sha256 != record.get("first_pretraffic_sha256"))) or
+            (not learning and (pretraffic_sha256 is not None or "first_pretraffic_sha256" in record))):
         return False
+    _validate_first_running_pin(record)
     from neutral_schema3_quiescent_preimage import _first_running_digest
     from shared_apply_seal import WORK
     return pinned == _first_running_digest(WORK / record["detail"]["id"] / "release",
@@ -376,7 +387,8 @@ def _validate_record(record: object) -> dict:
         {"schema", "phase", "detail", "previous", "found"},
     )
     if (type(record) is not dict or
-            (keys - {"failure", "manifest", "previous_manifest", "managed", "first_running_sha256"}) not in allowed or
+            (keys - {"failure", "manifest", "previous_manifest", "managed", "first_running_sha256",
+                     "first_pretraffic_sha256"}) not in allowed or
             ("failure" in record and (record.get("phase") not in
                                       ("committed", "requires-review") or
                                       "found" in record)) or
@@ -1000,7 +1012,8 @@ class SharedApplyOperation:
 
     def _advance_bound_ordinary(self, phase: str, expected: dict, attest, *,
                                 shared_work_parent: Path | None = None,
-                                first_running_sha256: str | None = None) -> dict:
+                                first_running_sha256: str | None = None,
+                                first_pretraffic_sha256: str | None = None) -> dict:
         """Internal original FD9 transition with exact immutable pins.
 
         This is the same WAL writer and phase table as ordinary Apply.
@@ -1027,12 +1040,15 @@ class SharedApplyOperation:
             raise SharedOperationError("bound ordinary predecessor Config mismatch")
 
         next_record = {**before, "phase": phase}
-        if first_running_sha256 is not None:
+        if first_running_sha256 is not None or first_pretraffic_sha256 is not None:
             if (phase != "activated" or before["phase"] != "activating" or
                     not _first_running_pin_scope(before) or
-                    "first_running_sha256" in before):
+                    "first_running_sha256" in before or "first_pretraffic_sha256" in before):
                 raise SharedOperationError("first running owner pin scope refused")
-            next_record["first_running_sha256"] = first_running_sha256
+            if first_running_sha256 is not None:
+                next_record["first_running_sha256"] = first_running_sha256
+            if first_pretraffic_sha256 is not None:
+                next_record["first_pretraffic_sha256"] = first_pretraffic_sha256
             _validate_first_running_pin(next_record)
 
         def pins():
@@ -1097,6 +1113,9 @@ class SharedApplyOperation:
             if not attest():
                 raise SharedOperationError("first activated physical witness refused")
             initial = receipt
+            learning = record["manifest"]["schema"] == 2
+            if learning and (initial.running is None or initial.pretraffic_sha256 is None):
+                raise SharedOperationError("first learning activation requires running and pretraffic proof")
             if initial.running is not None:
                 from neutral_schema3_quiescent_preimage import _first_running_digest
                 from shared_apply_seal import WORK
@@ -1108,8 +1127,10 @@ class SharedApplyOperation:
                             _first_running_digest(release, receipt.running,
                                                   config_fd=config_fd) == digest)
 
-                result = self._advance_bound_ordinary("activated", record, attest_pinned,
-                                                      first_running_sha256=digest)
+                pins = {"first_running_sha256": digest}
+                if learning:
+                    pins["first_pretraffic_sha256"] = initial.pretraffic_sha256
+                result = self._advance_bound_ordinary("activated", record, attest_pinned, **pins)
             else:
                 result = self._advance_bound_ordinary("activated", record,
                     lambda: attest() and receipt == initial)
@@ -1163,7 +1184,8 @@ class SharedApplyOperation:
                     receipt.root_sha256 == record["manifest"]["root_sha256"] and
                     receipt.config_base_sha256 == record["detail"]["base"] and
                     receipt == replace(activated_receipt, observed_config_sha256=config_digest) and
-                    _first_running_pin_matches(record, receipt.running, config_fd) and
+                    _first_running_pin_matches(record, receipt.running, config_fd,
+                                               pretraffic_sha256=receipt.pretraffic_sha256) and
                     (receipt.pretraffic_sha256 is not None) == learning)
 
         return self._advance_bound_ordinary(
@@ -1216,7 +1238,8 @@ class SharedApplyOperation:
                     receipt.config_sha256 == config_digest and
                     receipt.release_sha256 == activated_receipt.release_sha256 and
                     receipt.running == activated_receipt.running and
-                    _first_running_pin_matches(record, receipt.running, config_fd) and
+                    _first_running_pin_matches(record, receipt.running, config_fd,
+                                               pretraffic_sha256=receipt.pretraffic_sha256) and
                     receipt.pretraffic_sha256 == activated_receipt.pretraffic_sha256 and
                     receipt.retired_ready_sha256 == activated_receipt.retired_ready_sha256 and
                     receipt.idle_producer == activated_receipt.idle_producer and

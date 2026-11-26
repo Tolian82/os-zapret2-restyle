@@ -1302,6 +1302,56 @@ class StagedQuiescentTests(unittest.TestCase):
             with self.assertRaises(SharedOperationError):
                 activate()
 
+    def test_first_learning_activation_pins_original_pretraffic_and_running_together(self):
+        from types import SimpleNamespace
+        from shared_apply_operation import (SharedApplyOperation, DEFAULT_ROOT,
+            _first_running_pin_matches, _validate_first_running_pin)
+        from neutral_schema3_previous_physical import PriorRunningToken
+        generation, base, root = "a" * 32, "b" * 64, "c" * 64
+        record = {"phase": "activating", "detail": {"id": generation, "base": base},
+                  "manifest": {"schema": 2, "root_sha256": root}}
+        running = PriorRunningToken(123, "birth", 456, "supervisor-birth", "d" * 64)
+        receipt = gate.StagedBoundRuntimeReceipt(generation, root, base,
+            "e" * 64, None, running, "native-managed-kernel-staged", base, "1" * 64)
+
+        def advance(phase, expected, attest, **pins):
+            self.assertEqual((phase, expected), ("activated", record))
+            self.assertEqual(pins, {"first_running_sha256": "f" * 64,
+                                    "first_pretraffic_sha256": "1" * 64})
+            if not attest():
+                raise SharedOperationError("witness refused")
+            result = dict(record, phase=phase, **pins)
+            _validate_first_running_pin(result)
+            return result
+
+        store = SimpleNamespace(root=DEFAULT_ROOT, owner=0, read=lambda: record,
+                                _advance_bound_ordinary=Mock(side_effect=advance))
+        with patch.object(gate, "attest_bound_quiescent_staged_under_fd9",
+                          return_value=receipt) as physical, \
+                patch.object(gate, "_first_running_digest", return_value="f" * 64):
+            def activate():
+                return SharedApplyOperation._record_native_bound_activated(
+                    store, record, preimage=None, config_fd=4, config_digest=base, queue_fd=3)
+
+            activated, evidence = activate()
+            self.assertEqual(evidence, receipt)
+            for phase in ("activated", "epoch-finalizing", "committed"):
+                saved = dict(activated, phase=phase)
+                self.assertTrue(_first_running_pin_matches(saved, running, 4,
+                    pretraffic_sha256=receipt.pretraffic_sha256))
+                self.assertFalse(_first_running_pin_matches(saved, running, 4,
+                    pretraffic_sha256="0" * 64))
+            for key in ("first_running_sha256", "first_pretraffic_sha256"):
+                partial = dict(activated)
+                partial.pop(key)
+                with self.assertRaises(SharedOperationError):
+                    _validate_first_running_pin(partial)
+            with self.assertRaises(SharedOperationError):
+                _validate_first_running_pin(dict(activated, phase="config-saved"))
+            physical.side_effect = [receipt, replace(receipt, pretraffic_sha256="0" * 64)]
+            with self.assertRaises(SharedOperationError):
+                activate()
+
     def test_internal_saved_writer_requires_same_activated_runtime(self):
         from types import SimpleNamespace
         from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
