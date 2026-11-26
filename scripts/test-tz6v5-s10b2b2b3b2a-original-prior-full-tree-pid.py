@@ -85,6 +85,50 @@ class FullPreviousOwnerReadOnly(unittest.TestCase):
                          return_value=self.prior if native is None else native)
         return a, b
 
+    def test_running_executable_text_vnode_matches_exact_bytes(self):
+        import hashlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "dvtws2"
+            exe.write_bytes(b"engine fixture")
+            exe.chmod(0o700)
+            info = exe.stat()
+            expected = hashlib.sha256(exe.read_bytes()).hexdigest()
+            header = "USER CMD PID FD DEV INUM MODE SZ|DV R/W NAME\n"
+            row = (f"nobody dvtws2 {PID} text {info.st_dev:#x} "
+                   f"{info.st_ino} {info.st_mode:o} {info.st_size} r {exe}\n")
+
+            def runner_for(raw):
+                return Mock(return_value=Mock(returncode=0, stderr="", stdout=raw))
+
+            # The temporary test may run unprivileged. Inject only uid=0
+            # at the stat boundary; preserve actual inode and byte evidence.
+            from types import SimpleNamespace
+            real_fstat, real_lstat = os.fstat, Path.lstat
+
+            def root(info):
+                return SimpleNamespace(**{key: (0 if key == "st_uid" else getattr(info, key))
+                    for key in ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid",
+                                "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns")})
+
+            def run(raw, digest=expected):
+                with patch.object(gate.os, "fstat", side_effect=lambda fd: root(real_fstat(fd))), \
+                     patch.object(Path, "lstat", lambda path: root(real_lstat(path))):
+                    return gate._running_executable_identity(
+                        PID, digest, executable=exe, runner=runner_for(raw))
+
+            self.assertEqual(run(header + row)[:2], (info.st_dev, info.st_ino))
+            for bad in (header, header + row.replace(" text ", " mmap "),
+                        header + row + row, header + row.replace(f" {PID} ", " 999 "),
+                        header + row.replace(f" {info.st_ino} ", " 1 "),
+                        header + row.replace(f" {info.st_dev:#x} ", " 0x999 "),
+                        header + row.replace(f" {exe}\n", " /wrong\n")):
+                with self.assertRaises(gate.PreviousPhysicalRefused):
+                    run(bad)
+            with self.assertRaises(gate.PreviousPhysicalRefused):
+                run(header + row, "0" * 64)
+
     def test_real_complete_sealed_release_matches_all_active_bytes(self):
         original = verify_seal(self.old_work, owner=os.geteuid())
         expect = original["sha256"]["release"]

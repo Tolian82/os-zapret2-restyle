@@ -725,7 +725,7 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 return_value=Mock(read=Mock(return_value=record))))
             stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"list"}))
             stack.enter_context(patch.object(gate, "_s10_native_bound_engine_readback",
-                return_value={"engine_version": "v1.0.7"}))
+                return_value={"engine_version": "v1.0.7", "engine_sha256": "a" * 64}))
             fresh = stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
                 return_value=source))
             stack.enter_context(patch.object(gate, "_read_pinned_effective", side_effect=
@@ -734,16 +734,27 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 "neutral_schema3_previous_physical.attest_bound_running_predecessor_under_fd9",
                 return_value=physical))
             nested = stack.enter_context(patch.object(gate, "native_plan_original_prepared_fd9"))
+            exe = stack.enter_context(patch(
+                "neutral_schema3_previous_physical._running_executable_identity",
+                return_value=(1, 2, "a" * 64)))
+            running = stack.enter_context(patch(
+                "neutral_schema3_previous_physical._running_native", return_value=physical.running))
 
             def run(**kw):
                 args = dict(source=source, semantic=semantic, config_fd=4, config_digest=base)
                 args.update(kw)
                 return gate.native_recheck_running_prepared_fd9(op, b"original", **args)
 
-            self.assertEqual(run(), physical)
-            self.assertEqual(fresh.call_count, 2)
+            self.assertEqual(run(), replace(physical, executable_identity=(1, 2, "a" * 64)))
+            self.assertEqual(exe.call_count, 2)
+            self.assertEqual(running.call_count, 2)
+            exe.side_effect = ((1, 2, "a" * 64), (1, 3, "a" * 64))
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                run()
+            exe.side_effect = None
+            self.assertEqual(fresh.call_count, 4)
             fresh.assert_called_with(op, b"original", None, bound_record=record)
-            self.assertEqual(attested.call_count, 2)
+            self.assertEqual(attested.call_count, 4)
             nested.assert_not_called()
             for bad in (dict(config_fd=9), dict(config_digest=candidate),
                         dict(semantic=replace(semantic, lifecycle_proposal="RESTART")),

@@ -8,13 +8,14 @@ FD9 owner must re-attest its seal, P1 and previous runtime at physical commit.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import sys
 
 from config_projection_opnsense import registered_ids, xml_snapshot
@@ -1469,7 +1470,8 @@ def native_recheck_running_prepared_fd9(
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
     from neutral_schema3_previous_physical import (
         CompletePriorPreimage, LockedRunningPredecessor,
-        attest_bound_running_predecessor_under_fd9)
+        attest_bound_running_predecessor_under_fd9, _running_executable_identity,
+        _running_native, CHILD_EXEC, CHILD_PID, MONITOR_PID)
     from voice_ipfw_adapter import require_lifecycle_lock
 
     try:
@@ -1534,8 +1536,19 @@ def native_recheck_running_prepared_fd9(
                     physical.previous_root_sha256 != old_pin["root_sha256"] or
                     physical.config_base_sha256 != config_digest or
                     physical.authorization != "NONE" or physical.physical_transition_allowed or
-                    engine != _s10_native_bound_engine_readback() or store.read() != before):
+                    physical.executable_identity is not None):
                 raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_PHYSICAL_CHANGED")
+            executable = _running_executable_identity(
+                physical.running.pid, engine["engine_sha256"],
+                executable=Path(CHILD_EXEC), runner=subprocess.run)
+            # Bracket TEXT observation with original PID/birth/argv census,
+            # and original installed-engine guard, not a second provenance.
+            if (_running_native(WORK / prior["id"] / "release", owner_uid=0,
+                                child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+                    != physical.running or engine != _s10_native_bound_engine_readback() or
+                    store.read() != before):
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_EXECUTABLE_CHANGED")
+            physical = replace(physical, executable_identity=executable)
             require_lifecycle_lock()
             assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
             return fresh, candidate, old, decision, physical, engine
@@ -1546,7 +1559,8 @@ def native_recheck_running_prepared_fd9(
         # In-flight observation only. A caller must not manufacture an
         # ACTIVATING or terminal record from this return value.
         return first[4]
-    except (OSError, ValueError, RuntimeError, KeyError, TypeError, AttributeError):
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError, AttributeError,
+            subprocess.SubprocessError):
         raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_PRECHECK_REFUSED") from None
 
 

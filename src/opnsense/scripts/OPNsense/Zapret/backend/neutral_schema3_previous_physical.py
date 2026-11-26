@@ -261,6 +261,82 @@ def attest_previous_physical_under_fd9(*, generation: str,
         monitor_pidfile=MONITOR_PID)
 
 
+def _running_executable_identity(pid: int, expected_sha256: str, *,
+                                 executable: Path, runner) -> tuple:
+    """Bind FreeBSD's executable TEXT vnode to the exact installed bytes.
+
+    fstat -n -p PID FILE filters by device/inode, not by the process title.
+    Require the TEXT row (not merely an open descriptor or mmap), and check
+    its numeric vnode fields against an O_NOFOLLOW descriptor of FILE.
+    The caller brackets this read with its existing PID/birth/argv checks.
+    """
+    import re
+    import stat
+
+    if (type(pid) is not int or not 1 < pid < (1 << 31) or
+            type(expected_sha256) is not str or
+            re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None or
+            not executable.is_absolute() or executable.resolve() != executable):
+        raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_INPUT_INVALID")
+
+    def identity(info):
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or
+                info.st_nlink != 1 or info.st_mode & 0o022 or
+                not info.st_mode & 0o111 or not 0 < info.st_size <= 128 * 1024 * 1024):
+            raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_UNSAFE")
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid,
+                info.st_gid, info.st_nlink, info.st_size,
+                info.st_mtime_ns, info.st_ctime_ns)
+
+    fd = os.open(executable, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        before = identity(os.fstat(fd))
+        if identity(executable.lstat()) != before:
+            raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_PATH_CHANGED")
+
+        def text_vnode():
+            raw = _run(runner, ["/usr/bin/fstat", "-n", "-p", str(pid), str(executable)])
+            lines = raw.splitlines()
+            if not lines or lines[0].split() != [
+                    "USER", "CMD", "PID", "FD", "DEV", "INUM", "MODE", "SZ|DV", "R/W", "NAME"]:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_FSTAT_HEADER")
+            rows = [line.split() for line in lines[1:]]
+            matches = [row for row in rows if len(row) >= 4 and row[3] == "text"]
+            if len(matches) != 1:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_TEXT_REQUIRED")
+            row = matches[0]
+            if (len(row) not in (9, 10) or row[2] != str(pid) or
+                    row[-1] != str(executable) or
+                    (len(row) == 10 and row[8] != "r") or
+                    re.fullmatch(r"(?:0x[0-9a-f]+|0)", row[4]) is None or
+                    re.fullmatch(r"[0-9]+", row[5]) is None or
+                    re.fullmatch(r"[0-7]+", row[6]) is None or
+                    re.fullmatch(r"[0-9]+", row[7]) is None or
+                    (int(row[4], 16), int(row[5]), int(row[6], 8), int(row[7])) !=
+                    (before[0], before[1], before[2], before[6])):
+                raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_TEXT_CHANGED")
+            return tuple(row)
+
+        first = text_vnode()
+        digest = sha256()
+        count = 0
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            count += len(chunk)
+            if count > before[6]:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_SIZE_CHANGED")
+            digest.update(chunk)
+        if (count != before[6] or digest.hexdigest() != expected_sha256 or
+                text_vnode() != first or identity(os.fstat(fd)) != before or
+                identity(executable.lstat()) != before):
+            raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_CHANGED")
+        return (*before, expected_sha256)
+    finally:
+        os.close(fd)
+
+
 @dataclass(frozen=True)
 class LockedRunningPredecessor:
     generation: str
@@ -272,6 +348,7 @@ class LockedRunningPredecessor:
     epoch_sha256: str | None
     authorization: str = "NONE"
     physical_transition_allowed: bool = False
+    executable_identity: tuple | None = None
 
 
 def attest_bound_running_predecessor_under_fd9(
