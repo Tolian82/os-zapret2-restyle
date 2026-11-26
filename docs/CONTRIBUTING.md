@@ -7,7 +7,10 @@ Thank you for contributing to `os-zapret2-restyle`.
 General contributor rules are not duplicated here. Read:
 
 - [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md) — `DOC-*`;
-- [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) — `DEV-*`;
+- [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) — fundamental engineering/product rules;
+- [`DEVELOPMENT_PLANNING.md`](DEVELOPMENT_PLANNING.md) — functional-block planning and execution;
+- [`TESTING_RULES.md`](TESTING_RULES.md) — risk, verification, acceptance and CI test selection;
+- [`CHAT_RULES.md`](CHAT_RULES.md) — owner communication;
 - [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md) — `GH-*`.
 
 Current work scope is defined by `START_HERE.md` and current facts by `PROJECT_STATE.md`.

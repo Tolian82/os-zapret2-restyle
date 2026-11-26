@@ -6,6 +6,8 @@
 
 **Правило приоритета.** ТЗ_6v5 уточняет и заменяет противоречащие ему пункты ТЗ_6v4, прежде всего о построении runtime, физическом запуске и диагностике. Все не затронутые гарантии ТЗ_6v4 (двухуровневый native Auto, Source Map, P1/P2/FD9, пять списков GUI, исключения, Voice, Strategy Lab, rollback, ограничения на автономные остановки) **сохраняются**. ТЗ_6v2/6v3 и архив P0–P5 — исторические источники, но не альтернативный маршрут внедрения.
 
+**Development execution (owner-approved 26 November 2026):** [DEVELOPMENT_PLANNING.md](../DEVELOPMENT_PLANNING.md) and [TESTING_RULES.md](../TESTING_RULES.md) govern implementation planning, R0–R3, reusable evidence and scoped qualification. The [ordered plan](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) groups linked edits by functional outcome. This is a methodology amendment only; all V5 requirements, order, GO boundaries and safety criteria remain in force.
+
 ## 1. Цель и обязательная цепочка
 
 **Пользователь управляет настройками → платформенный адаптер считывает их → чистый компилятор и валидатор формируют проверенное поколение → единственный исполнитель выполняет Start/Stop → read-only Status и диагностика подтверждают фактическое состояние.**

@@ -14,6 +14,12 @@ BOOKS = {
     "DEV": ROOT / "docs" / "PROJECT_PRINCIPLES.md",
     "CHAT": ROOT / "docs" / "CHAT_RULES.md",
     "GH": ROOT / "docs" / "GITHUB_PUBLICATION.md",
+    "PLAN": ROOT / "docs" / "DEVELOPMENT_PLANNING.md",
+    "TEST": ROOT / "docs" / "TESTING_RULES.md",
+}
+BOOK_DOMAINS = {
+    "DOC": {"DOC"}, "DEV": {"DEV"}, "CHAT": {"CHAT"}, "GH": {"GH"},
+    "PLAN": {"DEV"}, "TEST": {"DEV", "GH"},
 }
 RULE_START = re.compile(r"^(DOC|DEV|CHAT|GH)-(\d{3})\.\s", re.M)
 SINGLE = re.compile(r"`?(DOC|DEV|CHAT|GH)-(\d{3})`?")
@@ -98,8 +104,11 @@ def read_books() -> tuple[dict[str, str], dict[str, set[str]], dict[str, str], d
             fail(f"no {prefix} rules found in {path.relative_to(ROOT)}")
         if len(found) != len(set(found)):
             fail(f"duplicate rule ID in {path.relative_to(ROOT)}")
-        if any(not item.startswith(prefix + "-") for item in found):
+        if any(item.split("-", 1)[0] not in BOOK_DOMAINS[prefix] for item in found):
             fail(f"wrong rule domain in {path.relative_to(ROOT)}")
+        duplicate = set(found).intersection(set().union(*ids.values()))
+        if duplicate:
+            fail(f"duplicate canonical rule ID across physical books: {sorted(duplicate)}")
         ids[prefix] = set(found)
 
         for rule_id, _, after_id in blocks:
@@ -138,6 +147,8 @@ def actual_pairs(
     texts: dict[str, str], known: set[str], status: dict[str, str]
 ) -> set[tuple[str, str]]:
     pairs: set[tuple[str, str]] = set()
+    homes = {rule_id: book for book, text in texts.items()
+             for rule_id, _, _ in rule_blocks(text)}
     for source_book, text in texts.items():
         for source, block, _ in rule_blocks(text):
             if status[source] != "active":
@@ -149,7 +160,7 @@ def actual_pairs(
                     fail(f"{source} references nonexistent canonical rule {target}")
                 if status[target] != "active":
                     fail(f"active rule {source} depends on non-active rule {target}")
-                if target.split("-", 1)[0] != source_book:
+                if homes[target] != source_book:
                     pairs.add((source, target))
     return pairs
 
@@ -195,8 +206,9 @@ def validate_registries(
     for book, text in texts.items():
         outbound = parse_registry_pairs(registry_section(text, OUT_BEGIN, OUT_END), "out", known, status)
         inbound = parse_registry_pairs(registry_section(text, IN_BEGIN, IN_END), "in", known, status)
-        expected_out = {pair for pair in actual if pair[0].startswith(book + "-")}
-        expected_in = {pair for pair in actual if pair[1].startswith(book + "-")}
+        book_ids = {rule_id for rule_id, _, _ in rule_blocks(text)}
+        expected_out = {pair for pair in actual if pair[0] in book_ids}
+        expected_in = {pair for pair in actual if pair[1] in book_ids}
         missing_out = sorted(expected_out - outbound)
         stale_out = sorted(outbound - expected_out)
         missing_in = sorted(expected_in - inbound)
@@ -241,7 +253,7 @@ def main() -> None:
     validate_active_references(known, status)
     retired = sorted(rule_id for rule_id, state in status.items() if state != "active")
     print(
-        "PASS: four canonical rule books have permanent unique IDs, valid lifecycle state, "
+        "PASS: six canonical rule books have permanent unique IDs, valid lifecycle state, "
         "valid active references, and exact bidirectional cross-reference registries; "
         f"non-active IDs={retired}"
     )

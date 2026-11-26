@@ -27,9 +27,8 @@ on:
       - scripts/test-ipset-policy.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py
       - scripts/stage5-native-same-archive-reboot.py
-      - scripts/stage2-opnsense-g03-first-install.py
-      - scripts/stage2-opnsense-g03-native-prepared.py
-      - scripts/stage2-opnsense-g03-native-prepared.php
+      # G03 fixture-only edits qualify on the exact PR; repeat on main only
+      # by dispatch when merged tree/inputs differ or a separate gate requires it.
       - scripts/stage5-native-real-shared-voice-reboot.py
       - scripts/stage2-opnsense-real-native-boot-syshook.py
   pull_request:

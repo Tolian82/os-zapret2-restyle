@@ -1,11 +1,14 @@
 # Owner / assistant chat rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-11-15
+**Updated:** 2026-11-26
 
 This file is the single normative home for owner-approved rules about how the assistant interprets the owner's words and communicates or acts from project chat.
 
 Other canonical rule domains:
+
+- [`DEVELOPMENT_PLANNING.md`](DEVELOPMENT_PLANNING.md) — specification, planning and functional-block execution;
+- [`TESTING_RULES.md`](TESTING_RULES.md) — risk, verification, acceptance and CI test selection.
 
 - [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md) — documentation governance (`DOC-*`);
 - [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) — project-development rules (`DEV-*`);
@@ -90,19 +93,19 @@ pkg info -x os-zapret2-restyle
 <!-- RULE-XREF-OUT-BEGIN -->
 | Source rule | Target rules |
 |---|---|
-| `CHAT-007` | `DEV-001`–`DEV-004` |
-| `CHAT-009` | `DOC-003`, `DOC-008`, `DEV-003` |
-| `CHAT-010` | `GH-010`–`GH-030` |
+| `CHAT-007` | `DEV-001`, `DEV-002`, `DEV-003`, `DEV-004` |
+| `CHAT-009` | `DEV-003`, `DOC-003`, `DOC-008` |
+| `CHAT-010` | `GH-010`, `GH-011`, `GH-012`, `GH-013`, `GH-014`, `GH-015`, `GH-016`, `GH-017`, `GH-018`, `GH-019`, `GH-020`, `GH-021`, `GH-022`, `GH-023`, `GH-024`, `GH-025`, `GH-026`, `GH-027`, `GH-028`, `GH-029`, `GH-030` |
 | `CHAT-012` | `DOC-021`, `DOC-025`, `GH-004` |
 | `CHAT-014` | `DEV-063` |
-| `CHAT-015` | `GH-034`–`GH-038`, `GH-060`–`GH-061` |
-| `CHAT-016` | `DEV-040`, `GH-034`–`GH-038`, `GH-060`–`GH-061` |
-| `CHAT-017` | `DEV-039`, `GH-039`–`GH-052` |
-| `CHAT-018` | `GH-024`–`GH-030` |
+| `CHAT-015` | `GH-034`, `GH-035`, `GH-036`, `GH-037`, `GH-038`, `GH-060`, `GH-061` |
+| `CHAT-016` | `DEV-040`, `GH-034`, `GH-035`, `GH-036`, `GH-037`, `GH-038`, `GH-060`, `GH-061` |
+| `CHAT-017` | `DEV-039`, `GH-039`, `GH-040`, `GH-041`, `GH-042`, `GH-043`, `GH-044`, `GH-045`, `GH-046`, `GH-047`, `GH-048`, `GH-049`, `GH-050`, `GH-051`, `GH-052` |
+| `CHAT-018` | `GH-024`, `GH-025`, `GH-026`, `GH-027`, `GH-028`, `GH-029`, `GH-030` |
 | `CHAT-021` | `DEV-011`, `DEV-042` |
-| `CHAT-025` | `DOC-008`, `DOC-042`–`DOC-045` |
+| `CHAT-025` | `DOC-008`, `DOC-042`, `DOC-043`, `DOC-044`, `DOC-045` |
 | `CHAT-026` | `DEV-001`, `DEV-003` |
-| `CHAT-027` | `GH-034`–`GH-038`, `GH-060`–`GH-061` |
+| `CHAT-027` | `GH-034`, `GH-035`, `GH-036`, `GH-037`, `GH-038`, `GH-060`, `GH-061` |
 <!-- RULE-XREF-OUT-END -->
 
 ### Inbound references

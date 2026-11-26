@@ -20,6 +20,10 @@
 
 **Неприкосновенные инварианты:** один original FD9/Config writer/долговечный журнал, один `dvtws2`, original `shared_apply_operation`, native P1/P2/FD и WAL/ACK, только собственный IPFW; без SIGSTOP/SIGCONT, observer/second daemon, несанкционированных остановок для Auto, PID-journal deletion или угаданного recovery. Подтверждённый manual/Found/managed и исправный операторский Stop важнее неподтверждённых Auto-строк.
 
+## Functional-block execution policy (owner-approved 26 November 2026)
+
+Apply [DEVELOPMENT_PLANNING.md](../DEVELOPMENT_PLANNING.md) DEV-007/DEV-017 and [TESTING_RULES.md](../TESTING_RULES.md) DEV-061/DEV-062/DEV-072 to every remaining stage. Preserve completed evidence and existing stage order; do not reopen accepted work without a changed dependency or concrete defect. Technical bullets are linked implementation actions, not individual PRs or mandatory test campaigns. Before each block name its outcome, exact affected paths/dependencies, exclusions, risk, existing tests, independently justified additions and stop/GO criteria. Fast checks during implementation; one scoped exact-head PR acceptance set on the completed block, followed by applicable main integrity. No new package publication at each stage. S11–S16 are R3 when they touch privileged lifecycle/Config/FD9/IPFW/P1; classify narrower nonmutating scope by actual risk. S17–S18 retain required final native acceptance; S19–S20 retain exact package delivery and owner-live criteria. No change to upstream-manual canon or approved V5 behavior.
+
 ## G0 — документы, исходники и воспроизводимый RED (S00–S03)
 
 ### S00. Закрепить новую редакцию требований и маршрут
@@ -290,6 +294,16 @@
 **S10c2 scoped evidence:** один original-producer test path для `all/list/auto`, native HOSTLIST и IPSET индивидуальных стратегий, последовательных пяти `--new` профилей, Voice ON/OFF, nonempty Exclude, known/owned Found, Auto выключен; negative source-drift/ref tamper, in-memory extended registry. Исходные чистые S08 тесты переиспользовать; нативные physical transitions — отдельный гейт S10/S11 и не объявляются выполненными документацией.
 
 **GO:** immutable candidate preflight и crash recovery подтверждены; ни одна пользовательская data write не обойдена.
+
+#### Remaining S10 functional blocks (R3; accepted source baseline _240)
+
+| Block | Linked implementation and result | Preselected acceptance and stopping condition |
+|---|---|---|
+| S10-A — transaction readiness | Complete the original FD9/FD4/P2 predecessor/candidate, real two-bound-root native owner, Found/P1 CAS and epoch readiness and final semantic decision. Reuse S08d and the existing original owner/seal; legacy prior remains conservative. No physical mutation authorization or new lifecycle actor. | Existing focused portable source/semantic/CAS/owner tests and one applicable genuine native G03/P2 scenario exercising the actual two-bound predecessor and candidate, relevant drift refusal and no state changes. Stop when genuine prerequisites and semantic classification are proven; do not reopen earlier cold/WAN-only or legacy evidence unless affected. |
+| S10-B — atomic promotion and recovery | Under the same original operation/WAL, integrate staged candidate promotion, protected P1/list and single Config commit, old bytes/revisions/CAS and exact rollback; prove interrupted prepare/promote/restore and Config-save uncertainty. Preserve original owner, engine and IPFW fencing. Do not implement the physical Start/Stop/Reload executor reserved for S11–S14. | Existing transaction/fault fixtures and focused genuine native original FD9 acceptance covering successful permitted transaction, pre-mutation refusal, interrupted promotion and verified restoration/uncertain failure. Add only uncovered independent safety cases. No second journal/writer/lock, no unverified physical success. |
+| S10 GO — integrated acceptance | Reconcile all S10 requirements against A/B, verify exact tested sources, scope-required native evidence and preserved independent WAN-only/prestart Lab constraints. This is B's final acceptance set when possible, not automatically a separate PR or heavy matrix. | Only outstanding distinct mandatory native criteria are run. Main integrity and evidence reconciliation; close #1319 and proceed to S11 only after all S10 GO requirements genuinely pass. No owner package or owner-device operation is implied. |
+
+Each implementation block is normally one logical PR. If a genuine blocker requires splitting, record the specific independent outcome or safety/dependency reason under DEV-017. Retain earlier S10a/c history as evidence, not active micro-stage instructions.
 
 ### S11. Единственный физический Start
 
