@@ -607,6 +607,31 @@ def _observe_cold_retired_predecessor(record: dict) -> tuple:
         return ready, idle
 
 
+def _cold_rollback_config_image(record: dict, saved: dict) -> tuple:
+    """Bind the old saved-model receipt to the sealed successor plan.
+
+    The enclosing original FD9 recovery observes the complete physical
+    state twice. Each read uses the same existing PHP Config owner, with
+    no retained FD4 and no additional writer. An equal-image ACTIVATED
+    is ambiguous: it must not enter automatic pre-save rollback.
+    """
+    import json
+    from neutral_schema3_saved_wan_preimage import _qualify_ordinary_cold_config
+
+    detail = record["detail"]
+    raw = _native_call((
+        "/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
+        "ordinary-cold", detail["id"], detail["page"]))
+    if not raw.endswith(b"\n") or raw.count(b"\n") != 1:
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_RECEIPT_INVALID")
+    image, digest, enabled = _qualify_ordinary_cold_config(json.loads(raw), record)
+    if (digest != saved["snapshot"] or enabled != saved["enabled"] or
+            image not in ("base-image", "base-equals-candidate") or
+            (image == "base-equals-candidate" and record["phase"] != "activating")):
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_OUTCOME_UNCERTAIN")
+    return image, digest, enabled
+
+
 def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
     """Qualify only the existing original ordinary cold rollback route.
 
@@ -616,11 +641,14 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
     only with the original archived ACK and empty producer proof. The
     original shell alone restores native staged IPFW and rename artifacts.
     Before terminal WAL restore require the whole old tree and empty
-    kernel. Learning candidates and Found remain outside this route.
+    kernel. Bind the old saved model to the candidate's original plan;
+    an ambiguous equal-image ACTIVATED remains fenced. Learning
+    candidates and Found remain outside this route.
     """
     from neutral_root_stage import (
         verify_original_operation_pins, _original_plan_matches)
     from shared_apply_seal import verify_seal
+    import json
 
     require_lifecycle_lock()
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
@@ -680,10 +708,11 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
             if active_hash != trees[0]:
                 raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_ACTIVE_TREE_CHANGED")
             kernel = _empty_kernel(old_work / "release")
+        config_image = _cold_rollback_config_image(record, saved)
         _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
         if store.read() != record:
             raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
-        return seals, saved_raw, active_hash, kernel, idle, trees, retired_receipt
+        return seals, saved_raw, active_hash, kernel, idle, trees, retired_receipt, config_image
 
     if observe() != observe():
         raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_PREIMAGE_CHANGED")

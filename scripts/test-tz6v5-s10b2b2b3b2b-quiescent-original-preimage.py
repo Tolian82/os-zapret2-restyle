@@ -120,6 +120,10 @@ class OriginalQuiescentTests(unittest.TestCase):
         record = dict(schema=1, phase="activating", detail=new,
                       previous=old, manifest=pin(new), previous_manifest=pin(old))
         saved = {"result": "committed", "snapshot": old["candidate"], "enabled": "0"}
+        classified = dict(result="read-only-ordinary-config-classification",
+            image="base-image", base=new["base"], candidate=new["candidate"],
+            snapshot=new["base"], enabled="0", commit_authorized=False,
+            restore_authorized=False, save_attested=False, runtime_attested=False)
         old_hash, new_hash = "1" * 64, "2" * 64
         stage = self.active.parent / f".{self.active.name}.stage.{new['id']}"
         stage.mkdir()
@@ -140,8 +144,11 @@ class OriginalQuiescentTests(unittest.TestCase):
             stack.enter_context(patch("shared_apply_seal._stat"))
             artifact = stack.enter_context(patch("shared_apply_seal._release_hash",
                 side_effect=lambda path, uid: old_hash if path == self.active else new_hash))
+            def read_config(argv):
+                row = saved if argv[2] == "saved" else classified
+                return (json.dumps(row) + "\n").encode()
             native = stack.enter_context(patch.object(gate, "_native_call",
-                return_value=(json.dumps(saved) + "\n").encode()))
+                                                       side_effect=read_config))
             full = stack.enter_context(patch.object(gate, "_full_prior_tree", return_value=old_hash))
             kernel = stack.enter_context(patch.object(gate, "_empty_kernel",
                                                        return_value="native-managed-kernel-empty"))
@@ -150,7 +157,36 @@ class OriginalQuiescentTests(unittest.TestCase):
             kernel.assert_not_called()
             gate.attest_inert_bound_cold_recovery(record, restored=True)
             self.assertEqual(pins.call_count, 4)
+            self.assertEqual([call.args[0][2:] for call in native.call_args_list],
+                [("saved", old["id"], old["page"]),
+                 ("ordinary-cold", new["id"], new["page"])] * 4)
             artifact.assert_called_with(stage, 0)
+            # An apparently saved old Config is insufficient if the original
+            # successor plan reports a different image. Both recovery gates
+            # must refuse it (old implementation never read this receipt).
+            classified.update(image="candidate-image", snapshot=new["candidate"])
+            for restored in (False, True):
+                with self.assertRaises(ValueError):
+                    gate.attest_inert_bound_cold_recovery(record, restored=restored)
+            classified.update(image="base-image", snapshot=new["base"])
+            classified["enabled"] = "1"
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate.attest_inert_bound_cold_recovery(record, restored=False)
+            classified["enabled"] = "0"
+            # Only ACTIVATING can use an equal model image: native save has
+            # not been attempted in that phase. ACTIVATED stays ambiguous.
+            equal_new = {**new, "candidate": new["base"]}
+            equal = {**record, "detail": equal_new, "manifest": pin(equal_new)}
+            gate.SharedApplyOperation.return_value.read.return_value = equal
+            classified.update(image="base-equals-candidate", candidate=new["base"])
+            gate.attest_inert_bound_cold_recovery(equal, restored=False)
+            ambiguous = {**equal, "phase": "activated"}
+            gate.SharedApplyOperation.return_value.read.return_value = ambiguous
+            for restored in (False, True):
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    gate.attest_inert_bound_cold_recovery(ambiguous, restored=restored)
+            gate.SharedApplyOperation.return_value.read.return_value = record
+            classified.update(image="base-image", candidate=new["candidate"])
             # An inert candidate can roll back to an already retired Auto
             # owner, but only on its full immutable history and idle proof.
             retired = {**record, "previous_manifest": {**record["previous_manifest"], "schema": 2}}
@@ -172,7 +208,7 @@ class OriginalQuiescentTests(unittest.TestCase):
                 with self.assertRaises(gate.QuiescentPreimageRefused):
                     gate.attest_inert_bound_cold_recovery(record, restored=restored)
             artifact.side_effect = lambda path, uid: old_hash if path == self.active else new_hash
-            native.return_value = (json.dumps({**saved, "snapshot": new["candidate"]}) + "\n").encode()
+            saved["snapshot"] = new["candidate"]
             with self.assertRaises(gate.QuiescentPreimageRefused):
                 gate.attest_inert_bound_cold_recovery(record, restored=False)
             # Bound learning, Found and post-save uncertainty cannot enter
