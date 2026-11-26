@@ -212,7 +212,14 @@ namespace {
     $orig = new FakeConfig($config->disk);
     $sequence = [];
     $p2Held = false;
-    $withP2 = static function (callable $scope) use (&$sequence, &$p2Held, $orig): string {
+    $observedDigests = [];
+    $originalBase = VoiceSettingsSnapshot::digest($orig->disk);
+    $withP2 = static function (callable $scope, string $observedDigest) use (
+        &$sequence, &$p2Held, &$observedDigests, $orig
+    ): string {
+        verify(hash_equals(VoiceSettingsSnapshot::digest($orig->disk), $observedDigest),
+               'Found transport did not pass fresh locked Config digest');
+        $observedDigests[] = $observedDigest;
         verify($orig->locks === 1 && !$p2Held,
                'P2 attempted before Config lock or still held at relock');
         $p2Held = true;
@@ -249,6 +256,9 @@ namespace {
         'p2-lock','before-config-save','found-config-saving','p2-unlock',
         'p2-lock','after-config-save','found-config-saved','p2-unlock'
     ], 'original Config->P2 lock order or durable phase order changed');
+    verify($observedDigests === [$originalBase, VoiceSettingsSnapshot::digest($orig->disk)] &&
+        $observedDigests[0] !== $observedDigests[1],
+        'Found pre-save and readback Config identities were conflated');
 
     // Found-only edit must still pass through one sealed nonterminal WAL,
     // but it must not manufacture a new native XML revision.

@@ -494,20 +494,26 @@ def verify_native_planned(operation: str) -> dict:
 
 def prepare_native_found_intent(
         operation: str, config_fd: int, candidate_digest: str, *,
-        runtime_mode: str | None = None) -> dict:
+        runtime_mode: str | None = None, base_digest: str | None = None,
+        stopped_only: bool = False) -> dict:
     """Original Config -> P2 -> existing journal, before any file mutation.
 
-    Import-only staging primitive. ONLY a future original PHP Config::lock
-    owner can pass its genuine inherited Config FD, plus original FD9. It
-    MUST NOT be dispatched by the current GUI or ordinary shell Apply, since
-    full Config+three-file write/recovery is deliberately still gated.
+    Production PHP passes the freshly locked base digest, not a copied
+    plan dependency. The existing native PREPARED-only fixture may omit it.
+    The private bound writer requires the fresh digest and a stopped owner.
+    No runtime or Config save is authorized by PREPARED.
     """
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not isinstance(operation, str) or
             not re.fullmatch(r"[a-f0-9]{32}", operation) or
             type(config_fd) is not int or config_fd < 3 or
             not isinstance(candidate_digest, str) or
-            not re.fullmatch(r"[a-f0-9]{64}", candidate_digest)):
+            not re.fullmatch(r"[a-f0-9]{64}", candidate_digest) or
+            (base_digest is not None and
+             (type(base_digest) is not str or
+              not re.fullmatch(r"[a-f0-9]{64}", base_digest))) or
+            type(stopped_only) is not bool or
+            (stopped_only and (base_digest is None or runtime_mode not in ("0", "1")))):
         raise EffectiveKnownRefused("native_original_config_fd9_required")
     import hashlib
     from auto_detect_original_lock_handoff import (
@@ -541,6 +547,8 @@ def prepare_native_found_intent(
             not isinstance(plan.get("found_batch"), dict) or
             not isinstance(plan.get("changed_fields"), list)):
         raise EffectiveKnownRefused("native_found_plan_not_qualified")
+    if base_digest is not None and base_digest != plan["dependencies"]:
+        raise EffectiveKnownRefused("native_found_base_config_changed")
     detail = {"id": operation, "page": "strategies",
               "base": plan["dependencies"], "candidate": candidate_digest,
               "changed_fields": plan["changed_fields"]}
@@ -562,7 +570,8 @@ def prepare_native_found_intent(
             if previous is None or previous["candidate"] != detail["base"]:
                 raise EffectiveKnownRefused("native_found_predecessor_unverified")
             prior = examine_shared(current)
-            if prior is None or prior.get("state") not in ("ready", "stopped"):
+            states = ("stopped",) if stopped_only else ("ready", "stopped")
+            if prior is None or prior.get("state") not in states:
                 raise EffectiveKnownRefused("native_found_predecessor_unverified")
 
         def original_witness(attested: bytes) -> bool:
@@ -584,6 +593,65 @@ def prepare_native_found_intent(
             "phase": record["phase"],
             "commit_authorized": False,
             "restore_authorized": False}
+
+
+def begin_native_bound_found_save_locked(
+        operation: str, config_fd: int, candidate_digest: str, *,
+        base_digest: str, runtime_mode: str, source_fd: int,
+        before_save, queue_fd: int | None = None) -> dict:
+    """Private original PHP begin boundary, not a CLI or activation permit.
+
+    The original Config owner must still hold FD4 and supply the fresh
+    pre-serialization Model digest. P2a, if required, is owned by its
+    parent BEFORE Config and remains held across save and readback.
+    Read the retained original generator frame on a separate pipe, not
+    the before-save handshake stdin. Only the existing original WAL/CAS
+    writes below. Keep this import-only until bound runtime/recovery closes.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_destination_commit import (
+        _bound_found_queue_scope, shared_apply_bound_found_files_original_fd9)
+    from neutral_shared_apply_source_gate import read_inherited_original_source
+    from shared_apply_operation import SharedApplyOperation, committed_owner, committed_manifest
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not re.fullmatch(r"[a-f0-9]{32}", operation) or
+            any(type(value) is not str or not re.fullmatch(r"[a-f0-9]{64}", value)
+                for value in (base_digest, candidate_digest)) or
+            runtime_mode not in ("0", "1") or not callable(before_save) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+            type(source_fd) is not int or source_fd < 3 or source_fd in (config_fd, 9) or
+            (queue_fd is not None and
+             (type(queue_fd) is not int or queue_fd < 3 or
+              queue_fd in (config_fd, source_fd, 9)))):
+        raise EffectiveKnownRefused("bound_found_original_save_transport_refused")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(owner=0)
+    current = store.read()
+    previous = committed_owner(current)
+    pin = committed_manifest(current)
+    if (previous is None or previous["candidate"] != base_digest or
+            previous["id"] == operation or
+            ((pin is not None and pin["schema"] == 2) != (queue_fd is not None))):
+        raise EffectiveKnownRefused("bound_found_original_save_predecessor_refused")
+    # Authenticate the inherited open description BEFORE any PREPARED
+    # mutation. Exiting this scope never unlocks the parent's P2a.
+    with _bound_found_queue_scope(queue_fd):
+        raw = read_inherited_original_source(source_fd)
+        if store.read() != current:
+            raise EffectiveKnownRefused("bound_found_original_save_owner_changed")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        prepare_native_found_intent(
+            operation, config_fd, candidate_digest, runtime_mode=runtime_mode,
+            base_digest=base_digest, stopped_only=True)
+    # The existing writer re-adopts (does not reacquire) that SAME P2a,
+    # binds the exact raw source to PREPARED, and holds P2 through ready.
+    return shared_apply_bound_found_files_original_fd9(
+        operation, config_fd, raw_pipe=raw, config_digest=base_digest,
+        before_save=before_save, queue_fd=queue_fd)
 
 
 def classify_planned_file_images(
@@ -1101,11 +1169,12 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, UnicodeError, KeyError):
             print("ERROR: original Found recovery scope refused", file=sys.stderr)
             return 69
-    if len(argv) == 4 and argv[0] == "begin-found-save-locked":
+    if argv and argv[0] == "begin-found-save-locked":
+        if (len(argv) != 5 or argv[3] not in ("0", "1") or
+                not re.fullmatch(r"[a-f0-9]{64}", argv[4])):
+            return 64
         try:
             from auto_detect_destination_commit import shared_apply_found_files_original_fd9
-            if argv[3] not in ("0", "1"):
-                return 64
 
             def wait_for_save():
                 # stdout signals that the before-save WAL is durable.
@@ -1114,7 +1183,8 @@ def main(argv: list[str] | None = None) -> int:
                 print("ready", flush=True)
                 sys.stdin.buffer.read(1)
 
-            prepare_native_found_intent(argv[1], 4, argv[2], runtime_mode=argv[3])
+            prepare_native_found_intent(
+                argv[1], 4, argv[2], runtime_mode=argv[3], base_digest=argv[4])
             shared_apply_found_files_original_fd9(argv[1], 4, before_save=wait_for_save)
             return 0
         except (ValueError, RuntimeError, OSError, UnicodeError):

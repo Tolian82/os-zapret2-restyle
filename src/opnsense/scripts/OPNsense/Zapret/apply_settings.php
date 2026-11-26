@@ -227,8 +227,9 @@ final class SharedConfigCommit
      * Original single-Config-writer INTERNAL cutover for an already durable
      * three-file found WAL. NO native worker/configd/GUI route calls this yet.
      *
-     * $withOriginalP2 is the FUTURE original native Config->P2 lock scope;
-     * it must execute its callback exactly once, releasing P2 before return.
+     * $withOriginalP2 receives its callback and the fresh locked Model
+     * digest (base before serialization, saved candidate on readback).
+     * It must execute its callback exactly once, releasing P2 before return.
      * $attestOriginal must prove FD9, original locked Config FD4, exact
      * sealed release/plan, found-files-written journal and three physical
      * after-images while P2 is held. $recordFoundPhase must fsync the SAME
@@ -267,6 +268,7 @@ final class SharedConfigCommit
         try {
             $model = $modelFactory();
             $live = $model->getNodes();
+            $baseDigest = VoiceSettingsSnapshot::digest($live);
             $target = SettingsApply::mergeForCommit($live, $plan, $page);
             $targetDigest = VoiceSettingsSnapshot::digest($target);
             if ($changeCount > 0) {
@@ -296,7 +298,7 @@ final class SharedConfigCommit
                     self::saveNativeModel($config, 'strategies');
                 }
                 return 'original-config-save-scope-exited';
-            });
+            }, $baseDigest);
             if ($p2Invocations !== 1 || $status !== 'original-config-save-scope-exited') {
                 throw new \RuntimeException('Original Config/P2 owner did not release scope');
             }
@@ -317,7 +319,8 @@ final class SharedConfigCommit
             $config->lock();
             try {
                 $saved = $modelFactory()->getNodes();
-                if (!hash_equals($targetDigest, VoiceSettingsSnapshot::digest($saved))) {
+                $savedDigest = VoiceSettingsSnapshot::digest($saved);
+                if (!hash_equals($targetDigest, $savedDigest)) {
                     throw new SharedConfigSaveUncertain(
                         'Original native Config changed during save/readback'
                     );
@@ -335,7 +338,7 @@ final class SharedConfigCommit
                         throw new \RuntimeException('Original saved Config WAL not durable');
                     }
                     return 'original-config-readback-attested';
-                });
+                }, $savedDigest);
                 if ($postInvocations !== 1 ||
                     $status !== 'original-config-readback-attested') {
                     throw new \RuntimeException('Original saved Config/P2 handoff refused');

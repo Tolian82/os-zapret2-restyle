@@ -347,14 +347,15 @@ final class SharedApplyConfigWorker
     private static function originalFoundLockedFileEvidence(
         object $config, string $id, string $mode = 'classify-locked',
         ?string $configDigest = null, ?string $runtimeMode = null,
-        ?callable $whileP2Held = null, $queueStream = null
+        ?callable $whileP2Held = null, $queueStream = null, ?string $baseDigest = null
     ): array {
         $begin = $mode === 'begin-found-save-locked';
         if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
                  !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
-            ($begin ? (!in_array($runtimeMode, ['0', '1'], true) || $whileP2Held === null)
-                    : ($runtimeMode !== null || $whileP2Held !== null)) ||
+            ($begin ? (!in_array($runtimeMode, ['0', '1'], true) || $whileP2Held === null ||
+                        $baseDigest === null || !preg_match('/^[a-f0-9]{64}$/D', $baseDigest))
+                    : ($runtimeMode !== null || $whileP2Held !== null || $baseDigest !== null)) ||
             ($queueStream !== null && (!is_resource($queueStream) ||
                 !in_array($mode, ['recover-found-locked', 'confirm-found-save-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
@@ -390,6 +391,7 @@ final class SharedApplyConfigWorker
             }
             if ($begin) {
                 $command[] = $runtimeMode;
+                $command[] = $baseDigest;
             }
             $descriptors = [0 => $begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r'],
                 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a'],
@@ -485,24 +487,30 @@ final class SharedApplyConfigWorker
         try {
             return SharedConfigCommit::persistFoundUnderOriginalOwner(
                 $plan, 'strategies', $config, $factory,
-                static function (callable $saveScope) use (
-                    &$scopes, $config, $mode, $id, $candidate
+                static function (callable $saveScope, string $observedDigest) use (
+                    &$scopes, $config, $mode, $id, $candidate, $plan
                 ): string {
                     if (++$scopes === 1) {
+                        if (!hash_equals($plan['dependencies'], $observedDigest)) {
+                            throw new \RuntimeException('Original Found base Config changed');
+                        }
                         $status = null;
                         $ready = self::originalFoundLockedFileEvidence(
                             $config, $id, 'begin-found-save-locked', $candidate, $mode,
                             static function () use ($saveScope, &$status): void {
                                 $status = $saveScope();
-                            }
+                            }, null, $observedDigest
                         );
                         if (($ready['result'] ?? null) !== 'ready' || !is_string($status)) {
                             throw new \RuntimeException('Original found save scope unavailable');
                         }
                         return $status;
                     }
+                    if ($scopes !== 2 || !hash_equals($candidate, $observedDigest)) {
+                        throw new \RuntimeException('Original Found saved Config changed');
+                    }
                     $receipt = self::originalFoundLockedFileEvidence(
-                        $config, $id, 'confirm-found-save-locked', $candidate
+                        $config, $id, 'confirm-found-save-locked', $observedDigest
                     );
                     if ($receipt !== ['result' => 'found-config-saved', 'mode' => $mode]) {
                         throw new \RuntimeException('Original found save readback unavailable');

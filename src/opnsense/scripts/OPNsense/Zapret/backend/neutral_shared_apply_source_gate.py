@@ -196,6 +196,18 @@ def decode_pipe(raw: bytes) -> dict[str, bytes]:
     return data
 
 
+def read_inherited_original_source(source_fd: int) -> bytes:
+    """Bounded original NUL frame; never read source data from argv or a path."""
+    if type(source_fd) is not int or source_fd < 3 or source_fd == 9:
+        raise OriginalSourceGateRefused("INVALID_ORIGINAL_PIPE")
+    if not stat.S_ISFIFO(os.fstat(source_fd).st_mode):
+        raise OriginalSourceGateRefused("INVALID_ORIGINAL_PIPE")
+    with os.fdopen(os.dup(source_fd), "rb") as stream:
+        raw = stream.read(MAX_PIPE + 1)
+    decode_pipe(raw)
+    return raw
+
+
 def _read(path: Path, uid: int, maximum: int, *, allow_empty: bool = False) -> bytes:
     """Read one existing owned single-link file with no symlink or replacement."""
     before = path.lstat()
