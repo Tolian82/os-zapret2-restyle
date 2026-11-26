@@ -593,15 +593,17 @@ class FoundPreparedSourceReceipt:
 
 
 def native_attest_found_prepared_fd9(
-        operation: str, raw_pipe: bytes, config_fd: int) -> FoundPreparedSourceReceipt:
+        operation: str, raw_pipe: bytes, config_fd: int, *,
+        _expected_record: dict | None = None) -> FoundPreparedSourceReceipt:
     """Join the existing Found WAL/CAS to the original sealed S08d source.
 
     Import-only, called with the genuine inherited Config FD and original
     FD9. No PHP Config lock acquisition in this child, no recursive P2,
     no root stage/bind, no new WAL or writes. This is not a proof of current
     Config revision or previous runtime: the original Config owner must
-    supply those at the future combined binding/commit. Until then every
-    existing Found/immutable-root physical fence stays closed.
+    supply those at the future combined binding/commit. Only the explicit
+    internal binding path may supply the exact expected WAL with old pin.
+    A staged candidate is still forbidden by the original source reader.
     """
     from auto_detect_destination_commit import (
         _native_found_wal_context, _qualified_shared_found_batch,
@@ -621,7 +623,9 @@ def native_attest_found_prepared_fd9(
         store, record, raw, rows, targets, attest = _native_found_wal_context(
             operation, config_fd)
         if (type(record) is not dict or record.get("phase") != "prepared" or
-                "manifest" in record or "previous_manifest" in record or
+                "manifest" in record or
+                (_expected_record is None and "previous_manifest" in record) or
+                (_expected_record is not None and record != _expected_record) or
                 record["detail"]["id"] != operation or
                 type(raw) is not bytes or
                 hashlib.sha256(raw).hexdigest() != record["found"]["plan_sha256"]):
@@ -640,6 +644,11 @@ def native_attest_found_prepared_fd9(
                     raise OriginalSourceGateRefused("S10_FOUND_WAL_OR_SEAL_CHANGED")
                 _verify_planned_preimages_locked(
                     verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+                if "previous_manifest" in record:
+                    from neutral_root_stage import _verify_original_pinned_root
+                    _verify_original_pinned_root(
+                        detail=record["previous"], binding=record["previous_manifest"],
+                        parent=WORK, owner_uid=0)
                 if (attest() is not True or store.read() != record or
                         _read(WORK / operation / "plan.json", 0, MAX_FILE) != raw):
                     raise OriginalSourceGateRefused("S10_FOUND_WAL_OR_SEAL_CHANGED")
@@ -669,6 +678,113 @@ def native_attest_found_prepared_fd9(
             source, record["found"]["plan_sha256"], detail["base"], detail["candidate"])
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_FOUND_PREPARED_SOURCE_REFUSED") from None
+
+
+def native_bind_found_prepared_fd9(operation: str, raw_pipe: bytes,
+                                   config_fd: int, *, config_digest: str):
+    """Attach one candidate root to the existing Found PREPARED only.
+
+    The existing native Config owner supplies its fresh whole-model base
+    digest under inherited FD4. Reuse original FD9, P2 and sealed source.
+    The original source reader forbids an existing root: obtain that typed
+    receipt BEFORE staging, then re-attest seal/CAS/root without bypassing
+    that fence. This import-only step grants no physical authorization.
+    """
+    from auto_detect_destination_commit import (
+        _native_found_wal_context, _qualified_shared_found_batch,
+        exclusive_destination_lock)
+    from auto_detect_effective_known import _verify_planned_preimages_locked
+    from auto_detect_gui_hostlist import AUTO_LOCK
+    from auto_detect_owned_sources import OWNED_ROOT
+    from neutral_root_stage import (
+        attest_prepared_source_root, _stage_candidate, _verify_original_pinned_root)
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    try:
+        require_lifecycle_lock()
+        store, before, raw, rows, targets, attest = _native_found_wal_context(
+            operation, config_fd)
+        if (type(config_digest) is not str or
+                not re.fullmatch(r"[a-f0-9]{64}", config_digest) or
+                before["phase"] != "prepared" or "manifest" in before or
+                before["detail"]["base"] != config_digest):
+            raise OriginalSourceGateRefused("S10_FOUND_BIND_BASE_REQUIRED")
+        engine = _s10_native_bound_engine_readback()
+        first = native_attest_found_prepared_fd9(
+            operation, raw_pipe, config_fd, _expected_record=before)
+        source = first.source
+        detail = before["detail"]
+        plan_sha = hashlib.sha256(raw).hexdigest()
+        if (first.plan_sha256 != plan_sha or
+                first.config_base_sha256 != config_digest or
+                first.config_candidate_sha256 != detail["candidate"] or
+                first.authorization != "NONE" or first.physical_transition_allowed or
+                first.promotion_allowed or store.read() != before or
+                _s10_native_bound_engine_readback() != engine):
+            raise OriginalSourceGateRefused("S10_FOUND_BIND_SOURCE_CHANGED")
+        enabled = source.requested_enabled
+        schema3 = (source.mode == "auto" and
+                   source.final_args_sha256 != source.original_args_sha256)
+        if schema3 != (source.mode == "auto" and enabled):
+            raise OriginalSourceGateRefused("S10_FOUND_BIND_SCHEMA_CHANGED")
+        candidate = attest_prepared_source_root(
+            source=source, candidate_sha256=detail["candidate"], enabled=enabled,
+            parent=WORK, journal_root=store.root, owner_uid=0,
+            found_plan_sha256=plan_sha)
+        verified = _qualified_shared_found_batch(rows)
+
+        def recheck_locked(expected):
+            # No source reader or Config acquisition inside this P2 section.
+            if (store.read() != expected or attest() is not True or
+                    _read(WORK / operation / "plan.json", 0, MAX_FILE) != raw or
+                    hashlib.sha256(_read(
+                        WORK / operation / "bundle-seal.json", 0, 1024)
+                    ).hexdigest() != source.original_seal_sha256):
+                raise OriginalSourceGateRefused("S10_FOUND_BIND_WAL_OR_SEAL_CHANGED")
+            _verify_planned_preimages_locked(
+                verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+            for pin, key in (("previous_manifest", "previous"),
+                             ("manifest", "detail")):
+                if pin in expected:
+                    _verify_original_pinned_root(
+                        detail=expected[key], binding=expected[pin],
+                        parent=WORK, owner_uid=0)
+            if attest() is not True or store.read() != expected:
+                raise OriginalSourceGateRefused("S10_FOUND_BIND_WAL_CHANGED")
+
+        # The ordinary S10a writer does not acquire P2. Keep original
+        # Config->P2 held across staging, binding and final CAS verification.
+        with exclusive_destination_lock(AUTO_LOCK, 0):
+            recheck_locked(before)
+            staged = _stage_candidate(
+                generation=operation, candidate=candidate, effective=source.effective,
+                native=source.native, mode=source.mode, enabled=enabled,
+                parent=WORK, journal_root=store.root, owner_uid=0, schema3=schema3,
+                found_plan_sha256=plan_sha)
+            recheck_locked(before)
+            if (staged.root_sha256 != candidate.sha256 or
+                    staged.original_seal_sha256 != source.original_seal_sha256):
+                raise OriginalSourceGateRefused("S10_FOUND_STAGED_SOURCE_CHANGED")
+            bound = store.bind_prepared_manifest(
+                generation=operation, effective=source.effective, native=source.native,
+                mode=source.mode, enabled=enabled, shared_work_parent=WORK,
+                schema3=schema3, found_plan_sha256=plan_sha)
+            expected = dict(before, manifest={
+                "schema": 2 if schema3 else 1, "generation": operation,
+                "root_sha256": staged.root_sha256,
+                "seal_sha256": staged.original_seal_sha256,
+                "candidate_sha256": detail["candidate"]})
+            if bound != expected:
+                raise OriginalSourceGateRefused("S10_FOUND_BOUND_SOURCE_CHANGED")
+            recheck_locked(expected)
+        if (_s10_native_bound_engine_readback() != engine or
+                store.read() != expected or attest() is not True):
+            raise OriginalSourceGateRefused("S10_FOUND_BIND_ENGINE_OR_OWNER_CHANGED")
+        # No service/Config/P1 operation follows from this receipt.
+        return first, staged
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+        raise OriginalSourceGateRefused("S10_FOUND_BIND_REFUSED") from None
 
 
 def _bind_original_prepared_source(*, store, parent: Path, before: dict,

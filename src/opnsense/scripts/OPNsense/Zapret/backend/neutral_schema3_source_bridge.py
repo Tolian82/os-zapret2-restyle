@@ -171,7 +171,8 @@ def _validate_typed_source(native: NativeParity, effective: EffectiveSnapshot,
 def _attest_original_schema3(*, generation: str, native: NativeParity,
                              effective: EffectiveSnapshot, parent: Path,
                              journal_root: Path, owner_uid: int,
-                             allow_bound_schema3: bool = False) -> OriginalSchema3Receipt:
+                             allow_bound_schema3: bool = False,
+                             found_plan_sha256: str | None = None) -> OriginalSchema3Receipt:
     """Testable read-only source proof; paths are fixed by installed FD9 wrapper."""
     if (type(generation) is not str or not _ID.fullmatch(generation) or
             type(owner_uid) is not int or owner_uid < 0 or
@@ -180,7 +181,7 @@ def _attest_original_schema3(*, generation: str, native: NativeParity,
         raise OriginalSchema3Refused("ORIGINAL_SCHEMA3_IDENTITY_REQUIRED")
     try:
         original_record, candidate_sha = _journal(
-            generation, journal_root=journal_root, owner_uid=owner_uid)
+            generation, journal_root=journal_root, owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)
         # A reattestation immediately AFTER the one original S10b1 journal
         # writer may read a schema-2 bound PREPARED. The original record
         # validator checks its shape; the S10b2b2b2 consumer MUST compare
@@ -227,7 +228,7 @@ def _attest_original_schema3(*, generation: str, native: NativeParity,
                     final != _read_promoted(rfd, "dvtws.args", owner_uid) or
                     active_raw != _read_promoted(rfd, "auto-detect-generation.json", owner_uid) or
                     _journal(generation, journal_root=journal_root,
-                             owner_uid=owner_uid)[0] != original_record):
+                             owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)[0] != original_record):
                 raise OriginalSchema3Refused("ORIGINAL_SCHEMA3_CHANGED_DURING_ATTEST")
             _verify_dir_still(wfd, "release", rfd)
             _verify_dir_still(pfd, generation, wfd)

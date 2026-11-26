@@ -80,7 +80,8 @@ def _attest_physical_schema3(*, generation: str, native: NativeParity,
                              effective: EffectiveSnapshot, enabled: bool,
                              parent: Path, journal_root: Path,
                              owner_uid: int,
-                             allow_bound_schema3: bool = False) -> PhysicalSchema3Receipt:
+                             allow_bound_schema3: bool = False,
+                             found_plan_sha256: str | None = None) -> PhysicalSchema3Receipt:
     """Testable original-artifact preflight. Paths are fixed by FD9 wrapper."""
     if (type(enabled) is not bool or type(owner_uid) is not int or
             not isinstance(parent, Path) or not isinstance(journal_root, Path) or
@@ -90,9 +91,9 @@ def _attest_physical_schema3(*, generation: str, native: NativeParity,
         original = _attest_original_schema3(
             generation=generation, native=native, effective=effective,
             parent=parent, journal_root=journal_root, owner_uid=owner_uid,
-            allow_bound_schema3=allow_bound_schema3)
+            allow_bound_schema3=allow_bound_schema3, found_plan_sha256=found_plan_sha256)
         journal, candidate_sha = _journal(
-            generation, journal_root=journal_root, owner_uid=owner_uid)
+            generation, journal_root=journal_root, owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)
         work = parent / generation
         with ExitStack() as stack:
             pfd = _open_parent(parent, owner_uid)
@@ -138,7 +139,7 @@ def _attest_physical_schema3(*, generation: str, native: NativeParity,
                     tuple(_pinned_ref(rfd, name, mode, owner_uid)
                           for name, mode in _REFS) != values or
                     _journal(generation, journal_root=journal_root,
-                             owner_uid=owner_uid)[0] != journal):
+                             owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)[0] != journal):
                 raise PhysicalSchema3Refused("ORIGINAL_SCHEMA3_CHANGED_DURING_ATTEST")
             _verify_dir_still(wfd, "release", rfd)
             _verify_dir_still(pfd, generation, wfd)
@@ -148,7 +149,7 @@ def _attest_physical_schema3(*, generation: str, native: NativeParity,
                 generation=generation, native=native, effective=effective,
                 parent=parent, journal_root=journal_root,
                 owner_uid=owner_uid,
-                allow_bound_schema3=allow_bound_schema3) != original:
+                allow_bound_schema3=allow_bound_schema3, found_plan_sha256=found_plan_sha256) != original:
             raise PhysicalSchema3Refused("ORIGINAL_SCHEMA3_SOURCE_CHANGED")
         return PhysicalSchema3Receipt(
             generation, proposal.candidate.sha256, original.seal_sha256,

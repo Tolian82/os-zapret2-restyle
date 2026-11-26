@@ -320,6 +320,115 @@ class OriginalDurableRootBinding(unittest.TestCase):
                     with self.assertRaises(SharedOperationError):
                         _validate_record(forged)
 
+    def _staged_pinned_found_fixture(self):
+        import hashlib
+        import shutil
+        from neutral_root_manifest import compile_candidate
+        from neutral_root_stage import _stage_candidate
+        from shared_apply_seal import create_seal
+
+        old_bound, old, fresh, plan = self._pinned_found_fixture()
+        parent = self.case.fx.parent
+        work = parent / fresh["id"]
+        work.mkdir(mode=0o700)
+        shutil.copytree(self.case.fx.release, work / "release")
+        shutil.copyfile(self.case.fx.work / "candidate.xml", work / "candidate.xml")
+        (work / "plan.json").write_bytes(plan)
+        (work / "plan.json").chmod(0o600)
+        create_seal(work, owner=self.owner.owner)
+        seal_sha = hashlib.sha256((work / "bundle-seal.json").read_bytes()).hexdigest()
+        plan_sha = hashlib.sha256(plan).hexdigest()
+        candidate = compile_candidate(
+            effective=self.case.fx.effective, generation=fresh["id"],
+            target_mode="list", enabled=False, original_args=self.case.fx.args,
+            original_source_map=None, seal_sha256=seal_sha, owner_uid=self.owner.owner)
+        pending = self.owner.prepare_found(
+            fresh, plan, lambda _: True, shared_work_parent=parent)
+        args = self.case.kw(generation=fresh["id"])
+        # Ordinary staging must refuse even the genuine original Found seal.
+        with self.assertRaises(RootStageRefused):
+            _stage_candidate(candidate=candidate, **args)
+        with self.assertRaises(RootStageRefused):
+            _stage_candidate(candidate=candidate, **args, found_plan_sha256="0" * 64)
+        self.assertEqual(self.owner.read(), pending)
+        staged = _stage_candidate(candidate=candidate, **args, found_plan_sha256=plan_sha)
+        self.assertEqual(staged.root_sha256, candidate.sha256)
+        self.assertEqual(self.owner.read(), pending)
+        return old_bound, old, fresh, plan, pending, work, staged, plan_sha
+
+    def test_dual_found_root_binding_and_exact_pristine_recovery(self):
+        with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None):
+            old_bound, old, fresh, plan, pending, work, staged, plan_sha = (
+                self._staged_pinned_found_fixture())
+            with self.assertRaises(SharedOperationError):
+                self.bind(generation=fresh["id"])
+            with self.assertRaises(SharedOperationError):
+                self.bind(generation=fresh["id"], found_plan_sha256="0" * 64)
+            self.assertEqual(self.owner.read(), pending)
+            bound = self.bind(generation=fresh["id"], found_plan_sha256=plan_sha)
+            self.assertEqual(bound["phase"], "prepared")
+            self.assertEqual(bound["found"], pending["found"])
+            self.assertEqual(bound["previous_manifest"], old_bound["manifest"])
+            self.assertEqual(bound["manifest"]["root_sha256"], staged.root_sha256)
+            self.assertEqual(bound["manifest"]["generation"], fresh["id"])
+            self.assertIsNone(committed_manifest(bound))
+            self.assertFalse(native_lifecycle_gate("common-apply",
+                            root=self.owner.root)["safe_to_mutate"])
+            with self.assertRaises(SharedOperationError):
+                self.owner.advance_found_files("found-files-writing",
+                                               fresh, plan, lambda *_: True)
+            self.assertEqual(self.owner.read(), bound)
+
+            # Reopen the single WAL after an interrupted caller; either
+            # physical pin drifting must leave its exact PREPARED intact.
+            reopened = SharedApplyOperation(self.owner.root, owner=self.owner.owner)
+            for root in (work / "manifest.json", self.case.fx.work / "manifest.json"):
+                original = root.read_bytes()
+                root.write_bytes(original + b"changed")
+                with self.assertRaises(SharedOperationError):
+                    reopened.finish_found_prepared_pristine(
+                        fresh["id"], plan, lambda *_: True,
+                        shared_work_parent=self.case.fx.parent)
+                self.assertEqual(reopened.read(), bound)
+                root.write_bytes(original)
+            restored = reopened.finish_found_prepared_pristine(
+                fresh["id"], plan, lambda raw, prior: raw == plan and prior == old["detail"],
+                shared_work_parent=self.case.fx.parent)
+            self.assertEqual(restored["phase"], "restored")
+            self.assertNotIn("found", restored)
+            self.assertEqual(restored["manifest"], bound["manifest"])
+            self.assertEqual(committed_manifest(restored), old_bound["manifest"])
+
+    def test_dual_found_root_interrupted_post_fsync_retains_both_pins(self):
+        import neutral_root_stage as stage
+        with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None):
+            old_bound, _, fresh, plan, _, work, staged, plan_sha = (
+                self._staged_pinned_found_fixture())
+            original = stage.attest_staged_candidate
+            calls = []
+            def interrupted(**kwargs):
+                receipt = original(**kwargs)
+                calls.append(receipt)
+                if len(calls) == 2:
+                    raise RootStageRefused("simulated post-fsync failure")
+                return receipt
+            with patch.object(stage, "attest_staged_candidate", side_effect=interrupted):
+                with self.assertRaisesRegex(SharedOperationError, "post-bind"):
+                    self.bind(generation=fresh["id"], found_plan_sha256=plan_sha)
+            reopened = SharedApplyOperation(self.owner.root, owner=self.owner.owner)
+            pending = reopened.read()
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(pending["phase"], "prepared")
+            self.assertEqual(pending["manifest"]["root_sha256"], staged.root_sha256)
+            self.assertEqual(pending["previous_manifest"], old_bound["manifest"])
+            with self.assertRaises(SharedOperationError):
+                reopened.advance_found_files("found-files-writing",
+                                             fresh, plan, lambda *_: True)
+            restored = reopened.finish_found_prepared_pristine(
+                fresh["id"], plan, lambda *_: True,
+                shared_work_parent=self.case.fx.parent)
+            self.assertEqual(committed_manifest(restored), old_bound["manifest"])
+
     def test_terminal_selector_distinguishes_two_generation_pins(self):
         bound = self.bind()
         old = self.owner._persist_record({**bound, "phase": "committed"})

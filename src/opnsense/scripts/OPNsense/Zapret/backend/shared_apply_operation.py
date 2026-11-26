@@ -276,8 +276,8 @@ def _validate_record(record: object) -> dict:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
     if "manifest" in record:
-        if "found" in record:
-            raise SharedOperationError("found transaction cannot attach immutable root")
+        if "found" in record and record["phase"] != "prepared":
+            raise SharedOperationError("bound Found physical transition not implemented")
         _validate_manifest_binding(record["manifest"], record["detail"])
     # No old Voice/Strategies record may invent protected physical or
     # Config-save uncertainty checkpoints without this exact found intent.
@@ -293,10 +293,10 @@ def _validate_record(record: object) -> dict:
         if "previous" not in record:
             raise SharedOperationError("invalid original predecessor root pin")
         _validate_manifest_binding(record["previous_manifest"], record["previous"])
-        # Found PREPARED may retain the exact old immutable pin, but no
-        # candidate root exists and all physical Found phases remain closed.
+        # Both Found root pins may coexist ONLY in PREPARED.
+        # Physical Found mutation remains fenced until qualified separately.
         if "found" in record and (
-                record["phase"] != "prepared" or "manifest" in record or
+                record["phase"] != "prepared" or
                 record["previous"]["candidate"] != record["detail"]["base"]):
             raise SharedOperationError("pinned found cannot mutate before dual binding")
         if ("manifest" not in record and
@@ -508,6 +508,7 @@ class SharedApplyOperation:
         record = self.read()
         if (record is None or record["detail"] != detail or
                 "found" not in record or "previous_manifest" in record or
+                "manifest" in record or
                 FOUND_NEXT.get(record["phase"]) != phase or
                 record["found"]["plan_sha256"] !=
                 hashlib.sha256(sealed_plan).hexdigest()):
@@ -736,7 +737,8 @@ class SharedApplyOperation:
     def bind_prepared_manifest(self, generation: str, *,
                                effective, native, mode: str, enabled: bool,
                                shared_work_parent: Path | None = None,
-                               schema3: bool = False) -> dict:
+                               schema3: bool = False,
+                               found_plan_sha256: str | None = None) -> dict:
         """Pin S10a's already-staged root in THIS fsynced original FD9 WAL.
 
         No alternate journal/seal/config/launcher, no phase advance and no
@@ -764,7 +766,11 @@ class SharedApplyOperation:
         before = self.read()
         if (before is None or before["phase"] != "prepared" or
                 before["detail"]["id"] != generation or
-                "found" in before or "manifest" in before):
+                "manifest" in before or
+                ("found" in before) != (found_plan_sha256 is not None) or
+                (found_plan_sha256 is not None and
+                 (type(found_plan_sha256) is not str or
+                  before["found"]["plan_sha256"] != found_plan_sha256))):
             raise SharedOperationError("original PREPARED unbound journal required")
         # Existing original S10a staging/attestation and the existing journal
         # writer are shared. Only the source verifier differs: schema-2 MUST
@@ -776,6 +782,8 @@ class SharedApplyOperation:
                     journal_root=self.root, owner_uid=self.owner)
         if not schema3:
             args["mode"] = mode
+        if found_plan_sha256 is not None:
+            args["found_plan_sha256"] = found_plan_sha256
         try:
             if "previous_manifest" in before:
                 _verify_original_pinned_root(
@@ -998,26 +1006,40 @@ class SharedApplyOperation:
         detail = record["detail"]
         prior = record.get("previous")
         old_pin = record.get("previous_manifest")
+        candidate_pin = record.get("manifest")
         if prior is not None and prior["candidate"] != detail["base"]:
             raise SharedOperationError("found pristine predecessor not Config base")
-        if old_pin is not None:
+        if old_pin is not None or candidate_pin is not None:
             from shared_apply_seal import WORK
             from neutral_root_stage import (
-                _verify_original_pinned_root, RootStageRefused)
+                _verify_original_pinned_root, _original_plan_matches,
+                RootStageRefused)
             from voice_ipfw_adapter import require_lifecycle_lock
             parent = WORK if shared_work_parent is None else shared_work_parent
             if not isinstance(parent, Path):
                 raise SharedOperationError("original pinned work parent required")
 
-            def check_old_pin():
+            def check_pins():
                 try:
                     require_lifecycle_lock()
-                    _verify_original_pinned_root(
-                        detail=prior, binding=old_pin,
-                        parent=parent, owner_uid=self.owner)
+                    if old_pin is not None:
+                        _verify_original_pinned_root(
+                            detail=prior, binding=old_pin,
+                            parent=parent, owner_uid=self.owner)
                 except (RootStageRefused, RuntimeError, OSError, ValueError):
                     raise SharedOperationError("found pristine predecessor pin refused") from None
-            check_old_pin()
+                if candidate_pin is not None:
+                    try:
+                        _verify_original_pinned_root(
+                            detail=detail, binding=candidate_pin,
+                            parent=parent, owner_uid=self.owner)
+                        if not _original_plan_matches(
+                                parent=parent, generation=identity,
+                                journal=record, owner_uid=self.owner):
+                            raise RootStageRefused("FOUND_RECOVERY_PLAN_CHANGED")
+                    except (RootStageRefused, RuntimeError, OSError, ValueError):
+                        raise SharedOperationError("found pristine candidate pin refused") from None
+            check_pins()
         try:
             plan = json.loads(sealed_plan)
             found_intent = plan["found_intent"]
@@ -1037,16 +1059,19 @@ class SharedApplyOperation:
             raise SharedOperationError("found pristine sealed plan mismatches journal")
         if not callable(attest) or attest(sealed_plan, prior) is not True:
             raise SharedOperationError("original found pristine Config/P2/runtime refused")
-        if old_pin is not None:
-            check_old_pin()
+        if old_pin is not None or candidate_pin is not None:
+            check_pins()
         if self.read() != record:
             raise SharedOperationError("found pristine journal changed under original locks")
-        # No physical writes: drop Found intent and retain only old pin.
+        # Keep the aborted candidate pin as evidence, never as committed owner.
+        # Only previous_manifest can identify the terminal RESTORED owner.
         completed = {"schema": SCHEMA, "phase": "restored", "detail": detail}
         if prior is not None:
             completed["previous"] = prior
         if old_pin is not None:
             completed["previous_manifest"] = old_pin
+        if candidate_pin is not None:
+            completed["manifest"] = candidate_pin
         return self._persist_record(completed)
 
     def recover_prepared(self, identity: str, attest, *,
