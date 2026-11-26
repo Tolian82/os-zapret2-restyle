@@ -108,7 +108,8 @@ def _zero_processes(pidfiles: tuple[Path, ...], *, runner=subprocess.run) -> Non
                 (command[0] in ("daemon:", "daemon", "/usr/sbin/daemon") and
                  any(token in (CHILD_EXEC, MONITOR_EXEC, "dvtws2",
                                "supervisor_loop.sh") or
-                     token.startswith(("dvtws2[", "supervisor_loop.sh["))
+                     token.startswith(("dvtws2[", "supervisor_loop.sh[",
+                                       CHILD_EXEC + "[", MONITOR_EXEC + "["))
                      for token in command[1:]))):
             raise QuiescentPreimageRefused("QUIESCENT_ORPHAN_PROCESS")
     if not seen or any(_present(path) for path in pidfiles):

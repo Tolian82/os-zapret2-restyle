@@ -1324,7 +1324,10 @@ class OriginalQuiescentTests(unittest.TestCase):
                 path.unlink()
             for line in (f"999 {gate.CHILD_EXEC}", f"999 /bin/sh {gate.MONITOR_EXEC}",
                          "999 daemon: supervisor_loop.sh[123] (daemon)",
-                         "999 daemon: dvtws2[123] (daemon)", "malformed", "999"):
+                         "999 daemon: dvtws2[123] (daemon)",
+                         f"999 daemon: {gate.CHILD_EXEC}[123] (daemon)",
+                         f"999 daemon: {gate.MONITOR_EXEC}[123] (daemon)",
+                         "malformed", "999"):
                 self.runner.return_value.stdout = "1 /sbin/init\n" + line + "\n"
                 with self.subTest(line=line), self.assertRaises(gate.QuiescentPreimageRefused):
                     self.call()
