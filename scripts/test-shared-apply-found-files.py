@@ -182,6 +182,37 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         self.assert_old()
         self.assertEqual(journal.read()["phase"], "found-files-writing")
 
+    def test_stage_identity_drift_after_ready_leaves_original_destination(self):
+        journal, _, _, apply = self.journaled()
+        original_advance = journal.advance_found_stage
+        target = self.targets["youtube"]
+        original_identity = destination._file_identity(target.lstat())
+        replacement = self.root / "replacement.tmp"
+        replacement.write_text(self.new["youtube"])
+        replacement.chmod(0o600)
+        observed = {}
+
+        def advance_then_drift(detail, raw, name, phase, pin, attest):
+            original_advance(detail, raw, name, phase, pin, attest)
+            if name == "youtube" and phase == "ready":
+                temp = target.with_name(pin["temp"])
+                replacement.replace(temp)
+                observed["path"] = temp
+                observed["identity"] = destination._file_identity(temp.lstat())
+
+        journal.advance_found_stage = advance_then_drift
+        with self.assertRaises(DestinationRefused):
+            apply()
+        self.assert_old()
+        self.assertEqual(destination._file_identity(target.lstat()), original_identity)
+        self.assertEqual(destination._file_identity(observed["path"].lstat()),
+                         observed["identity"])
+        current = journal.read()
+        self.assertEqual(current["phase"], "found-files-writing")
+        stage = current["found"]["stages"]["youtube"]
+        self.assertEqual(stage["state"], "ready")
+        self.assertNotEqual(stage["pin"]["inode"], observed["identity"][1])
+
     def test_stage_installed_fsync_failure_keeps_ambiguous_wal(self):
         journal, _, _, apply = self.journaled()
         original_advance = journal.advance_found_stage

@@ -51,9 +51,9 @@ def _target(path: Path, uid: int, *, links: int = 1) -> tuple[bytes, os.stat_res
             b = os.fstat(fd)
         finally:
             os.close(fd)
-        identity = lambda x: (*_file_identity(x), x.st_mode, x.st_nlink)
-        if (identity(st) != identity(a) or identity(a) != identity(b) or
-                identity(b) != identity(path.lstat()) or len(data) != st.st_size):
+        identity = _target_identity(st)
+        if (identity != _target_identity(a) or identity != _target_identity(b) or
+                identity != _target_identity(path.lstat()) or len(data) != st.st_size):
             raise DestinationRefused("destination_changed_during_read")
         data.decode("utf-8")
         return data, st
@@ -89,6 +89,10 @@ def _file_identity(st: os.stat_result) -> tuple:
     return st.st_dev, st.st_ino, st.st_ctime_ns, st.st_mtime_ns, st.st_size
 
 
+def _target_identity(st: os.stat_result) -> tuple:
+    return (*_file_identity(st), st.st_mode, st.st_uid, st.st_gid, st.st_nlink)
+
+
 def _stage_pin(st: os.stat_result, data: bytes) -> dict:
     return {"device": st.st_dev, "inode": st.st_ino, "mtime_ns": st.st_mtime_ns,
             "size": st.st_size, "sha256": _sha(data)}
@@ -115,7 +119,9 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int, *,
         raise DestinationRefused("destination_conflict_with_gui")
     temp = path.parent / (".auto-detect-" + secrets.token_hex(16) + ".tmp")
     fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    created = None
     try:
+        created = os.fstat(fd)
         os.fchown(fd, st.st_uid, st.st_gid)
         os.fchmod(fd, stat.S_IMODE(st.st_mode))
         data = memoryview(expected)
@@ -125,46 +131,52 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int, *,
                 raise DestinationRefused("short_destination_write")
             data = data[n:]
         os.fsync(fd)
-    finally:
-        os.close(fd)
-    # The original FD9 WAL can persist the just-fsynced private inode
-    # BEFORE the first rename. Ordinary GUI/P2 writers pass no stage_fn.
-    # The stage callback must be INSIDE the cleanup scope: a refused journal
-    # fsync must never leave unowned private .auto-detect-* temp artifacts.
-    try:
+        written = os.fstat(fd)
+
         # Upstream v1.0.7 compares mtime+size, NOT inode or content SHA.
         # Check the actual fsynced staged inode, before its atomic rename.
         # A same-signature replacement is not proof of a native hot reload.
         staged_bytes, staged_stat = _target(temp, uid)
-        if staged_bytes != expected:
+        staged_identity = _target_identity(written)
+        if staged_bytes != expected or _target_identity(staged_stat) != staged_identity:
             raise DestinationRefused("original_staged_temp_changed")
         if (current != expected and
                 not _native_list_modification_visible(st, staged_stat)):
             raise DestinationRefused("native_list_reload_signature_unchanged")
         if stage_fn is not None:
-            stage_fn("ready", temp, expected)
-        # Writers that ignore the shared GUI lock are not trusted. Recheck
-        # before replace against the actual original inode identity.
-        again, check = _target(path, uid)
-        preimage = _file_identity(st)
-        observed = _file_identity(check)
-        if again != current or observed != preimage:
-            # The same inode and identical content can still be modified
-            # in place by a foreign writer during temporary inode creation.
-            # Never replace such a file or discard a new minute finding.
-            raise DestinationRefused("destination_conflict_with_gui")
-        if stage_fn is not None:
-            staged, _ = _target(temp, uid)
-            if staged != expected:
+            # Persist the inode observed through the writer's own descriptor.
+            stage_fn("ready", temp, expected, written)
+            staged_bytes, staged_stat = _target(temp, uid)
+            if staged_bytes != expected or _target_identity(staged_stat) != staged_identity:
                 raise DestinationRefused("original_staged_temp_changed")
+
+        # Recheck the destination at the rename boundary after stage fsync.
+        again, check = _target(path, uid)
+        if again != current or _target_identity(check) != _target_identity(st):
+            raise DestinationRefused("destination_conflict_with_gui")
+        if _target_identity(temp.lstat()) != staged_identity:
+            raise DestinationRefused("original_staged_temp_changed")
         os.replace(temp, path)
         _sync(path.parent)
         if stage_fn is not None:
-            stage_fn("installed", path, expected)
+            installed, installed_stat = _target(path, uid)
+            if installed != expected or not os.path.samestat(installed_stat, written):
+                raise DestinationRefused("original_staged_inode_changed_at_rename")
+            stage_fn("installed", path, installed, installed_stat)
     finally:
-        if temp.exists():
-            temp.unlink()
-            _sync(path.parent)
+        # Keep the original inode open until cleanup so its number cannot
+        # be recycled for another file at the temporary path.
+        try:
+            try:
+                current_temp = temp.lstat()
+            except FileNotFoundError:
+                pass
+            else:
+                if created is not None and os.path.samestat(created, current_temp):
+                    temp.unlink()
+                    _sync(path.parent)
+        finally:
+            os.close(fd)
 
 
 
@@ -1320,13 +1332,15 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
     own_written_inodes = {}
     ready_pins = {}
 
-    def file_stage(name: str, phase: str, target: Path, contents: bytes) -> None:
+    def file_stage(name: str, phase: str, target: Path, contents: bytes,
+                   observed_stat: os.stat_result | None = None) -> None:
         if stage_fn is None:
             return
-        observed, st = _target(target, uid)
-        if observed != contents:
-            raise DestinationRefused("original_staged_inode_content_changed")
-        pin = _stage_pin(st, contents)
+        if observed_stat is None:
+            observed, observed_stat = _target(target, uid)
+            if observed != contents:
+                raise DestinationRefused("original_staged_inode_content_changed")
+        pin = _stage_pin(observed_stat, contents)
         if phase == "ready":
             if name in ready_pins:
                 raise DestinationRefused("duplicate_original_staged_inode")
@@ -1374,8 +1388,8 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
                 if stage_fn is not None and replace_fn is None:
                     replace(path, before, after, uid,
                             expected_identity=batch[name][2],
-                            stage_fn=lambda phase, item, contents, n=name:
-                                file_stage(n, phase, item, contents))
+                            stage_fn=lambda phase, item, contents, info, n=name:
+                                file_stage(n, phase, item, contents, info))
                 else:
                     replace(path, before, after, uid)
             actual, st = _target(path, uid)
@@ -1697,13 +1711,12 @@ def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record:
                     temp.unlink()
                     _sync(path.parent)
 
-                def stage_restore(phase, item, content):
+                def stage_restore(phase, item, content, info):
                     nonlocal record
                     if phase == "ready":
-                        actual, st = _target(item, uid)
-                        if actual != before or content != before or attest() is not True:
+                        if content != before or attest() is not True:
                             raise DestinationRefused("original_found_restore_stage_refused")
-                        pin = {**_stage_pin(st, actual), "temp": item.name}
+                        pin = {**_stage_pin(info, content), "temp": item.name}
                         record = store.record_found_rollback(
                             record, plan_bytes, source=name, pin=pin,
                             bound_attest=bound_attest)
