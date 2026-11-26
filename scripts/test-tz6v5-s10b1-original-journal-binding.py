@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S10b1: exact original PREPARED journal pins S10a root, never activates.
+"""S10 original journal pins, file CAS and recovery with disposable data.
 
 Portable S0 may use local stubs for native-only modules. GitHub Actions
 runs this unchanged test with the actual original SharedApplyOperation and
@@ -724,6 +724,232 @@ class OriginalDurableRootBinding(unittest.TestCase):
                             mode="list", enabled=False,
                             shared_work_parent=self.case.fx.parent)
                 self.assertEqual(self.owner.read(), self.before)
+
+
+class OriginalManagedFileCAS(unittest.TestCase):
+    def fixture(self, *, extra_change=False):
+        import shutil
+        from auto_detect_destination_commit import _sha, _target_identity
+        from neutral_root_manifest import compile_candidate
+        from neutral_root_stage import _stage_candidate
+        from shared_apply_seal import create_seal
+
+        case = _prior.OriginalPreparedS10a("runTest")
+        case.setUp()
+        self.addCleanup(case.doCleanups)
+        store, parent = case.original_journal, case.fx.parent
+        name = "hostlist-youtube.txt"
+        before, after = b"old.example\n", b"new.example\n"
+        (case.fx.release / "managed").mkdir()
+        old_file = case.fx.release / "managed" / name
+        old_file.write_bytes(before)
+        case.stage(case.candidate())
+        bound = store.bind_prepared_manifest(generation=case.detail["id"],
+            effective=case.fx.effective, native=case.fx.native, mode="list",
+            enabled=False, shared_work_parent=parent)
+        for phase in ("activating", "activated", "config-saved", "committed"):
+            bound = store._advance_bound_ordinary(phase, bound, lambda: True,
+                                                   shared_work_parent=parent)
+        detail = {**case.detail, "id": "e" * 32, "base": case.detail["candidate"],
+                  "candidate": "9" * 64}
+        work = parent / detail["id"]
+        work.mkdir(mode=0o700)
+        shutil.copytree(case.fx.release, work / "release")
+        shutil.copyfile(case.fx.work / "candidate.xml", work / "candidate.xml")
+        (work / "plan.json").write_text(json.dumps({"result": "prepared",
+            "page": detail["page"], "dependencies": detail["base"],
+            "changed_fields": [], "candidate": {"general": {"enabled": "0"}}}))
+        new_file = work / "release" / "managed" / name
+        new_file.write_bytes(after)
+        if extra_change:
+            (work / "release" / "unrelated.txt").write_text("different tree\n")
+        create_seal(work, owner=store.owner)
+        candidate = compile_candidate(effective=case.fx.effective, generation=detail["id"],
+            target_mode="list", enabled=False, original_args=case.fx.args,
+            original_source_map=None, seal_sha256=_sha((work / "bundle-seal.json").read_bytes()),
+            owner_uid=store.owner)
+        store.advance("prepared", detail)
+        _stage_candidate(candidate=candidate, **case.kw(generation=detail["id"]))
+        prepared = store.bind_prepared_manifest(generation=detail["id"],
+            effective=case.fx.effective, native=case.fx.native, mode="list",
+            enabled=False, shared_work_parent=parent)
+        active = parent / "runtime-v2"
+        shutil.copytree(case.fx.release, active)
+        target = active / "managed" / name
+        row = (name, _sha(before), _sha(after), *(_target_identity(path.lstat())
+                for path in (old_file, new_file, target)))
+        return store, prepared, row, parent, active, target, before, after
+
+    def test_original_managed_file_cas_and_interrupted_restore(self):
+        from auto_detect_destination_commit import (
+            _write_bound_managed_file_locked, _restore_bound_managed_file_locked)
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            for interrupted in (False, True):
+                with self.subTest(interrupted=interrupted):
+                    store, prepared, row, parent, active, target, before, after = self.fixture()
+                    kw = dict(parent=parent, active=active, attest=lambda: True)
+                    real_replace = os.replace
+                    seen = []
+
+                    def replace_file(source, dest, **kwargs):
+                        if Path(dest) == target:
+                            intent = store.read()
+                            self.assertEqual(intent["phase"], "managed-writing")
+                            pin = intent["managed"].get("restore", intent["managed"]["ready"])
+                            self.assertEqual(Path(source).stat().st_ino, pin["inode"])
+                            seen.append(pin["sha256"])
+                        result = real_replace(source, dest, **kwargs)
+                        if interrupted and Path(dest) == target:
+                            raise OSError("interrupted after file rename")
+                        return result
+
+                    with patch("os.replace", side_effect=replace_file):
+                        if interrupted:
+                            with self.assertRaisesRegex(OSError, "interrupted after file rename"):
+                                _write_bound_managed_file_locked(store, prepared, row, **kw)
+                        else:
+                            _write_bound_managed_file_locked(store, prepared, row, **kw)
+                    pending = store.read()
+                    self.assertEqual(target.read_bytes(), after)
+                    self.assertEqual("installed" in pending["managed"], not interrupted)
+                    self.assertFalse(native_lifecycle_gate("common-recover-activating",
+                        root=store.root)["safe_to_mutate"])
+                    with self.assertRaises(SharedOperationError):
+                        store.advance("activated", prepared["detail"])
+                    with self.assertRaises(SharedOperationError):
+                        store.attest_unbound_config_save(prepared["detail"]["id"], "d" * 64,
+                                                        shared_work_parent=parent)
+                    if interrupted:
+                        with patch("os.replace", side_effect=replace_file):
+                            with self.assertRaisesRegex(OSError, "interrupted after file rename"):
+                                _restore_bound_managed_file_locked(store, pending, **kw)
+                        pending = store.read()
+                        self.assertEqual(target.read_bytes(), before)
+                        self.assertIn("restore", pending["managed"])
+                    restored = _restore_bound_managed_file_locked(store, pending, **kw)
+                    self.assertEqual(restored["phase"], "restored")
+                    self.assertEqual(committed_manifest(restored), prepared["previous_manifest"])
+                    self.assertEqual(target.read_bytes(), before)
+                    self.assertEqual(seen, [row[2], row[1]] if interrupted else [row[2]])
+
+    def test_original_managed_cas_crash_after_ready_before_rename(self):
+        from auto_detect_destination_commit import (
+            _write_bound_managed_file_locked, _restore_bound_managed_file_locked)
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, before, _ = self.fixture()
+            kw = dict(parent=parent, active=active, attest=lambda: True)
+            original = target.stat()
+            real_replace = os.replace
+
+            def stop_at_rename(source, dest, **kwargs):
+                if Path(dest) == target:
+                    os._exit(85)
+                return real_replace(source, dest, **kwargs)
+
+            pid = os.fork()
+            if pid == 0:
+                with patch("os.replace", side_effect=stop_at_rename):
+                    try:
+                        _write_bound_managed_file_locked(store, prepared, row, **kw)
+                    except Exception:
+                        os._exit(86)
+                    os._exit(87)
+            _, status = os.waitpid(pid, 0)
+            self.assertEqual(os.waitstatus_to_exitcode(status), 85)
+            pending = store.read()
+            temp = target.with_name(pending["managed"]["ready"]["temp"])
+            self.assertEqual(temp.stat().st_ino, pending["managed"]["ready"]["inode"])
+            self.assertEqual(target.read_bytes(), before)
+            self.assertEqual(_restore_bound_managed_file_locked(store, pending, **kw)["phase"], "restored")
+            self.assertFalse(temp.exists())
+            self.assertTrue(os.path.samestat(target.stat(), original))
+
+    def test_native_managed_write_restores_a_synchronous_interruption(self):
+        from contextlib import ExitStack
+        from auto_detect_destination_commit import exclusive_destination_lock
+        from neutral_effective_diff import EffectiveDecision
+        from neutral_schema3_previous_physical import LockedRunningPredecessor, PriorRunningToken
+        import neutral_shared_apply_source_gate as gate
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, before, _ = self.fixture()
+            detail, prior = prepared["detail"], prepared["previous"]
+            root = prepared["manifest"]["root_sha256"]
+            old_root = prepared["previous_manifest"]["root_sha256"]
+            running = PriorRunningToken(123, "birth", 456, "monitor-birth", "f" * 64)
+            executable = (1, 2, "f" * 64)
+            physical = LockedRunningPredecessor(detail["id"], prior["id"], old_root,
+                detail["base"], "3" * 64, running, None, executable_identity=executable,
+                managed_preimages=(row,))
+            semantic = gate.OriginalSemanticReceipt(detail["id"], prior["id"], root, old_root,
+                EffectiveDecision("RELOAD_SAFE_CANDIDATE", (row[0],), ()), None,
+                lifecycle_proposal="RELOAD")
+            real_replace = os.replace
+            attempts = []
+
+            def fail_first_live_rename(source, dest, **kwargs):
+                result = real_replace(source, dest, **kwargs)
+                if Path(dest) == target:
+                    attempts.append(target.read_bytes())
+                    if len(attempts) == 1:
+                        raise OSError("interrupted after file rename")
+                return result
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(gate, "native_recheck_running_prepared_fd9", return_value=physical))
+                stack.enter_context(patch.object(gate, "_s10_native_bound_engine_readback",
+                                                return_value={"engine_sha256": executable[2]}))
+                stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+                stack.enter_context(patch("shared_apply_seal.WORK", parent))
+                stack.enter_context(patch("neutral_schema3_previous_physical.COMMON_ACTIVE", active))
+                stack.enter_context(patch("neutral_schema3_previous_physical._running_native", return_value=running))
+                stack.enter_context(patch("neutral_schema3_previous_physical._running_executable_identity",
+                                          return_value=executable))
+                stack.enter_context(patch("voice_ipfw_adapter.shared_release_manifest"))
+                kernel = stack.enter_context(patch("voice_firewall_transaction.verify_prior_state"))
+                config = stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+                stack.enter_context(patch("auto_detect_destination_commit.exclusive_destination_lock",
+                    side_effect=lambda *_: exclusive_destination_lock(parent / "p2.lock", store.owner)))
+                stack.enter_context(patch("os.replace", side_effect=fail_first_live_rename))
+                with self.assertRaisesRegex(OSError, "interrupted after file rename"):
+                    gate.native_write_running_managed_file_fd9(detail["id"], b"fixture",
+                        source=None, semantic=semantic, config_fd=4, config_digest=detail["base"])
+            self.assertGreaterEqual(config.call_count, 4)
+            self.assertEqual(config.call_count, kernel.call_count)
+            self.assertEqual(len(attempts), 2)
+            self.assertEqual(attempts[1], before)
+            self.assertEqual(target.read_bytes(), before)
+            self.assertEqual(store.read()["phase"], "restored")
+
+    def test_original_managed_file_cas_refuses_drift_before_any_write(self):
+        from auto_detect_destination_commit import (
+            DestinationRefused, _write_bound_managed_file_locked, _restore_bound_managed_file_locked)
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            for kind in ("another release entry", "same bytes new inode", "foreign postimage"):
+                with self.subTest(kind=kind):
+                    store, prepared, row, parent, active, target, before, after = self.fixture(
+                        extra_change=kind == "another release entry")
+                    kw = dict(parent=parent, active=active, attest=lambda: True)
+                    sibling = target.with_name("substitute")
+                    if kind == "foreign postimage":
+                        pending = _write_bound_managed_file_locked(store, prepared, row, **kw)
+                        sibling.write_bytes(after)
+                        sibling.replace(target)
+                        with self.assertRaisesRegex(DestinationRefused, "foreign_image"):
+                            _restore_bound_managed_file_locked(store, pending, **kw)
+                        self.assertEqual(store.read(), pending)
+                        self.assertEqual(target.read_bytes(), after)
+                    else:
+                        if kind == "same bytes new inode":
+                            sibling.write_bytes(before)
+                            sibling.replace(target)
+                        with self.assertRaises(DestinationRefused):
+                            _write_bound_managed_file_locked(store, prepared, row, **kw)
+                        self.assertEqual(store.read(), prepared)
+                        self.assertEqual(target.read_bytes(), before)
 
 
 if __name__ == "__main__":

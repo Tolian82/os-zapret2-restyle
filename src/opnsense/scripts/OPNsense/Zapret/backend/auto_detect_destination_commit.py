@@ -115,7 +115,7 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int, *,
     """One protected same-directory replace after read-side CAS under GUI lock."""
     now, st = _target(path, uid)
     if now != current or (expected_identity is not None and
-                          _file_identity(st) != expected_identity):
+                          expected_identity not in (_file_identity(st), _target_identity(st))):
         raise DestinationRefused("destination_conflict_with_gui")
     temp = path.parent / (".auto-detect-" + secrets.token_hex(16) + ".tmp")
     fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -1603,6 +1603,134 @@ def _found_temp(path: Path, pin: dict, uid: int, *, links: int = 1) -> Path | No
     if not _matches_stage(pin, data, info):
         raise DestinationRefused("foreign_found_temporary_inode")
     return temp
+
+
+def _managed_write_images(store, record: dict, name: str, parent: Path) -> tuple:
+    """Read both sealed originals and prove a one-file complete release delta."""
+    from neutral_effective_diff import _REF_FILE
+    from neutral_root_stage import verify_original_operation_pins
+    from shared_apply_seal import _release_hash, verify_seal
+
+    if store.read() != record or not _REF_FILE.fullmatch(name):
+        raise DestinationRefused("original_managed_owner_changed")
+    uid = store.owner
+    verify_original_operation_pins(record=record, parent=parent, owner_uid=uid)
+    old = parent / record["previous"]["id"]
+    new = parent / record["detail"]["id"]
+    relative = "managed/" + name
+    old_bytes, old_stat = _target(old / "release" / relative, uid)
+    new_bytes, new_stat = _target(new / "release" / relative, uid)
+    old_hash = verify_seal(old, owner=uid)["sha256"]["release"]
+    new_hash = verify_seal(new, owner=uid)["sha256"]["release"]
+    if (old_bytes == new_bytes or os.path.samestat(old_stat, new_stat) or
+            _release_hash(old / "release", uid, replacement=(
+                relative, _sha(old_bytes), _sha(new_bytes))) != new_hash):
+        raise DestinationRefused("original_managed_delta_requires_promotion")
+    return old_bytes, old_stat, new_bytes, new_stat, old_hash, new_hash
+
+
+def _write_bound_managed_file_locked(store, record: dict, preimage: tuple, *,
+                                     parent: Path, active: Path, attest) -> dict:
+    """One original FD9/Config/P2 replacement. Keep the Config save fenced."""
+    from shared_apply_seal import _release_hash, _stat
+
+    if (record.get("phase") != "prepared" or "found" in record or
+            record.get("manifest", {}).get("schema") != 1 or
+            record.get("previous_manifest", {}).get("schema") != 1 or
+            record["detail"]["page"] != "strategies"):
+        raise DestinationRefused("original_managed_prepared_required")
+    name, old_sha, new_sha, old_identity, new_identity, live_identity = preimage
+    content, old_stat, desired, new_stat, old_hash, new_hash = _managed_write_images(
+        store, record, name, parent)
+    path = active / "managed" / name
+    uid = store.owner
+    _stat(active, uid, directory=True)
+    current, current_stat = _target(path, uid)
+    if (old_sha != _sha(content) or new_sha != _sha(desired) or current != content or
+            (old_identity, new_identity, live_identity) != tuple(map(_target_identity,
+                (old_stat, new_stat, current_stat))) or
+            len({identity[:2] for identity in (old_identity, new_identity, live_identity)}) != 3 or
+            _release_hash(active, uid) != old_hash):
+        raise DestinationRefused("original_managed_preimage_changed")
+    row = {"name": name, "before_sha256": old_sha, "after_sha256": new_sha,
+           "before_identity": list(live_identity)}
+    record = store._checkpoint_managed_write(record, row, attest, shared_work_parent=parent)
+
+    def stage(phase, item, data, info):
+        nonlocal record
+        if phase == "ready":
+            new_now, new_info = _target(parent / record["detail"]["id"] / "release" /
+                                       "managed" / name, uid)
+            if new_now != desired or _target_identity(new_info) != new_identity:
+                raise DestinationRefused("original_managed_candidate_changed")
+            changes = {"ready": {**_stage_pin(info, data), "temp": item.name}}
+        else:
+            if _release_hash(active, uid) != new_hash:
+                raise DestinationRefused("original_managed_after_release_changed")
+            changes = {"installed": list(_target_identity(info))}
+        record = store._checkpoint_managed_write(record, {**record["managed"], **changes},
+                                                 attest, shared_work_parent=parent)
+
+    _replace(path, content, desired, uid, stage_fn=stage, expected_identity=live_identity)
+    return record
+
+
+def _restore_bound_managed_file_locked(store, record: dict, *, parent: Path,
+                                       active: Path, attest) -> dict:
+    """Recover one interrupted pre-save CAS with an independently attested owner."""
+    from shared_apply_operation import MANAGED_WRITING
+    from shared_apply_seal import _release_hash, _stat
+
+    if record.get("phase") != MANAGED_WRITING or store.read() != record or attest() is not True:
+        raise DestinationRefused("original_managed_restore_owner_required")
+    row = record["managed"]
+    name = row["name"]
+    before, _, after, _, old_hash, new_hash = _managed_write_images(store, record, name, parent)
+    if (row["before_sha256"], row["after_sha256"]) != (_sha(before), _sha(after)):
+        raise DestinationRefused("original_managed_restore_sources_changed")
+    path = active / "managed" / name
+    uid = store.owner
+    _stat(active, uid, directory=True)
+
+    def observe():
+        raw, info = _target(path, uid)
+        identity = list(_target_identity(info))
+        if raw == before and (identity == row["before_identity"] or
+                "restore" in row and _matches_stage(row["restore"], raw, info) and
+                identity[5:] == row["before_identity"][5:]):
+            return "before", identity
+        if (raw == after and "ready" in row and _matches_stage(row["ready"], raw, info) and
+                identity[5:] == row["before_identity"][5:] and
+                ("installed" not in row or identity == row["installed"])):
+            return "after", identity
+        raise DestinationRefused("original_managed_restore_foreign_image")
+
+    state, identity = observe()
+    temps = [_found_temp(path, row[k], uid) for k in ("ready", "restore") if k in row]
+    for temp in temps:
+        if temp is not None:
+            temp.unlink()
+            _sync(temp.parent)
+    if (observe() != (state, identity) or
+            _release_hash(active, uid) != (old_hash if state == "before" else new_hash)):
+        raise DestinationRefused("original_managed_restore_release_changed")
+    if state == "after":
+        def stage(phase, item, data, info):
+            nonlocal record, row
+            if phase == "ready":
+                row = {**row, "restore": {**_stage_pin(info, data), "temp": item.name}}
+                record = store._checkpoint_managed_write(record, row, attest,
+                                                         shared_work_parent=parent)
+
+        _replace(path, after, before, uid, stage_fn=stage, expected_identity=tuple(identity))
+
+    # Recovery may itself resume after rename but before directory fsync.
+    _sync(path.parent)
+
+    def restored():
+        return attest() is True and observe()[0] == "before" and _release_hash(active, uid) == old_hash
+
+    return store._checkpoint_managed_write(record, None, restored, shared_work_parent=parent)
 
 
 def _observe_found_source(path: Path, name: str, row: tuple,

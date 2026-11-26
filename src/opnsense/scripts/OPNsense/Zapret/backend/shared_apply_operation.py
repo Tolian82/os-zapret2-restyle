@@ -41,6 +41,7 @@ FOUND_CONFIG_PHASES = frozenset(("found-config-saving", "found-config-saved"))
 FOUND_POST_PHASES = frozenset(("found-files-written", *FOUND_CONFIG_PHASES))
 FOUND_ROLLBACK_FROM = frozenset((*FOUND_FILE_PHASES, "found-config-saving"))
 FOUND_RESTORING = "found-restoring"
+MANAGED_WRITING = "managed-writing"
 FOUND_RUNTIME_NEXT = {
     "found-config-saved": {"activating"},
     "activating": {"activated"},
@@ -61,7 +62,7 @@ PHASES = frozenset((
     "prepared", "activating", "activated", "config-saved",
     "epoch-finalizing", "committed", "restored", "restore-failed", "requires-review",
     "found-files-writing", "found-files-written",
-    "found-config-saving", "found-config-saved", FOUND_RESTORING,
+    "found-config-saving", "found-config-saved", FOUND_RESTORING, MANAGED_WRITING,
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -208,18 +209,70 @@ def _validate_found_stages(stages: object) -> dict:
         if not isinstance(row, dict) or set(row) != {"state", "pin"} or \
                 row["state"] not in ("ready", "installed"):
             raise SharedOperationError("invalid found staged source status")
-        pin = row["pin"]
-        fields = {"device", "inode", "mtime_ns", "size", "sha256"}
-        if not isinstance(pin, dict) or set(pin) not in (fields, fields | {"temp"}) or \
-                any(type(pin[k]) is not int or pin[k] <= 0
-                    for k in ("device", "inode", "mtime_ns")) or \
-                type(pin["size"]) is not int or pin["size"] < 0 or \
-                type(pin["sha256"]) is not str or not DIGEST.fullmatch(pin["sha256"]):
-            raise SharedOperationError("invalid found staged inode pin")
-        if "temp" in pin and (not isinstance(pin["temp"], str) or not re.fullmatch(
-                r"\.auto-(?:detect|hostlist)-[a-f0-9]{32}\.tmp", pin["temp"])):
-            raise SharedOperationError("invalid found temporary filename")
+        _validate_stage_pin(row["pin"])
     return stages
+
+
+def _validate_stage_pin(pin: object) -> None:
+    fields = {"device", "inode", "mtime_ns", "size", "sha256"}
+    if not isinstance(pin, dict) or set(pin) not in (fields, fields | {"temp"}) or \
+            any(type(pin[k]) is not int or pin[k] <= 0
+                for k in ("device", "inode", "mtime_ns")) or \
+            type(pin["size"]) is not int or pin["size"] < 0 or \
+            type(pin["sha256"]) is not str or not DIGEST.fullmatch(pin["sha256"]):
+        raise SharedOperationError("invalid staged inode pin")
+    if "temp" in pin and (not isinstance(pin["temp"], str) or not re.fullmatch(
+            r"\.auto-(?:detect|hostlist)-[a-f0-9]{32}\.tmp", pin["temp"])):
+        raise SharedOperationError("invalid staged temporary filename")
+
+
+_MANAGED_BASE = {"name", "before_sha256", "after_sha256", "before_identity"}
+
+
+def _validate_managed_write(record: dict) -> None:
+    from neutral_effective_diff import _REF_FILE
+
+    row = record["managed"]
+    if (set(record) != {"schema", "phase", "detail", "previous", "manifest",
+                        "previous_manifest", "managed"} or record["phase"] != MANAGED_WRITING or
+            record["detail"]["page"] != "strategies" or
+            record["previous"]["candidate"] != record["detail"]["base"] or
+            record["manifest"]["schema"] != 1 or record["previous_manifest"]["schema"] != 1 or
+            type(row) is not dict or not _MANAGED_BASE <= row.keys() or
+            row.keys() - _MANAGED_BASE - {"ready", "installed", "restore"} or
+            type(row["name"]) is not str or not _REF_FILE.fullmatch(row["name"]) or
+            any(type(row[k]) is not str or not DIGEST.fullmatch(row[k])
+                for k in ("before_sha256", "after_sha256")) or
+            row["before_sha256"] == row["after_sha256"] or
+            ("ready" not in row and ("installed" in row or "restore" in row))):
+        raise SharedOperationError("invalid original managed write intent")
+    for key in ("before_identity", "installed"):
+        if key not in row:
+            continue
+        identity = row[key]
+        if (type(identity) is not list or len(identity) != 9 or
+                any(type(n) is not int or n < 0 for n in identity) or
+                not identity[1] or identity[8] != 1 or not stat.S_ISREG(identity[5]) or
+                identity[5] & 0o022):
+            raise SharedOperationError("invalid managed file identity")
+    for key, digest in (("ready", "after_sha256"), ("restore", "before_sha256")):
+        if key in row:
+            pin = row[key]
+            _validate_stage_pin(pin)
+            if (not pin.get("temp", "").startswith(".auto-detect-") or
+                    pin["sha256"] != row[digest]):
+                raise SharedOperationError("invalid managed file checkpoint")
+    if "ready" in row and [row["ready"]["device"], row["ready"]["inode"]] == row["before_identity"][:2]:
+        raise SharedOperationError("managed staged inode aliases the preimage")
+    if "restore" in row and row["restore"]["temp"] == row["ready"]["temp"]:
+        raise SharedOperationError("managed restore aliases the forward temporary name")
+    if "installed" in row:
+        installed = row["installed"]
+        ready = row["ready"]
+        if ([installed[i] for i in (0, 1, 3, 4)] !=
+                [ready[k] for k in ("device", "inode", "mtime_ns", "size")] or
+                installed[5:] != row["before_identity"][5:]):
+            raise SharedOperationError("managed installed inode differs from ready")
 
 
 def _validate_found_post(post: object) -> dict:
@@ -267,7 +320,7 @@ def _validate_record(record: object) -> dict:
         {"schema", "phase", "detail", "previous", "found"},
     )
     if (type(record) is not dict or
-            (keys - {"failure", "manifest", "previous_manifest"}) not in allowed or
+            (keys - {"failure", "manifest", "previous_manifest", "managed"}) not in allowed or
             ("failure" in record and (record.get("phase") not in
                                       ("committed", "requires-review") or
                                       "found" in record)) or
@@ -305,6 +358,10 @@ def _validate_record(record: object) -> dict:
         if ((prior is None and record["phase"] != "prepared") or
                 (prior is not None and prior["candidate"] != record["detail"]["base"])):
             raise SharedOperationError("bound found predecessor Config mismatch")
+    if ("managed" in record) != (record["phase"] == MANAGED_WRITING):
+        raise SharedOperationError("managed write phase lacks original intent")
+    if "managed" in record:
+        _validate_managed_write(record)
     if "failure" in record:
         failure = record["failure"]
         late = record["phase"] == "committed"
@@ -815,6 +872,51 @@ class SharedApplyOperation:
         check_root()
         if self.read() != record:
             raise SharedOperationError("ordinary Config save owner changed")
+
+    def _checkpoint_managed_write(self, expected: dict, managed: dict | None, attest, *,
+                                  shared_work_parent: Path) -> dict:
+        """Fsync one managed list intent or inode pin in the original WAL."""
+        from neutral_root_stage import verify_original_operation_pins
+        from voice_ipfw_adapter import require_lifecycle_lock
+
+        if self.read() != expected or not callable(attest):
+            raise SharedOperationError("managed write owner changed")
+        next_record = dict(expected)
+        if expected["phase"] == "prepared" and type(managed) is dict and managed.keys() == _MANAGED_BASE:
+            next_record.update(phase=MANAGED_WRITING, managed=managed)
+        elif expected["phase"] == MANAGED_WRITING:
+            if managed is None:
+                next_record.pop("managed")
+                next_record["phase"] = "restored"
+            else:
+                stage = expected["managed"]
+                changed = {key for key in stage.keys() | managed.keys()
+                           if stage.get(key) != managed.get(key)}
+                available = {"restore"} if "ready" in stage else {"ready"}
+                if "ready" in stage and not {"installed", "restore"} & stage.keys():
+                    available.add("installed")
+                if not stage.keys() <= managed.keys() or len(changed) != 1 or not changed <= available:
+                    raise SharedOperationError("managed write checkpoint out of order")
+                next_record["managed"] = managed
+        else:
+            raise SharedOperationError("managed write requires prepared owner")
+        _validate_record(next_record)
+
+        def verify():
+            require_lifecycle_lock()
+            verify_original_operation_pins(record=expected, parent=shared_work_parent,
+                                           owner_uid=self.owner)
+            if self.read() != expected:
+                raise SharedOperationError("managed write owner changed")
+
+        verify()
+        if attest() is not True:
+            raise SharedOperationError("managed write physical witness refused")
+        verify()
+        result = self._persist_record(next_record)
+        if self.read() != result:
+            raise SharedOperationError("managed write durable readback refused")
+        return result
 
     def _advance_bound_ordinary(self, phase: str, expected: dict, attest, *,
                                 shared_work_parent: Path | None = None) -> dict:

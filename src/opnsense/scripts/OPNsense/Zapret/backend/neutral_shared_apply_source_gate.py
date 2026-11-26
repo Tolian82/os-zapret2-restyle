@@ -1463,7 +1463,7 @@ def _managed_change_preimages(old: EffectiveSnapshot, candidate: EffectiveSnapsh
     must equal the live old bytes; the sealed candidate must match S08d.
     Return in-flight evidence, not a durable intent or a Reload permit.
     """
-    from auto_detect_destination_commit import _target, _file_identity
+    from auto_detect_destination_commit import _target, _target_identity
 
     if (decision != _ordinary_effective_decision((old, True), (candidate, True)) or
             decision.kind not in ("NO_CHANGE", "SAVE_ONLY", "RELOAD_SAFE_CANDIDATE")):
@@ -1488,7 +1488,7 @@ def _managed_change_preimages(old: EffectiveSnapshot, candidate: EffectiveSnapsh
         data, info = _target(root / "managed" / name, owner_uid)
         if hashlib.sha256(data).hexdigest() != expected:
             raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_BYTES_CHANGED")
-        return data, (*_file_identity(info), info.st_mode, info.st_nlink)
+        return data, _target_identity(info)
 
     rows = []
     for name in names:
@@ -1622,6 +1622,77 @@ def native_recheck_running_prepared_fd9(
     except (OSError, ValueError, RuntimeError, KeyError, TypeError, AttributeError,
             subprocess.SubprocessError):
         raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_PRECHECK_REFUSED") from None
+
+
+def native_write_running_managed_file_fd9(
+        operation: str, raw_pipe: bytes, *, source: SourceGateReceipt,
+        semantic: OriginalSemanticReceipt, config_fd: int, config_digest: str) -> dict:
+    """Stage and replace one referenced list under the original three locks."""
+    from auto_detect_destination_commit import (
+        exclusive_destination_lock, _write_bound_managed_file_locked,
+        _restore_bound_managed_file_locked)
+    from auto_detect_gui_hostlist import AUTO_LOCK
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_schema3_previous_physical import (
+        _running_native, _running_executable_identity, CHILD_EXEC, CHILD_PID,
+        MONITOR_PID, COMMON_ACTIVE)
+    from shared_apply_operation import SharedApplyOperation, MANAGED_WRITING
+    from shared_apply_seal import WORK
+    from voice_firewall_transaction import verify_prior_state
+    from voice_ipfw_adapter import (
+        require_lifecycle_lock, FreeBSDIPFWAdapter, shared_release_manifest)
+
+    physical = native_recheck_running_prepared_fd9(
+        operation, raw_pipe, source=source, semantic=semantic,
+        config_fd=config_fd, config_digest=config_digest)
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "prepared" or "found" in record or
+            record["detail"]["id"] != physical.generation or
+            record["detail"]["base"] != physical.config_base_sha256 or
+            physical.config_base_sha256 != config_digest or
+            record["manifest"]["root_sha256"] != semantic.candidate_root_sha256 or
+            record["previous"]["id"] != physical.previous_generation or
+            record["previous_manifest"]["root_sha256"] != physical.previous_root_sha256 or
+            record["manifest"]["schema"] != 1 or record["previous_manifest"]["schema"] != 1 or
+            physical.epoch_sha256 is not None or physical.executable_identity is None or
+            semantic.lifecycle_proposal != "RELOAD" or semantic.decision.kind != "RELOAD_SAFE_CANDIDATE" or
+            semantic.decision.changed_inactive or len(semantic.decision.changed_active) != 1 or
+            not physical.managed_preimages or len(physical.managed_preimages) != 1 or
+            physical.managed_preimages[0][0] != semantic.decision.changed_active[0]):
+        raise OriginalSourceGateRefused("S10_MANAGED_SINGLE_ACTIVE_SCOPE_REQUIRED")
+    prior_release = WORK / physical.previous_generation / "release"
+
+    def attest():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        observed = _running_native(prior_release, owner_uid=0,
+                                   child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+        engine = _s10_native_bound_engine_readback()
+        if (observed != physical.running or _running_executable_identity(
+                observed.pid, engine["engine_sha256"], executable=Path(CHILD_EXEC),
+                runner=subprocess.run) != physical.executable_identity):
+            raise OriginalSourceGateRefused("S10_MANAGED_RUNNING_OWNER_CHANGED")
+        capture = shared_release_manifest(prior_release)
+        verify_prior_state(FreeBSDIPFWAdapter(19000, 19099), capture, capture)
+        return True
+
+    with exclusive_destination_lock(AUTO_LOCK, 0):
+        try:
+            return _write_bound_managed_file_locked(
+                store, record, physical.managed_preimages[0], parent=WORK,
+                active=COMMON_ACTIVE, attest=attest)
+        except (OSError, ValueError, RuntimeError):
+            pending = store.read()
+            if (pending is not None and pending["phase"] == MANAGED_WRITING and
+                    all(pending.get(key) == value for key, value in record.items()
+                        if key != "phase")):
+                try:
+                    _restore_bound_managed_file_locked(store, pending, parent=WORK,
+                                                       active=COMMON_ACTIVE, attest=attest)
+                except (OSError, ValueError, RuntimeError):
+                    raise OriginalSourceGateRefused("S10_MANAGED_RESTORE_UNCERTAIN") from None
+            raise
 
 
 def native_begin_quiescent_bound_promotion_fd9(
