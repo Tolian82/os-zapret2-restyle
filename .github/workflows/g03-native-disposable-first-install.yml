@@ -19,6 +19,11 @@ on:
         type: boolean
         default: false
         required: false
+      s10_inode_probe:
+        description: "S10: isolated native inode/ctime experiment only (no package or Apply)"
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -84,6 +89,7 @@ jobs:
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
           php -l src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php
           python3.13 scripts/test-s10-first-enabled-trace.py
+          python3.13 scripts/stage2-opnsense-s10-inode-probe.py --portable
           python3.13 scripts/test-voice-release-stage.py VoiceReleaseStageTests.test_common_hostlist_delta_preserves_full_release_seal VoiceReleaseStageTests.test_source_xml_changes_mid_stage_are_detected
           php scripts/test-g04-initial-config.php
           python3.13 scripts/test-stage2-opnsense-real-native-clean-install.py RealInstallContracts.test_lc05_exact_native_first_config_is_only_new_subtree
@@ -93,7 +99,7 @@ jobs:
   native-g03:
     needs: [fast-g03, scope-g03]
     if: needs.scope-g03.outputs.native_required == 'true'
-    name: Real OPNsense clean first upstream install and reinstall
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.s10_inode_probe && 'S10 isolated native inode probe (not G03 acceptance)' || 'Real OPNsense clean first upstream install and reinstall' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -104,7 +110,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Reuse existing native G03 guest for authenticated Chromium F5
-        if: github.event_name != 'workflow_dispatch' || !inputs.s10_first_commit
+        if: github.event_name != 'workflow_dispatch' || (!inputs.s10_first_commit && !inputs.s10_inode_probe)
         run: |
           set -eu
           python3.13 -m py_compile scripts/stage2-opnsense-g03-five-editor-f5.py
@@ -129,6 +135,14 @@ jobs:
           run: |
             set -eu
             /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            if [ "${{ github.event_name == 'workflow_dispatch' && inputs.s10_inode_probe && '1' || '0' }}" = 1 ]; then
+              if [ "${{ github.event_name == 'workflow_dispatch' && inputs.s10_first_commit && '1' || '0' }}" = 1 ]; then
+                echo G03_INODE_PROBE_MUST_BE_EXCLUSIVE >&2
+                exit 69
+              fi
+              GITHUB_ACTIONS=true ZAPRET2_G03_DISPOSABLE_NATIVE=1 /usr/local/bin/python3 scripts/stage2-opnsense-s10-inode-probe.py
+              exit 0
+            fi
             pkg update -f
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
@@ -170,7 +184,7 @@ jobs:
             cat g03-five-f5-ci.pub >> /root/.ssh/authorized_keys
             chmod 0600 /root/.ssh/authorized_keys
       - name: Authenticated installed Chromium F5 of all FIVE saved HOSTLIST editors
-        if: github.event_name != 'workflow_dispatch' || !inputs.s10_first_commit
+        if: github.event_name != 'workflow_dispatch' || (!inputs.s10_first_commit && !inputs.s10_inode_probe)
         env:
           ZAPRET2_G03_FIVE_F5: '1'
         run: |
@@ -202,7 +216,7 @@ jobs:
           curl -kfsS --max-time 20 -o /dev/null https://127.0.0.1:18443/index.php
           python3.13 scripts/stage2-opnsense-g03-five-editor-f5.py
       - name: Original Config FD4 and FD9/P2 no-write PREPARED recovery on same G03 guest
-        if: github.event_name != 'workflow_dispatch' || !inputs.s10_first_commit
+        if: github.event_name != 'workflow_dispatch' || (!inputs.s10_first_commit && !inputs.s10_inode_probe)
         run: |
           set -eu
           test -s "$RUNNER_TEMP/g03-readonly-browser-ssh/key"
