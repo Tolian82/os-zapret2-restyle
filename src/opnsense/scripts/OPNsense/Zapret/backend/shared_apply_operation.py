@@ -836,6 +836,34 @@ class SharedApplyOperation:
             raise SharedOperationError("bound ordinary durable readback refused")
         return result
 
+    def _record_native_bound_activated(self, record: dict, *, preimage,
+                                       config_fd: int, config_digest: str) -> dict:
+        """Same original WAL after physical promotion, before Config save.
+
+        An unqualified staged image retains ACTIVATING. This internal
+        in-flight transition is not a cold recovery or launcher command.
+        """
+        from neutral_schema3_quiescent_preimage import (
+            StagedBoundRuntimeReceipt, attest_bound_quiescent_staged_under_fd9)
+
+        if (self.root != DEFAULT_ROOT or self.owner != 0 or
+                type(record) is not dict or self.read() != record or
+                record.get("phase") != "activating" or "found" in record or
+                record.get("manifest", {}).get("schema") != 1):
+            raise SharedOperationError("bound native activated scope refused")
+
+        def attest():
+            receipt = attest_bound_quiescent_staged_under_fd9(
+                record, preimage=preimage, config_fd=config_fd,
+                config_digest=config_digest)
+            return (type(receipt) is StagedBoundRuntimeReceipt and
+                    receipt.generation == record["detail"]["id"] and
+                    receipt.root_sha256 == record["manifest"]["root_sha256"] and
+                    receipt.config_base_sha256 == record["detail"]["base"])
+
+        return self._advance_bound_ordinary("activated", record, attest)
+
+
     def _finish_native_bound_ordinary(self, record: dict, *, config_fd: int,
                                       config_digest: str, enabled: bool,
                                       runtime_mode: str) -> dict:

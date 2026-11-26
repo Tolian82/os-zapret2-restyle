@@ -1424,14 +1424,17 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_SEMANTIC_PREPARED_REFUSED") from None
 
-def native_begin_quiescent_bound_promotion_fd9(operation: str, raw_pipe: bytes) -> dict:
+def native_begin_quiescent_bound_promotion_fd9(
+        operation: str, raw_pipe: bytes) -> tuple[dict, "QuiescentPreimage"]:
     """Durable first ordinary bound checkpoint, under the existing FD9.
 
     Internal coordinator only: no new command or lifecycle action. A
     running predecessor (including one requiring retirement) is refused
     here. Both passes derive source and the native quiescent proof from
-    the original readers, not a caller-supplied semantic receipt. The
-    original physical coordinator must still implement final pre-action
+    the original readers, not a caller-supplied semantic receipt. Retain
+    the exact preimage alongside the resulting record in the SAME in-flight
+    FD9 coordinator; never reconstruct it after an interrupted promotion.
+    The original physical coordinator must still implement final pre-action
     reattestation, actual promotion and recovery before calling this.
     """
     from shared_apply_operation import SharedApplyOperation
@@ -1473,8 +1476,9 @@ def native_begin_quiescent_bound_promotion_fd9(operation: str, raw_pipe: bytes) 
             return source, semantic
 
         first = observe()
-        return store._advance_bound_ordinary(
+        record = store._advance_bound_ordinary(
             "activating", before, lambda: observe() == first)
+        return record, first[1].previous_physical
     except (OSError, ValueError, RuntimeError, TypeError, KeyError):
         raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_PRECHECK_REFUSED") from None
 

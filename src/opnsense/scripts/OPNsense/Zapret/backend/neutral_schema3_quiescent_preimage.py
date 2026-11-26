@@ -258,6 +258,134 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
         raise QuiescentPreimageRefused("ORIGINAL_QUIESCENT_PREIMAGE_REFUSED") from None
 
 
+@dataclass(frozen=True)
+class StagedBoundRuntimeReceipt:
+    generation: str
+    root_sha256: str
+    config_base_sha256: str
+    release_sha256: str
+    backup_sha256: str | None
+    running: object
+    kernel_state: str
+
+
+def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: QuiescentPreimage,
+                                            config_fd: int, config_digest: str) -> StagedBoundRuntimeReceipt:
+    """Reversible ordinary cutover before Config::save, not cold recovery.
+
+    Use the original in-flight quiescent preimage, not a reconstruction
+    of the old state after installation. Only inert schema1 candidates
+    from an empty or stopped inert predecessor qualify here. No new locks,
+    PHP calls, process signals, IPFW writes or journal mutations.
+    """
+    import sys
+    import json
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import (
+        verify_original_operation_pins, _verify_original_pinned_root, _original_plan_matches)
+    from neutral_schema3_previous_physical import _running_native
+    from voice_firewall_transaction import verify_staged_state
+
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(record) is not dict or type(preimage) is not QuiescentPreimage or
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+            raise QuiescentPreimageRefused("BOUND_STAGED_NATIVE_SCOPE_REQUIRED")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        if (store.read() != record or record["phase"] not in ("activating", "activated") or
+                "found" in record or record.get("manifest", {}).get("schema") != 1 or
+                record.get("previous_manifest", {}).get("schema", 1) != 1):
+            raise QuiescentPreimageRefused("BOUND_STAGED_ORDINARY_INERT_REQUIRED")
+        detail, pin = record["detail"], record["manifest"]
+        prior = record.get("previous")
+        old_id = None if prior is None else prior["id"]
+        if (preimage.generation != detail["id"] or preimage.root_sha256 != pin["root_sha256"] or
+                preimage.config_base_sha256 != detail["base"] or config_digest != detail["base"] or
+                preimage.config_candidate_sha256 != detail["candidate"] or
+                preimage.previous_generation != old_id or preimage.authorization != "NONE" or
+                preimage.physical_transition_allowed or preimage.promotion_allowed or
+                preimage.original_executor_recheck_required is not True or
+                preimage.kernel_state not in ("native-kernel-absent", "native-managed-kernel-empty") or
+                (prior is None and (preimage.old_state != "first-install-empty" or
+                                    preimage.retirement_state != "no-prior-data" or
+                                    preimage.previous_release_sha256 is not None)) or
+                (prior is not None and (preimage.old_state != "committed-stopped" or
+                                        preimage.retirement_state != "inert-no-producer-data" or
+                                        prior["candidate"] != detail["base"]))):
+            raise QuiescentPreimageRefused("BOUND_STAGED_PREIMAGE_CHANGED")
+        work = WORK / detail["id"]
+        release = work / "release"
+        name = COMMON_ACTIVE.name
+        backup = COMMON_ACTIVE.with_name("runtime-v2-backups") / f"{name}-{detail['id']}"
+        stage = COMMON_ACTIVE.parent / f".{name}.stage.{detail['id']}"
+        parked = COMMON_ACTIVE.parent / f".{name}.old.{detail['id']}"
+
+        def observe():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise QuiescentPreimageRefused("BOUND_STAGED_OWNER_CHANGED")
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            root = json.loads(_verify_original_pinned_root(
+                detail=detail, binding=pin, parent=WORK, owner_uid=0))
+            service = root["service"]
+            enabled = preimage.verified_wan_device is not None
+            if (root["schema"] != 1 or root["generation"] != detail["id"] or
+                    service["enabled"] is not enabled or
+                    service["target_mode"] not in ("all", "list", "auto") or
+                    (enabled and service["target_mode"] == "auto") or
+                    inspect_inert_release(release, owner_uid=0) != "inactive"):
+                raise QuiescentPreimageRefused("BOUND_STAGED_ROOT_MODE_CHANGED")
+            tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
+            if _present(stage) or _present(parked):
+                raise QuiescentPreimageRefused("BOUND_STAGED_ATOMIC_RESIDUE")
+            old_tree = None
+            if prior is None:
+                # The pristine gate also allows an empty active directory.
+                _safe_empty_directory(backup, 0)
+            else:
+                old_work = WORK / prior["id"]
+                if (not _original_plan_matches(parent=WORK, generation=prior["id"],
+                                               journal={"detail": prior}, owner_uid=0) or
+                        inspect_inert_release(old_work / "release", owner_uid=0) != "inactive"):
+                    raise QuiescentPreimageRefused("BOUND_STAGED_PREVIOUS_SOURCE_CHANGED")
+                old_tree = _full_prior_tree(old_work, backup, 0)
+                if old_tree != preimage.previous_release_sha256:
+                    raise QuiescentPreimageRefused("BOUND_STAGED_BACKUP_CHANGED")
+            _safe_empty_directory(PRODUCER_ROOT, 0)
+            process = None
+            if enabled:
+                process = _running_native(release, owner_uid=0,
+                                          child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+                desired = shared_release_manifest(release)
+                if desired["rule_base"] != 19000 or desired["rule_max"] not in (19010, 19099):
+                    raise QuiescentPreimageRefused("BOUND_STAGED_KERNEL_SCOPE_INVALID")
+                empty = {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}
+                # Stopped prior has an empty physical kernel, even when its
+                # sealed manifest describes previously enabled Voice rules.
+                verify_staged_state(FreeBSDIPFWAdapter(19000, 19099), empty, desired)
+                kernel = "native-managed-kernel-staged"
+            else:
+                _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+                kernel = _empty_kernel(release)
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise QuiescentPreimageRefused("BOUND_STAGED_OWNER_CHANGED")
+            return StagedBoundRuntimeReceipt(detail["id"], pin["root_sha256"], config_digest,
+                                             tree, old_tree, process, kernel)
+
+        first = observe()
+        if observe() != first:
+            raise QuiescentPreimageRefused("BOUND_STAGED_WITNESS_CHANGED")
+        return first
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError, AttributeError,
+            subprocess.SubprocessError):
+        raise QuiescentPreimageRefused("BOUND_STAGED_PHYSICAL_ATTEST_REFUSED") from None
+
+
 def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
     """Qualify only the existing original ordinary cold rollback route.
 
