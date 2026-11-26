@@ -12,8 +12,13 @@ on:
       - scripts/stage2-opnsense-g03-five-editor-f5.py
       - scripts/stage2-opnsense-g03-native-prepared.py
       - scripts/stage2-opnsense-g03-native-prepared.php
-      - .github/workflows/g03-native-disposable-first-install.yml
   workflow_dispatch:
+    inputs:
+      s10_first_commit:
+        description: "S10: first protected native commit only (disposable guest)"
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -91,6 +96,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Reuse existing native G03 guest for authenticated Chromium F5
+        if: github.event_name != 'workflow_dispatch' || !inputs.s10_first_commit
         run: |
           set -eu
           python3.13 -m py_compile scripts/stage2-opnsense-g03-five-editor-f5.py
@@ -143,7 +149,11 @@ jobs:
             # Test-only files outside installed pkg, BEFORE first ordinary Apply.
             install -m 0700 scripts/stage2-opnsense-g03-native-prepared.py /root/g03-native-prepared.py
             install -m 0600 scripts/stage2-opnsense-g03-native-prepared.php /root/g03-native-prepared.php
-            GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 ZAPRET2_G03_PRISTINE_COLD=1 /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
+            GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 ZAPRET2_G03_PRISTINE_COLD=1 ZAPRET2_G03_PRISTINE_FIRST_COMMIT="${{ github.event_name == 'workflow_dispatch' && inputs.s10_first_commit && '1' || '0' }}" /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
+            # The explicit first-commit run ends on this same disposable guest.
+            if [ "${{ github.event_name == 'workflow_dispatch' && inputs.s10_first_commit && '1' || '0' }}" = 1 ]; then
+              exit 0
+            fi
             # Guest is disposable; host Chromium gets READ-ONLY browser access
             # through a one-run SSH key. No plugin persistence or new service.
             test -s g03-five-f5-ci.pub
@@ -152,6 +162,7 @@ jobs:
             cat g03-five-f5-ci.pub >> /root/.ssh/authorized_keys
             chmod 0600 /root/.ssh/authorized_keys
       - name: Authenticated installed Chromium F5 of all FIVE saved HOSTLIST editors
+        if: github.event_name != 'workflow_dispatch' || !inputs.s10_first_commit
         env:
           ZAPRET2_G03_FIVE_F5: '1'
         run: |
@@ -183,6 +194,7 @@ jobs:
           curl -kfsS --max-time 20 -o /dev/null https://127.0.0.1:18443/index.php
           python3.13 scripts/stage2-opnsense-g03-five-editor-f5.py
       - name: Original Config FD4 and FD9/P2 no-write PREPARED recovery on same G03 guest
+        if: github.event_name != 'workflow_dispatch' || !inputs.s10_first_commit
         run: |
           set -eu
           test -s "$RUNNER_TEMP/g03-readonly-browser-ssh/key"

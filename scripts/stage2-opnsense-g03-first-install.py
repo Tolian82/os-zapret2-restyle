@@ -74,6 +74,21 @@ def five_hostlist_native_apply(config_path: Path):
     editor_names = {"youtube": "youtube_found", "user": "user_found", "auto": "shared_found"}
     runpy.run_path(str(Path(__file__).with_name("p5b2b-native-witness.py")))["set_guest_lo0"]()
 
+    if os.environ.get("ZAPRET2_G03_PRISTINE_FIRST_COMMIT") == "1":
+        need(os.environ.get("ZAPRET2_G03_PRISTINE_COLD") == "1" and
+             os.environ.get("ZAPRET2_G03_DISPOSABLE_NATIVE") == "1" and
+             os.environ.get("GITHUB_ACTIONS") == "true" and
+             sys.platform.startswith("freebsd") and os.geteuid() == 0,
+             "G03_FIRST_BOUND_DISPOSABLE_SCOPE_REQUIRED")
+        checked = subprocess.run(
+            [sys.executable, "/root/g03-native-prepared.py", "pristine-first-commit"],
+            env={**os.environ, "ZAPRET2_G03_COLD_PREPARED": "1"},
+            timeout=600, check=False)
+        need(checked.returncode == 0, "G03_FIRST_BOUND_NATIVE_COMMIT_REFUSED")
+        # The committed bound owner is not a legacy baseline. Do not run
+        # legacy GUI/Found fixtures over it or remove its genuine journal.
+        return
+
     gui = runpy.run_path(str(Path(__file__).with_name("stage2-opnsense-real-native-voice-http.py")))
     web = gui["GuestHttps"]()
     try:

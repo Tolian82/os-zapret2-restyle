@@ -193,7 +193,30 @@ def main():
           flush=True)
 
 
-def bound_manifest_main(*, stopped=False, cold=False):
+def verify_first_bound_commit(record, op, receipt, root, original, saved, status):
+    """Test-only readback: no success based solely on coordinator stdout."""
+    detail = record.get("detail", {})
+    pin = record.get("manifest", {})
+    need(record.get("phase") == "committed" and detail.get("id") == op and
+         detail.get("page") == "strategies" and detail.get("base") != detail.get("candidate") and
+         detail.get("changed_fields") == ["hostlist.mode"] and
+         "previous" not in record and "previous_manifest" not in record and "found" not in record and
+         pin.get("schema") == 1 and pin.get("generation") == op and
+         pin.get("candidate_sha256") == detail.get("candidate") and
+         re.fullmatch(r"[a-f0-9]{64}", record.get("first_running_sha256", "")) is not None and
+         root.is_file() and not root.is_symlink() and
+         receipt == "G03_BOUND_NATIVE_COMMIT=" + hashlib.sha256(root.read_bytes()).hexdigest() and
+         pin.get("root_sha256") == receipt.split("=", 1)[1],
+         "G03_FIRST_BOUND_COMMIT_WAL_OR_PIN_UNPROVEN")
+    need(saved == {"result": "committed", "snapshot": detail["candidate"], "enabled": "1"} and
+         status.returncode == 0 and status.stdout.strip() == "zapret is running" and
+         PIDFILE.is_file() and not PIDFILE.is_symlink() and
+         re.fullmatch(r"[1-9][0-9]*", PIDFILE.read_text().strip()) is not None and
+         snapshot()[2] == original[2],
+         "G03_FIRST_BOUND_COMMIT_NATIVE_READBACK_UNPROVEN")
+
+
+def bound_manifest_main(*, stopped=False, cold=False, first_commit=False):
     """One genuine original bound FD9 PREPARED proof for running/stopped owner.
 
     The STOPPED branch runs only after an explicit service stop on the
@@ -210,7 +233,7 @@ def bound_manifest_main(*, stopped=False, cold=False):
     expected_status = 1 if stopped or cold else 0
     native_status = subprocess.run([SERVICE, "status"], capture_output=True,
                                    text=True, timeout=30)
-    need(not (cold and stopped) and
+    need(not (cold and stopped) and (not first_commit or cold) and
          (previous is None if cold else (
              isinstance(previous, dict) and previous.get("phase") == "restored"
              and isinstance(prior, dict))) and
@@ -271,16 +294,17 @@ from shared_apply_seal import WORK, verify_seal
 from neutral_schema3_saved_wan_preimage import _native_preflight
 from neutral_schema3_quiescent_preimage import QuiescentPreimage
 from neutral_shared_apply_source_gate import (
-    native_bind_original_prepared_fd9, native_plan_original_prepared_fd9, MAX_PIPE)
+    native_bind_original_prepared_fd9, native_plan_original_prepared_fd9,
+    native_coordinate_original_prepared_fd9, MAX_PIPE)
 from voice_ipfw_adapter import require_lifecycle_lock
 op, mode = sys.argv[1:]
 try:
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     prior = store.read()
-    if mode not in ("running", "stopped", "cold"):
+    if mode not in ("running", "stopped", "cold", "first-commit"):
         raise RuntimeError("mode")
-    if mode == "cold":
+    if mode in ("cold", "first-commit"):
         if prior is not None:
             raise RuntimeError("G03_PRISTINE_COLD_WAL_ALREADY_PRESENT")
         old_owner = None
@@ -295,8 +319,20 @@ try:
     detail = {"id": op, "page": "strategies", "base": native["base"],
               "candidate": native["candidate"], "changed_fields": native["fields"]}
     store.advance("prepared", detail)
-    source, bound = native_bind_original_prepared_fd9(
-        op, sys.stdin.buffer.read(MAX_PIPE + 1))
+    raw = sys.stdin.buffer.read(MAX_PIPE + 1)
+    if mode == "first-commit":
+        route, committed, source, semantic = native_coordinate_original_prepared_fd9(op, raw)
+        if (route != "first-enabled-committed" or store.read() != committed or
+                committed.get("phase") != "committed" or committed.get("detail") != detail or
+                source.mode != "list" or source.requested_enabled is not True or
+                semantic.lifecycle_proposal != "START" or
+                type(semantic.previous_physical) is not QuiescentPreimage or
+                semantic.previous_physical.old_state != "first-install-empty" or
+                semantic.candidate_root_sha256 != committed["manifest"]["root_sha256"]):
+            raise RuntimeError("G03_FIRST_BOUND_COORDINATOR_OUTCOME_UNPROVEN")
+        print("G03_BOUND_NATIVE_COMMIT=" + committed["manifest"]["root_sha256"])
+        raise SystemExit(0)
+    source, bound = native_bind_original_prepared_fd9(op, raw)
     record = store.read()
     if (source.mode != "list" or source.requested_enabled is not True or
             record["phase"] != "prepared" or record.get("previous") != old_owner or
@@ -362,9 +398,19 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
     raise SystemExit(69)
 '''
     pinned = call(["/bin/sh", "-c", shell, "g03-bound-native", op,
-                   child, "cold" if cold else ("stopped" if stopped else "running")], locked=True)
+                   child, "first-commit" if first_commit else (
+                       "cold" if cold else ("stopped" if stopped else "running"))],
+                  locked=True, timeout=300 if first_commit else 180)
     record = json.loads(WAL.read_bytes())
     root = Path("/var/db/zapret2/shared-work") / op / "manifest.json"
+    if first_commit:
+        saved = json.loads(call([PHP, str(script / "shared_apply_config.php"), "saved",
+                                 op, "strategies"], locked=True))
+        status = subprocess.run([SERVICE, "status"], capture_output=True,
+                                text=True, timeout=30)
+        verify_first_bound_commit(record, op, pinned, root, original, saved, status)
+        print("G03_S10_FIRST_BOUND=PASS_REAL_CONFIG_ENGINE_IPFW_COMMITTED", flush=True)
+        return
     need(re.fullmatch(r"G03_BOUND_NATIVE_PIN=[a-f0-9]{64}", pinned) is not None and
          record.get("phase") == "prepared" and record.get("previous") == prior and
          record.get("manifest", {}).get("root_sha256") ==
@@ -396,14 +442,15 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
 
 
 
-def pristine_cold_native_main():
-    """Test-only before first ordinary Apply: no fabricated cold owner."""
+def pristine_cold_native_main(*, first_commit=False):
+    """Disposable first bound commit or existing read-only PREPARED proof."""
     engine = Path("/usr/local/etc/zapret2/binaries/my/dvtws2")
     release = Path("/var/db/zapret2-restyle/runtime.release")
     work = Path("/var/db/zapret2/shared-work")
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_G03_COLD_PREPARED") == "1" and
          os.environ.get("ZAPRET2_G03_PRISTINE_COLD") == "1" and
+         (not first_commit or os.environ.get("ZAPRET2_G03_PRISTINE_FIRST_COMMIT") == "1") and
          sys.platform.startswith("freebsd") and os.geteuid() == 0 and
          Path(SERVICE).is_file() and engine.is_file() and
          not engine.is_symlink() and release.is_file() and
@@ -414,8 +461,16 @@ def pristine_cold_native_main():
     original = snapshot()
     engine_sha = hashlib.sha256(engine.read_bytes()).hexdigest()
     release_bytes = release.read_bytes()
-    bound_manifest_main(cold=True)
+    bound_manifest_main(cold=True, first_commit=first_commit)
     final = json.loads(WAL.read_bytes())
+    if first_commit:
+        need(final.get("phase") == "committed" and
+             "previous" not in final and "previous_manifest" not in final and
+             snapshot()[2] == original[2] and
+             hashlib.sha256(engine.read_bytes()).hexdigest() == engine_sha and
+             release.read_bytes() == release_bytes,
+             "G03_PRISTINE_FIRST_COMMIT_OWNER_DRIFT")
+        return
     need(final.get("phase") == "restored" and "previous" not in final and
          "previous_manifest" not in final and isinstance(final.get("manifest"), dict) and
          snapshot() == original and
@@ -614,6 +669,8 @@ if __name__ == "__main__":
             config_save_uncertain_main()
         elif sys.argv[1:] == ["pristine-cold"]:
             pristine_cold_native_main()
+        elif sys.argv[1:] == ["pristine-first-commit"]:
+            pristine_cold_native_main(first_commit=True)
         elif sys.argv[1:] == ["stopped"]:
             # Only after the baseline has finished; Stage5 Guest D still
             # requires a genuinely RUNNING predecessor for partial/Config
@@ -628,7 +685,7 @@ if __name__ == "__main__":
         label = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
         prefix = ("G03_COLD_PARTIAL" if sys.argv[1:] == ["partial"] else
                   "G03_COLD_CONFIG" if sys.argv[1:] == ["config-uncertain"] else
-                  "G03_PRISTINE_COLD" if sys.argv[1:] == ["pristine-cold"] else
+                  "G03_PRISTINE_COLD" if sys.argv[1:] in (["pristine-cold"], ["pristine-first-commit"]) else
                   "G03_COLD_STOPPED" if sys.argv[1:] == ["stopped"] else
                   "G03_COLD_PREPARED")
         print(prefix + "=REFUSED:" + label, file=sys.stderr)
