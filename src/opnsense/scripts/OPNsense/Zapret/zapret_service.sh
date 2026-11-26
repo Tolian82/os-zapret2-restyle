@@ -3556,6 +3556,38 @@ pkg_update_finish_service()
     return 0
 }
 
+shared_apply_first_running_base_stop_service()
+{
+    # Private joined child of the original FD9 + native Config FD4 owner.
+    [ "$#" -eq 2 ] || return 64
+    case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#1}" -eq 32 ] || return 64
+    case "$2" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#2}" -eq 64 ] || return 64
+    [ -x "$PYTHON_RUNTIME" ] || return 69
+    _first_stop_guard=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+        guard-first-running-base-shell "$1" "$2") || return 70
+    case "$_first_stop_guard" in first-running-base-shell=qualified:*:*) ;; *) return 70 ;; esac
+    _first_stop_pids=${_first_stop_guard#first-running-base-shell=qualified:}
+    case "$_first_stop_pids" in *:*:*) return 70 ;; esac
+    _first_stop_child=${_first_stop_pids%%:*}
+    _first_stop_monitor=${_first_stop_pids#*:}
+    for _first_stop_pid in "$_first_stop_child" "$_first_stop_monitor"; do
+        case "$_first_stop_pid" in ""|*[!0-9]*) return 70 ;; esac
+        [ "$_first_stop_pid" -gt 1 ] 2>/dev/null || return 70
+    done
+    [ "$_first_stop_child" != "$_first_stop_monitor" ] || return 70
+    [ "$(common_pidfile_read "$CHILD_PIDFILE")" = "$_first_stop_child" ] || return 70
+    [ "$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE")" = "$_first_stop_monitor" ] || return 70
+    # Only the original service Stop helpers send signals, never this Python guard.
+    supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" || return 70
+    launcher_stop "$CHILD_PIDFILE" 5 || return 70
+    _first_stop_after=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+        guard-first-running-base-stopped "$1" "$2") || return 70
+    [ "$_first_stop_after" = first-running-base-stopped=qualified ] || return 70
+    printf '%s\n' first-running-base-physical=stopped
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -3628,6 +3660,11 @@ service_dispatch()
         shared-apply-record)
             shift
             shared_apply_record_service "$@"
+            ;;
+        shared-apply-first-running-base-physical)
+            # Never acquire a second FD9 or allow unbound public Stop.
+            [ "$#" -eq 3 ] || return 64
+            shared_apply_first_running_base_stop_service "$2" "$3"
             ;;
         shared-apply-first-enabled-physical)
             # This private action is not part of the normal service lock

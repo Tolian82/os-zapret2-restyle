@@ -618,6 +618,97 @@ class OriginalQuiescentTests(unittest.TestCase):
             self.assertEqual(store.read(), record)
             self.assertEqual((active / "dvtws.args").read_bytes(), b"candidate")
 
+    def test_first_running_base_stop_requires_exact_joined_receipt(self):
+        import subprocess
+        record = {"phase": "activated", "detail": {"id": "a" * 32, "base": "b" * 64}}
+        store = Mock(read=Mock(return_value=record))
+        live = (("candidate", 1, 3), None,
+                ("native-managed-kernel-staged", "d" * 64, ()))
+        cold = (("candidate", 1, 3), None, "native-managed-kernel-staged")
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch.object(gate, "_attest_first_running_base_locked",
+                return_value=live))
+            zero = stack.enter_context(patch.object(gate, "_zero_processes"))
+            layout = stack.enter_context(patch.object(gate, "_first_inert_recovery_layout",
+                return_value=cold))
+            joined = stack.enter_context(patch.object(gate, "_run_bound_restore_joined",
+                return_value=subprocess.CompletedProcess([], 0,
+                    b"first-running-base-physical=stopped\n", b"")))
+
+            def recover():
+                return gate._stop_first_running_base_joined_locked(store, record,
+                    config_fd=4, config_digest=record["detail"]["base"])
+
+            self.assertIsNone(recover())
+            joined.assert_called_with((str(gate.SCRIPT / "zapret_service.sh"),
+                "shared-apply-first-running-base-physical", record["detail"]["id"],
+                record["detail"]["base"]), pass_fds=(9, 4), budget=60,
+                capture_output=True)
+            zero.assert_called_with((gate.CHILD_PID, gate.MONITOR_PID, gate.DAEMON_PID))
+            layout.assert_called_once()
+            store._advance_bound_ordinary.assert_not_called()
+            for result in (subprocess.CompletedProcess([], 70, b"", b""),
+                           subprocess.CompletedProcess([], 0, b"foreign\n", b""),
+                           subprocess.CompletedProcess([], 0,
+                               b"first-running-base-physical=stopped\nother\n", b"")):
+                joined.return_value = result
+                layout.reset_mock()
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    recover()
+                layout.assert_not_called()
+            joined.return_value = subprocess.CompletedProcess([], 0,
+                b"first-running-base-physical=stopped\n", b"")
+            layout.return_value = (("candidate", 1, 4), None, "native-managed-kernel-staged")
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                recover()
+            store._advance_bound_ordinary.assert_not_called()
+
+    def test_first_running_base_observed_config_routes_stop_then_cold(self):
+        import sys
+        from shared_apply_operation import _config_observation_witness
+
+        detail = {"id": "a" * 32, "page": "strategies", "base": "b" * 64,
+                  "candidate": "c" * 64, "changed_fields": ["general.enabled"]}
+        record = {"phase": "activated", "detail": detail, "manifest": {"schema": 1},
+                  "first_running_sha256": "d" * 64}
+        store = Mock(read=Mock(return_value=record))
+        plan_sha = "e" * 64
+        base_witness = _config_observation_witness(detail, plan_sha, detail["base"])
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch.object(gate, "SharedApplyOperation", return_value=store))
+            stack.enter_context(patch("shared_apply_seal.verify_seal",
+                return_value={"sha256": {"plan.json": plan_sha}}))
+            zero = stack.enter_context(patch.object(gate, "_zero_processes",
+                side_effect=gate.QuiescentPreimageRefused("running")))
+            physical = stack.enter_context(patch.object(gate, "_stop_first_running_base_joined_locked"))
+            cold = stack.enter_context(patch.object(gate, "finish_bound_cold_restore_locked",
+                return_value={"result": "original-bound-cold-restored", "id": detail["id"]}))
+            reply = gate.finish_first_config_recovery_locked(detail["id"], base_witness,
+                config_fd=4)
+            self.assertEqual(reply, {"result": "original-bound-cold-restored", "id": detail["id"]})
+            physical.assert_called_once_with(store, record, config_fd=4,
+                config_digest=detail["base"])
+            cold.assert_called_once_with(detail["id"], detail["base"], config_fd=4)
+            physical.reset_mock()
+            cold.reset_mock()
+            zero.side_effect = None
+            self.assertEqual(gate.finish_first_config_recovery_locked(detail["id"],
+                base_witness, config_fd=4), reply)
+            physical.assert_not_called()
+            cold.assert_called_once()
+            physical.reset_mock()
+            cold.reset_mock()
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate.finish_first_config_recovery_locked(detail["id"], "0" * 64,
+                    config_fd=4)
+            physical.assert_not_called()
+            cold.assert_not_called()
     def test_first_saved_running_requires_all_rollback_stages_until_config_saved(self):
         names = ("zapret2_voice_telegram", "zapret2_voice_discord")
         pinned = "a" * 64

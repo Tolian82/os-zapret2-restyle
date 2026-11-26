@@ -183,3 +183,64 @@ reset
 if shared_apply_stop_service "restored $ID voice" >/dev/null; then fail "unowned stop"; fi
 if shared_apply_stop_service "committed /tmp/invalid voice" >/dev/null; then fail "path injection"; fi
 echo 'PASS: common native stop validates active release and owned kernel lifecycle'
+# Join-only first ACTIVATED Stop, never a public committed Stop.
+sed -n '/^shared_apply_first_running_base_stop_service()$/,/^}$/p' "$SOURCE" > "$ROOT/first-running-base-stop.sh"
+[ -s "$ROOT/first-running-base-stop.sh" ] || fail "first running base private Stop missing"
+sh -n "$ROOT/first-running-base-stop.sh" || fail "first running base Stop syntax"
+(
+    . "$ROOT/first-running-base-stop.sh"
+    ROOT="$ROOT/first-running-base"
+    mkdir -p "$ROOT"
+    ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    BASE=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    BACKEND_DIR="$ROOT"
+    PYTHON_RUNTIME="$ROOT/python-stub"
+    CHILD_PIDFILE="$ROOT/child.pid"
+    SUPERVISOR_MONITOR_PIDFILE="$ROOT/monitor.pid"
+    SUPERVISOR_DAEMON_PIDFILE="$ROOT/daemon.pid"
+    LOG="$ROOT/log"
+    cat > "$PYTHON_RUNTIME" <<'PY'
+#!/bin/sh
+printf 'guard:%s\n' "$2" >> "$LOG"
+[ "${GUARD_FAIL:-0}" = 0 ] || exit 69
+case "$2" in
+ guard-first-running-base-shell) printf '%s\n' "${OWNER_WIRE:-first-running-base-shell=qualified:321:654}" ;;
+ guard-first-running-base-stopped) printf '%s\n' "${AFTER_WIRE:-first-running-base-stopped=qualified}" ;;
+ *) exit 69 ;;
+esac
+PY
+    chmod +x "$PYTHON_RUNTIME"
+    export LOG GUARD_FAIL OWNER_WIRE AFTER_WIRE
+    common_pidfile_read() { cat "$1"; }
+    supervisor_pidfile_read() { cat "$1"; }
+    supervisor_stop() { printf 'stop:supervisor\n' >> "$LOG"; [ "$STOP_SUP_FAIL" = 0 ]; }
+    launcher_stop() { printf 'stop:launcher\n' >> "$LOG"; [ "$STOP_LAUNCH_FAIL" = 0 ]; }
+    reset() { printf '321\n' > "$CHILD_PIDFILE"; printf '654\n' > "$SUPERVISOR_MONITOR_PIDFILE"; : > "$LOG"; GUARD_FAIL=0; OWNER_WIRE=first-running-base-shell=qualified:321:654; AFTER_WIRE=first-running-base-stopped=qualified; STOP_SUP_FAIL=0; STOP_LAUNCH_FAIL=0; export GUARD_FAIL OWNER_WIRE AFTER_WIRE; }
+    fail() { echo "FAIL: $1" >&2; exit 1; }
+    reset
+    shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out" || fail positive
+    [ "$(cat "$ROOT/out")" = first-running-base-physical=stopped ] || fail receipt
+    [ "$(grep -c '^stop:' "$LOG")" = 2 ] || fail positive-stops
+    reset; GUARD_FAIL=1
+    if shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out"; then fail guard; fi
+    ! grep -q '^stop:' "$LOG" || fail guard-stop
+    reset; OWNER_WIRE=first-running-base-shell=qualified:322:654; export OWNER_WIRE
+    if shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out"; then fail replaced-child; fi
+    ! grep -q '^stop:' "$LOG" || fail replaced-child-stop
+    reset; OWNER_WIRE=first-running-base-shell=qualified:321:655; export OWNER_WIRE
+    if shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out"; then fail replaced-monitor; fi
+    ! grep -q '^stop:' "$LOG" || fail replaced-monitor-stop
+    reset; STOP_SUP_FAIL=1
+    if shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out"; then fail supervisor; fi
+    ! grep -q 'stop:launcher' "$LOG" || fail supervisor-launcher
+    reset; STOP_LAUNCH_FAIL=1
+    if shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out"; then fail launcher; fi
+    ! grep -q '^guard:guard-first-running-base-stopped' "$LOG" || fail launcher-after
+    reset; AFTER_WIRE=first-running-base-stopped=unverified; export AFTER_WIRE
+    if shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out"; then fail post; fi
+    [ ! -s "$ROOT/out" ] || fail post-receipt
+    reset
+    if shared_apply_first_running_base_stop_service "$ID" "${BASE}x" > "$ROOT/out"; then fail args; fi
+    ! grep -q '^guard:' "$LOG" || fail malformed-guard
+    printf 'PASS: first running base shell stop cases\n'
+)

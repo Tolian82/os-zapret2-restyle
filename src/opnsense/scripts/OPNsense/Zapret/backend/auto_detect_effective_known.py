@@ -1218,6 +1218,25 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, KeyError, TypeError):
             print("ERROR: original managed locked Config phase refused", file=sys.stderr)
             return 69
+    if argv and argv[0] in ("guard-first-running-base-shell", "guard-first-running-base-stopped"):
+        if len(argv) != 3:
+            return 64
+        try:
+            from neutral_schema3_quiescent_preimage import (
+                native_guard_first_running_base_shell_locked,
+                native_guard_first_running_base_stopped_shell_locked)
+            if argv[0] == "guard-first-running-base-shell":
+                pid, monitor = native_guard_first_running_base_shell_locked(
+                    argv[1], argv[2], config_fd=4)
+                print(f"first-running-base-shell=qualified:{pid}:{monitor}")
+            else:
+                native_guard_first_running_base_stopped_shell_locked(
+                    argv[1], argv[2], config_fd=4)
+                print("first-running-base-stopped=qualified")
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+            print("ERROR: original first running base guard refused", file=sys.stderr)
+            return 69
     if argv and argv[0] == "guard-first-enabled-shell":
         if len(argv) != 4:
             return 64

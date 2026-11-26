@@ -1267,6 +1267,103 @@ def _attest_first_running_base_locked(store, record: dict, *, config_fd: int,
     return first
 
 
+def _first_running_base_scope_locked(operation: str, base: str, *, config_fd: int):
+    """One original, pinned ACTIVATED owner and inherited native locks."""
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import OP_ID, DIGEST
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(base) is not str or not DIGEST.fullmatch(base) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "activated" or
+            record["detail"]["id"] != operation or
+            record["detail"]["base"] != base or base == record["detail"]["candidate"] or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 1 or
+            (type(record.get("first_running_sha256")) is not str or
+             not DIGEST.fullmatch(record["first_running_sha256"]))):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_OWNER_REQUIRED")
+    return store, record
+
+
+def native_guard_first_running_base_shell_locked(operation: str, base: str, *,
+                                                 config_fd: int = 4) -> tuple[int, int]:
+    """Read-only owner/PID birth and reversible IPFW preflight before Stop."""
+    from neutral_schema3_previous_physical import _running_native
+
+    store, record = _first_running_base_scope_locked(operation, base, config_fd=config_fd)
+    first = _attest_first_running_base_locked(store, record,
+        config_fd=config_fd, config_digest=base)
+    if (first[0] is None or first[0][0] != "candidate" or first[1] is not None or
+            type(first[2]) is not tuple or first[2][0] not in
+            ("native-managed-kernel-staged", "native-managed-kernel-final")):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_PHYSICAL_SCOPE_REQUIRED")
+    release = WORK / operation / "release"
+    running = _running_native(release, owner_uid=0, child_pidfile=CHILD_PID,
+                              monitor_pidfile=MONITOR_PID)
+    if (_first_running_digest(release, running, config_fd=config_fd) !=
+            record["first_running_sha256"] or store.read() != record):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_PROCESS_CHANGED")
+    return running.pid, running.monitor_pid
+
+
+def native_guard_first_running_base_stopped_shell_locked(operation: str, base: str, *,
+                                                         config_fd: int = 4) -> None:
+    """Post-Stop process census and original staged-kernel evidence, no WAL."""
+    store, record = _first_running_base_scope_locked(operation, base, config_fd=config_fd)
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+
+    def observe():
+        return _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=base, queue_fd=None, store=store)
+
+    first = observe()
+    if (first[0] is None or first[0][0] != "candidate" or first[1] is not None or
+            first[2] != "native-managed-kernel-staged" or
+            observe() != first or store.read() != record):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOPPED_CHANGED")
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+
+
+def _stop_first_running_base_joined_locked(store, record: dict, *,
+                                           config_fd: int, config_digest: str) -> None:
+    """Join original Stop before any IPFW/tree/WAL rollback under FD9/FD4."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+
+    first = _attest_first_running_base_locked(store, record,
+        config_fd=config_fd, config_digest=config_digest)
+    if (first[0] is None or first[0][0] != "candidate" or first[1] is not None or
+            type(first[2]) is not tuple or first[2][0] not in
+            ("native-managed-kernel-staged", "native-managed-kernel-final")):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOP_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_JOURNAL_CHANGED")
+    try:
+        reply = _run_bound_restore_joined((str(SCRIPT / "zapret_service.sh"),
+            "shared-apply-first-running-base-physical", record["detail"]["id"],
+            config_digest), pass_fds=(9, config_fd), budget=60, capture_output=True)
+    except (OSError, subprocess.SubprocessError):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOP_UNCERTAIN") from None
+    if (reply.returncode != 0 or type(reply.stdout) is not bytes or
+            reply.stdout != b"first-running-base-physical=stopped\n"):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOP_UNCONFIRMED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    observed = _first_inert_recovery_layout(record, config_fd=config_fd,
+        config_digest=config_digest, queue_fd=None, store=store)
+    if (observed[:2] != first[:2] or observed[2] != "native-managed-kernel-staged" or
+            store.read() != record):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_POST_STOP_CHANGED")
+
 def native_guard_first_enabled_shell_locked(operation: str, candidate: str,
                                             wan: str, *, config_fd: int = 4) -> None:
     """Read-only FD9/FD4 gate before the single original shell actuator."""
@@ -1858,6 +1955,15 @@ def finish_first_config_recovery_locked(operation: str, witness_sha256: str, *,
         return {"result": "original-first-config-committed", "id": operation}
     if (not learning and record["phase"] == "activated" and
             witness_sha256 == _config_observation_witness(detail, plan_sha, base)):
+        if "first_running_sha256" in record:
+            # A previous interrupted Stop can already be process-free; never
+            # send another signal in that case. Otherwise qualify the exact
+            # original running owner and join its physical Stop under FD9/FD4.
+            try:
+                _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+            except QuiescentPreimageRefused:
+                _stop_first_running_base_joined_locked(store, record,
+                    config_fd=config_fd, config_digest=base)
         return finish_bound_cold_restore_locked(operation, base, config_fd=config_fd)
     raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_IMAGE_REFUSED")
 
