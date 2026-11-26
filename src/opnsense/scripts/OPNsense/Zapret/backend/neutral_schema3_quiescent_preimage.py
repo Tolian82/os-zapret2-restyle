@@ -537,6 +537,53 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
         raise QuiescentPreimageRefused("BOUND_STAGED_PHYSICAL_ATTEST_REFUSED") from None
 
 
+def _cold_recovery_trees(active: Path, generation: str, old_hash: str,
+                         new_hash: str, *, phase: str, restored: bool,
+                         owner_uid: int) -> tuple:
+    """Read the existing atomic transaction paths before any recovery mutation.
+
+    Both original seals have already qualified. Permit only an exact old
+    or new active tree, a complete new stage and at most one exact old
+    hold/backup. Never create, rename or remove anything here.
+    """
+    from shared_apply_seal import _stat, _release_hash
+
+    _stat(active.parent, owner_uid, directory=True)
+    name = active.name
+    backup_root = active.with_name("runtime-v2-backups")
+    if _present(backup_root):
+        _stat(backup_root, owner_uid, directory=True)
+    stage = active.parent / f".{name}.stage.{generation}"
+    parked = active.parent / f".{name}.old.{generation}"
+    backup = backup_root / f"{name}-{generation}"
+
+    def read(path, allowed):
+        if not _present(path):
+            return None
+        digest = _release_hash(path, owner_uid)
+        if digest not in allowed:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_ARTIFACT_CHANGED")
+        return digest
+
+    active_sha = read(active, (old_hash, new_hash))
+    stage_sha = read(stage, (new_hash,))
+    parked_sha = read(parked, (old_hash,))
+    backup_sha = read(backup, (old_hash,))
+    if parked_sha is not None and backup_sha is not None:
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_DUPLICATE_PRIOR")
+    if restored:
+        if active_sha != old_hash:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_OLD_TREE_REQUIRED")
+    elif active_sha is None:
+        if (phase != "activating" or stage_sha is None or
+                (parked_sha is None and backup_sha is None)):
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_RENAME_GAP_INVALID")
+    elif active_sha != old_hash:
+        if backup_sha is None or stage_sha is not None or parked_sha is not None:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_INSTALLED_TREE_INVALID")
+    return active_sha, stage_sha, parked_sha, backup_sha
+
+
 def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
     """Qualify only the existing original ordinary cold rollback route.
 
@@ -549,7 +596,7 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
     """
     from neutral_root_stage import (
         verify_original_operation_pins, _original_plan_matches)
-    from shared_apply_seal import verify_seal, _release_hash
+    from shared_apply_seal import verify_seal
 
     require_lifecycle_lock()
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
@@ -588,29 +635,23 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
             raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_CHANGED")
         idle = _observe_idle_producer(PRODUCER_ROOT, 0)
         _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        # Refuse damaged/foreign stage, hold, backup and active trees before
+        # the existing shell may mutate IPFW or rename anything. Repeat the
+        # same read at terminal completion, not a separate recovery ledger.
+        trees = _cold_recovery_trees(
+            COMMON_ACTIVE, new["id"], seals[0]["sha256"]["release"],
+            seals[1]["sha256"]["release"], phase=record["phase"],
+            restored=restored, owner_uid=0)
         kernel = active_hash = None
         if restored:
             active_hash = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+            if active_hash != trees[0]:
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_ACTIVE_TREE_CHANGED")
             kernel = _empty_kernel(old_work / "release")
-            # The original parked recovery intentionally preserves exact
-            # transaction artifacts. Unknown/partial residue cannot be
-            # blessed by the terminal journal writer.
-            name = COMMON_ACTIVE.name
-            stage = COMMON_ACTIVE.parent / f".{name}.stage.{new['id']}"
-            parked = COMMON_ACTIVE.parent / f".{name}.old.{new['id']}"
-            backup = COMMON_ACTIVE.with_name("runtime-v2-backups") / f"{name}-{new['id']}"
-            if _present(parked) and _present(backup):
-                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_DUPLICATE_PRIOR")
-            for artifact, expected in (
-                    (stage, seals[1]["sha256"]["release"]),
-                    (parked, seals[0]["sha256"]["release"]),
-                    (backup, seals[0]["sha256"]["release"])):
-                if _present(artifact) and _release_hash(artifact, 0) != expected:
-                    raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_ARTIFACT_CHANGED")
         _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
         if store.read() != record:
             raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
-        return seals, saved_raw, active_hash, kernel, idle
+        return seals, saved_raw, active_hash, kernel, idle, trees
 
     if observe() != observe():
         raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_PREIMAGE_CHANGED")

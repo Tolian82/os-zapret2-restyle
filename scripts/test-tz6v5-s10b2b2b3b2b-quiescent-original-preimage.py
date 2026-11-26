@@ -137,8 +137,9 @@ class OriginalQuiescentTests(unittest.TestCase):
             pins = stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
             stack.enter_context(patch("neutral_root_stage._original_plan_matches", return_value=True))
             stack.enter_context(patch("shared_apply_seal.verify_seal", side_effect=seal))
+            stack.enter_context(patch("shared_apply_seal._stat"))
             artifact = stack.enter_context(patch("shared_apply_seal._release_hash",
-                                                  return_value=new_hash))
+                side_effect=lambda path, uid: old_hash if path == self.active else new_hash))
             native = stack.enter_context(patch.object(gate, "_native_call",
                 return_value=(json.dumps(saved) + "\n").encode()))
             full = stack.enter_context(patch.object(gate, "_full_prior_tree", return_value=old_hash))
@@ -151,10 +152,11 @@ class OriginalQuiescentTests(unittest.TestCase):
             self.assertEqual(pins.call_count, 4)
             artifact.assert_called_with(stage, 0)
             # A partial/corrupted stage is not terminal old-owner evidence.
-            artifact.return_value = "3" * 64
-            with self.assertRaises(gate.QuiescentPreimageRefused):
-                gate.attest_inert_bound_cold_recovery(record, restored=True)
-            artifact.return_value = new_hash
+            artifact.side_effect = lambda path, uid: old_hash if path == self.active else "3" * 64
+            for restored in (False, True):
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    gate.attest_inert_bound_cold_recovery(record, restored=restored)
+            artifact.side_effect = lambda path, uid: old_hash if path == self.active else new_hash
             native.return_value = (json.dumps({**saved, "snapshot": new["candidate"]}) + "\n").encode()
             with self.assertRaises(gate.QuiescentPreimageRefused):
                 gate.attest_inert_bound_cold_recovery(record, restored=False)
@@ -165,6 +167,72 @@ class OriginalQuiescentTests(unittest.TestCase):
                     {**record, "found": {}}, {**record, "phase": "config-saved"}):
                 with self.assertRaises(gate.QuiescentPreimageRefused):
                     gate.attest_inert_bound_cold_recovery(forbidden, restored=False)
+
+    def test_bound_cold_atomic_images_are_checked_before_mutation(self):
+        from tempfile import TemporaryDirectory
+        from shared_apply_seal import _release_hash, SharedBundleError
+
+        with TemporaryDirectory() as tmp:
+            parent = Path(tmp)
+            active = parent / "runtime-v2"
+            generation = "a" * 32
+            stage = parent / f".runtime-v2.stage.{generation}"
+            parked = parent / f".runtime-v2.old.{generation}"
+            backup_root = parent / "runtime-v2-backups"
+            backup = backup_root / f"runtime-v2-{generation}"
+            old, new, foreign = (parent / name for name in ("old", "new", "foreign"))
+            for path, content in ((old, b"old"), (new, b"new"), (foreign, b"foreign")):
+                path.mkdir()
+                (path / "data").write_bytes(content)
+            uid = os.geteuid()
+            old_hash, new_hash = _release_hash(old, uid), _release_hash(new, uid)
+
+            def clear():
+                for path in (active, stage, parked, backup_root):
+                    if path.is_symlink():
+                        path.unlink()
+                    elif path.exists():
+                        shutil.rmtree(path)
+
+            def run(mapping, allowed, *, phase="activating", restored=False):
+                clear()
+                for path, source in mapping:
+                    path.parent.mkdir(exist_ok=True)
+                    shutil.copytree(source, path)
+                before = {str(p): p.lstat().st_ino for p in parent.rglob("*")}
+                def observe():
+                    return gate._cold_recovery_trees(
+                        active, generation, old_hash, new_hash, phase=phase,
+                        restored=restored, owner_uid=uid)
+                if allowed:
+                    observe()
+                else:
+                    with self.assertRaises((gate.QuiescentPreimageRefused, SharedBundleError)):
+                        observe()
+                self.assertEqual(before, {str(p): p.lstat().st_ino for p in parent.rglob("*")})
+
+            run(((active, old),), True)
+            run(((active, old), (stage, new)), True)
+            run(((stage, new), (parked, old)), True)
+            run(((stage, new), (backup, old)), True)
+            run(((active, new), (backup, old)), True, phase="activated")
+            run(((active, old), (stage, new), (parked, old)), True, restored=True)
+            run(((active, new),), False)
+            run(((active, foreign),), False)
+            run(((active, old), (stage, foreign)), False)
+            run(((active, new), (backup, foreign)), False)
+            run(((active, old), (parked, old), (backup, old)), False)
+            run(((stage, new),), False)
+            run(((stage, new), (parked, old)), False, phase="activated")
+            run(((active, new), (backup, old)), False, restored=True)
+            run(((active, new), (backup, old), (stage, new)), False)
+            clear()
+            shutil.copytree(old, active)
+            backup_root.symlink_to(old, target_is_directory=True)
+            with self.assertRaises(SharedBundleError):
+                gate._cold_recovery_trees(
+                    active, generation, old_hash, new_hash, phase="activating",
+                    restored=False, owner_uid=uid)
 
     def test_cold_native_absent_kernel_never_loads_adapter(self):
         self.cold()
