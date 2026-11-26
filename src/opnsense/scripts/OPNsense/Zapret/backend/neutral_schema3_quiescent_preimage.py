@@ -1314,6 +1314,17 @@ def native_guard_first_running_base_shell_locked(operation: str, base: str, *,
     return running.pid, running.monitor_pid
 
 
+def _first_running_base_stopped_kernel(record: dict, kernel: str) -> bool:
+    """Accept empty IPFW only if the sealed first candidate requests no IPFW."""
+    if kernel == "native-managed-kernel-staged":
+        return True
+    if kernel not in ("native-kernel-absent", "native-managed-kernel-empty"):
+        return False
+    _, desired = _first_inert_staged_manifests(
+        record, WORK / record["detail"]["id"] / "release")
+    return desired["rules"] == {} and desired["tables"] == {}
+
+
 def native_guard_first_running_base_stopped_shell_locked(operation: str, base: str, *,
                                                          config_fd: int = 4) -> None:
     """Post-Stop process census and original staged-kernel evidence, no WAL."""
@@ -1326,7 +1337,7 @@ def native_guard_first_running_base_stopped_shell_locked(operation: str, base: s
 
     first = observe()
     if (first[0] is None or first[0][0] != "candidate" or first[1] is not None or
-            first[2] != "native-managed-kernel-staged" or
+            not _first_running_base_stopped_kernel(record, first[2]) or
             observe() != first or store.read() != record):
         raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOPPED_CHANGED")
     _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
@@ -1360,7 +1371,8 @@ def _stop_first_running_base_joined_locked(store, record: dict, *,
     _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
     observed = _first_inert_recovery_layout(record, config_fd=config_fd,
         config_digest=config_digest, queue_fd=None, store=store)
-    if (observed[:2] != first[:2] or observed[2] != "native-managed-kernel-staged" or
+    if (observed[:2] != first[:2] or
+            not _first_running_base_stopped_kernel(record, observed[2]) or
             store.read() != record):
         raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_POST_STOP_CHANGED")
 

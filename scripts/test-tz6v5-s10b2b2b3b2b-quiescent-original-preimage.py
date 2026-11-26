@@ -618,6 +618,67 @@ class OriginalQuiescentTests(unittest.TestCase):
             self.assertEqual(store.read(), record)
             self.assertEqual((active / "dvtws.args").read_bytes(), b"candidate")
 
+    def test_first_running_base_stopped_empty_kernel_requires_empty_sealed_manifest(self):
+        import subprocess
+
+        record = {"phase": "activated", "detail": {"id": "a" * 32, "base": "b" * 64}}
+        store = Mock(read=Mock(return_value=record))
+        empty = {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}
+        live = (("candidate", 1, 3), None,
+                ("native-managed-kernel-final", "d" * 64, ()))
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate, "_first_running_base_scope_locked",
+                return_value=(store, record)))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch.object(gate, "_zero_processes"))
+            layout = stack.enter_context(patch.object(gate, "_first_inert_recovery_layout",
+                return_value=(live[0], None, "native-managed-kernel-empty")))
+            manifests = stack.enter_context(patch.object(gate,
+                "_first_inert_staged_manifests", return_value=(empty, empty)))
+            stack.enter_context(patch.object(gate, "_attest_first_running_base_locked",
+                return_value=live))
+            joined = stack.enter_context(patch.object(gate, "_run_bound_restore_joined",
+                return_value=subprocess.CompletedProcess([], 0,
+                    b"first-running-base-physical=stopped\n", b"")))
+
+            def shell_guard():
+                return gate.native_guard_first_running_base_stopped_shell_locked(
+                    record["detail"]["id"], record["detail"]["base"], config_fd=4)
+
+            def joined_guard():
+                return gate._stop_first_running_base_joined_locked(store, record,
+                    config_fd=4, config_digest=record["detail"]["base"])
+
+            for kernel in ("native-managed-kernel-empty", "native-kernel-absent"):
+                with self.subTest(kernel=kernel):
+                    layout.return_value = (live[0], None, kernel)
+                    self.assertIsNone(shell_guard())
+                    self.assertIsNone(joined_guard())
+
+            # A missing kernel is not acceptable if the sealed source
+            # actually requested any ordinary rule or Voice destination.
+            for field, payload in (("rules", {19000: ["divert", "989"]}),
+                                   ("tables", {"zapret2_voice_telegram": ["1.2.3.4"]})):
+                with self.subTest(field=field):
+                    manifests.return_value = (empty, {**empty, field: payload})
+                    for run in (shell_guard, joined_guard):
+                        with self.assertRaises(gate.QuiescentPreimageRefused):
+                            run()
+            manifests.side_effect = VoiceFirewallError("untrusted original manifest")
+            for run in (shell_guard, joined_guard):
+                with self.assertRaises(VoiceFirewallError):
+                    run()
+            manifests.side_effect = None
+            layout.return_value = (live[0], None, "native-managed-kernel-staged")
+            manifests.reset_mock()
+            self.assertIsNone(shell_guard())
+            self.assertIsNone(joined_guard())
+            manifests.assert_not_called()
+            self.assertEqual(store.read(), record)
+            store._advance_bound_ordinary.assert_not_called()
+            joined.assert_called()
+
     def test_first_running_base_stop_requires_exact_joined_receipt(self):
         import subprocess
         record = {"phase": "activated", "detail": {"id": "a" * 32, "base": "b" * 64}}
