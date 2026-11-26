@@ -1250,6 +1250,92 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
     return live, staged, kernel
 
 
+def native_install_first_disabled_bound_locked(record: dict, *, preimage: QuiescentPreimage,
+                                               config_fd: int, config_digest: str) -> tuple:
+    """Install only a first disabled bound release under the original locks.
+
+    Reuse atomic_install_tree. No launcher, firewall operation, Config save,
+    new WAL or fallback. Retain the original ACTIVATING on uncertain install.
+    """
+    import json
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import _verify_original_pinned_root
+    from shared_apply_seal import _stat
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or record.get("phase") != "activating" or
+            type(preimage) is not QuiescentPreimage or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 1 or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_SCOPE_REQUIRED")
+    detail, pin = record["detail"], record["manifest"]
+    if (config_digest != detail["base"] or detail["base"] == detail["candidate"] or
+            preimage != QuiescentPreimage(detail["id"], pin["root_sha256"], None, None,
+                detail["base"], detail["candidate"], None, "first-install-empty",
+                preimage.kernel_state, "no-prior-data") or
+            preimage.kernel_state not in ("native-kernel-absent", "native-managed-kernel-empty")):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_PREIMAGE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    work = WORK / detail["id"]
+    active = COMMON_ACTIVE
+    backup = active.with_name("runtime-v2-backups")
+
+    def observe():
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=pin, parent=WORK, owner_uid=0))
+        if root["service"]["enabled"] is not False:
+            raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_MODE_REQUIRED")
+        observed = _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=None, store=store)
+        if observed[2] != preimage.kernel_state:
+            raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_KERNEL_CHANGED")
+        return observed
+
+    first = observe()
+    live, stage, kernel = first
+    if (stage is not None or (live is not None and live[0] != "empty") or
+            observe() != first):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_LAYOUT_CHANGED")
+    if live is not None:
+        # Empty and absent are the admitted first-install preimages. Avoid
+        # producing a fictitious predecessor backup from an empty directory.
+        info = _stat(active, 0, directory=True)
+        if ("empty", info.st_dev, info.st_ino) != live or observe() != first:
+            raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_EMPTY_CHANGED")
+        os.rmdir(active)  # never recursively delete even one unexpected file
+        directory = os.open(active.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    if observe() != (None, None, kernel):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_LAYOUT_CHANGED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    reply = _run_bound_restore_joined(
+        ("/bin/sh", "-c", '. "$1"; . "$2"; atomic_install_tree "$3" "$4" "$5" "$6"',
+         "zapret-first-disabled", str(SCRIPT / "backend/common.sh"),
+         str(SCRIPT / "backend/atomic.sh"), str(work / "release"), str(active), str(backup), detail["id"]),
+        pass_fds=(9, config_fd), budget=60, capture_output=True)
+    if reply.returncode != 0 or reply.stdout != b"\n":
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_OUTCOME_UNCERTAIN")
+    installed = observe()
+    if (installed[0] is None or installed[0][0] != "candidate" or installed[1] is not None or
+            observe() != installed):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_READBACK_CHANGED")
+    # Original writer independently attests the same installed tree and
+    # process/kernel state before advancing the existing WAL.
+    result, receipt = store._record_native_bound_activated(record, preimage=preimage,
+        config_fd=config_fd, config_digest=config_digest)
+    if result != {**record, "phase": "activated"} or store.read() != result:
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_READBACK_CHANGED")
+    return result, receipt
+
+
 def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
                                   config_digest: str, queue_fd: int | None) -> dict:
     """Restore first inert cold tree with exact base and reversible kernel."""

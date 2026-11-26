@@ -89,6 +89,93 @@ class OriginalQuiescentTests(unittest.TestCase):
             os.chown(lock, 0, 0)
         lock.chmod(0o600)
 
+    def test_first_disabled_install_normalizes_only_the_exact_empty_tree(self):
+        import json
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryFile() as config, ExitStack() as stack:
+            base = Path(tmp)
+            op = "a" * 32
+            work = base / "work" / op
+            release = work / "release"
+            release.mkdir(parents=True)
+            (release / "item").write_bytes(b"sealed")
+            active = base / "runtime-v2"
+            active.mkdir()
+            record = {"phase": "activating", "detail": {"id": op, "base": "b" * 64,
+                "candidate": "c" * 64}, "manifest": {"schema": 1, "root_sha256": "d" * 64}}
+            preimage = gate.QuiescentPreimage(op, "d" * 64, None, None,
+                "b" * 64, "c" * 64, None, "first-install-empty",
+                "native-kernel-absent", "no-prior-data")
+            store = Mock(read=Mock(return_value=record))
+            receipt = object()
+            for key, value in (("WORK", work.parent), ("COMMON_ACTIVE", active)):
+                stack.enter_context(patch.object(gate, key, value))
+            stack.enter_context(patch("sys.platform", "freebsd15"))
+            stack.enter_context(patch("os.geteuid", return_value=0))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch.object(gate, "SharedApplyOperation", return_value=store))
+            stack.enter_context(patch("shared_apply_seal._stat",
+                side_effect=lambda path, *args, **kw: path.lstat()))
+            root = stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root",
+                return_value=json.dumps({"service": {"enabled": False}}).encode()))
+
+            def layout(*args, **kw):
+                live = None
+                if active.exists():
+                    info = active.stat()
+                    live = ("candidate" if (active / "item").exists() else "empty",
+                            info.st_dev, info.st_ino)
+                return live, None, preimage.kernel_state
+
+            stack.enter_context(patch.object(gate, "_first_inert_recovery_layout", side_effect=layout))
+
+            def install(command, **kw):
+                self.assertEqual(command[-4:], (str(release), str(active),
+                    str(base / "runtime-v2-backups"), op))
+                self.assertEqual(kw["pass_fds"], (9, config.fileno()))
+                self.assertFalse(active.exists())
+                shutil.copytree(release, active)
+                return subprocess.CompletedProcess(command, 0, b"\n", b"")
+
+            joined = stack.enter_context(patch.object(gate, "_run_bound_restore_joined",
+                side_effect=install))
+
+            def activate(current, **kw):
+                self.assertEqual(kw["preimage"], preimage)
+                result = {**current, "phase": "activated"}
+                store.read.return_value = result
+                return result, receipt
+
+            store._record_native_bound_activated.side_effect = activate
+
+            def run():
+                return gate.native_install_first_disabled_bound_locked(record,
+                    preimage=preimage, config_fd=config.fileno(), config_digest="b" * 64)
+
+            root.return_value = b'{"service":{"enabled":true}}'
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                run()
+            joined.assert_not_called()
+            root.return_value = b'{"service":{"enabled":false}}'
+            real_rmdir = os.rmdir
+
+            def race(path):
+                (active / "foreign").write_bytes(b"retain")
+                return real_rmdir(path)
+
+            with patch("os.rmdir", side_effect=race):
+                with self.assertRaises(OSError):
+                    run()
+            self.assertEqual((active / "foreign").read_bytes(), b"retain")
+            joined.assert_not_called()
+            (active / "foreign").unlink()
+            self.assertEqual(run(), ({**record, "phase": "activated"}, receipt))
+            self.assertEqual((active / "item").read_bytes(), b"sealed")
+            joined.assert_called_once()
+
     def test_first_activating_pristine_restore_requires_exact_empty_state(self):
         import subprocess
         from shared_apply_seal import verify_seal, _release_hash, _stat, SharedBundleError
