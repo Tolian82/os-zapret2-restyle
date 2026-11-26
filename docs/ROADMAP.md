@@ -1,3 +1,9 @@
+## 26 November 2026 — S10 original Found PREPARED predecessor-root pin
+
+**Accepted main:** `v0.6.5_236` / `b97f79a7806a0a715a79d91dd7b9a32f5aa77b8b`; [PR #1357](https://github.com/Tolian82/os-zapret2-restyle/pull/1357) five required exact-head workflows successful; postmerge [CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45750641750) and [Stage 5 four guests](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45750641790) successful. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=237`, source-only `v0.6.5_237`, prospective CI-only `os-zapret2-restyle-0.6.5_237.pkg` (**not published**). The original Found PREPARED may carry the exact attested immutable predecessor root pin in the ONE original FD9 operation.json; pristine no-write recovery retains that pin. Existing P2 file mutation remains blocked until independently qualified candidate-root binding/rollback. Synthetic bound-owner tests are not installed native qualification. All candidate exact-head gates pending. [S10](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md), [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). S10 OPEN; S11 blocked.
+
+---
+
 ## 26 November 2026 — S10 original Found PREPARED source/CAS candidate
 
 **Accepted main:** `v0.6.5_234` / `21ed595a84c1c5435b0476a4258ae0bd5c66c176`; PR #1355 exact-head 6/6 SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=235`, `v0.6.5_235`, prospective CI-only `os-zapret2-restyle-0.6.5_235.pkg`. Import-only existing original FD4/FD9/P2 sealed Found PREPARED → S08d source bridge, no physical permission, no mixed WAL or new writer. See [S10](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md), [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Exact-head CI pending, S10 OPEN/S11 blocked.

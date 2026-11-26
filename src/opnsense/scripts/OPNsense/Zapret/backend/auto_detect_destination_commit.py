@@ -1801,6 +1801,9 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int,
         operation_id, config_fd)
     if record["phase"] != "prepared":
         raise DestinationRefused("original_apply_not_prepared")
+    # A verified OLD root is not a verified successor. Never enter P2 writes.
+    if "previous_manifest" in record or "manifest" in record:
+        raise DestinationRefused("original_found_dual_root_not_bound")
     verified = _qualified_shared_found_batch(rows)
     with exclusive_destination_lock(AUTO_LOCK, 0):
         _verify_planned_preimages_locked(verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
