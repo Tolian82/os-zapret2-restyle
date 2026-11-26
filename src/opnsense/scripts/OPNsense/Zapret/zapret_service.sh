@@ -4051,20 +4051,22 @@ service_with_lifecycle_lock()
                             service_api_complete "$?"
                             return $?
                             ;;
-                        activating-first\ *)
+                        activating-first\ *|activated-first\ *)
                             # A first bound pristine recovery has no prior
                             # owner to boot. Never fall through to legacy
                             # or report that Start actually ran.
                             IFS=' ' read -r _first_phase _first_id _first_page <<EOF
 $_shared_owner
 EOF
-                            [ "$_shared_owner" = "activating-first $_first_id $_first_page" ] || return 70
+                            case "$_first_phase" in activating-first|activated-first) ;; *) return 70 ;; esac
+                            [ "$_shared_owner" = "$_first_phase $_first_id $_first_page" ] || return 70
+                            _first_stage=${_first_phase%-first}
                             case "$_first_id" in ""|*[!a-f0-9]*) return 70 ;; esac
                             [ "${#_first_id}" -eq 32 ] || return 70
                             case "$_first_page" in strategies|voice) ;; *) return 70 ;; esac
                             _first_receipt=$("$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
-                                recover-first-activating "$_first_id") || return 70
-                            [ "$_first_receipt" = "first-activating-restored=$_first_id" ] &&
+                                "recover-first-$_first_stage" "$_first_id") || return 70
+                            [ "$_first_receipt" = "first-$_first_stage-restored=$_first_id" ] &&
                                 [ "$(shared_apply_inspect_service)" = restored ] || return 70
                             return 69
                             ;;

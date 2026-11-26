@@ -1951,7 +1951,8 @@ def main(argv: list[str]) -> int:
                      bool(OP_ID.fullmatch(argv[2])))
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
-    first_pristine = len(argv) == 3 and argv[1] == "recover-first-activating" and bool(OP_ID.fullmatch(argv[2]))
+    first_pristine = len(argv) == 3 and argv[1] in (
+        "recover-first-activating", "recover-first-activated") and bool(OP_ID.fullmatch(argv[2]))
     managed_recovery = len(argv) == 4 and argv[1] == "recover-managed" and all(
         OP_ID.fullmatch(value) for value in argv[2:4]
     )
@@ -2101,10 +2102,10 @@ def main(argv: list[str]) -> int:
             elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"])
-            elif (record["phase"] == "activating" and "previous" not in record and
+            elif (record["phase"] in ("activating", "activated") and "previous" not in record and
                     "found" not in record and record.get("manifest", {}).get("schema") == 1):
                 detail = record["detail"]
-                print("activating-first " + detail["id"] + " " + detail["page"])
+                print(record["phase"] + "-first " + detail["id"] + " " + detail["page"])
             elif record["phase"] in ("activating", "activated", MANAGED_WRITING,
                                      MANAGED_CONFIG_SAVING) and "previous" in record:
                 detail, previous = record["detail"], record["previous"]
@@ -2118,7 +2119,7 @@ def main(argv: list[str]) -> int:
 
             store = SharedApplyOperation(owner=0)
             record = store.read()
-            if (record is None or record["phase"] != "activating" or
+            if (record is None or record["phase"] != argv[1].removeprefix("recover-first-") or
                     record["detail"]["id"] != argv[2] or "previous" in record or
                     "previous_manifest" in record or "found" in record or
                     record.get("manifest", {}).get("schema") != 1):
@@ -2126,7 +2127,7 @@ def main(argv: list[str]) -> int:
             result = native_finish_bound_cold_restore(record)
             if result != {**record, "phase": "restored"} or store.read() != result:
                 raise SharedOperationError("first activating recovery readback mismatch")
-            print("first-activating-restored=" + argv[2])
+            print("first-" + record["phase"] + "-restored=" + argv[2])
         elif managed_recovery:
             from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
 

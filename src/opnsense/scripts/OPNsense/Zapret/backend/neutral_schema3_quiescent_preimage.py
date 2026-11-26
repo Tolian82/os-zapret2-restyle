@@ -1081,50 +1081,115 @@ def _finish_managed_recovery_locked(store, record: dict, *, config_fd: int,
             active=active, attest=attest, saved_base=saved_image)
 
 
-def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
-                                  config_digest: str, queue_fd: int | None) -> dict:
-    """Close a first bound ACTIVATING only if its pristine preimage survives."""
+def _first_inert_recovery_layout(record: dict, *, config_fd: int,
+                                 config_digest: str, queue_fd: int | None, store) -> tuple:
+    """Observe an empty or fully attributed first inert tree, without mutation."""
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
     from neutral_root_stage import verify_original_operation_pins, _original_plan_matches
+    from shared_apply_seal import verify_seal, _release_hash, _stat
 
     detail = record["detail"]
-    if (record["phase"] != "activating" or "previous" in record or
+    if (record["phase"] not in ("activating", "activated") or "previous" in record or
             "previous_manifest" in record or "found" in record or
             record.get("manifest", {}).get("schema") != 1 or
-            config_digest != detail["base"] or queue_fd is not None):
+            config_digest != detail["base"] or queue_fd is not None or
+            (record["phase"] == "activated" and detail["base"] == detail["candidate"])):
         raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_OWNER_CHANGED")
     work = WORK / detail["id"]
-    backups = COMMON_ACTIVE.with_name("runtime-v2-backups")
+    release = work / "release"
+    verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    if (not _original_plan_matches(parent=WORK, generation=detail["id"],
+            journal={"detail": detail}, owner_uid=0) or
+            inspect_inert_release(release, owner_uid=0) != "inactive"):
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SOURCE_CHANGED")
+    wanted = verify_seal(work, owner=0)["sha256"]["release"]
+    active = COMMON_ACTIVE
+    parent, name = active.parent, active.name
+    stage = parent / f".{name}.stage.{detail['id']}"
+    _stat(parent, 0, directory=True)
+    for path in (active.with_name("runtime-v2-backups"), PRODUCER_ROOT, EPOCH_ROOT):
+        _safe_empty_directory(path, 0)
+    if (any(item.name != detail["id"] for item in WORK.iterdir()) or
+            any(item != stage and item.name.startswith((f".{name}.stage.", f".{name}.old."))
+                for item in parent.iterdir())):
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_WORK_RESIDUE")
+    _reject_cold_recovery_residue(active)
+
+    def image(path):
+        if not _present(path):
+            return None
+        info = _stat(path, 0, directory=True)
+        if path == active and not any(path.iterdir()):
+            return ("empty", info.st_dev, info.st_ino)
+        if _release_hash(path, 0) != wanted:
+            raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
+        return ("candidate", info.st_dev, info.st_ino)
+
     pidfiles = (CHILD_PID, MONITOR_PID, DAEMON_PID)
+    _zero_processes(pidfiles)
+    kernel = _empty_kernel(release)
+    first = image(active), image(stage)
+    _zero_processes(pidfiles)
+    if (image(active), image(stage)) != first:
+        raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
+    live, staged = first
+    if (staged is not None and (record["phase"] != "activating" or
+            (live is not None and live[0] != "empty"))):
+        raise QuiescentPreimageRefused("FIRST_BOUND_TREE_LAYOUT_REFUSED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_OWNER_CHANGED")
+    return live, staged, kernel
+
+
+def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
+                                  config_digest: str, queue_fd: int | None) -> dict:
+    """Restore first inert cold tree only with exact base and empty kernel."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
 
     def observe():
+        return _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=queue_fd, store=store)
+
+    first = observe()
+    if observe() != first:
+        raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
+    live, staged, kernel = first
+    target = None
+    if staged is not None:
+        target = COMMON_ACTIVE.parent / f".{COMMON_ACTIVE.name}.stage.{record['detail']['id']}"
+    elif live is not None and live[0] == "candidate":
+        target = COMMON_ACTIVE
+    if target is not None:
         require_lifecycle_lock()
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
-        if store.read() != record:
-            raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_OWNER_CHANGED")
-        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
-        if (not _original_plan_matches(parent=WORK, generation=detail["id"],
-                journal={"detail": detail}, owner_uid=0) or
-                inspect_inert_release(work / "release", owner_uid=0) != "inactive"):
-            raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SOURCE_CHANGED")
-        _cold_files(COMMON_ACTIVE, backups, PRODUCER_ROOT, EPOCH_ROOT, 0)
-        _reject_cold_recovery_residue(COMMON_ACTIVE)
-        if any(item.name != detail["id"] for item in WORK.iterdir()):
-            raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_WORK_RESIDUE")
-        _zero_processes(pidfiles)
-        kernel = _empty_kernel(work / "release")
-        _zero_processes(pidfiles)
-        _cold_files(COMMON_ACTIVE, backups, PRODUCER_ROOT, EPOCH_ROOT, 0)
-        _reject_cold_recovery_residue(COMMON_ACTIVE)
-        if any(item.name != detail["id"] for item in WORK.iterdir()):
-            raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_WORK_RESIDUE")
-        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
-        if store.read() != record:
-            raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_OWNER_CHANGED")
-        return kernel
+        if observe() != first:
+            raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
+        try:
+            reply = _run_bound_restore_joined(
+                ("/bin/sh", "-c", '. "$1"; atomic_remove_tree "$2"',
+                 "zapret-first-cold", str(SCRIPT / "backend/atomic.sh"), str(target)),
+                pass_fds=(9, config_fd), budget=20)
+        except (OSError, subprocess.SubprocessError):
+            raise QuiescentPreimageRefused("FIRST_BOUND_TREE_REMOVE_UNCERTAIN") from None
+        if reply.returncode != 0 or _present(target):
+            raise QuiescentPreimageRefused("FIRST_BOUND_TREE_REMOVE_FAILED")
+
+    # Persist the removal (including a resumed already-absent tree) before WAL.
+    directory_fd = os.open(COMMON_ACTIVE.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
     def exact():
-        return observe() == observe()
+        observed = observe()
+        expected_live = None if target == COMMON_ACTIVE else live
+        return observed == (expected_live, None, kernel) and observe() == observed
 
     result = store._advance_bound_ordinary("restored", record, exact)
     if result != {**record, "phase": "restored"} or store.read() != result:
@@ -1252,7 +1317,7 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
             record.get("phase") not in ("activating", "activated", MANAGED_WRITING, MANAGED_CONFIG_SAVING) or
             "found" in record or record.get("manifest", {}).get("schema") != 1 or
             ("previous" in record and record["previous"]["candidate"] != record["detail"]["base"]) or
-            ("previous" not in record and (record["phase"] != "activating" or
+            ("previous" not in record and (record["phase"] not in ("activating", "activated") or
                                            "previous_manifest" in record))):
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
     detail = record["detail"]
