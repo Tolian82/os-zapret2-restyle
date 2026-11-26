@@ -1964,6 +1964,69 @@ def native_begin_quiescent_bound_promotion_fd9(
         raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_PRECHECK_REFUSED") from None
 
 
+def native_run_first_enabled_apply_fd9(operation: str, raw_pipe: bytes, *,
+                                       source: SourceGateReceipt,
+                                       semantic: OriginalSemanticReceipt) -> dict:
+    """Private first All/List Start with the original FD9/PHP Config owner."""
+    from dataclasses import asdict
+    from neutral_schema3_quiescent_preimage import (
+        QuiescentPreimage, _run_bound_restore_joined)
+    from shared_apply_operation import SharedApplyOperation, DIGEST
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    if (type(before) is not dict or before.get("phase") != "prepared" or
+            before["detail"]["id"] != operation or "previous" in before or
+            "previous_manifest" in before or "found" in before or
+            before.get("manifest", {}).get("schema") != 1 or
+            before["detail"]["base"] == before["detail"]["candidate"] or
+            not before["detail"]["changed_fields"] or
+            type(source) is not SourceGateReceipt or source.generation != operation or
+            source.mode not in ("all", "list") or source.requested_enabled is not True or
+            source.original_seal_sha256 != before["manifest"]["seal_sha256"] or
+            type(semantic) is not OriginalSemanticReceipt or
+            type(semantic.previous_physical) is not QuiescentPreimage or
+            semantic.previous_physical.old_state != "first-install-empty" or
+            not semantic.previous_physical.verified_wan_device or
+            semantic.previous_generation is not None or
+            semantic.lifecycle_proposal != "START" or
+            semantic.candidate_root_sha256 != before["manifest"]["root_sha256"] or
+            semantic.authorization != "NONE" or semantic.physical_transition_allowed or
+            semantic.promotion_allowed or not semantic.final_original_fd9_reattest_required or
+            store.read() != before):
+        raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_SCOPE_REQUIRED")
+    activating, physical = native_begin_quiescent_bound_promotion_fd9(operation, raw_pipe)
+    if (physical != semantic.previous_physical or
+            activating != {**before, "phase": "activating"} or store.read() != activating):
+        raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_PREIMAGE_CHANGED")
+    wire = (json.dumps(asdict(physical), sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=True, allow_nan=False) + "\n").encode("ascii")
+    if len(wire) > 4096:
+        raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_WIRE_TOO_LARGE")
+    command = ["/usr/local/bin/php", str(Path(__file__).parent.parent / "shared_apply_config.php"),
+               "first-enabled-apply", operation, before["detail"]["page"]]
+    reply = _run_bound_restore_joined(command, pass_fds=(9,), budget=120,
+                                      capture_output=True, input_data=wire)
+    receipt = {"result": "saved", "saved": True, "applied": False,
+               "snapshot": before["detail"]["candidate"],
+               "change_count": len(before["detail"]["changed_fields"])}
+    require_lifecycle_lock()
+    committed = {**activating, "phase": "committed"}
+    saved = store.read()
+    if (reply.returncode != 0 or type(reply.stdout) is not bytes or
+            not 0 < len(reply.stdout) <= 4096 or reply.stdout.count(b"\n") != 1 or
+            not reply.stdout.endswith(b"\n") or
+            _managed_handoff_json(json.loads(reply.stdout)) != _managed_handoff_json(receipt) or
+            type(saved) is not dict or
+            {k: v for k, v in saved.items() if k != "first_running_sha256"} != committed or
+            type(saved.get("first_running_sha256")) is not str or
+            not DIGEST.fullmatch(saved["first_running_sha256"])):
+        raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN")
+    return saved
+
+
 def native_run_first_disabled_apply_fd9(operation: str, raw_pipe: bytes, *,
                                         source: SourceGateReceipt,
                                         semantic: OriginalSemanticReceipt) -> dict:
@@ -2083,6 +2146,23 @@ def native_coordinate_original_prepared_fd9(operation: str, raw_pipe: bytes) -> 
         if result != {**bound, "phase": "committed"} or store.read() != result:
             raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_OUTCOME_UNCERTAIN")
         return "managed-committed", result, source, semantic
+    if (type(semantic.previous_physical) is QuiescentPreimage and
+            semantic.previous_physical.old_state == "first-install-empty" and
+            semantic.lifecycle_proposal == "START" and source.requested_enabled is True and
+            inputs["mode"] in (b"all", b"list") and bound["manifest"]["schema"] == 1 and
+            "previous" not in bound and "previous_manifest" not in bound and
+            bound["detail"]["base"] != bound["detail"]["candidate"] and
+            bound["detail"]["changed_fields"]):
+        result = native_run_first_enabled_apply_fd9(operation, raw_pipe,
+                                                    source=source, semantic=semantic)
+        expected = {**bound, "phase": "committed"}
+        if (type(result) is not dict or
+                {k: v for k, v in result.items() if k != "first_running_sha256"} != expected or
+                type(result.get("first_running_sha256")) is not str or
+                not re.fullmatch(r"[a-f0-9]{64}", result["first_running_sha256"]) or
+                store.read() != result):
+            raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN")
+        return "first-enabled-committed", result, source, semantic
     if (type(semantic.previous_physical) is QuiescentPreimage and
             semantic.previous_physical.old_state == "first-install-empty" and
             semantic.lifecycle_proposal == "SAVE_ONLY" and source.requested_enabled is False and
