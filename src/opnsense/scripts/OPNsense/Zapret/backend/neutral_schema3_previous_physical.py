@@ -262,6 +262,120 @@ def attest_previous_physical_under_fd9(*, generation: str,
 
 
 @dataclass(frozen=True)
+class LockedRunningPredecessor:
+    generation: str
+    previous_generation: str
+    previous_root_sha256: str
+    config_base_sha256: str
+    release_sha256: str
+    running: PriorRunningToken
+    epoch_sha256: str | None
+    authorization: str = "NONE"
+    physical_transition_allowed: bool = False
+
+
+def attest_bound_running_predecessor_under_fd9(
+        record: dict, *, preimage: CompletePriorPreimage,
+        config_fd: int, config_digest: str) -> LockedRunningPredecessor:
+    """Recheck the earlier running preimage under the original Config lock.
+
+    Private ordinary PREPARED only. Never call the earlier PHP preflight
+    while holding Config; never acquire P2a or grant physical transition.
+    Legacy unpinned predecessors remain outside this qualified scope.
+    """
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_owner import attest_prepared_ordinary_learning_predecessor
+    from auto_detect_minute import inspect_inert_release
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+    from voice_ipfw_adapter import FreeBSDIPFWAdapter, shared_release_manifest
+    from voice_firewall_transaction import verify_prior_state
+
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(record) is not dict or type(preimage) is not CompletePriorPreimage or
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+            raise PreviousPhysicalRefused("BOUND_RUNNING_NATIVE_SCOPE_REQUIRED")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        if (store.read() != record or record.get("phase") != "prepared" or
+                "found" in record or type(record.get("manifest")) is not dict or
+                type(record.get("previous_manifest")) is not dict or
+                type(record.get("previous")) is not dict):
+            raise PreviousPhysicalRefused("BOUND_RUNNING_PREPARED_REQUIRED")
+        detail, prior = record["detail"], record["previous"]
+        pin, old_pin = record["manifest"], record["previous_manifest"]
+        if (pin["schema"] not in (1, 2) or old_pin["schema"] not in (1, 2) or
+                prior["id"] == detail["id"] or
+                config_digest != detail["base"] or config_digest != prior["candidate"] or
+                preimage.generation != detail["id"] or
+                preimage.previous_generation != prior["id"] or
+                preimage.root_sha256 != pin["root_sha256"] or
+                preimage.saved_config_base_sha256 != config_digest or
+                preimage.old_release_sha256 != preimage.active_release_sha256 or
+                preimage.authorization != "NONE" or preimage.physical_transition_allowed or
+                preimage.promotion_allowed or preimage.final_fd9_recheck_required is not True):
+            raise PreviousPhysicalRefused("BOUND_RUNNING_PREIMAGE_CHANGED")
+        expected = PriorRunningToken(
+            preimage.prior_pid, preimage.prior_birth, preimage.supervisor_pid,
+            preimage.supervisor_birth, preimage.original_kernel_argv_sha256)
+        work = WORK / prior["id"]
+        release = work / "release"
+
+        def observe():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_JOURNAL_CHANGED")
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            root = json.loads(_verify_original_pinned_root(
+                detail=prior, binding=old_pin, parent=WORK, owner_uid=0))
+            service = root["service"]
+            learning = old_pin["schema"] == 2
+            if (root["schema"] != old_pin["schema"] or root["generation"] != prior["id"] or
+                    service["enabled"] is not True or
+                    service["target_mode"] not in ("all", "list", "auto") or
+                    learning != (service["target_mode"] == "auto")):
+                raise PreviousPhysicalRefused("BOUND_RUNNING_PRIOR_MODE_CHANGED")
+            tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
+            running = _running_native(release, owner_uid=0,
+                                      child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+            if tree != preimage.active_release_sha256 or running != expected:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_PRIOR_PHYSICAL_CHANGED")
+            manifest = shared_release_manifest(release)
+            if manifest["rule_base"] != 19000 or manifest["rule_max"] not in (19010, 19099):
+                raise PreviousPhysicalRefused("BOUND_RUNNING_KERNEL_SCOPE_INVALID")
+            verify_prior_state(FreeBSDIPFWAdapter(19000, 19099), manifest, manifest)
+            epoch_sha = None
+            if learning:
+                proof, epoch_sha = attest_prepared_ordinary_learning_predecessor(record, config_fd)
+                if (proof.operation_id != prior["id"] or proof.generation != prior["id"] or
+                        proof.owner_candidate_sha256 != config_digest or
+                        (proof.owner.pid, proof.owner.started) != (running.pid, running.started) or
+                        type(epoch_sha) is not str or len(epoch_sha) != 64 or
+                        any(c not in "0123456789abcdef" for c in epoch_sha)):
+                    raise PreviousPhysicalRefused("BOUND_RUNNING_PRIOR_EPOCH_CHANGED")
+            elif inspect_inert_release(release, owner_uid=0) != "inactive":
+                raise PreviousPhysicalRefused("BOUND_RUNNING_PRIOR_INERT_REQUIRED")
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_JOURNAL_CHANGED")
+            return LockedRunningPredecessor(
+                detail["id"], prior["id"], old_pin["root_sha256"], config_digest,
+                tree, running, epoch_sha)
+
+        first = observe()
+        if observe() != first:
+            raise PreviousPhysicalRefused("BOUND_RUNNING_PRIOR_WITNESS_CHANGED")
+        return first
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError, AttributeError,
+            subprocess.SubprocessError):
+        raise PreviousPhysicalRefused("BOUND_RUNNING_PREDECESSOR_REFUSED") from None
+
+
+@dataclass(frozen=True)
 class FinalBoundRuntimeReceipt:
     generation: str
     root_sha256: str

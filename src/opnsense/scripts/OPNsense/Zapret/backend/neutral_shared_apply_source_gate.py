@@ -1384,7 +1384,15 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
                      (type(physical.previous_release_sha256) is not str or
                       physical.retirement_state not in (
                           "original-epoch-ack-retired",
-                          "inert-no-producer-data"))) or
+                          "inert-no-producer-data",
+                          "inert-idle-producer") or
+                      (physical.retirement_state == "inert-idle-producer" and
+                       (type(physical.idle_producer) is not tuple or
+                        len(physical.idle_producer) != 2 or
+                        any(type(row) is not tuple or len(row) != 4
+                            for row in physical.idle_producer))) or
+                      (physical.retirement_state == "inert-no-producer-data" and
+                       physical.idle_producer is not None))) or
                     physical.kernel_state not in (
                         "native-kernel-absent", "native-managed-kernel-empty") or
                     physical.config_base_sha256 != before["detail"]["base"] or

@@ -470,5 +470,98 @@ class FinalBoundRuntimeReadOnly(unittest.TestCase):
             self.assertEqual(calls, [])
 
 
+class LockedRunningPredecessorReadOnly(unittest.TestCase):
+    def test_exact_bound_running_owner_under_existing_config_lock(self):
+        import json
+        from contextlib import ExitStack
+        from types import SimpleNamespace
+
+        generation, old_id, digest = "a" * 32, "b" * 32, "c" * 64
+        record = {"phase": "prepared", "detail": {"id": generation, "base": digest},
+                  "previous": {"id": old_id, "candidate": digest},
+                  "manifest": {"schema": 1, "root_sha256": "d" * 64},
+                  "previous_manifest": {"schema": 2, "root_sha256": "e" * 64}}
+        preimage = gate.CompletePriorPreimage(
+            generation, "d" * 64, old_id, "f" * 64, "f" * 64, digest, "tun0",
+            PID, BIRTH, MON, MONBIRTH, "1" * 64)
+        token = gate.PriorRunningToken(PID, BIRTH, MON, MONBIRTH, "1" * 64)
+        old_root = {"schema": 2, "generation": old_id,
+                    "service": {"enabled": True, "target_mode": "auto"}}
+        proof = SimpleNamespace(operation_id=old_id, generation=old_id,
+                                owner_candidate_sha256=digest,
+                                owner=SimpleNamespace(pid=PID, started=BIRTH))
+        manifest = {"rule_base": 19000, "rule_max": 19010, "rules": {}, "tables": {}}
+        with ExitStack() as stack:
+            stack.enter_context(patch("sys.platform", "freebsd15"))
+            stack.enter_context(patch("os.geteuid", return_value=0))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            cfg = stack.enter_context(patch(
+                "auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            store = stack.enter_context(patch.object(gate, "SharedApplyOperation",
+                return_value=Mock(read=Mock(return_value=record))))
+            pins = stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            root = stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root",
+                                             return_value=json.dumps(old_root).encode()))
+            tree = stack.enter_context(patch.object(gate, "_full_prior_tree", return_value="f" * 64))
+            proc = stack.enter_context(patch.object(gate, "_running_native", return_value=token))
+            stack.enter_context(patch("voice_ipfw_adapter.shared_release_manifest",
+                                      return_value=manifest))
+            adapter = stack.enter_context(patch("voice_ipfw_adapter.FreeBSDIPFWAdapter"))
+            kernel = stack.enter_context(patch("voice_firewall_transaction.verify_prior_state"))
+            learning = stack.enter_context(patch(
+                "auto_detect_owner.attest_prepared_ordinary_learning_predecessor",
+                return_value=(proof, "2" * 64)))
+            inert = stack.enter_context(patch("auto_detect_minute.inspect_inert_release",
+                                               return_value="inactive"))
+            nested = stack.enter_context(patch.object(gate, "_attest_saved_wan"))
+
+            def run(**kw):
+                args = dict(record=record, preimage=preimage, config_fd=4, config_digest=digest)
+                args.update(kw)
+                return gate.attest_bound_running_predecessor_under_fd9(**args)
+
+            receipt = run()
+            self.assertEqual(receipt.running, token)
+            self.assertEqual(receipt.epoch_sha256, "2" * 64)
+            self.assertFalse(receipt.physical_transition_allowed)
+            self.assertEqual(pins.call_count, 2)
+            self.assertEqual(kernel.call_count, 2)
+            adapter.assert_called_with(19000, 19099)
+            nested.assert_not_called()
+            inert.assert_not_called()
+            self.assertGreaterEqual(cfg.call_count, 4)
+
+            for bad in (dict(config_fd=9), dict(config_digest="3" * 64),
+                        dict(preimage=replace(preimage, prior_pid=PID + 1)),
+                        dict(preimage=replace(preimage, root_sha256="3" * 64))):
+                with self.assertRaises(gate.PreviousPhysicalRefused):
+                    run(**bad)
+            for mock, values in ((tree, ("f" * 64, "3" * 64)),
+                                 (proc, (token, replace(token, monitor_pid=MON + 1))),
+                                 (learning, ((proof, "2" * 64), (proof, "3" * 64))),
+                                 (pins, (None, ValueError("pin drift"))),
+                                 (kernel, (None, ValueError("foreign kernel")))):
+                mock.side_effect = values
+                with self.assertRaises(gate.PreviousPhysicalRefused):
+                    run()
+                mock.side_effect = None
+
+            # A running inert owner uses the same original physical witness,
+            # but must not be confused with a learning epoch.
+            record["previous_manifest"]["schema"] = 1
+            old_root["schema"] = 1
+            old_root["service"]["target_mode"] = "list"
+            root.return_value = json.dumps(old_root).encode()
+            learning.reset_mock()
+            self.assertIsNone(run().epoch_sha256)
+            learning.assert_not_called()
+            inert.assert_called()
+            inert.return_value = "active"
+            with self.assertRaises(gate.PreviousPhysicalRefused):
+                run()
+            nested.assert_not_called()
+            store.return_value.read.assert_called()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -882,6 +882,7 @@ class OriginalFd9SourceGate(unittest.TestCase):
             ("stopped-on", True, True, False, "START"),
             ("stopped-pinned-off", True, False, True, "SAVE_ONLY"),
             ("stopped-pinned-on", True, True, True, "START"),
+            ("stopped-pinned-idle", True, True, True, "START"),
             ("cold-off", False, False, False, "SAVE_ONLY"),
             ("cold-on", False, True, False, "START"),
         )
@@ -925,7 +926,10 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     "tun0" if enabled else None,
                     "committed-stopped" if has_prior else "first-install-empty",
                     "native-managed-kernel-empty",
-                    "inert-no-producer-data" if has_prior else "no-prior-data")
+                    ("inert-idle-producer" if name == "stopped-pinned-idle" else
+                     "inert-no-producer-data" if has_prior else "no-prior-data"),
+                    idle_producer=((1, 2, 0, "a" * 64), (1, 3, 0, "a" * 64))
+                    if name == "stopped-pinned-idle" else None)
                 quiescent = stack.enter_context(patch(
                     "neutral_schema3_quiescent_preimage.attest_quiescent_under_fd9",
                     return_value=proof))
@@ -956,6 +960,11 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     effective=effective, enabled=enabled)
                 running.assert_not_called()
                 self.assertEqual(store.read(), record)
+                if name == "stopped-pinned-idle":
+                    for idle in (None, (), ((1, 2), (1, 3))):
+                        quiescent.return_value = replace(proof, idle_producer=idle)
+                        with self.assertRaises(gate.OriginalSourceGateRefused):
+                            gate.native_plan_original_prepared_fd9(candidate)
 
     def test_s10_wrong_state_incomplete_owner_cannot_fall_through(self):
         """A READY failure never becomes STOPPED; bad cold cannot become START."""
