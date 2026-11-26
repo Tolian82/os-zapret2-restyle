@@ -530,6 +530,26 @@ class EffectiveKnownTests(unittest.TestCase):
                                     "native_original_config_fd9_required"):
             prepare_native_found_intent("a" * 32, 1, "b" * 64)
 
+    def test_native_found_fresh_base_drift_refuses_before_p2_or_wal(self):
+        plan = {"page": "strategies", "result": "prepared", "dependencies": "a" * 64,
+                "found_intent": {"config_revision": "a" * 64, "commit_authorized": False},
+                "found_batch": {}, "changed_fields": []}
+        raw = json.dumps(plan).encode()
+        with patch("sys.platform", "freebsd15"), patch("os.geteuid", return_value=0), \
+                patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"), \
+                patch("shared_apply_seal._stat"), \
+                patch("shared_apply_seal.verify_seal", return_value={
+                    "sha256": {"plan.json": hashlib.sha256(raw).hexdigest()}}), \
+                patch("auto_detect_effective_known._target", return_value=(raw, None)), \
+                patch("auto_detect_effective_known.exclusive_destination_lock") as lock, \
+                patch("shared_apply_operation.SharedApplyOperation") as store:
+            with self.assertRaisesRegex(EffectiveKnownRefused, "native_found_base_config_changed"):
+                prepare_native_found_intent("b" * 32, 4, "c" * 64, runtime_mode="1",
+                                            base_digest="d" * 64, stopped_only=True)
+            lock.assert_not_called()
+            store.assert_not_called()
+
     def test_private_bound_found_save_uses_fresh_base_and_separate_source_pipe(self):
         from contextlib import nullcontext
         from types import SimpleNamespace
@@ -576,6 +596,8 @@ class EffectiveKnownTests(unittest.TestCase):
                 invoke(raw[:-1])
             prepare.assert_not_called()
             write.assert_not_called()
+            with self.assertRaises(EffectiveKnownRefused):
+                invoke(raw, 3)  # inert old owner must not acquire a queue
             pin.return_value = {"schema": 2}
             with self.assertRaises(EffectiveKnownRefused):
                 invoke(raw)
