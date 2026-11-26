@@ -676,6 +676,22 @@ class OriginalDurableRootBinding(unittest.TestCase):
         with self.assertRaises(SharedOperationError):
             _validate_record(mixed)
 
+    def test_first_running_pin_is_only_first_inert_activated_history(self):
+        bound = self.bind()
+        first = {k: v for k, v in bound.items() if k not in ("previous", "previous_manifest")}
+        pin = "a" * 64
+        for phase in ("activated", "config-saved", "committed", "restored"):
+            _validate_record({**first, "phase": phase, "first_running_sha256": pin})
+        for phase in ("prepared", "activating"):
+            with self.assertRaises(SharedOperationError):
+                _validate_record({**first, "phase": phase, "first_running_sha256": pin})
+        for invalid in ("x", True, None):
+            with self.assertRaises(SharedOperationError):
+                _validate_record({**first, "phase": "activated", "first_running_sha256": invalid})
+        if "previous" in bound:
+            with self.assertRaises(SharedOperationError):
+                _validate_record({**bound, "phase": "activated", "first_running_sha256": pin})
+
     def test_post_bind_reattest_failure_keeps_durable_prepared_refusal(self):
         import neutral_root_stage as staged
         real = staged.attest_staged_candidate

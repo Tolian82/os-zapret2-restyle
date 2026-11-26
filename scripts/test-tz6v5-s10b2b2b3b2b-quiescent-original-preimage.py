@@ -1216,6 +1216,42 @@ class StagedQuiescentTests(unittest.TestCase):
             physical.assert_not_called()
 
 
+    def test_internal_first_running_activated_pins_exact_identity_before_save(self):
+        from types import SimpleNamespace
+        from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT, _first_running_pin_matches
+        from neutral_schema3_previous_physical import PriorRunningToken
+        generation, base, root = "a" * 32, "b" * 64, "c" * 64
+        record = {"phase": "activating", "detail": {"id": generation, "base": base},
+                  "manifest": {"schema": 1, "root_sha256": root}}
+        running = PriorRunningToken(123, "birth", 456, "supervisor-birth", "d" * 64)
+        receipt = gate.StagedBoundRuntimeReceipt(generation, root, base,
+            "e" * 64, None, running, "native-managed-kernel-staged", base)
+
+        def advance(phase, expected, attest, *, first_running_sha256):
+            self.assertEqual((phase, expected, first_running_sha256),
+                             ("activated", record, "f" * 64))
+            if not attest():
+                raise SharedOperationError("witness refused")
+            return dict(record, phase=phase, first_running_sha256=first_running_sha256)
+
+        store = SimpleNamespace(root=DEFAULT_ROOT, owner=0, read=lambda: record,
+                                _advance_bound_ordinary=Mock(side_effect=advance))
+        with patch.object(gate, "attest_bound_quiescent_staged_under_fd9",
+                          return_value=receipt), \
+                patch.object(gate, "_first_running_digest", return_value="f" * 64) as digest:
+            def activate():
+                return SharedApplyOperation._record_native_bound_activated(
+                    store, record, preimage=None, config_fd=4, config_digest=base)
+
+            activated, evidence = activate()
+            self.assertEqual(evidence, receipt)
+            self.assertEqual(activated["first_running_sha256"], "f" * 64)
+            self.assertTrue(_first_running_pin_matches(activated, running, 4))
+            self.assertFalse(_first_running_pin_matches(record, running, 4))
+            digest.side_effect = ["f" * 64, "0" * 64]
+            with self.assertRaises(SharedOperationError):
+                activate()
+
     def test_internal_saved_writer_requires_same_activated_runtime(self):
         from types import SimpleNamespace
         from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
@@ -1238,6 +1274,7 @@ class StagedQuiescentTests(unittest.TestCase):
                 patch("voice_ipfw_adapter.require_lifecycle_lock"), \
                 patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"), \
                 patch("os.fsync", side_effect=lambda fd: calls.append(("fsync", fd))), \
+                patch("shared_apply_operation._first_running_pin_matches", return_value=True), \
                 patch.object(gate, "attest_bound_quiescent_staged_under_fd9",
                              return_value=replace(receipt, observed_config_sha256=candidate)) as physical:
             def saved(evidence=receipt, digest=candidate, queue_fd=None):

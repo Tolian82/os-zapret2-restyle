@@ -1081,6 +1081,35 @@ def _finish_managed_recovery_locked(store, record: dict, *, config_fd: int,
             active=active, attest=attest, saved_base=saved_image)
 
 
+def _first_running_digest(release: Path, running, *, config_fd: int) -> str:
+    """Pin the observed original process and TEXT vnode, not merely its argv."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_schema3_previous_physical import (
+        PriorRunningToken, _running_native, _running_executable_identity)
+    from neutral_shared_apply_source_gate import (
+        _s10_native_bound_engine_readback, _managed_running_digest)
+
+    if type(running) is not PriorRunningToken:
+        raise QuiescentPreimageRefused("FIRST_BOUND_RUNNING_TOKEN_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+
+    def process():
+        return _running_native(release, owner_uid=0, child_pidfile=CHILD_PID,
+                               monitor_pidfile=MONITOR_PID)
+
+    if process() != running:
+        raise QuiescentPreimageRefused("FIRST_BOUND_RUNNING_OWNER_CHANGED")
+    engine = _s10_native_bound_engine_readback()
+    executable = _running_executable_identity(running.pid, engine["engine_sha256"],
+        executable=Path(CHILD_EXEC), runner=subprocess.run)
+    if process() != running or _s10_native_bound_engine_readback() != engine:
+        raise QuiescentPreimageRefused("FIRST_BOUND_RUNNING_OWNER_CHANGED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    require_lifecycle_lock()
+    return _managed_running_digest(running, executable)
+
+
 def _first_inert_staged_manifests(record: dict, release: Path) -> tuple:
     """The only admitted nonempty kernel is the original reversible candidate."""
     import json

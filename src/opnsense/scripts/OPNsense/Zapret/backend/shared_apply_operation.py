@@ -333,6 +333,35 @@ def _validate_found_post(post: object) -> dict:
     return post
 
 
+def _first_running_pin_scope(record: dict) -> bool:
+    return ("previous" not in record and "previous_manifest" not in record and
+            "found" not in record and record.get("manifest", {}).get("schema") == 1)
+
+
+def _validate_first_running_pin(record: dict) -> None:
+    if "first_running_sha256" not in record:
+        return
+    value = record["first_running_sha256"]
+    if (not _first_running_pin_scope(record) or
+            record["phase"] not in ("activated", "config-saved", "committed", "restored") or
+            type(value) is not str or not DIGEST.fullmatch(value)):
+        raise SharedOperationError("invalid first bound running owner pin")
+
+
+def _first_running_pin_matches(record: dict, running, config_fd: int) -> bool:
+    if not _first_running_pin_scope(record):
+        return "first_running_sha256" not in record
+    if running is None:
+        return "first_running_sha256" not in record
+    pinned = record.get("first_running_sha256")
+    if pinned is None:
+        return False
+    from neutral_schema3_quiescent_preimage import _first_running_digest
+    from shared_apply_seal import WORK
+    return pinned == _first_running_digest(WORK / record["detail"]["id"] / "release",
+                                           running, config_fd=config_fd)
+
+
 def _validate_record(record: object) -> dict:
     # Existing unextended records remain readable; a new transaction can
     # retain precisely ONE predecessor inside the SAME durable journal.
@@ -347,7 +376,7 @@ def _validate_record(record: object) -> dict:
         {"schema", "phase", "detail", "previous", "found"},
     )
     if (type(record) is not dict or
-            (keys - {"failure", "manifest", "previous_manifest", "managed"}) not in allowed or
+            (keys - {"failure", "manifest", "previous_manifest", "managed", "first_running_sha256"}) not in allowed or
             ("failure" in record and (record.get("phase") not in
                                       ("committed", "requires-review") or
                                       "found" in record)) or
@@ -389,6 +418,7 @@ def _validate_record(record: object) -> dict:
         raise SharedOperationError("managed write phase lacks original intent")
     if "managed" in record:
         _validate_managed_write(record)
+    _validate_first_running_pin(record)
     if "failure" in record:
         failure = record["failure"]
         late = record["phase"] == "committed"
@@ -969,7 +999,8 @@ class SharedApplyOperation:
         return result
 
     def _advance_bound_ordinary(self, phase: str, expected: dict, attest, *,
-                                shared_work_parent: Path | None = None) -> dict:
+                                shared_work_parent: Path | None = None,
+                                first_running_sha256: str | None = None) -> dict:
         """Internal original FD9 transition with exact immutable pins.
 
         This is the same WAL writer and phase table as ordinary Apply.
@@ -995,6 +1026,15 @@ class SharedApplyOperation:
                 before["previous"]["candidate"] != before["detail"]["base"]):
             raise SharedOperationError("bound ordinary predecessor Config mismatch")
 
+        next_record = {**before, "phase": phase}
+        if first_running_sha256 is not None:
+            if (phase != "activated" or before["phase"] != "activating" or
+                    not _first_running_pin_scope(before) or
+                    "first_running_sha256" in before):
+                raise SharedOperationError("first running owner pin scope refused")
+            next_record["first_running_sha256"] = first_running_sha256
+            _validate_first_running_pin(next_record)
+
         def pins():
             require_lifecycle_lock()
             verify_original_operation_pins(
@@ -1014,7 +1054,7 @@ class SharedApplyOperation:
         # Persist the exact candidate/predecessor bindings through every
         # allowed phase, including review/restore. No second writer or
         # physical action; failure before fsync leaves the old phase.
-        result = self._persist_record({**before, "phase": phase})
+        result = self._persist_record(next_record)
         # Failure after fsync is uncertain, not a verified old phase.
         if self.read() != result:
             raise SharedOperationError("bound ordinary durable readback refused")
@@ -1053,7 +1093,28 @@ class SharedApplyOperation:
                     receipt.observed_config_sha256 == config_digest and
                     (receipt.pretraffic_sha256 is not None) == (record["manifest"]["schema"] == 2))
 
-        result = self._advance_bound_ordinary("activated", record, attest)
+        if _first_running_pin_scope(record):
+            if not attest():
+                raise SharedOperationError("first activated physical witness refused")
+            initial = receipt
+            if initial.running is not None:
+                from neutral_schema3_quiescent_preimage import _first_running_digest
+                from shared_apply_seal import WORK
+                release = WORK / record["detail"]["id"] / "release"
+                digest = _first_running_digest(release, initial.running, config_fd=config_fd)
+
+                def attest_pinned():
+                    return (attest() and receipt == initial and
+                            _first_running_digest(release, receipt.running,
+                                                  config_fd=config_fd) == digest)
+
+                result = self._advance_bound_ordinary("activated", record, attest_pinned,
+                                                      first_running_sha256=digest)
+            else:
+                result = self._advance_bound_ordinary("activated", record,
+                    lambda: attest() and receipt == initial)
+        else:
+            result = self._advance_bound_ordinary("activated", record, attest)
         # Keep the actual PID, tree, backup and zero-cut from this checkpoint
         # in the SAME in-flight coordinator through Config::save. Do not
         # reconstruct them from a different post-save process.
@@ -1102,6 +1163,7 @@ class SharedApplyOperation:
                     receipt.root_sha256 == record["manifest"]["root_sha256"] and
                     receipt.config_base_sha256 == record["detail"]["base"] and
                     receipt == replace(activated_receipt, observed_config_sha256=config_digest) and
+                    _first_running_pin_matches(record, receipt.running, config_fd) and
                     (receipt.pretraffic_sha256 is not None) == learning)
 
         return self._advance_bound_ordinary(
@@ -1154,6 +1216,7 @@ class SharedApplyOperation:
                     receipt.config_sha256 == config_digest and
                     receipt.release_sha256 == activated_receipt.release_sha256 and
                     receipt.running == activated_receipt.running and
+                    _first_running_pin_matches(record, receipt.running, config_fd) and
                     receipt.pretraffic_sha256 == activated_receipt.pretraffic_sha256 and
                     receipt.retired_ready_sha256 == activated_receipt.retired_ready_sha256 and
                     receipt.idle_producer == activated_receipt.idle_producer and
