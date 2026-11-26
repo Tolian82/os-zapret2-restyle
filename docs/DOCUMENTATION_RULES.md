@@ -1,11 +1,14 @@
 # Documentation rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-08-15
+**Updated:** 2026-11-26
 
 This file is the single normative home for general rules about project documentation: structure, maintenance, reading, synchronization, archiving, rule references, and documentation integrity.
 
 The other canonical rule books are:
+
+- [`DEVELOPMENT_PLANNING.md`](DEVELOPMENT_PLANNING.md) — specification, planning and functional-block execution;
+- [`TESTING_RULES.md`](TESTING_RULES.md) — risk, verification, acceptance and CI test selection.
 
 - [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) — project-development rules (`DEV-*`);
 - [`CHAT_RULES.md`](CHAT_RULES.md) — owner/assistant chat rules (`CHAT-*`);
@@ -13,7 +16,7 @@ The other canonical rule books are:
 
 ## Canonical rule architecture
 
-DOC-001. **Exactly four canonical general rule books exist.** Documentation rules live here; project-development rules live in `PROJECT_PRINCIPLES.md`; chat rules live in `CHAT_RULES.md`; GitHub rules live in `GITHUB_PUBLICATION.md`.
+DOC-001. **Six canonical general rule books exist.** Documentation rules live here; fundamental engineering and product rules live in `PROJECT_PRINCIPLES.md`; specification, planning and functional-block execution live in `DEVELOPMENT_PLANNING.md`; risk, testing, verification and CI test selection live in `TESTING_RULES.md`; chat rules live in `CHAT_RULES.md`; GitHub delivery and repository operations live in `GITHUB_PUBLICATION.md`. The permanent DOC, DEV, CHAT and GH namespaces are unchanged. DEV and GH rules may occupy their designated specialist books without changing their IDs. Each ID has exactly one normative definition across all six books.
 
 DOC-002. **One current general rule has one normative home.** Other active documents reference its rule ID instead of restating the same rule as a second authority.
 
@@ -47,13 +50,13 @@ DOC-014. **[ОТМЕНЕНО] All useful current general normative information b
 
 DOC-015. **Engineering memory has three levels.** Level 1 is bounded mandatory recovery; Level 2 is current-line/current-task detail; Level 3 is historical/deep proof loaded on demand.
 
-DOC-016. **A zero-memory cold start is context-first but rule-complete.** Read completely, in this order: root `AGENTS.md`; `START_HERE.md`; `PROJECT_STATE.md`; the four canonical rule books; `ROADMAP.md`; `INDEX.md`; then only specialist documents selected by the current handoff. GitHub mutation additionally applies `GH-006`.
+DOC-016. **A zero-memory cold start is context-first but rule-complete.** Read completely, in this order: root `AGENTS.md`; `START_HERE.md`; `PROJECT_STATE.md`; the six canonical rule books; `ROADMAP.md`; `INDEX.md`; then only specialist documents selected by the current handoff. GitHub mutation additionally applies `GH-006`.
 
 DOC-017. **Level 2 owns richer current-line detail.** `docs/history/current/vX.Y.x.md` carries active-line chronology, supplemented by selected current-task specialist documents.
 
 DOC-018. **Level 3 preserves detailed history.** Completed line archives plus original devlogs, patches, evidence, decisions, audits, releases, and Git history remain available without default loading.
 
-DOC-019. **`INDEX.md` is the integrity/navigation map.** It routes to the four rule books, Level-1 state/handoff/plan, current ledger, completed version-line archives, specialist documentation, and deep record stores.
+DOC-019. **`INDEX.md` is the integrity/navigation map.** It routes to the six rule books, Level-1 state/handoff/plan, current ledger, completed version-line archives, specialist documentation, and deep record stores.
 
 DOC-020. **Archiving never means deletion.** A compact archive may summarize a completed line while original detailed records remain intact and reachable.
 
@@ -61,7 +64,7 @@ DOC-020. **Archiving never means deletion.** A compact archive may summarize a c
 
 DOC-021. **`START_HERE.md` is the exact revision handoff.** It states what was just established at the current `_N` boundary, its effect, exact next action, and minimum specialist reading.
 
-DOC-022. **The top of `START_HERE.md` provides direct orientation links.** `PROJECT_STATE.md` is first, followed by all four rule books, the master plan, and `INDEX.md`.
+DOC-022. **The top of `START_HERE.md` provides direct orientation links.** `PROJECT_STATE.md` is first, followed by all six rule books, the master plan, and `INDEX.md`.
 
 DOC-023. **`START_HERE.md` is not a patch diary.** It carries the current `_N` boundary rather than a copy of every previous revision.
 
@@ -95,7 +98,7 @@ DOC-035. **Standalone deep records must add distinct value.** Create them for di
 
 ## Reconciliation and release presentation
 
-DOC-036. **Every logical development scope begins and ends with documentation reconciliation.** Before implementation, establish the current handoff/state/rules; before completion, reconcile every affected active fact, contract, handoff, plan, and proof pointer. The reconciliation decision is mandatory, but editing documentation files is not: when nothing documented changed, the correct result is an evidence-based no-op under `DOC-047`.
+DOC-036. **Every logical development scope begins and ends with documentation reconciliation.** Before implementation, establish the current handoff/state/rules; before completion, reconcile every affected active fact, contract, handoff, plan, and proof pointer. Within one approved functional block, linked intermediate edits do not require separate handoffs, revisions, documentation commits or PRs. Reconcile the final scope once before publication. The reconciliation decision is mandatory, but editing documentation files is not: when nothing documented changed, the correct result is an evidence-based no-op under `DOC-047`.
 
 DOC-037. **Every GitHub delivery includes a documentation-impact decision and one complete documentation reconciliation.** Facts, contracts, handoff, plan, and governance that exist before an engineering/source merge belong in that same logical source PR. Immutable testing-package facts that do not exist until after that merge and successful publication are the single bounded exception: the generic publisher must create the publication-record PR defined by `GH-060`–`GH-061`, and that PR is part of the same delivery rather than a second engineering scope. The record PR increments the `main` source revision (including a `PLUGIN_REVISION`-only Makefile edit) under `DEV-032`–`DEV-033`, without creating or publishing an additional package. Before that tail is merged, reconcile every affected current document whose bounded role actually changed; do not create a separate ad-hoc cleanup PR for publication facts. GitHub execution follows `GH-053`.
 
@@ -109,7 +112,7 @@ DOC-041. **Documentation-policy changes are recorded here first.** Add or amend 
 
 ## Cross-reference integrity and maintainability
 
-DOC-042. **Each canonical rule book contains an explicit cross-reference registry.** The registry lists every cross-book rule reference made by active rules in that file and every active cross-book rule reference made into that file.
+DOC-042. **Each canonical rule book contains an explicit cross-reference registry.** The registry lists every cross-book rule reference made by active rules in that file and every active cross-book rule reference made into that file, including references between physical books sharing a permanent rule-ID namespace.
 
 DOC-043. **Cross-reference registries are bidirectional.** A source-book outbound reference and the target-book inbound reference must describe the same active source/target relationship.
 
@@ -151,9 +154,9 @@ This registry is part of the rule contract. It is maintained with rule changes a
 | `DOC-016` | `GH-006` |
 | `DOC-026` | `DEV-029`, `DEV-030`, `DEV-031` |
 | `DOC-028` | `DEV-036`, `DEV-037` |
-| `DOC-037` | `DEV-032`–`DEV-033`, `GH-053`, `GH-060`–`GH-061` |
-| `DOC-038` | `DEV-039`, `GH-039`–`GH-046` |
-| `DOC-047` | `GH-053`, `GH-054`, `GH-060`–`GH-061` |
+| `DOC-037` | `DEV-032`, `DEV-033`, `GH-053`, `GH-060`, `GH-061` |
+| `DOC-038` | `DEV-039`, `GH-039`, `GH-040`, `GH-041`, `GH-042`, `GH-043`, `GH-044`, `GH-045`, `GH-046` |
+| `DOC-047` | `GH-053`, `GH-054`, `GH-060`, `GH-061` |
 | `DOC-049` | `GH-004`, `GH-026` |
 <!-- RULE-XREF-OUT-END -->
 
@@ -163,7 +166,7 @@ This registry is part of the rule contract. It is maintained with rule changes a
 | Target rule | Referenced by |
 |---|---|
 | `DOC-003` | `CHAT-009` |
-| `DOC-008` | `DEV-046`, `CHAT-009`, `CHAT-025`, `GH-055` |
+| `DOC-008` | `CHAT-009`, `CHAT-025`, `DEV-046`, `GH-055` |
 | `DOC-011` | `GH-054` |
 | `DOC-012` | `GH-054` |
 | `DOC-016` | `GH-006` |
@@ -173,14 +176,14 @@ This registry is part of the rule contract. It is maintained with rule changes a
 | `DOC-028` | `DEV-037`, `GH-047` |
 | `DOC-029` | `GH-047` |
 | `DOC-030` | `GH-047` |
-| `DOC-036` | `GH-053` |
-| `DOC-037` | `GH-053`, `GH-060`, `GH-061` |
+| `DOC-036` | `DEV-017`, `GH-053` |
+| `DOC-037` | `DEV-017`, `GH-053`, `GH-060`, `GH-061` |
 | `DOC-038` | `GH-042` |
 | `DOC-039` | `GH-042` |
-| `DOC-042` | `DEV-046`, `CHAT-025`, `GH-055`, `GH-058` |
-| `DOC-043` | `DEV-046`, `CHAT-025`, `GH-055`, `GH-058` |
-| `DOC-044` | `DEV-046`, `CHAT-025`, `GH-055`, `GH-058` |
-| `DOC-045` | `DEV-046`, `CHAT-025`, `GH-055`, `GH-057`, `GH-058` |
+| `DOC-042` | `CHAT-025`, `DEV-046`, `GH-055`, `GH-058` |
+| `DOC-043` | `CHAT-025`, `DEV-046`, `GH-055`, `GH-058` |
+| `DOC-044` | `CHAT-025`, `DEV-046`, `GH-055`, `GH-058` |
+| `DOC-045` | `CHAT-025`, `DEV-046`, `GH-055`, `GH-057`, `GH-058` |
 | `DOC-047` | `GH-053`, `GH-054`, `GH-057` |
 | `DOC-049` | `GH-006` |
 | `DOC-053` | `GH-057`, `GH-059` |

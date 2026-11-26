@@ -1,8 +1,10 @@
-## 26 November 2026 — S10 original Found PREPARED predecessor-root pin
+## Current priority — TZ6v5 functional blocks
 
-**Accepted main:** `v0.6.5_236` / `b97f79a7806a0a715a79d91dd7b9a32f5aa77b8b`; [PR #1357](https://github.com/Tolian82/os-zapret2-restyle/pull/1357) five required exact-head workflows successful; postmerge [CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45750641750) and [Stage 5 four guests](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45750641790) successful. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=237`, source-only `v0.6.5_237`, prospective CI-only `os-zapret2-restyle-0.6.5_237.pkg` (**not published**). The original Found PREPARED may carry the exact attested immutable predecessor root pin in the ONE original FD9 operation.json; pristine no-write recovery retains that pin. Existing P2 file mutation remains blocked until independently qualified candidate-root binding/rollback. Synthetic bound-owner tests are not installed native qualification. All candidate exact-head gates pending. [S10](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md), [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). S10 OPEN; S11 blocked.
+Complete S10 (one original FD9 transaction) using the [functional-block plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) and [risk-based testing rules](TESTING_RULES.md). S10-A: transaction readiness and semantic decision; S10-B: original atomic promotion/rollback; integrated S10 GO qualification, then S11–S20 in existing order. Preserve all approved V5 requirements and mandatory native/release gates.
 
 ---
+
+**Historical context below:** preceding source-candidate notes are not current instructions; current chronology belongs to [the v0.6.x ledger](history/current/v0.6.x.md).
 
 ## 26 November 2026 — S10 original Found PREPARED source/CAS candidate
 
@@ -120,7 +122,7 @@ Merged `main _132 88425da7` has **six verified RED** from disposable OPNsense (P
 
 On merged source-only `main v0.6.5_130` (`0b001459`), the [pinned S02 all-caller code route map](architecture/ZAPRET2_TZ6V5_S02_ACTUAL_LIFECYCLE_ROUTE_AUDIT.md) records GUI/API/configd/FD9 physical transitions, Run/Stop/Restart/Apply/Voice/Lab/pkg/upstream/boot/callback/Auto, old lifecycle-only RU/EN, IPFW numeric scope and raw PID/SIGKILL low-level helpers. This is **source-level read-only GO**, NOT native implementation/owner approval. Next source-only `v0.6.5_131` (prospective package `os-zapret2-restyle-0.6.5_131.pkg` **not built/published**) carries only documentation and Makefile revision. S03 actual generator RED/parity and V5-01–17 failures next, then S04–S20. Old three-icon screenshot tooltip/handler not owner-verified; #1223/#1224/#1225 remain OPEN. Owner last installed `_117.pkg` untouched. Historical candidate wording below should not be mistaken for current work.
 
-## Current priority — ТЗ_6v5 (22 ноября 2026)
+## Historical priority — TZ6v5 (22 November 2026)
 
 **Product candidate `v0.6.5_129` (PR #1237, ещё НЕ merged):** после успешного docs-only `main _128` разрабатываются exact активные IPFW-диапазоны: launcher `RULE_BASE=19000/RULE_MAX=19099`, генератор/preview и обе копии purge; прежняя системная вставка IPFW 65534 заменяется fail-closed. Сравнительная Lab 19140–19200 остаётся future-only. Критерий V5-17 требует проверенной интеграции; old-head canary показал известное `OriginalLockRefused/original_config_child_rc69` в restored Apply, не доказано, что оно связано с диапазоном. Текущий source PR добавляет охрану числовых границ для backend/Voice/Lab/rollback, узко разрешённый sealed `19010 ↔ 19099` переход прежнего IPFW-поколения под original FD9 и CI `scripts/test-ipfw-number-scope.py`; canary на следующей ревизии PASS, G01 в одном прогоне блокирован внешним GitHub Releases 403 до purge. Полный exact-head gate обязателен перед merge; `_129.pkg` не выпущен, owner `_117` не менялся.
 

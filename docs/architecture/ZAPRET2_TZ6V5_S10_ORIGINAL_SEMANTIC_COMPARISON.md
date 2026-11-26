@@ -6,7 +6,7 @@ Accepted `v0.6.5_239`, `10ee803522eb947c633509f76c086e30494774aa` / [PR #1360](h
 
 The new typed `FoundSemanticReceipt` always has `authorization=NONE`, `physical_transition_allowed=False`, `promotion_allowed=False`, and requires a final original FD9 witness. The existing native G03 now asserts a real legacy predecessor yields `RESTART_REQUIRED` and leaves original physical writer/checkpoints closed; the original no-write recovery still proves unchanged Config, P1, IPFW and running process. Portable tests inject realistic old/candidate snapshot shapes and adverse old-PID/CAS/base cases. This is NOT installed proof for a two-root active owner, physical write, STOP/Start, reload signal, or power-loss rollback.
 
-Next: prove genuine two-bound-root legacy-to-bound migration/epoch semantics and an original WAL-authorized physical P1/Config atomic rollback before permitting any physical action. S10 still OPEN; S11 blocked.
+Next (accepted _240, PR #1361): use the [ordered S10-A/S10-B functional blocks](ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) under [DEVELOPMENT_PLANNING](../DEVELOPMENT_PLANNING.md) and [TESTING_RULES](../TESTING_RULES.md). Genuine two-bound-root legacy-to-bound migration/epoch semantics and original WAL-authorized P1/Config atomic rollback remain required. No physical Start/Stop/Reload implementation before its ordered stage. S10 remains OPEN; S11 blocked.
 
 ---
 

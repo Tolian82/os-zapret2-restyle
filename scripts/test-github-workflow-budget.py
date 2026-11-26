@@ -198,6 +198,16 @@ class BudgetContracts(unittest.TestCase):
         self.assertNotIn('  push:', g03,
                          'same branch must not produce duplicate push/PR preflight jobs')
 
+    def test_stage5_g03_fixture_pr_qualification_is_not_repeated_on_main(self):
+        body = (ROOT / '.github/workflows/stage5-native-cross-clean-running.yml').read_text(encoding='utf-8')
+        push, pr = body.split('  pull_request:', 1)
+        for path in ('scripts/stage2-opnsense-g03-first-install.py',
+                     'scripts/stage2-opnsense-g03-native-prepared.py',
+                     'scripts/stage2-opnsense-g03-native-prepared.php'):
+            self.assertNotIn('      - ' + path, push)
+            self.assertIn('      - ' + path, pr)
+        self.assertIn('  workflow_dispatch:', pr)
+
     def test_g03_native_setup_gate_rejects_only_help_exemption(self):
         workflow = (ROOT / '.github/workflows/g03-native-disposable-first-install.yml').read_text(
             encoding='utf-8')
@@ -317,7 +327,7 @@ class BudgetContracts(unittest.TestCase):
         self.assertIn('scripts/test-github-branch-hygiene.sh', gov.group(1))
 
     def test_native_execution_rule_is_canonical_not_just_p3_notes(self):
-        rulebook = (ROOT / 'docs/GITHUB_PUBLICATION.md').read_text(encoding='utf-8')
+        rulebook = (ROOT / 'docs/TESTING_RULES.md').read_text(encoding='utf-8')
         agents = (ROOT / 'AGENTS.md').read_text(encoding='utf-8')
         self.assertRegex(rulebook, r'(?m)^GH-071\. \*\*Native-test placement')
         for required in ('pre-provisioned KVM', 'infrastructure failure / NOT TESTED',
@@ -327,11 +337,17 @@ class BudgetContracts(unittest.TestCase):
         self.assertIn('GH-071', agents)
 
     def test_canonical_rules_and_pr_gate_are_mandatory(self):
-        rules = (ROOT / 'docs/GITHUB_PUBLICATION.md').read_text(encoding='utf-8')
-        for identifier in range(66, 72):
+        rules = ((ROOT / 'docs/GITHUB_PUBLICATION.md').read_text(encoding='utf-8') + '\n' +
+                 (ROOT / 'docs/TESTING_RULES.md').read_text(encoding='utf-8'))
+        for identifier in range(66, 73):
             self.assertRegex(rules, rf'(?m)^GH-{identifier:03d}\. ')
         self.assertIn('Четыре уровня S0–S3 не означают четырёх', rules)
         self.assertIn('Центральная CI', rules)
+        testing = (ROOT / 'docs/TESTING_RULES.md').read_text(encoding='utf-8')
+        for risk in ('R0 —', 'R1 —', 'R2 —', 'R3 —'):
+            self.assertIn(risk, testing)
+        planning = (ROOT / 'docs/DEVELOPMENT_PLANNING.md').read_text(encoding='utf-8')
+        self.assertIn('Functional-block principle', planning)
         gate = (ROOT / '.github/workflows/pr-title.yml').read_text(encoding='utf-8')
         self.assertIn('python3 scripts/test-github-workflow-budget.py', gate)
 

@@ -7,6 +7,8 @@ DOC_RULES="${ROOT_DIR}/docs/DOCUMENTATION_RULES.md"
 DEV_RULES="${ROOT_DIR}/docs/PROJECT_PRINCIPLES.md"
 CHAT_RULES="${ROOT_DIR}/docs/CHAT_RULES.md"
 GH_RULES="${ROOT_DIR}/docs/GITHUB_PUBLICATION.md"
+PLAN_RULES="${ROOT_DIR}/docs/DEVELOPMENT_PLANNING.md"
+TEST_RULES="${ROOT_DIR}/docs/TESTING_RULES.md"
 START_HERE="${ROOT_DIR}/docs/START_HERE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 CI="${ROOT_DIR}/.github/workflows/ci.yml"
@@ -31,7 +33,7 @@ require_fixed()
 }
 
 for file in \
-  "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" \
+  "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" "${PLAN_RULES}" "${TEST_RULES}" \
   "${START_HERE}" "${INDEX}" "${CI}" "${TITLE_WORKFLOW}" "${CLEANUP_WORKFLOW}" \
   "${PRERELEASE_WORKFLOW}" "${DELIVERY_CI}" "${RELEASE_TRIGGER}" "${RELEASE_WORKFLOW}"
 do
@@ -55,8 +57,8 @@ require_fixed 'GITHUB_PUBLICATION.md' "${INDEX}" 'INDEX does not route to GitHub
 require_fixed 'GH-001.' "${GH_RULES}" 'GitHub connector-first rule is missing'
 require_fixed 'GH-007.' "${GH_RULES}" 'scope/risk preflight rule is missing'
 require_fixed 'GH-009. **[ОТМЕНЕНО]' "${GH_RULES}" 'cancelled broad-reconciliation rule marker is missing'
-require_fixed 'GH-016.' "${GH_RULES}" 'scope-proportionate validation rule is missing'
-require_fixed 'GH-021.' "${GH_RULES}" 'latest-head CI rule is missing'
+require_fixed 'GH-016.' "${TEST_RULES}" 'scope-proportionate validation rule is missing'
+require_fixed 'GH-021.' "${TEST_RULES}" 'latest-head CI rule is missing'
 require_fixed 'GH-024.' "${GH_RULES}" 'exact-head merge rule is missing'
 require_fixed 'GH-027.' "${GH_RULES}" 'forward-only published-release identity rule is missing'
 require_fixed 'GH-034.' "${GH_RULES}" 'testing-package GitHub boundary is missing'

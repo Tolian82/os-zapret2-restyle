@@ -1,11 +1,14 @@
 # GitHub rules — Правила работы с GitHub
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-11-25
+**Updated:** 2026-11-26
 
-This file is the fourth canonical rule book and the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, documentation synchronization, and repository hygiene. The filename `GITHUB_PUBLICATION.md` is intentionally retained; its scope is all GitHub work, not publication only.
+This is the normative home for GitHub repository access, branches, PRs, queue/trigger governance, merges, testing packages, full releases and repository hygiene. Test selection, verification and native CI qualification have moved without renumbering to [TESTING_RULES.md](TESTING_RULES.md); block planning is in [DEVELOPMENT_PLANNING.md](DEVELOPMENT_PLANNING.md).
 
 Other canonical rule domains:
+
+- [`DEVELOPMENT_PLANNING.md`](DEVELOPMENT_PLANNING.md) — specification, planning and functional-block execution;
+- [`TESTING_RULES.md`](TESTING_RULES.md) — risk, verification, acceptance and CI test selection.
 
 - [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md) — documentation governance (`DOC-*`);
 - [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) — project-development/version/product rules (`DEV-*`);
@@ -17,8 +20,8 @@ Read this file completely before GitHub mutation.
 
 - access and preflight: `GH-001`–`GH-008`;
 - branch and PR scope: `GH-010`–`GH-015`;
-- validation and CI: `GH-016`–`GH-023`, `GH-062` (mandatory local fast preflight before PR/full CI);
-- strict Actions resource budget, runner selection, bounded native checks and workflow throttling: `GH-066`–`GH-072`;
+- validation and CI: [TESTING_RULES.md](TESTING_RULES.md), `GH-016`–`GH-023`, `GH-062` (mandatory local fast preflight before PR/full CI);
+- Actions queue/trigger governance: `GH-066`–`GH-068`, `GH-070`; scope, native qualification and budgets: [TESTING_RULES.md](TESTING_RULES.md), `GH-069`, `GH-071`, `GH-072`;
 - merge, post-merge verification, cleanup: `GH-024`–`GH-030`, `GH-064`;
 - issue, PR completion and unattended monitoring: `GH-063`–`GH-065`;
 - repository/secret hygiene: `GH-031`–`GH-033`;
@@ -51,6 +54,8 @@ GH-009. **[ОТМЕНЕНО] Owner-canon/documentation reconciliation is broad b
 
 GH-010. **One logical engineering/source scope uses one task branch and one source PR.** Branch from the exact verified `main` SHA; unrelated work gets another scope. The bounded post-publication documentation-record PR required by `GH-060`–`GH-061` is the explicit delivery-tail exception because immutable publication facts do not exist before the source merge and publication; that tail contains no product/package change.
 
+The functional block in DEV-007 and DEV-017 is the default PR boundary. Linked internal edits are prepared and validated together; no separate PR per helper, checkpoint, test case or documentation note.
+
 GH-011. **Same-root-cause corrections stay in the same PR.** A stale test, fixture, documentation contract, or CI assertion exposed by the intended change is repaired in that PR; this is the GitHub application of `DEV-017`.
 
 GH-012. **Do not mix unrelated opportunistic cleanup into a task branch.** Preserve reviewability and causality.
@@ -62,24 +67,6 @@ GH-014. **Every PR into `main` must introduce exactly the next revision of its a
 GH-015. **Docs/governance/tests/CI-only PRs also increment `PLUGIN_REVISION` exactly once for the resulting `main` commit.** They update the version/handoff metadata consistently, but do not by themselves require a FreeBSD package build, testing publication or a stable release. State the latest published/installed package separately from the newer source-only revision; apply `DEV-033`.
 
 ## Validation and CI failure handling
-
-GH-016. **Validate the latest head with checks proportionate to the changed scope.** Pure documentation changes run the documentation, rule-reference, link, release-governance, and repository-integrity checks that can be affected, without mechanically running the full product matrix. Product or packaged-source changes run the scope-applicable product checks, not every historical regression by default. CI/workflow changes run their affected CI contracts, expanding to the general validation matrix only when its semantics actually change and require that evidence. Select the bounded check set before execution; stop adding unrelated tests after the gate passes. Never merge based on an unverified older head.
-
-GH-017. **Read exact failed-job evidence before changing source, tests, workflow, or branch state.** Apply `DEV-012`; a plausible explanation is not enough.
-
-GH-018. **A confirmed same-scope defect is corrected in the same PR.** Update the PR head and rerun applicable checks.
-
-GH-019. **A stale test or CI assertion is corrected, not obeyed as obsolete product authority.** Apply `DEV-013` and preserve current intended architecture.
-
-GH-020. **An external runner, network, action, service, or dependency outage does not justify speculative source changes.** Apply `DEV-014` and diagnose infrastructure first.
-
-GH-021. **Only successful checks for the latest mergeable head authorize merge.** If the head changes, prior successful checks do not prove the new head.
-
-GH-022. **Never report a skipped or unrun job as PASS.** A legitimately path-skipped build is `SKIPPED`, not successful qualification, under `DEV-011`.
-
-GH-023. **Path-gated package builds remain meaningful.** Packaged-source or package/CI-infrastructure changes run required FreeBSD package qualification; pure docs/governance changes may skip package build when the workflow classifies them as non-package changes.
-
-GH-062. **Быстрые локальные проверки — обязательный входной контроль ДО открытия PR и запуска длинной CI-матрицы.** Перед публикацией ветки/открытием PR с изменённым кодом, тестами или конфигурацией разработчик **самостоятельно выполняет на точных подготовленных файлах** доступные быстрые проверки синтаксиса и форматирования, целевые unit/contract/regression-тесты для изменённого поведения и **запускает каждый новый или изменённый тест**, а не только проверяет его текст. Проверяются также относящиеся к изменению версия/ревизия, заголовок PR и элементарные ошибки тестовых фикстур, регулярных выражений, shell, PHP, Python и JavaScript. **Любой провал блокирует открытие PR и долгую CI:** сначала исправить ошибку локально в том же scope, повторить быстрый тест до успеха, и лишь затем запускать полную требуемую матрицу. При каждом последующем изменении head те же затронутые быстрые проверки повторяются **до отправки изменений**. Для docs-only и изменений правил выполняются локальные проверки ссылок, идентификаторов правил, реестров перекрёстных ссылок и целостности документации; это не требует запускать продуктовую матрицу, если она не относится к изменению. Если конкретный тест технически невозможно выполнить локально (например, требуется FreeBSD 15), явно зафиксировать причину и выполнить максимально узкую доступную отдельную проверку до длинной матрицы; **не объявлять невыполненную проверку успешной**. Перечень действительно выполненных команд и их результаты отражаются в PR. Длинная CI остаётся обязательной по сфере изменения, но не служит средством обнаружения простых ошибок, которые можно найти до PR.
 
 ## Mandatory CI resource budget and GitHub queue protection
 
@@ -93,26 +80,13 @@ GH-067. **Изменение только `PLUGIN_REVISION` в `Makefile` НЕ �
 
 GH-068. **Дублирующие проверки устаревших PR head должны автоматически прекращаться.** Каждый новый/изменённый тяжёлый native PR workflow обязан использовать отдельную concurrency-group на workflow/repository/event/PR и `cancel-in-progress` для PR. Ручные `workflow_dispatch`, защищённый `main`, testing publication и stable release должны быть изолированы от такого автосброса. Повторный запуск допускается только после выяснения реального failed/cancelled/stalled/current-head статуса; нельзя создавать пустые коммиты, запускать полную матрицу по кругу или подменять queued/skipped/cancelled статусом PASS.
 
-GH-069. **Четырёхуровневая экономная CI обязательна; объём определяется необходимыми доказательствами, не количеством тестов.** S0 — реально выполненные локально синтаксис/unit/регрессия до push; S1 — быстрые обязательные PR version/title/docs/rules/source gates; S2 — точные, обоснованные изменённым кодом нативные сценарии на одноразовых FreeBSD/OPNsense, включая FD9/IPFW/Voice/GUI только когда они затронуты; S3 — обоснованная полной финальной приёмкой или релизом комплексная package/clean/RUNNING/reboot/Voice/GUI проверка, без автоматического прогона всех исторических матриц перед каждым промежуточным testing package. Публикация промежуточного тестового `.pkg` требует достоверной квалификации его физических байтов/ABI, сборки и затронутых функций и рисков безопасности, но не заранее завершённой физической приёмки владельца: пакет является её входом. Для связанных native-проверок использовать один побайтово идентичный `.pkg` с SHA-256, когда этого требует критерий. Исторические одноразовые тесты сохранять доступными для осмысленного ручного прогона, не гонять автоматически на каждый docs/revision-only PR. Отсутствие дополнительной проверки не является дефектом само по себе: её необходимость нужно обосновать по `DEV-061`. Экономия ресурсов **никогда** не заменяет обязательный exact-head PASS, критическую безопасность или реально требуемую финальную приёмку.
-
-**Четыре уровня S0–S3 не означают четырёх GitHub check runs.** GitHub показывает отдельные jobs (включая SKIPPED), поэтому это число не равно объёму вычислений и не должно выдаваться за «четыре проверки». Рабочая цель обычного функционального PR: быстрый S1 плюс **один** обоснованный нативный S2-набор для затронутой подсистемы. Каждая дополнительная тяжёлая VM требует конкретного объяснения независимого критерия приёмки (например, общая GUI-страница действительно затронула нижний Apply). Полная Strategy Lab corrective matrix для несвязанного first-install, документации или CI-policy запрещена: только изменения Lab/shared runtime либо явно выбранный S3. Полная обязательная релизная квалификация S3 сохраняется; для промежуточного testing package используем заранее определённые, пропорциональные изменению ограничения, а не повторяем финальную приёмку. В отчётах различать число workflows, число check runs, реально запущенные VM, SKIPPED и причины запуска. Отдельный PR budget test обязан проверять fan-out **внутри** `CI`, а не только standalone YAML.
-
 GH-070. **Watchdog не должен создавать вторую очередь GitHub Actions.** Предпочитать событие завершения доверенной CI, оставив дедуплицированный *ежечасный* cron fallback и ручной dispatch. Без отдельного решения владельца запрещён опрос каждые 10 минут в дополнение к событийному мониторингу. Сохранить проверку текущего head, определение failure/stall/ready-but-open, dedup уведомлений и реальную проверку доставки. Watchdog не должен запускать нативные CI-матрицы или самостоятельно выполнять несогласованный merge. Быстрый PR gate обязан проверять отдельные YAML path filters и внутренние job `if:` центральной CI: запрещать пакетный fan-out к чужим историческим VM, дублирующие branch-push/PR запуски и broad Makefile/Stage0 triggers. Нарушение бюджета должно давать FAIL до дорогих VM.
-
-GH-071. **Native-test placement, infrastructure readiness, and strict time budgets are mandatory.** Run routine syntax, unit, contract, source, rule, and CI-policy validation as fast S0/S1 checks without provisioning a FreeBSD/OPNsense VM. An S2/S3 native test is justified only by the affected subsystem or an explicit release/acceptance criterion; do not couple a GUI localization or read-only browser smoke to historical RUNNING package upgrades, engine compilation, IPFW, or unrelated lifecycle matrices merely to obtain an installed page. Keep genuine installed OPNsense/FreeBSD and authenticated Chromium where the acceptance criterion requires them; an offline mock, source inspection, or skipped test is **not** native acceptance.
-
-**Native execution environment:** Prefer a qualified, isolated, pre-provisioned KVM/FreeBSD/OPNsense test host (including an approved, maintained self-hosted runner) with a known guest image, installed hypervisor/dependencies, bounded access and reliable restore/cleanup. Treat it as test infrastructure, never silently use the owner's production appliance. A GitHub-hosted runner may be used only when a fast prerequisite gate verifies the **runner's own** QEMU/KVM/image/network/package-manager readiness before any long VM operation. A DNS check from the developer's PC is not evidence of runner connectivity. Cache reusable verified base images and dependency preparation where safe, with identity/invalidation checks; never cache secrets or a private owner Config.
-
-**Budget and failure policy:** Set an explicit job timeout and individual bounds for image download, package installation, boot, SSH readiness and other potentially blocking network/VM steps; a narrow GUI smoke should have a short budget (the P3 browser workflow is capped at 15 minutes), while materially longer S3/release tests require a distinct documented rationale and intentional trigger. Detect inaccessible repositories, DNS, missing hypervisor/KVM, guest boot failure and no-progress states early. Fail closed with an explicit **infrastructure failure / NOT TESTED**, not PASS and not a product regression. Do not rerun a known failing external preflight blindly, start multiple equivalent VM jobs, or push empty commits to retry an outage; repair the environment or move the same exact-source required native test to a qualified alternate host. Preserve the evidence gate before merge/publication and distinguish S0/S1 PASS from outstanding S2/S3 and owner-live acceptance.
-
-GH-072. **Outcome-first CI routing and real-user boundary priority are mandatory.** For every PR classify exact changed paths into lightweight GUI/domain/IPSET, critical shared Config/FD9/transport, full lifecycle or documentation-only; a new/unclassified production path fails **toward more** checking, never toward silent exemption. First run a bounded (target at most five minutes) real changed-path regression using production Model, Python bridges, shared Apply encoder/root-contract and actual UI render/semantics where portable; it must exercise the input and downstream consumer, not only regex/mocks. A known owner failure must be reproduced *before its fix* by a test that genuinely fails old code, then passes fixed code; a previously green irrelevant matrix does not qualify it. Keep separate correctness for short synthetic checks, installed native browser/FD9, exact qualified .pkg and owner appliance. Only dispatch full legacy 100-step Project/Voice matrices when critical changed paths, unknown paths or intentional manual/full release criteria warrant them; run targeted S2 native browser/FD9 only for those relevant paths. A documentation or CI-policy-only PR, even one containing a noninstalled read-only Python probe under docs/, does not launch product/VM matrices. Preserve original FD9, Config/IPFW/Voice, immutable package identity, exact-head and fail-closed gates. The native package job for actual packaged-source changes waits for the fast user-journey gate; it need not await unrelated whole-project matrices, but required critical checks **must** pass before an authorized merge/release. Record selected/missing checks and their cost in PR, and stop once the justified decisions are established. This implements `DEV-062` and supplements `GH-069`–`GH-071` without weakening them.
 
 ## Issue execution, PR completion and unattended monitoring
 
 GH-063. **An Issue is a tracked request, not running implementation or an installed watcher.** Opening, linking or updating an Issue does not automatically assign an agent, start coding, open a PR, run CI or deploy monitoring. For an owner-authorized implementation, specify its concrete execution path and acceptance evidence and advance to a scoped branch/PR in the active work whenever possible. If blocked, state the reason explicitly and leave the Issue open. Close as completed only after implementation and verification; use a clearly reasoned non-completion disposition if applicable. Never describe an idle Issue as a stuck PR.
 
 GH-064. **The executing developer remains accountable for the PR's terminal outcome.** A Ready PR or successful CI run is not delivery. Observe and validate all scope-required checks for the **current PR head SHA**, never treating failed, cancelled, skipped, missing, queued, stalled or old-head checks as PASS. Repair same-scope failures in the same PR; when all required checks pass, verify the actual base, next source revision, review/authorization and safety gates, then complete the authorized exact-head merge, post-merge `main` verification and temporary branch cleanup. If the PR cannot be completed or work cannot continue, report that it remains OPEN with its head SHA, precise blocker and next action instead of claiming completion. Do not bypass required checks or authorization.
-
 
 **Complete the active-session acceptance cycle (owner decision 2026-11-25).** For each authorized logical increment, follow this mandatory order:
 
@@ -125,6 +99,7 @@ GH-064. **The executing developer remains accountable for the PR's terminal outc
 
 While CI is running, use the available active-session time for useful preparation of the next approved stage: read its specification, trace the real production paths, and prepare the necessary implementation and verification plan. Preparation must not interrupt the current qualification, create competing candidates, advance the ordered implementation before acceptance, or expand the approved scope. Avoid repetitive interim reports and unnecessary requests for the owner to say "continue". If an actual blocker, owner decision, or active-session limit prevents completion, state the exact unfinished boundary and next action explicitly; never claim acceptance, pretend to continue after the session ends, or promise unattended execution without a real authorized automation. Existing exact-head, authorization, safety and CI-budget requirements remain in force.
 
+The authorized logical increment is the completed functional block. Before reusing a successful expensive native PR qualification, verify the resulting main tree equals the accepted head and relevant dependencies, build inputs and execution contract are unchanged. Main integrity and release classification still run. If equality or applicability cannot be established, run the affected mandatory native gate on main. Do not skip an explicit S3/release criterion or reuse old PASS for changed bytes.
 
 GH-065. **Unattended completion alerts require a real, separately operating automation.** An Issue, GitHub Actions CI, open/idle chat or intention to follow up is not a watchdog and cannot wake an inactive assistant. A deployed GitHub-native watcher must check owner-managed open PRs against their **current head** and scope-specific required checks on relevant CI completion, with a bounded scheduled fallback; classify ready-but-open, failed, stalled and stale conditions and send deduplicated actionable notifications. Obsolete, cancelled or skipped checks never establish current-head PASS. Privileged watchers must not execute untrusted PR code, leak secrets, weaken protections or silently auto-merge. Notifications alone do not repair or merge PRs; autonomous action requires separately configured authorization and all normal safety gates. **Notification delivery is a separate qualified gate:** an attempted comment that GitHub returns HTTP 403/429, a successful read-only state classification, a passed unit test, or a red run alone is **not** proof that the owner received an alert. A privileged watcher must retain trusted-default-branch execution, deduplicated current-head scanning and a bounded scheduled fallback; it must fail visibly on comment refusal, preserve a minimal redacted API diagnostic and safe GitHub Actions summary without leaking secrets or claiming the summary is a pushed notification. Document and verify actual requested/effective token permissions and at least one live PR-timeline write, while maintaining the developer's GH-064 responsibility to finish Ready PRs.
 
@@ -206,7 +181,7 @@ GH-053. **Every GitHub delivery applies documentation reconciliation.** Apply `D
 
 GH-054. **Touch bounded documents only when their role requires it.** Apply `DOC-011`, `DOC-012`, and `DOC-047`; do not mechanically edit state, handoff, roadmap, or rule books merely to increase PR file count.
 
-GH-055. **GitHub-rule changes are recorded here first.** Add or amend the persistent `GH-*` rule, then reconcile affected references and checks under `DOC-008` and `DOC-042`–`DOC-045` in the same logical scope.
+GH-055. **GitHub-rule changes are recorded in their canonical home first.** Add or amend the persistent `GH-*` rule here or in TESTING_RULES.md for verification and CI test selection, then reconcile affected references and checks under `DOC-008` and `DOC-042`–`DOC-045` in the same logical scope.
 
 GH-056. **Legacy GitHub decisions are rationale/history, not competing current procedure.** Where an older decision was superseded, preserve it as history and do not merge obsolete behavior back into this file.
 
@@ -223,34 +198,29 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 <!-- RULE-XREF-OUT-BEGIN -->
 | Source rule | Target rules |
 |---|---|
-| `GH-005` | `DEV-027`–`DEV-040` |
+| `GH-005` | `DEV-027`, `DEV-028`, `DEV-029`, `DEV-030`, `DEV-031`, `DEV-032`, `DEV-033`, `DEV-034`, `DEV-035`, `DEV-036`, `DEV-037`, `DEV-038`, `DEV-039`, `DEV-040` |
 | `GH-006` | `DOC-016`, `DOC-049` |
+| `GH-010` | `DEV-007`, `DEV-017` |
 | `GH-011` | `DEV-017` |
-| `GH-014` | `DEV-027`–`DEV-035` |
+| `GH-014` | `DEV-027`, `DEV-028`, `DEV-029`, `DEV-030`, `DEV-031`, `DEV-032`, `DEV-033`, `DEV-034`, `DEV-035` |
 | `GH-015` | `DEV-033` |
-| `GH-035` | `DEV-032` |
-| `GH-017` | `DEV-012` |
-| `GH-019` | `DEV-013` |
-| `GH-020` | `DEV-014` |
-| `GH-022` | `DEV-011` |
 | `GH-029` | `CHAT-010`, `CHAT-022` |
 | `GH-034` | `CHAT-015`, `CHAT-016`, `CHAT-027` |
-| `GH-039` | `DEV-039`, `CHAT-017` |
+| `GH-035` | `DEV-032` |
+| `GH-039` | `CHAT-017`, `DEV-039` |
 | `GH-041` | `DEV-038` |
 | `GH-042` | `DOC-038`, `DOC-039` |
-| `GH-047` | `DOC-028`–`DOC-030`, `DEV-036`, `DEV-037` |
+| `GH-047` | `DEV-036`, `DEV-037`, `DOC-028`, `DOC-029`, `DOC-030` |
 | `GH-048` | `DEV-034`, `DEV-035` |
 | `GH-051` | `DEV-036`, `DEV-037` |
 | `GH-053` | `DOC-036`, `DOC-037`, `DOC-047` |
 | `GH-054` | `DOC-011`, `DOC-012`, `DOC-047` |
-| `GH-055` | `DOC-008`, `DOC-042`–`DOC-045` |
+| `GH-055` | `DOC-008`, `DOC-042`, `DOC-043`, `DOC-044`, `DOC-045` |
 | `GH-057` | `DOC-019`, `DOC-045`, `DOC-047`, `DOC-053` |
-| `GH-058` | `DOC-042`–`DOC-045` |
+| `GH-058` | `DOC-042`, `DOC-043`, `DOC-044`, `DOC-045` |
 | `GH-059` | `DOC-053` |
-| `GH-060` | `DOC-037`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
-| `GH-061` | `DOC-037`, `DEV-032`–`DEV-033` |
-| `GH-069` | `DEV-061` |
-| `GH-072` | `DEV-062` |
+| `GH-060` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `DEV-040`, `DOC-037` |
+| `GH-061` | `DEV-032`, `DEV-033`, `DOC-037` |
 <!-- RULE-XREF-OUT-END -->
 
 ### Inbound references
@@ -258,32 +228,46 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 <!-- RULE-XREF-IN-BEGIN -->
 | Target rule | Referenced by |
 |---|---|
-| `GH-004` | `DOC-049`, `CHAT-012` |
+| `GH-004` | `CHAT-012`, `DOC-049` |
 | `GH-006` | `DOC-016` |
-| `GH-010`–`GH-014` | `CHAT-010` |
-| `GH-011` | additionally `DEV-017` |
-| `GH-014` | `DEV-033` |
-| `GH-015` | `DEV-033`, `CHAT-010` |
-| `GH-016` | `DEV-033` |
-| `GH-049` | `DEV-033` |
-| `GH-016`–`GH-023` | `CHAT-010` |
-| `GH-024`–`GH-030` | `CHAT-010`, `CHAT-018` |
-| `GH-026` | additionally `DOC-049` |
-| `GH-034`–`GH-038` | `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
-| `GH-039` | `DOC-038`, `DEV-039`, `CHAT-017` |
-| `GH-040` | `DOC-038`, `CHAT-017` |
-| `GH-041` | `DOC-038`, `DEV-038`, `CHAT-017` |
-| `GH-042`–`GH-044` | `DOC-038`, `CHAT-017` |
-| `GH-045`, `GH-046` | `DOC-038`, `DEV-039`, `CHAT-017` |
-| `GH-047` | `DEV-036`, `DEV-037`, `CHAT-017` |
-| `GH-048`–`GH-050` | `CHAT-017` |
-| `GH-051` | `DEV-036`, `DEV-037`, `CHAT-017` |
+| `GH-010` | `CHAT-010`, `DEV-007` |
+| `GH-011` | `CHAT-010`, `DEV-017` |
+| `GH-012` | `CHAT-010` |
+| `GH-013` | `CHAT-010` |
+| `GH-014` | `CHAT-010`, `DEV-033` |
+| `GH-015` | `CHAT-010`, `DEV-033` |
+| `GH-024` | `CHAT-010`, `CHAT-018` |
+| `GH-025` | `CHAT-010`, `CHAT-018` |
+| `GH-026` | `CHAT-010`, `CHAT-018`, `DOC-049`, `GH-069` |
+| `GH-027` | `CHAT-010`, `CHAT-018` |
+| `GH-028` | `CHAT-010`, `CHAT-018` |
+| `GH-029` | `CHAT-010`, `CHAT-018` |
+| `GH-030` | `CHAT-010`, `CHAT-018` |
+| `GH-034` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `DEV-040` |
+| `GH-035` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `DEV-040` |
+| `GH-036` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `DEV-040` |
+| `GH-037` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `DEV-040` |
+| `GH-038` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `DEV-040` |
+| `GH-039` | `CHAT-017`, `DEV-039`, `DOC-038` |
+| `GH-040` | `CHAT-017`, `DOC-038` |
+| `GH-041` | `CHAT-017`, `DEV-038`, `DOC-038` |
+| `GH-042` | `CHAT-017`, `DOC-038` |
+| `GH-043` | `CHAT-017`, `DOC-038` |
+| `GH-044` | `CHAT-017`, `DOC-038` |
+| `GH-045` | `CHAT-017`, `DEV-039`, `DOC-038` |
+| `GH-046` | `CHAT-017`, `DEV-039`, `DOC-038` |
+| `GH-047` | `CHAT-017`, `DEV-036`, `DEV-037` |
+| `GH-048` | `CHAT-017` |
+| `GH-049` | `CHAT-017`, `DEV-033` |
+| `GH-050` | `CHAT-017` |
+| `GH-051` | `CHAT-017`, `DEV-036`, `DEV-037` |
 | `GH-052` | `CHAT-017` |
 | `GH-053` | `DOC-037`, `DOC-047` |
 | `GH-054` | `DOC-047` |
-| `GH-060` | `DOC-037`, `DOC-047`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
-| `GH-061` | `DOC-037`, `DOC-047`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
-| `GH-072` | `DEV-062` |
+| `GH-060` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `DEV-040`, `DOC-037`, `DOC-047` |
+| `GH-061` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `DEV-040`, `DOC-037`, `DOC-047` |
+| `GH-064` | `GH-069` |
+| `GH-070` | `GH-072` |
 <!-- RULE-XREF-IN-END -->
 
 ## Rule lifecycle

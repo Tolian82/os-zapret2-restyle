@@ -8,6 +8,8 @@ DOC_RULES="${ROOT_DIR}/docs/DOCUMENTATION_RULES.md"
 DEV_RULES="${ROOT_DIR}/docs/PROJECT_PRINCIPLES.md"
 CHAT_RULES="${ROOT_DIR}/docs/CHAT_RULES.md"
 GH_RULES="${ROOT_DIR}/docs/GITHUB_PUBLICATION.md"
+PLAN_RULES="${ROOT_DIR}/docs/DEVELOPMENT_PLANNING.md"
+TEST_RULES="${ROOT_DIR}/docs/TESTING_RULES.md"
 START_HERE="${ROOT_DIR}/docs/START_HERE.md"
 PROJECT_STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 ROADMAP="${ROOT_DIR}/docs/ROADMAP.md"
@@ -48,7 +50,7 @@ do
 done
 
 for file in \
-    "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" \
+    "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" "${PLAN_RULES}" "${TEST_RULES}" \
     "${START_HERE}" "${PROJECT_STATE}" "${ROADMAP}" "${INDEX}" "${CURRENT_LEDGER}" \
     "${RULE_DECISION}" "${LIFECYCLE_DECISION}" "${MEMORY_DECISION}" \
     "${ARCHIVE_01}" "${ARCHIVE_02}" "${ARCHIVE_03}" "${XREF_TEST}" "${LINK_TEST}"
@@ -73,7 +75,7 @@ done
 python3 "${XREF_TEST}"
 python3 "${LINK_TEST}"
 
-for file in "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}"
+for file in "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" "${PLAN_RULES}" "${TEST_RULES}"
 do
     require_fixed 'RULE-XREF-OUT-BEGIN' "${file}" "missing outbound rule registry in ${file}"
     require_fixed 'RULE-XREF-IN-BEGIN' "${file}" "missing inbound rule registry in ${file}"
@@ -105,7 +107,7 @@ require_fixed 'CHAT-011.' "${CHAT_RULES}" 'explicit read-only boundary rule is m
 require_fixed 'automatically impose read-only mode is explicitly cancelled' "${CHAT_RULES}" 'old automatic read-only interpretation is not explicitly cancelled'
 require_fixed 'CHAT-026.' "${CHAT_RULES}" 'owner instruction consequence rule is missing'
 require_fixed 'GH-009. **[ОТМЕНЕНО]' "${GH_RULES}" 'cancelled broad GitHub reconciliation rule is missing'
-require_fixed 'GH-016.' "${GH_RULES}" 'scope-proportionate CI rule is missing'
+require_fixed 'GH-016.' "${TEST_RULES}" 'scope-proportionate CI rule is missing'
 require_fixed 'GH-027.' "${GH_RULES}" 'forward-only release identity rule is missing'
 require_fixed 'GH-057.' "${GH_RULES}" 'tree consistency rule is missing'
 require_fixed 'GH-058.' "${GH_RULES}" 'rule cross-reference merge gate is missing'
@@ -117,15 +119,19 @@ require_fixed 'docs/DOCUMENTATION_RULES.md' "${AGENTS}" 'AGENTS does not route t
 require_fixed 'docs/PROJECT_PRINCIPLES.md' "${AGENTS}" 'AGENTS does not route to DEV rules'
 require_fixed 'docs/CHAT_RULES.md' "${AGENTS}" 'AGENTS does not route to CHAT rules'
 require_fixed 'docs/GITHUB_PUBLICATION.md' "${AGENTS}" 'AGENTS does not route to GH rules'
+require_fixed 'docs/DEVELOPMENT_PLANNING.md' "${AGENTS}" 'AGENTS does not route to planning rules'
+require_fixed 'docs/TESTING_RULES.md' "${AGENTS}" 'AGENTS does not route to testing rules'
+require_fixed 'DEV-007.' "${PLAN_RULES}" 'functional-block rule is missing'
+require_fixed 'DEV-072.' "${TEST_RULES}" 'risk-class rule is missing'
 require_fixed 'START_HERE.md -> PROJECT_STATE.md -> version-line archive' "${AGENTS}" 'AGENTS does not explain the current-work documentation flow'
 
-for marker in PROJECT_STATE.md DOCUMENTATION_RULES.md PROJECT_PRINCIPLES.md CHAT_RULES.md GITHUB_PUBLICATION.md ROADMAP.md INDEX.md
+for marker in PROJECT_STATE.md DOCUMENTATION_RULES.md PROJECT_PRINCIPLES.md CHAT_RULES.md GITHUB_PUBLICATION.md DEVELOPMENT_PLANNING.md TESTING_RULES.md ROADMAP.md INDEX.md
 do
     require_fixed "${marker}" "${START_HERE}" "START_HERE does not expose ${marker}"
 done
 
 for marker in \
-    DOCUMENTATION_RULES.md PROJECT_PRINCIPLES.md CHAT_RULES.md GITHUB_PUBLICATION.md \
+    DOCUMENTATION_RULES.md PROJECT_PRINCIPLES.md CHAT_RULES.md GITHUB_PUBLICATION.md DEVELOPMENT_PLANNING.md TESTING_RULES.md \
     START_HERE.md PROJECT_STATE.md ROADMAP.md "history/current/${current_line}.md" \
     history/archive/v0.1.x.md history/archive/v0.2.x.md history/archive/v0.3.x.md \
     'verification/evidence/' 'devlog/' 'patches/' 'decisions/' 'releases/'
@@ -138,7 +144,7 @@ if [ "${major}" -gt 0 ] 2>/dev/null || [ "${second}" -ge 5 ] 2>/dev/null; then
 fi
 
 for file in \
-    "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" \
+    "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" "${PLAN_RULES}" "${TEST_RULES}" \
     "${START_HERE}" "${PROJECT_STATE}" "${ROADMAP}" "${INDEX}" "${CURRENT_LEDGER}" \
     "${RULE_DECISION}" "${LIFECYCLE_DECISION}" "${MEMORY_DECISION}"
 do
@@ -165,4 +171,4 @@ require_fixed 'docs_only: ${{ steps.paths.outputs.docs_only }}' "${CI}" 'CI docs
 require_fixed 'name: Validate documentation' "${CI}" 'focused documentation CI job is missing'
 require_fixed 'scripts/test-repository-hygiene.sh' "${CI}" 'repository hygiene test is not wired into CI'
 
-echo "Repository artifact, four-rule-book, rule lifecycle, current-work flow (${current_line}), scoped CI, cross-reference, Level-1, archive, style, whitespace, Markdown-link, and INDEX integrity tests passed."
+echo "Repository artifact, six-rule-book, rule lifecycle, current-work flow (${current_line}), scoped CI, cross-reference, Level-1, archive, style, whitespace, Markdown-link, and INDEX integrity tests passed."

@@ -42,6 +42,8 @@ META_PATHS = frozenset({
     'scripts/test-github-workflow-budget.py',
     'scripts/test-github-branch-hygiene.sh',
     'scripts/test-current-handoff-identity.py',
+    'scripts/test-rule-cross-references.py',
+    'scripts/test-repository-hygiene.sh',
     # Source-extracted, no installed service or Config mutations.
     'scripts/test-tz6v5-s03e2-gui-lifecycle-handler.py',
 })
@@ -123,6 +125,8 @@ def self_test() -> None:
                  'scripts/ci_owner_journey_scope.py',
                  'scripts/test-github-branch-hygiene.sh',
                  'scripts/test-current-handoff-identity.py',
+                 'scripts/test-rule-cross-references.py',
+                 'scripts/test-repository-hygiene.sh',
                  'scripts/test-tz6v5-s03e2-gui-lifecycle-handler.py'):
         assert classify([path]) == dict(owner_flow=False, full_matrix=False,
                                         voice_scope=False), path

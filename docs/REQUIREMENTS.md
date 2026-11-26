@@ -1,6 +1,6 @@
 # os-zapret2-restyle — product requirements
 
-This file owns product-level behavior and the BH reachability requirements. Detailed subsystem contracts have one primary home. Implementation facts and test outcomes live in [PROJECT_STATE](PROJECT_STATE.md); [START_HERE](START_HERE.md) owns the immediate task. General engineering/governance rules are referenced from the four canonical rule books.
+This file owns product-level behavior and the BH reachability requirements. Detailed subsystem contracts have one primary home. Implementation facts and test outcomes live in [PROJECT_STATE](PROJECT_STATE.md); [START_HERE](START_HERE.md) owns the immediate task. General engineering/governance rules are referenced from the six canonical rule books.
 
 ## Contract map
 
