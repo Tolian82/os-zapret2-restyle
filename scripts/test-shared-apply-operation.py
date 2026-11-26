@@ -848,6 +848,40 @@ class TestJournal(unittest.TestCase):
             pins = stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
             native_bound_prepare_gate(op)
             self.assertEqual(pins.call_count, 2)
+            # A list-only edit preserves the native, unedited OptionField
+            # dictionary in the actual PHP plan. Labels are not authority.
+            for selected_mode in ("all", "list"):
+                for on, off in ((1, 0), (True, False), ("1", "0")):
+                    with self.subTest(mode=selected_mode, selected=on):
+                        options = {name: {"value": "display " + name,
+                                          "selected": on if name == selected_mode else off}
+                                   for name in ("all", "list", "auto")}
+                        native_plan = {**plan, "candidate": {
+                            **plan["candidate"], "hostlist": {"mode": options}}}
+                        plan_file.write_text(json.dumps(native_plan))
+                        native_bound_prepare_gate(op)
+            for options in (
+                    {},
+                    {"list": {"selected": 0}},
+                    {"all": {"selected": 1}, "list": {"selected": 1}},
+                    {"list": {"selected": 1}, "auto": {"selected": 1}},
+                    {"list": {"selected": 0}, "auto": {"selected": 1}},
+                    {"list": {"value": "List"}},
+                    {"list": {"selected": 2}},
+                    {"list": {"selected": 1.0}},
+                    {"list": {"selected": "true"}},
+                    {"list": {"selected": None}},
+                    {"list": 1},
+                    {"list": {"selected": 1}, "foreign": {"selected": 0}},
+                    {"foreign": {"selected": 1}},
+                    [{"list": {"selected": 1}}]):
+                with self.subTest(invalid_mode=options):
+                    native_plan = {**plan, "candidate": {
+                        **plan["candidate"], "hostlist": {"mode": options}}}
+                    plan_file.write_text(json.dumps(native_plan))
+                    with self.assertRaises(SharedOperationError):
+                        native_bound_prepare_gate(op)
+            plan_file.write_text(json.dumps(plan))
             self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
             for patch_plan in ({"dependencies": "0" * 64}, {"found_intent": {}},
                                {"candidate": {"general": {"enabled": "1"}, "hostlist": {"mode": "auto"}}},

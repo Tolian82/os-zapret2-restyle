@@ -1985,11 +1985,25 @@ def native_bound_prepare_gate(operation: str) -> None:
         candidate = plan.get("candidate") if type(plan) is dict else None
         general = candidate.get("general") if type(candidate) is dict else None
         hostlist = candidate.get("hostlist") if type(candidate) is dict else None
+        # Unchanged OPNsense OptionField values retain native getNodes()
+        # dictionaries. Match the selected-flag contract of VoiceModelValues
+        # without treating a display label or an ambiguous selection as mode.
+        mode = hostlist.get("mode") if type(hostlist) is dict else None
+        if type(mode) is dict:
+            selected = []
+            for name, option in mode.items():
+                flag = option.get("selected") if type(option) is dict else None
+                if (name not in ("all", "list", "auto") or
+                        type(flag) not in (bool, int, str) or flag not in (0, 1, "0", "1")):
+                    raise SharedOperationError("bound prepare invalid native mode option")
+                if flag in (1, "1"):
+                    selected.append(name)
+            mode = selected[0] if len(selected) == 1 else None
         if (type(plan) is not dict or plan.get("result") != "prepared" or
                 plan.get("page") != "strategies" or "found_intent" in plan or
                 "found_batch" in plan or plan.get("dependencies") != record["detail"]["candidate"] or
                 type(general) is not dict or general.get("enabled") != "1" or
-                type(hostlist) is not dict or hostlist.get("mode") not in ("all", "list")):
+                mode not in ("all", "list")):
             raise SharedOperationError("bound prepare detached plan scope refused")
         if store.read() != record:
             raise SharedOperationError("bound prepare owner changed")
