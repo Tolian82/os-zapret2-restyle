@@ -1686,10 +1686,27 @@ def _attest_bound_managed_installed_locked(store, record: dict, *, parent: Path,
     before, _, after, _, _, after_hash = _managed_write_images(store, record, row["name"], parent)
     _stat(active, store.owner, directory=True)
     current, info = _target(active / "managed" / row["name"], store.owner)
-    if (current != after or (_sha(before), _sha(after)) !=
-            (row["before_sha256"], row["after_sha256"]) or
-            list(_target_identity(info)) != row["installed"] or
-            _release_hash(active, store.owner) != after_hash):
+    # Keep the original refusal and short-circuit order. Distinct source
+    # locations let the existing bounded M03 trace identify the failed proof
+    # without logging paths, bytes, digests, inode values or timestamps.
+    if current != after:
+        raise DestinationRefused("original_managed_installed_image_changed")
+    if (_sha(before), _sha(after)) != (row["before_sha256"], row["after_sha256"]):
+        raise DestinationRefused("original_managed_installed_image_changed")
+    identity = list(_target_identity(info))
+    installed = row["installed"]
+    if identity != installed:
+        if identity[:2] != installed[:2]:  # device / inode
+            raise DestinationRefused("original_managed_installed_image_changed")
+        if identity[2:3] != installed[2:3]:  # ctime_ns
+            raise DestinationRefused("original_managed_installed_image_changed")
+        if identity[3:4] != installed[3:4]:  # mtime_ns
+            raise DestinationRefused("original_managed_installed_image_changed")
+        if identity[4:5] != installed[4:5]:  # size
+            raise DestinationRefused("original_managed_installed_image_changed")
+        # Mode / uid / gid / links, or a noncanonical identity shape.
+        raise DestinationRefused("original_managed_installed_image_changed")
+    if _release_hash(active, store.owner) != after_hash:
         raise DestinationRefused("original_managed_installed_image_changed")
 
 

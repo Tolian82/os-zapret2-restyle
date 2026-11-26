@@ -4,12 +4,14 @@ import ast
 import base64
 import contextlib
 import io
+import hashlib
 import json
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from types import SimpleNamespace
+from types import SimpleNamespace, ModuleType
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "src/opnsense/scripts/OPNsense/Zapret"
@@ -209,3 +211,60 @@ with tempfile.TemporaryDirectory() as directory:
         assert (result.returncode, result.stdout) == ((0, b"first-enabled-physical=activated\n")
                 if failure == "none" else (70, b"")), failure
 print("PASS: finite first-enabled trace, real PHP join, 7 shell refusals + 1 success; no raw stderr or changed receipts")
+
+
+def installed_proof_trace_test(source):
+    """Each independent failed proof gets a distinct source line; all still refuse."""
+    node = next(node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef)
+                and node.name == "_attest_bound_managed_installed_locked")
+    class Refused(RuntimeError):
+        pass
+    sha = lambda data: hashlib.sha256(data).hexdigest()
+    seal = ModuleType("shared_apply_seal")
+    seal._stat = lambda path, owner, **kw: path.stat()
+    with tempfile.TemporaryDirectory() as directory:
+        active = Path(directory)
+        (active / "managed").mkdir()
+        target = active / "managed" / "list.txt"
+        old, new = b"old.example\n", b"new.example\n"
+        target.write_bytes(new)
+        def identity(st):
+            return [st.st_dev, st.st_ino, st.st_ctime_ns, st.st_mtime_ns,
+                    st.st_size, st.st_mode, st.st_uid, st.st_gid, st.st_nlink]
+        original = identity(target.stat())
+        seal._release_hash = lambda path, owner: sha(target.read_bytes())
+        store = SimpleNamespace(owner=target.stat().st_uid)
+        scope = {"Path": Path, "DestinationRefused": Refused, "_sha": sha,
+                 "_target": lambda path, owner: (path.read_bytes(), path.stat()),
+                 "_target_identity": identity,
+                 "_managed_write_images": lambda *args: (old, None, new, None, None, sha(new))}
+        exec(compile(ast.Module(body=[node], type_ignores=[]), "<installed-proof>", "exec"), scope)
+        attest = scope[node.name]
+        row = {"name": target.name, "before_sha256": sha(old), "after_sha256": sha(new),
+               "installed": original}
+        def observe(changes=None, *, bad_tree=False):
+            with patch.dict(sys.modules, {seal.__name__: seal}), patch.object(seal, "_release_hash",
+                    (lambda *args: "0" * 64) if bad_tree else seal._release_hash):
+                try:
+                    attest(store, {"managed": {**row, **(changes or {})}}, parent=active, active=active)
+                except Refused as error:
+                    assert str(error) == "original_managed_installed_image_changed"
+                    trace = error.__traceback__
+                    while trace.tb_next is not None:
+                        trace = trace.tb_next
+                    return trace.tb_lineno
+                return None
+        assert observe() is None
+        lines = [observe({"before_sha256": "0" * 64})]
+        for index in (1, 2, 3, 4, 5):
+            changed = original.copy()
+            changed[index] += 1
+            lines.append(observe({"installed": changed}))
+        lines.append(observe(bad_tree=True))
+        target.write_bytes(b"foreign.example\n")
+        lines.append(observe())
+        assert None not in lines and len(set(lines)) == len(lines), lines
+        return lines
+
+installed_proof_trace_test((NATIVE / "backend/auto_detect_destination_commit.py").read_text())
+print("PASS: managed installed proof has eight distinct refusal locations; exact valid file accepted")
