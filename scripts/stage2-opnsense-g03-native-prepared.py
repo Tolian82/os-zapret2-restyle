@@ -42,7 +42,8 @@ def call(argv, *, locked=False, timeout=180, expected_rc=0):
                   "unknown")
         allowed = {"stage", "stage-partial", "stage-config", "stage-ordinary", "durable",
                    "crash-partial", "crash-config-save", "shared-apply-prepare",
-                   "found-cold", "found-recover", "found-recover-prepared"}
+                   "found-cold", "found-recover", "found-recover-prepared",
+                   "attest"}
         if action not in allowed:
             action = "unknown"
         reason = re.search(r"G03_[A-Z0-9_]+(?:=REFUSED:[A-Z0-9_]+)?",
@@ -133,6 +134,13 @@ def main():
          pending.get("previous") == previous["detail"] and
          "found" in pending and snapshot() == original,
          "G03_COLD_PREPARED_NOT_DURABLE_OR_LIVE_OWNER_DRIFT")
+    # Same original FD9 and genuine PHP Config FD4. Read-only P2/CAS.
+    attested = call([PHP, NATIVE, "attest", op], locked=True)
+    need(attested == "original-found-prepared-source-cas-attested" and
+         json.loads(WAL.read_bytes()) == pending and snapshot() == original,
+         "G03_S10_FOUND_PREPARED_SOURCE_CAS_DRIFT")
+    print("G03_S10_FOUND_SOURCE_CAS=PASS_REAL_ORIGINAL_FD4_FD9_P2_SEAL_NO_WRITES",
+          flush=True)
     receipt = json.loads(call([
         PHP, "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php",
         "found-recover-prepared", op, "strategies"], locked=True))

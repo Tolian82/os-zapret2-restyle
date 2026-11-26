@@ -95,7 +95,7 @@ function stage($config, bool $partial = false, bool $withConfig = false): string
     return SharedApplyRequest::materialize($prepared);
 }
 
-function durable($config, string $id): void {
+function durable($config, string $id, bool $attest = false): void {
     required(preg_match('/^[a-f0-9]{32}$/D', $id) === 1,
              'G03_COLD_BAD_OPERATION_ID');
     $planFile = "/var/db/zapret2/shared-work/$id/plan.json";
@@ -126,6 +126,51 @@ from auto_detect_effective_known import prepare_native_found_intent
 receipt=prepare_native_found_intent(sys.argv[1],4,sys.argv[2],runtime_mode="1")
 print(json.dumps(receipt,sort_keys=True,separators=(",",":")))
 PY;
+    if ($attest) {
+        // G03 test-only native Source/CAS evidence; no Config/P1/root writes.
+        $script = <<<'PY'
+import json, subprocess, sys
+sys.path.insert(0, "/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
+from shared_apply_operation import SharedApplyOperation
+from neutral_shared_apply_source_gate import native_attest_found_prepared_fd9, decode_pipe, MAX_PIPE
+from voice_ipfw_adapter import require_lifecycle_lock
+op = sys.argv[1]
+require_lifecycle_lock()
+before = SharedApplyOperation(owner=0).read()
+script = r"""
+set -eu
+base=/usr/local/opnsense/scripts/OPNsense/Zapret
+work="/var/db/zapret2/shared-work/$1"
+. "$base/backend/config.sh"
+config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
+{
+    printf 'S10C2B1_ORIGINAL_INPUT_V1\0'
+    printf '%s\0' "${TRAFFIC_ARGS:-}" "${YOUTUBE_DOMAINS:-}" "${USER_DOMAINS:-}" \
+      "${TELEGRAM_IPS:-}" "${DISCORD_IPS:-}" "${X_IPS:-}" \
+      "${SIP_IPS:-}" "${CUSTOM_IPS:-}" "${EXCLUDE_DOMAINS:-}" \
+      "${EXCLUDE_IPSET:-}" "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
+}
+"""
+wire = subprocess.run(["/bin/sh", "-c", script, "g03-found-wire", op],
+                      capture_output=True, timeout=30, check=False)
+if wire.returncode or not wire.stdout or len(wire.stdout) > MAX_PIPE:
+    raise RuntimeError("G03_FOUND_NATIVE_WIRE_REFUSED")
+decode_pipe(wire.stdout)
+witness = native_attest_found_prepared_fd9(op, wire.stdout, 4)
+if (SharedApplyOperation(owner=0).read() != before or
+        witness.authorization != "NONE" or witness.physical_transition_allowed or
+        witness.promotion_allowed or witness.final_original_fd9_reattest_required is not True or
+        witness.source.authorization != "NONE" or witness.source.physical_transition_allowed):
+    raise RuntimeError("G03_FOUND_NATIVE_ATTEST_NOT_READONLY")
+print(json.dumps({"result":"original-found-prepared-source-cas-only",
+    "generation":op, "base":witness.config_base_sha256,
+    "candidate":witness.config_candidate_sha256,
+    "source_status":witness.source.status,
+    "authorization":witness.authorization,
+    "final_reattest":witness.final_original_fd9_reattest_required},
+    sort_keys=True,separators=(",",":")))
+PY;
+    }
     $pipes = [];
     $proc = null;
     try {
@@ -142,12 +187,25 @@ PY;
         $rc = proc_close($proc);
         $proc = null;
         $result = is_string($text) ? json_decode($text, true) : null;
+        if ($attest) {
+            required($rc === 0 && is_array($result) &&
+                     ($result['result'] ?? null) === 'original-found-prepared-source-cas-only' &&
+                     ($result['generation'] ?? null) === $id &&
+                     ($result['base'] ?? null) === $base &&
+                     ($result['candidate'] ?? null) === $candidate &&
+                     ($result['source_status'] ?? null) ===
+                         'ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY' &&
+                     ($result['authorization'] ?? null) === 'NONE' &&
+                     ($result['final_reattest'] ?? null) === true,
+                     'G03_S10_FOUND_SOURCE_CAS_REFUSED');
+        } else {
         required($rc === 0 && is_array($result) &&
                  ($result['result'] ?? null) === 'original-found-intent-durable' &&
                  ($result['phase'] ?? null) === 'prepared' &&
                  ($result['commit_authorized'] ?? null) === false &&
                  ($result['restore_authorized'] ?? null) === false,
                  'G03_COLD_DURABLE_INTENT_REFUSED');
+        }
     } finally {
         foreach ($pipes as $pipe) { if (is_resource($pipe)) { fclose($pipe); } }
         if (is_resource($proc)) { @proc_terminate($proc); @proc_close($proc); }
@@ -270,7 +328,7 @@ try {
              getenv('ZAPRET2_G03_COLD_PREPARED') === '1' &&
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
              in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config',
-                                         'durable','crash-partial','crash-config-save','stage-ordinary'], true) &&
+                                         'durable','attest','crash-partial','crash-config-save','stage-ordinary'], true) &&
              count($argv) === (in_array(($argv[1] ?? ''),
                 ['stage','stage-partial','stage-config','stage-ordinary'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
@@ -297,9 +355,11 @@ try {
             } elseif (in_array($argv[1], ['stage','stage-partial','stage-config'], true)) {
                 echo 'prepared-id=' . stage($config,
                     $argv[1] !== 'stage', $argv[1] === 'stage-config') . "\n";
-            } elseif ($argv[1] === 'durable') {
-                durable($config, $argv[2]);
-                echo "original-found-prepared-durable\n";
+            } elseif (in_array($argv[1], ['durable', 'attest'], true)) {
+                durable($config, $argv[2], $argv[1] === 'attest');
+                echo ($argv[1] === 'attest'
+                    ? "original-found-prepared-source-cas-attested\n"
+                    : "original-found-prepared-durable\n");
             } else {
                 crashFirstFoundFile($config, $argv[2]);
                 echo "original-partial-first-atomic-file-crashed\n";
