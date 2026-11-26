@@ -776,7 +776,7 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool,
 
 
 def _run_bound_restore_joined(command, *, budget: float, capture_output: bool = False,
-                              pass_fds: tuple[int, ...]) -> subprocess.CompletedProcess:
+                              pass_fds: tuple[int, ...], input_data: bytes | None = None) -> subprocess.CompletedProcess:
     """Deadline refuses success but cannot kill a physical shell/PHP parent.
 
     Both commands are synchronous, with no detached descendants. Wait for
@@ -788,10 +788,10 @@ def _run_bound_restore_joined(command, *, budget: float, capture_output: bool = 
 
     started = time.monotonic()
     output = subprocess.PIPE if capture_output else subprocess.DEVNULL
-    with subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output,
+    with subprocess.Popen(command, stdin=subprocess.PIPE if input_data is not None else subprocess.DEVNULL, stdout=output,
                           stderr=output, pass_fds=pass_fds, close_fds=True) as child:
         try:
-            stdout, stderr = child.communicate(timeout=budget)
+            stdout, stderr = child.communicate(input=input_data, timeout=budget)
         except BaseException:
             # communicate(timeout) does NOT kill the child. Do not close
             # descriptors or unwind the original lock before joining it.

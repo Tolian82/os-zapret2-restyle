@@ -1711,6 +1711,153 @@ def native_write_running_managed_file_fd9(
             raise
 
 
+def _managed_handoff_json(value) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=True, allow_nan=False).encode("ascii")
+
+
+def _managed_handoff_digest(value) -> str:
+    from dataclasses import asdict
+    return hashlib.sha256(_managed_handoff_json(asdict(value))).hexdigest()
+
+
+def _managed_handoff_scope(record, operation: str) -> dict:
+    if (type(record) is not dict or record.get("phase") != "prepared" or
+            "found" in record or record.get("manifest", {}).get("schema") != 1 or
+            record.get("previous_manifest", {}).get("schema") != 1 or
+            record["detail"]["id"] != operation or
+            record["detail"]["page"] != "strategies" or
+            record["detail"]["base"] == record["detail"]["candidate"] or
+            not record["detail"]["changed_fields"] or
+            record["previous"]["candidate"] != record["detail"]["base"]):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_SCOPE_REQUIRED")
+    return record["detail"]
+
+
+def _managed_handoff_wire(source: SourceGateReceipt, semantic: OriginalSemanticReceipt,
+                          raw_pipe: bytes) -> bytes:
+    from dataclasses import asdict
+    from neutral_schema3_previous_physical import CompletePriorPreimage
+
+    if (type(source) is not SourceGateReceipt or type(semantic) is not OriginalSemanticReceipt or
+            type(semantic.previous_physical) is not CompletePriorPreimage or
+            semantic.lifecycle_proposal != "RELOAD" or
+            semantic.decision.kind != "RELOAD_SAFE_CANDIDATE" or
+            len(semantic.decision.changed_active) != 1 or semantic.decision.changed_inactive or
+            source.requested_enabled is not True or source.generation != semantic.generation or
+            type(raw_pipe) is not bytes or len(raw_pipe) > MAX_PIPE):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_PROPOSAL_REQUIRED")
+    header = _managed_handoff_json({"source": _managed_handoff_digest(source),
+        "semantic": _managed_handoff_digest(semantic),
+        "physical": asdict(semantic.previous_physical)})
+    if len(header) > 8192:
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_HEADER_TOO_LARGE")
+    return header + b"\n" + raw_pipe
+
+
+def native_write_managed_handoff_locked(operation: str, witness: str, stream, *, config_fd: int) -> dict:
+    """Private stdin from original FD9 parent, re-attested under native FD4.
+
+    The transport carries observations only, never a phase grant. Rebuild
+    the typed source and decision from the original pinned seal, and reuse
+    the complete existing locked physical/CAS writer. No nested PHP call.
+    """
+    from dataclasses import asdict
+    from neutral_schema3_previous_physical import CompletePriorPreimage
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import SharedApplyOperation, _config_save_witness
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    detail = _managed_handoff_scope(before, operation)
+    if witness != _config_save_witness(detail, verify_seal(WORK / operation, owner=0)["sha256"]["plan.json"]):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_CONFIG_CHANGED")
+    line = stream.readline(8194)
+    if not line.endswith(b"\n") or len(line) > 8193:
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_HEADER_INVALID")
+    header = json.loads(line)
+    if (type(header) is not dict or set(header) != {"source", "semantic", "physical"} or
+            _managed_handoff_json(header) + b"\n" != line or
+            any(type(header[k]) is not str or not re.fullmatch(r"[a-f0-9]{64}", header[k])
+                for k in ("source", "semantic")) or type(header["physical"]) is not dict):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_HEADER_INVALID")
+    data = header["physical"]
+    fields = ("generation", "root_sha256", "previous_generation", "old_release_sha256",
+              "active_release_sha256", "saved_config_base_sha256", "resolved_wan_device",
+              "prior_pid", "prior_birth", "supervisor_pid", "supervisor_birth",
+              "original_kernel_argv_sha256")
+    physical = CompletePriorPreimage(**{key: data[key] for key in fields})
+    if (_managed_handoff_json(asdict(physical)) != _managed_handoff_json(data) or
+            any(type(data[k]) is not int or data[k] <= 0 for k in ("prior_pid", "supervisor_pid")) or
+            any(type(data[k]) is not str or not 0 < len(data[k]) <= 256 for k in fields
+                if k not in ("prior_pid", "supervisor_pid"))):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_PHYSICAL_INVALID")
+    raw = stream.read(MAX_PIPE + 1)
+    if len(raw) > MAX_PIPE or decode_pipe(raw)["mode"] not in (b"all", b"list"):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_SOURCE_INVALID")
+    source = native_original_bound_effective_fd9(operation, raw, bound_record=before)
+    if _managed_handoff_digest(source) != header["source"]:
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_SOURCE_CHANGED")
+    pin, old_pin = before["manifest"], before["previous_manifest"]
+    engine = _s10_native_bound_engine_readback()
+    read = dict(parent=WORK, sources=Path(__file__).parent, owner_uid=0,
+                engine_version=engine["engine_version"])
+    old = _read_pinned_effective(detail=before["previous"], binding=old_pin, **read)
+    candidate = _read_pinned_effective(detail=detail, binding=pin, **read)
+    decision = _ordinary_effective_decision(old, candidate)
+    semantic = OriginalSemanticReceipt(operation, before["previous"]["id"],
+        pin["root_sha256"], old_pin["root_sha256"], decision, physical,
+        lifecycle_proposal=_running_lifecycle_proposal(source.requested_enabled, decision))
+    if (_managed_handoff_digest(semantic) != header["semantic"] or
+            _managed_handoff_wire(source, semantic, raw) != line + raw or store.read() != before):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_SEMANTIC_CHANGED")
+    return native_write_running_managed_file_fd9(operation, raw, source=source,
+        semantic=semantic, config_fd=config_fd, config_digest=detail["base"])
+
+
+def native_run_managed_apply_fd9(operation: str, raw_pipe: bytes, *,
+                                 source: SourceGateReceipt, semantic: OriginalSemanticReceipt) -> dict:
+    """Original prepared owner -> existing PHP writer -> exact terminal WAL.
+
+    Private coordinator only; the public Apply switch is still gated on
+    integrated first-bound promotion/recovery. Never retry an uncertain save.
+    """
+    from neutral_schema3_quiescent_preimage import _run_bound_restore_joined
+    from shared_apply_operation import SharedApplyOperation
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    detail = _managed_handoff_scope(before, operation)
+    wire = _managed_handoff_wire(source, semantic, raw_pipe)
+    if (source.generation != operation or semantic.candidate_root_sha256 != before["manifest"]["root_sha256"] or
+            semantic.previous_root_sha256 != before["previous_manifest"]["root_sha256"] or
+            store.read() != before):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_OWNER_CHANGED")
+    command = ["/usr/local/bin/php", str(Path(__file__).parent.parent / "shared_apply_config.php"),
+               "managed-apply", operation, "strategies"]
+    reply = _run_bound_restore_joined(command, budget=90, capture_output=True,
+                                      pass_fds=(9,), input_data=wire)
+    expected = {**before, "phase": "committed"}
+    receipt = {"result": "saved", "saved": True, "applied": False,
+               "snapshot": detail["candidate"], "change_count": len(detail["changed_fields"])}
+    require_lifecycle_lock()
+    if (reply.returncode != 0 or not 0 < len(reply.stdout) <= 16384 or
+            _managed_handoff_json(json.loads(reply.stdout)) != _managed_handoff_json(receipt) or
+            store.read() != expected):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_OUTCOME_UNCERTAIN")
+    return expected
+
+
 def native_checkpoint_managed_config_fd9(operation: str, witness_sha256: str, *,
                                          config_fd: int, saved: bool) -> dict:
     """Original PHP owner: durable intent before save, exact commit after relock."""

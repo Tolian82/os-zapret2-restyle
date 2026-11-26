@@ -828,6 +828,102 @@ class OriginalFd9SourceGate(unittest.TestCase):
             store.return_value._advance_bound_ordinary.assert_not_called()
             nested.assert_not_called()
 
+    def test_s10_managed_handoff_joins_original_config_owner_and_refuses_drift(self):
+        from contextlib import ExitStack
+        import io
+        import subprocess
+        from unittest.mock import Mock
+        from neutral_effective_diff import EffectiveSnapshot
+        from neutral_schema3_previous_physical import CompletePriorPreimage
+        from shared_apply_operation import _config_save_witness
+
+        op, old_id = "a" * 32, "b" * 32
+        base, candidate, seal, root, old_root = (c * 64 for c in "cdef1")
+        old = EffectiveSnapshot("2" * 64, "3" * 64,
+                                (("hostlist-youtube.txt", "4" * 64),), (), 0)
+        new = replace(old, linked=(("hostlist-youtube.txt", "5" * 64),))
+        source = gate.SourceGateReceipt("list", "6" * 64, (),
+            generation=op, original_seal_sha256=seal, effective=new, requested_enabled=True)
+        physical = CompletePriorPreimage(op, root, old_id, "7" * 64, "7" * 64,
+            base, "tun0", 5432, "birth", 6543, "monitor-birth", "8" * 64)
+        semantic = gate.OriginalSemanticReceipt(op, old_id, root, old_root,
+            gate._ordinary_effective_decision((old, True), (new, True)), physical,
+            lifecycle_proposal="RELOAD")
+        record = {"phase": "prepared", "detail": {"id": op, "base": base,
+                  "candidate": candidate, "page": "strategies",
+                  "changed_fields": ["hostlist.youtubedomains"]},
+                  "previous": {"id": old_id, "candidate": base},
+                  "manifest": {"schema": 1, "root_sha256": root, "seal_sha256": seal},
+                  "previous_manifest": {"schema": 1, "root_sha256": old_root}}
+        raw = b"original"
+        wire = gate._managed_handoff_wire(source, semantic, raw)
+        plan_sha = "9" * 64
+        witness = _config_save_witness(record["detail"], plan_sha)
+        committed = {**record, "phase": "committed"}
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            store = Mock(read=Mock(return_value=record))
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            stack.enter_context(patch.object(gate, "verify_seal",
+                return_value={"sha256": {"plan.json": plan_sha}}))
+            stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"list"}))
+            fresh = stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
+                return_value=source))
+            stack.enter_context(patch.object(gate, "_s10_native_bound_engine_readback",
+                return_value={"engine_version": "v1.0.7"}))
+            stack.enter_context(patch.object(gate, "_read_pinned_effective", side_effect=
+                lambda *, detail, **kw: (new if detail["id"] == op else old, True)))
+            write = stack.enter_context(patch.object(gate, "native_write_running_managed_file_fd9",
+                return_value={**record, "phase": "managed-writing"}))
+            nested = stack.enter_context(patch.object(gate, "native_plan_original_prepared_fd9"))
+            joined = stack.enter_context(patch("neutral_schema3_quiescent_preimage._run_bound_restore_joined"))
+
+            def locked(value=wire, digest=witness, fd=4):
+                return gate.native_write_managed_handoff_locked(
+                    op, digest, io.BytesIO(value), config_fd=fd)
+
+            self.assertEqual(locked()["phase"], "managed-writing")
+            write.assert_called_once_with(op, raw, source=source, semantic=semantic,
+                                          config_fd=4, config_digest=base)
+            write.reset_mock()
+            for bad in (b" " + wire, b"{}\n" + raw, b"x" * 8194 + b"\n" + raw):
+                with self.assertRaises(gate.OriginalSourceGateRefused):
+                    locked(bad)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                locked(digest="0" * 64)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                locked(fd=9)
+            fresh.return_value = replace(source, candidate_input_sha256="0" * 64)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                locked()
+            fresh.return_value = source
+            write.assert_not_called()
+            nested.assert_not_called()
+            store._persist_record.assert_not_called()
+
+            def php(command, **kw):
+                self.assertEqual(command[-3:], ["managed-apply", op, "strategies"])
+                self.assertEqual(kw["input_data"], wire)
+                self.assertEqual(kw["pass_fds"], (9,))
+                store.read.return_value = committed
+                return subprocess.CompletedProcess(command, 0, json.dumps({
+                    "result": "saved", "saved": True, "applied": False,
+                    "snapshot": candidate, "change_count": 1}).encode())
+
+            joined.side_effect = php
+            self.assertEqual(gate.native_run_managed_apply_fd9(op, raw,
+                source=source, semantic=semantic), committed)
+            store.read.return_value = record
+            joined.side_effect = None
+            joined.return_value = subprocess.CompletedProcess([], 0, b'{"result":"saved"}')
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                gate.native_run_managed_apply_fd9(op, raw, source=source, semantic=semantic)
+            self.assertEqual(joined.call_count, 2)
+            store._persist_record.assert_not_called()
+
     def test_s10_running_enabled_off_stop_overrides_legacy_restart_and_pinned_no_change(self):
         """Injected old running process: identical S08d can NEVER suppress STOP.
 

@@ -408,8 +408,10 @@ final class SharedApplyConfigWorker
         ?callable $whileP2Held = null, $queueStream = null, ?string $baseDigest = null
     ): array {
         $begin = $mode === 'begin-found-save-locked';
+        $managedWrite = $mode === 'write-managed-handoff-locked';
         $joined = in_array($mode, ['finish-ordinary-restore-locked', 'recover-managed-config-locked',
-            'begin-managed-config-save-locked', 'confirm-managed-config-save-locked'], true);
+            'begin-managed-config-save-locked', 'confirm-managed-config-save-locked',
+            'write-managed-handoff-locked'], true);
         if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
                  !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
@@ -454,7 +456,7 @@ final class SharedApplyConfigWorker
                 $command[] = $runtimeMode;
                 $command[] = $baseDigest;
             }
-            $descriptors = [0 => $begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r'],
+            $descriptors = [0 => $managedWrite ? STDIN : ($begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r']),
                 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a'],
                 4 => $handle, 9 => $fd9];
             if ($queueStream !== null) {
@@ -855,9 +857,9 @@ final class SharedApplyConfigWorker
             $queueFd = (int)$matches[1];
         }
         if (count($argv) !== ($action === 'found-save' || $queueFd !== null ? 5 : 4) ||
-            !in_array($action, ['preflight', 'save', 'saved', 'managed-save',
+            !in_array($action, ['preflight', 'save', 'saved', 'managed-save', 'managed-apply',
                 'ordinary-cold', 'ordinary-restore-finish', 'managed-save-recover', ...$foundActions], true) ||
-            !in_array($argv[3], $found || in_array($action, ['managed-save', 'managed-save-recover'], true)
+            !in_array($argv[3], $found || in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply'], true)
                 ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
@@ -872,7 +874,7 @@ final class SharedApplyConfigWorker
                 $queueStream = self::openOriginalFoundQueue($queueFd);
             }
             if ($found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish',
-                'save', 'saved', 'managed-save', 'managed-save-recover'], true)) {
+                'save', 'saved', 'managed-save', 'managed-save-recover', 'managed-apply'], true)) {
                 // Core may repair unreadable Config from a backup on load.
                 // A recovery reader must not trigger such implicit mutation.
                 self::requireReadableConfig();
@@ -987,17 +989,23 @@ final class SharedApplyConfigWorker
             }
             $id = $argv[2];
             $page = $argv[3];
+            $managedApply = $action === 'managed-apply';
             $attest = static function (string $mode, string $base, string $candidate, string $phase)
-                use ($config, $id, $plan, $planSha): bool {
+                use ($config, $id, $plan, $planSha, $managedApply): bool {
                 // Hash the same parsed plan bytes and native Model snapshots on both sides of FD4.
                 if ($mode === 'confirm-managed-config-save-locked') {
                     self::requireReadableConfig();
                 }
                     $digest = self::configSaveWitness($plan, $planSha, $base, $candidate);
+                if ($managedApply && $mode === 'begin-managed-config-save-locked' &&
+                    self::originalLockedFileEvidence($config, $id, 'write-managed-handoff-locked', $digest)
+                        !== ['result'=>'managed-writing', 'id'=>$id]) {
+                    throw new \RuntimeException('Original managed write outcome uncertain');
+                }
                 return self::originalLockedFileEvidence($config, $id, $mode, $digest) ===
                     ['result'=>$phase, 'id'=>$id];
             };
-            $managed = $action === 'managed-save';
+            $managed = $action === 'managed-save' || $managedApply;
             $result = SharedConfigCommit::persist($plan, $page, $config, $factory,
                 $managed
                     ? static fn(string $base, string $candidate): bool => $attest(
@@ -1020,7 +1028,7 @@ final class SharedApplyConfigWorker
             fwrite(STDERR, "ERROR: native shared Config save uncertain; retain recovery evidence\n");
             return 70;
         } catch (\Throwable $error) {
-            if (in_array($action, ['managed-save', 'managed-save-recover'], true)) {
+            if (in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply'], true)) {
                 // A joined child may have fsynced its phase before losing the receipt.
                 fwrite(STDERR, "ERROR: original managed Config outcome requires journal review\n");
                 return 70;

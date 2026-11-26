@@ -1191,6 +1191,19 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError, RuntimeError, KeyError, TypeError):
             print("ERROR: original ordinary locked Config save refused", file=sys.stderr)
             return 69
+    if argv and argv[0] == "write-managed-handoff-locked":
+        if len(argv) != 3:
+            return 64
+        try:
+            from neutral_shared_apply_source_gate import native_write_managed_handoff_locked
+            record = native_write_managed_handoff_locked(
+                argv[1], argv[2], sys.stdin.buffer, config_fd=4)
+            print(json.dumps({"result": record["phase"], "id": record["detail"]["id"]},
+                             separators=(",", ":")))
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+            print("ERROR: original managed locked write outcome refused", file=sys.stderr)
+            return 69
     if argv and argv[0] in ("begin-managed-config-save-locked", "confirm-managed-config-save-locked"):
         if len(argv) != 3:
             return 64
