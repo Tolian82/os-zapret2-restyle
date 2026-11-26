@@ -259,3 +259,132 @@ def attest_previous_physical_under_fd9(*, generation: str,
         enabled=enabled, parent=WORK, journal_root=DEFAULT_ROOT, owner_uid=0,
         active=COMMON_ACTIVE, child_pidfile=CHILD_PID,
         monitor_pidfile=MONITOR_PID)
+
+
+@dataclass(frozen=True)
+class FinalBoundRuntimeReceipt:
+    generation: str
+    root_sha256: str
+    config_sha256: str
+    release_sha256: str
+    running: PriorRunningToken | None
+    epoch_sha256: str | None
+    kernel_state: str
+    authorization: str = "NONE"
+    physical_transition_allowed: bool = False
+
+
+def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
+                                           config_digest: str, enabled: bool,
+                                           runtime_mode: str) -> FinalBoundRuntimeReceipt:
+    """Final installed candidate proof, not a phase writer or activation permit.
+
+    The original Config owner supplies its fresh saved digest while holding
+    inherited FD4; no nested PHP or queue acquisition. FD9 excludes the
+    minute owner. Require the exact final kernel, never verify-cleanup or
+    a staged rollback state. Learning requires the real finalized epoch
+    and its current original producer inodes; appends do not change identity.
+    """
+    import pwd
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_epoch_receipts import EpochReceipts, _canonical
+    from auto_detect_owner import attest_learning_epoch_finalizing_generation
+    from auto_detect_storage import ROOT as PRODUCER, ENGINE_USER, FILE_MODE, _secure
+    from auto_detect_queue import DurableInbox
+    from auto_detect_minute import inspect_inert_release
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+    from neutral_schema3_quiescent_preimage import (
+        _zero_processes, _empty_kernel, _safe_empty_directory, DAEMON_PID)
+    from voice_ipfw_adapter import FreeBSDIPFWAdapter, shared_release_manifest
+    from voice_firewall_transaction import verify_prior_state
+
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(record) is not dict or type(config_fd) is not int or
+                config_fd < 3 or config_fd == 9 or type(enabled) is not bool or
+                runtime_mode not in ("0", "1") or (runtime_mode == "1" and not enabled)):
+            raise PreviousPhysicalRefused("BOUND_FINAL_NATIVE_SCOPE_REQUIRED")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        if store.read() != record or type(record.get("manifest")) is not dict:
+            raise PreviousPhysicalRefused("BOUND_FINAL_OWNER_REQUIRED")
+        detail, pin = record["detail"], record["manifest"]
+        learning = pin["schema"] == 2
+        if (pin["schema"] not in (1, 2) or config_digest != detail["candidate"] or
+                record["phase"] != ("epoch-finalizing" if learning else "config-saved") or
+                (learning and runtime_mode != "1") or
+                ("found" in record and record["found"].get("runtime_mode") != runtime_mode) or
+                ("found" not in record and enabled != (runtime_mode == "1"))):
+            raise PreviousPhysicalRefused("BOUND_FINAL_PHASE_CONFIG_MISMATCH")
+        work = WORK / detail["id"]
+        release = work / "release"
+
+        def observe():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise PreviousPhysicalRefused("BOUND_FINAL_OWNER_CHANGED")
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            root = json.loads(_verify_original_pinned_root(
+                detail=detail, binding=pin, parent=WORK, owner_uid=0))
+            service = root["service"]
+            if (root["schema"] != pin["schema"] or root["generation"] != detail["id"] or
+                    service["enabled"] is not enabled or
+                    service["target_mode"] not in ("all", "list", "auto") or
+                    learning != (service["target_mode"] == "auto" and enabled)):
+                raise PreviousPhysicalRefused("BOUND_FINAL_ROOT_MODE_CHANGED")
+            tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
+            process = epoch_digest = None
+            if runtime_mode == "1":
+                process = _running_native(release, owner_uid=0,
+                                          child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+                manifest = shared_release_manifest(release)
+                if manifest["rule_base"] != 19000 or manifest["rule_max"] not in (19010, 19099):
+                    raise PreviousPhysicalRefused("BOUND_FINAL_KERNEL_SCOPE_INVALID")
+                # Even a sealed legacy-width release must have no residual
+                # rules anywhere in the existing allocated 19000..19099 scope.
+                verify_prior_state(FreeBSDIPFWAdapter(19000, 19099), manifest, manifest)
+                kernel = "native-managed-kernel-final"
+                if learning:
+                    proof = attest_learning_epoch_finalizing_generation(detail["id"])
+                    if (proof.operation_id != detail["id"] or proof.generation != detail["id"] or
+                            proof.owner_candidate_sha256 != config_digest or
+                            (proof.owner.pid, proof.owner.started) != (process.pid, process.started)):
+                        raise PreviousPhysicalRefused("BOUND_FINAL_LEARNING_OWNER_CHANGED")
+                    epoch = EpochReceipts(owner_uid=0).verify_learning_stopped_epoch(
+                        proof, workspace=work)
+                    gid = pwd.getpwnam(ENGINE_USER).pw_gid
+                    queue = DurableInbox(PRODUCER, owner_uid=0, writer_gid=gid)
+                    queue._verify()  # read-only, FD9 excludes original minute ingress
+                    _safe_empty_directory(queue.pending, 0)
+                    for row in epoch["files"]:
+                        info = _secure(PRODUCER / row["name"], directory=False,
+                                       uid=0, gid=gid, mode=FILE_MODE, links=1)
+                        if (info.st_dev, info.st_ino, info.st_nlink) != (
+                                row["device"], row["inode"], row["nlink"]):
+                            raise PreviousPhysicalRefused("BOUND_FINAL_LEARNING_INODE_CHANGED")
+                    epoch_digest = sha256(_canonical(epoch)).hexdigest()
+                elif inspect_inert_release(release, owner_uid=0) != "inactive":
+                    raise PreviousPhysicalRefused("BOUND_FINAL_INERT_RELEASE_REQUIRED")
+            else:
+                _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+                if inspect_inert_release(release, owner_uid=0) != "inactive":
+                    raise PreviousPhysicalRefused("BOUND_FINAL_INERT_RELEASE_REQUIRED")
+                _safe_empty_directory(PRODUCER, 0)
+                kernel = _empty_kernel(release)
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise PreviousPhysicalRefused("BOUND_FINAL_OWNER_CHANGED")
+            return FinalBoundRuntimeReceipt(detail["id"], pin["root_sha256"], config_digest,
+                                            tree, process, epoch_digest, kernel)
+
+        first = observe()
+        if observe() != first:
+            raise PreviousPhysicalRefused("BOUND_FINAL_PHYSICAL_WITNESS_CHANGED")
+        return first
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError, AttributeError,
+            subprocess.SubprocessError):
+        raise PreviousPhysicalRefused("BOUND_FINAL_PHYSICAL_ATTEST_REFUSED") from None

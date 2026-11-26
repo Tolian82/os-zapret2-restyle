@@ -836,6 +836,47 @@ class SharedApplyOperation:
             raise SharedOperationError("bound ordinary durable readback refused")
         return result
 
+    def _finish_native_bound_ordinary(self, record: dict, *, config_fd: int,
+                                      config_digest: str, enabled: bool,
+                                      runtime_mode: str) -> dict:
+        """Original FD9/FD4 terminal checkpoint; not a public command.
+
+        Do not accept a generic callback, a synthetic committed predecessor,
+        or a saved-image match as physical proof. Fsync the actual native
+        Config descriptor before the final two read-only observations, then
+        use the existing original WAL writer. Found runtime remains fenced.
+        """
+        from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+        from neutral_schema3_previous_physical import (
+            FinalBoundRuntimeReceipt, attest_bound_candidate_final_under_fd9)
+        from voice_ipfw_adapter import require_lifecycle_lock
+
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                self.root != DEFAULT_ROOT or self.owner != 0 or
+                type(record) is not dict or self.read() != record or
+                "found" in record or "manifest" not in record or
+                record["phase"] not in ("config-saved", "epoch-finalizing") or
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+                config_digest != record["detail"]["candidate"]):
+            raise SharedOperationError("bound native terminal scope refused")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        os.fsync(config_fd)
+
+        def attest():
+            receipt = attest_bound_candidate_final_under_fd9(
+                record, config_fd=config_fd, config_digest=config_digest,
+                enabled=enabled, runtime_mode=runtime_mode)
+            return (type(receipt) is FinalBoundRuntimeReceipt and
+                    receipt.generation == record["detail"]["id"] and
+                    receipt.root_sha256 == record["manifest"]["root_sha256"] and
+                    receipt.config_sha256 == config_digest and
+                    receipt.authorization == "NONE" and
+                    receipt.physical_transition_allowed is False)
+
+        return self._advance_bound_ordinary("committed", record, attest)
+
+
     def bind_prepared_manifest(self, generation: str, *,
                                effective, native, mode: str, enabled: bool,
                                shared_work_parent: Path | None = None,
