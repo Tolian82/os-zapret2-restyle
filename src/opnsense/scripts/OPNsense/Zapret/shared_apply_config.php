@@ -420,7 +420,8 @@ final class SharedApplyConfigWorker
                     : ($runtimeMode !== null || $whileP2Held !== null || $baseDigest !== null)) ||
             ($queueStream !== null && (!is_resource($queueStream) ||
                 !in_array($mode, ['recover-found-locked', 'confirm-found-save-locked',
-                    'finish-ordinary-restore-locked', 'recover-managed-config-locked'], true)))) {
+                    'finish-ordinary-restore-locked', 'recover-managed-config-locked',
+                    'recover-first-config-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
         }
         SharedApplyLifecycleLock::assertHeld();
@@ -851,7 +852,8 @@ final class SharedApplyConfigWorker
             'found-runtime-epoch-finalizing', 'found-runtime-committed'];
         $found = in_array($action, $foundActions, true);
         $queueFd = null;
-        if (in_array($action, ['found-recover', 'ordinary-restore-finish', 'managed-save-recover'], true) &&
+        if (in_array($action, ['found-recover', 'ordinary-restore-finish', 'managed-save-recover',
+            'ordinary-first-recover'], true) &&
             count($argv) === 5 &&
             preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D', $argv[4], $matches) === 1) {
             $queueFd = (int)$matches[1];

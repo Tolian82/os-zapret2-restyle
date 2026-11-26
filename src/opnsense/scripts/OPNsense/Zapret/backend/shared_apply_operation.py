@@ -2038,7 +2038,8 @@ def main(argv: list[str]) -> int:
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
     first_pristine = len(argv) == 3 and argv[1] in (
-        "recover-first-activating", "recover-first-activated", "recover-first-config-saved") and bool(OP_ID.fullmatch(argv[2]))
+        "recover-first-activating", "recover-first-activated", "recover-first-config-saved",
+        "recover-first-epoch-finalizing") and bool(OP_ID.fullmatch(argv[2]))
     managed_recovery = len(argv) == 4 and argv[1] == "recover-managed" and all(
         OP_ID.fullmatch(value) for value in argv[2:4]
     )
@@ -2190,6 +2191,11 @@ def main(argv: list[str]) -> int:
                     record.get("manifest", {}).get("schema") == 1):
                 detail = record["detail"]
                 print(record["phase"] + "-first " + detail["id"] + " " + detail["page"])
+            elif (record["phase"] in ("activated", "epoch-finalizing") and
+                    _first_running_pin_scope(record) and record["manifest"]["schema"] == 2 and
+                    "first_running_sha256" in record and "first_pretraffic_sha256" in record):
+                detail = record["detail"]
+                print(record["phase"] + "-first " + detail["id"] + " " + detail["page"])
             elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"])
@@ -2209,11 +2215,17 @@ def main(argv: list[str]) -> int:
             if (record is None or record["phase"] != argv[1].removeprefix("recover-first-") or
                     record["detail"]["id"] != argv[2] or "previous" in record or
                     "previous_manifest" in record or "found" in record or
-                    record.get("manifest", {}).get("schema") != 1):
+                    record.get("manifest", {}).get("schema") not in (1, 2)):
                 raise SharedOperationError("first activating recovery owner mismatch")
+            learning = record["manifest"]["schema"] == 2
+            if learning and (record["phase"] not in ("activated", "epoch-finalizing") or
+                    "first_running_sha256" not in record or "first_pretraffic_sha256" not in record):
+                raise SharedOperationError("first learning recovery owner mismatch")
+            if not learning and record["phase"] == "epoch-finalizing":
+                raise SharedOperationError("first inert recovery phase mismatch")
             result = native_finish_bound_cold_restore(record)
-            admitted = {"activating": ("restored",), "activated": ("restored", "committed"),
-                        "config-saved": ("committed",)}[record["phase"]]
+            admitted = ("committed",) if learning else {"activating": ("restored",),
+                "activated": ("restored", "committed"), "config-saved": ("committed",)}[record["phase"]]
             if (result["phase"] not in admitted or result != {**record, "phase": result["phase"]} or
                     store.read() != result):
                 raise SharedOperationError("first Config recovery readback mismatch")

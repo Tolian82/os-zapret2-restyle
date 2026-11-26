@@ -350,6 +350,89 @@ class OriginalQuiescentTests(unittest.TestCase):
             self.assertEqual(recover()["phase"], "committed")
             self.assertEqual(calls, ["config-saved", "cleanup", "committed"])
 
+    def test_first_learning_saved_recovery_orders_epoch_and_keeps_failed_checkpoint(self):
+        import tempfile
+        from types import SimpleNamespace
+        from contextlib import nullcontext
+        record = {**self.f.original.read(), "phase": "activated",
+                  "manifest": {"schema": 2}, "first_running_sha256": "a" * 64,
+                  "first_pretraffic_sha256": "b" * 64}
+        record.pop("previous", None)
+        record.pop("previous_manifest", None)
+        detail = record["detail"]
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryFile() as config, ExitStack() as stack:
+            base = Path(tmp)
+            work = base / "work" / detail["id"]
+            work.mkdir(parents=True)
+            active = base / "active"
+            active.mkdir()
+            epochs = base / "epochs"
+            (epochs / detail["id"]).mkdir(parents=True)
+            for key, value in (("WORK", work.parent), ("COMMON_ACTIVE", active),
+                               ("EPOCH_ROOT", epochs), ("PRODUCER_ROOT", base / "producer")):
+                stack.enter_context(patch.object(gate, key, value))
+            store = Mock(read=Mock(return_value=record))
+            sources = ((1, "learning", "/fixture/source"),)
+            proof = SimpleNamespace(operation_id=detail["id"], generation=detail["id"],
+                owner_candidate_sha256=detail["candidate"], learning=sources)
+            data = {"pretraffic_sha256": record["first_pretraffic_sha256"]}
+            queue = Mock()
+            queue.inherited_exclusive.side_effect = lambda fd: nullcontext()
+            receipts = Mock()
+            receipts._attest_learning_running_seed.return_value = (None, data)
+            staged = ("native-managed-kernel-staged", "a" * 64, (("stage", "x", ()),))
+            final = ("native-managed-kernel-final", "a" * 64, ())
+            calls = []
+            def advance(phase, current, attest):
+                if not attest():
+                    raise gate.QuiescentPreimageRefused("drift")
+                calls.append(phase)
+                result = {**current, "phase": phase}
+                store.read.return_value = result
+                return result
+            store._advance_bound_ordinary.side_effect = advance
+            for name in ("require_lifecycle_lock", "_safe_empty_directory", "_reject_cold_recovery_residue"):
+                stack.enter_context(patch.object(gate, name))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            stack.enter_context(patch("shared_apply_seal._stat"))
+            stack.enter_context(patch("auto_detect_post_drop._learning_release_sources",
+                return_value=(work, detail["candidate"], sources)))
+            stack.enter_context(patch("auto_detect_post_drop._qualified_learning_sources",
+                return_value=(detail["id"], ("source",))))
+            stack.enter_context(patch("auto_detect_post_drop._original_epoch_queue",
+                return_value=(queue, receipts)))
+            for name in ("attest_bound_learning_staged_generation",
+                         "attest_learning_epoch_finalizing_generation"):
+                stack.enter_context(patch("auto_detect_owner." + name, return_value=proof))
+            stack.enter_context(patch.object(gate, "_full_prior_tree", return_value="tree"))
+            kernel = stack.enter_context(patch.object(gate, "_first_saved_running_kernel",
+                return_value=staged))
+            stack.enter_context(patch.object(gate, "_first_inert_staged_manifests",
+                return_value=({}, {})))
+            stack.enter_context(patch.object(gate, "FreeBSDIPFWAdapter"))
+            stack.enter_context(patch("voice_firewall_transaction.verify_staged_state"))
+            def cleanup(*args):
+                self.assertEqual(store.read()["phase"], "epoch-finalizing")
+                calls.append("cleanup")
+                kernel.return_value = final
+            native = stack.enter_context(patch("voice_firewall_transaction.cleanup_committed",
+                side_effect=VoiceFirewallError("uncertain cleanup")))
+            def finish(*args, **kwargs):
+                calls.append("epoch")
+                return data
+            stack.enter_context(patch("auto_detect_post_drop.native_finish_first_bound_learning_epoch_locked",
+                side_effect=finish))
+            def recover():
+                return gate._finish_first_learning_saved_locked(store, store.read(),
+                    config_fd=config.fileno(), config_digest=detail["candidate"], queue_fd=3)
+            with self.assertRaises(VoiceFirewallError):
+                recover()
+            self.assertEqual(calls, ["epoch-finalizing"])
+            native.side_effect = cleanup
+            self.assertEqual(recover()["phase"], "committed")
+            self.assertEqual(calls, ["epoch-finalizing", "cleanup", "epoch", "committed"])
+
     def test_real_bound_cold_root_with_actual_empty_manifest_check(self):
         self.cold()
         record = self.f.original.read()

@@ -1373,8 +1373,117 @@ def _finish_first_saved_locked(store, record: dict, *, config_fd: int,
     return result
 
 
+def _finish_first_learning_saved_locked(store, record: dict, *, config_fd: int,
+                                        config_digest: str, queue_fd: int) -> dict:
+    """Resume the original first Auto saved image without restarting its owner."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_owner import (attest_bound_learning_staged_generation,
+                                  attest_learning_epoch_finalizing_generation)
+    from auto_detect_post_drop import (_learning_release_sources, _qualified_learning_sources,
+                                      _original_epoch_queue,
+                                      native_finish_first_bound_learning_epoch_locked)
+    from neutral_root_stage import verify_original_operation_pins
+    from shared_apply_seal import _stat
+    from voice_firewall_transaction import cleanup_committed, verify_staged_state
+
+    detail = record["detail"]
+    if (record["phase"] not in ("activated", "epoch-finalizing") or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 2 or
+            config_digest != detail["candidate"] or detail["base"] == config_digest):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    work = WORK / detail["id"]
+    release = work / "release"
+    workspace, candidate, sources = _learning_release_sources(COMMON_ACTIVE)
+    if workspace != work or candidate != config_digest:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SOURCE_CHANGED")
+    _, names = _qualified_learning_sources(sources, PRODUCER_ROOT)
+    queue, receipts = _original_epoch_queue(names)
+
+    def observe(current):
+        def attest():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != current:
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_OWNER_CHANGED")
+            verify_original_operation_pins(record=current, parent=WORK, owner_uid=0)
+            _stat(COMMON_ACTIVE.parent, 0, directory=True)
+            _safe_empty_directory(COMMON_ACTIVE.with_name("runtime-v2-backups"), 0)
+            _stat(EPOCH_ROOT, 0, directory=True)
+            _reject_cold_recovery_residue(COMMON_ACTIVE)
+            if (any(item.name != detail["id"] for item in WORK.iterdir()) or
+                    set(item.name for item in EPOCH_ROOT.iterdir()) != {detail["id"]} or
+                    any(item.name.startswith((f".{COMMON_ACTIVE.name}.stage.",
+                        f".{COMMON_ACTIVE.name}.old.")) for item in COMMON_ACTIVE.parent.iterdir())):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_RESIDUE")
+            if _learning_release_sources(COMMON_ACTIVE) != (work, candidate, sources):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SOURCE_CHANGED")
+            proof = (attest_bound_learning_staged_generation(current, config_fd)
+                     if current["phase"] == "activated" else
+                     attest_learning_epoch_finalizing_generation(detail["id"]))
+            if (proof.operation_id != detail["id"] or proof.generation != detail["id"] or
+                    proof.owner_candidate_sha256 != config_digest or proof.learning != sources):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_PROOF_CHANGED")
+            return proof
+
+        proof = attest()
+        tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
+        kernel = _first_saved_running_kernel(current, release, config_fd=config_fd)
+        if current["phase"] == "activated":
+            empty, desired = _first_inert_staged_manifests(current, release)
+            verify_staged_state(FreeBSDIPFWAdapter(19000, 19099), empty, desired)
+        with queue.inherited_exclusive(queue_fd):
+            _, data = receipts._attest_learning_running_seed(proof, queue, workspace=work,
+                attest=attest, unfinished=current["phase"] == "activated")
+            if data["pretraffic_sha256"] != current.get("first_pretraffic_sha256"):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SEED_CHANGED")
+            if (current["phase"] == "epoch-finalizing" and
+                    _present(EPOCH_ROOT / detail["id"] / "epoch.json") and
+                    (kernel[0] != "native-managed-kernel-final" or
+                     receipts.verify_learning_stopped_epoch(proof, workspace=work) != data)):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_EPOCH_CHANGED")
+        if (_full_prior_tree(work, COMMON_ACTIVE, 0) != tree or attest() != proof or
+                _first_saved_running_kernel(current, release, config_fd=config_fd) != kernel):
+            raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_WITNESS_CHANGED")
+        return tree, kernel, data
+
+    first = observe(record)
+    if observe(record) != first:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_WITNESS_CHANGED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    os.fsync(config_fd)
+    current = record
+    if current["phase"] == "activated":
+        current = store._advance_bound_ordinary("epoch-finalizing", record,
+            lambda: observe(record) == first)
+        if current != {**record, "phase": "epoch-finalizing"} or store.read() != current:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_READBACK_REQUIRED")
+    if observe(current) != first:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_WITNESS_CHANGED")
+    tree, kernel, data = first
+    if kernel[0] == "native-managed-kernel-staged":
+        empty, desired = _first_inert_staged_manifests(current, release)
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        cleanup_committed(FreeBSDIPFWAdapter(19000, 19099, allow_mutations=True), empty, desired)
+    final = (tree, ("native-managed-kernel-final", kernel[1], ()), data)
+    if observe(current) != final:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_FINAL_CHANGED")
+    epoch = native_finish_first_bound_learning_epoch_locked(current, config_fd=config_fd,
+        config_digest=config_digest, queue_fd=queue_fd)
+    if epoch != data:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_EPOCH_CHANGED")
+    result = store._advance_bound_ordinary("committed", current,
+        lambda: observe(current) == final and observe(current) == final)
+    if result != {**record, "phase": "committed"} or store.read() != result:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_READBACK_REQUIRED")
+    return result
+
+
 def finish_first_config_recovery_locked(operation: str, witness_sha256: str, *,
-                                         config_fd: int) -> dict:
+                                         config_fd: int, queue_fd: int | None = None) -> dict:
     """Classify the exact sealed plan and saved image under original FD4."""
     import sys
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
@@ -1384,16 +1493,22 @@ def finish_first_config_recovery_locked(operation: str, witness_sha256: str, *,
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             type(operation) is not str or not OP_ID.fullmatch(operation) or
             type(witness_sha256) is not str or not DIGEST.fullmatch(witness_sha256) or
-            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+            (queue_fd is not None and (type(queue_fd) is not int or queue_fd < 3 or
+                                       queue_fd in (9, config_fd)))):
         raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_NATIVE_REQUIRED")
     require_lifecycle_lock()
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
     record = store.read()
     if (type(record) is not dict or record["detail"]["id"] != operation or
-            record["phase"] not in ("activated", "config-saved") or
             "previous" in record or "previous_manifest" in record or "found" in record or
-            record.get("manifest", {}).get("schema") != 1):
+            record.get("manifest", {}).get("schema") not in (1, 2)):
+        raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_OWNER_REQUIRED")
+    learning = record["manifest"]["schema"] == 2
+    if (record["phase"] not in (("activated", "epoch-finalizing") if learning else
+                               ("activated", "config-saved")) or
+            learning != (queue_fd is not None)):
         raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_OWNER_REQUIRED")
     detail = record["detail"]
     base, candidate = detail["base"], detail["candidate"]
@@ -1401,9 +1516,13 @@ def finish_first_config_recovery_locked(operation: str, witness_sha256: str, *,
         raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_AMBIGUOUS_IMAGE")
     plan_sha = verify_seal(WORK / operation, owner=0)["sha256"]["plan.json"]
     if witness_sha256 == _config_observation_witness(detail, plan_sha, candidate):
-        _finish_first_saved_locked(store, record, config_fd=config_fd, config_digest=candidate)
+        if learning:
+            _finish_first_learning_saved_locked(store, record, config_fd=config_fd,
+                config_digest=candidate, queue_fd=queue_fd)
+        else:
+            _finish_first_saved_locked(store, record, config_fd=config_fd, config_digest=candidate)
         return {"result": "original-first-config-committed", "id": operation}
-    if (record["phase"] == "activated" and
+    if (not learning and record["phase"] == "activated" and
             witness_sha256 == _config_observation_witness(detail, plan_sha, base)):
         return finish_bound_cold_restore_locked(operation, base, config_fd=config_fd)
     raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_IMAGE_REFUSED")
@@ -1519,23 +1638,30 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
     """Existing FD9 caller -> original P2a if present -> PHP Config -> WAL."""
     import json
     import sys
-    from auto_detect_post_drop import _original_epoch_queue
+    from auto_detect_post_drop import (_original_epoch_queue, _learning_release_sources,
+                                      _qualified_learning_sources)
 
     if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_SCOPE_REQUIRED")
     require_lifecycle_lock()
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    first_learning = (type(record) is dict and record.get("manifest", {}).get("schema") == 2 and
+        record.get("phase") in ("activated", "epoch-finalizing") and
+        "previous" not in record and "previous_manifest" not in record and "found" not in record and
+        "first_running_sha256" in record and "first_pretraffic_sha256" in record)
     if (type(record) is not dict or store.read() != record or
+            (not first_learning and (
             record.get("phase") not in ("activating", "activated", "config-saved", MANAGED_WRITING, MANAGED_CONFIG_SAVING) or
             "found" in record or record.get("manifest", {}).get("schema") != 1 or
             (record["phase"] == "config-saved" and "previous" in record) or
             ("previous" in record and record["previous"]["candidate"] != record["detail"]["base"]) or
             ("previous" not in record and (record["phase"] not in ("activating", "activated", "config-saved") or
-                                           "previous_manifest" in record))):
+                                           "previous_manifest" in record))))):
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
     detail = record["detail"]
     recover_save = record["phase"] == MANAGED_CONFIG_SAVING
-    first_save = "previous" not in record and record["phase"] in ("activated", "config-saved")
+    first_save = first_learning or ("previous" not in record and
+                                    record["phase"] in ("activated", "config-saved"))
     action = ("ordinary-first-recover" if first_save else
               "managed-save-recover" if recover_save else "ordinary-restore-finish")
     command = ["/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
@@ -1566,7 +1692,7 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
         else:
             restored = "original-managed-config-restored" if recover_save else "original-bound-cold-restored"
             if (receipt != {"result": restored, "id": detail["id"]} or
-                    record["phase"] == "config-saved"):
+                    record["phase"] == "config-saved" or first_learning):
                 raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_RECEIPT_REQUIRED")
         result = store.read()
         expected = {**record, "phase": phase}
@@ -1575,6 +1701,16 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
             raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_READBACK_REQUIRED")
         return result
 
+    if first_learning:
+        work, candidate, sources = _learning_release_sources(COMMON_ACTIVE)
+        if work != WORK / detail["id"] or candidate != detail["candidate"]:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SOURCE_CHANGED")
+        _, names = _qualified_learning_sources(sources, PRODUCER_ROOT)
+        queue, receipts = _original_epoch_queue(names)
+        if queue.root != PRODUCER_ROOT or queue.uid != 0 or receipts.root != EPOCH_ROOT:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_QUEUE_CHANGED")
+        with queue.exclusive(existing_only=True):
+            return invoke(queue.locked_fd)
     retired = record.get("previous_manifest", {}).get("schema") == 2
     if "previous" not in record:
         _safe_empty_directory(PRODUCER_ROOT, 0)

@@ -4051,14 +4051,14 @@ service_with_lifecycle_lock()
                             service_api_complete "$?"
                             return $?
                             ;;
-                        activating-first\ *|activated-first\ *|config-saved-first\ *)
+                        activating-first\ *|activated-first\ *|config-saved-first\ *|epoch-finalizing-first\ *)
                             # A first bound pristine recovery has no prior
                             # owner to boot. Never fall through to legacy
                             # or report that Start actually ran.
                             IFS=' ' read -r _first_phase _first_id _first_page <<EOF
 $_shared_owner
 EOF
-                            case "$_first_phase" in activating-first|activated-first|config-saved-first) ;; *) return 70 ;; esac
+                            case "$_first_phase" in activating-first|activated-first|config-saved-first|epoch-finalizing-first) ;; *) return 70 ;; esac
                             [ "$_shared_owner" = "$_first_phase $_first_id $_first_page" ] || return 70
                             _first_stage=${_first_phase%-first}
                             case "$_first_id" in ""|*[!a-f0-9]*) return 70 ;; esac
@@ -4069,7 +4069,7 @@ EOF
                             case "$_first_stage:$_first_receipt" in
                                 "activating:first-activating-restored=$_first_id"|"activated:first-activated-restored=$_first_id")
                                     [ "$(shared_apply_inspect_service)" = restored ] || return 70 ;;
-                                "activated:first-activated-committed=$_first_id"|"config-saved:first-config-saved-committed=$_first_id")
+                                "activated:first-activated-committed=$_first_id"|"config-saved:first-config-saved-committed=$_first_id"|"epoch-finalizing:first-epoch-finalizing-committed=$_first_id")
                                     [ "$(shared_apply_inspect_service)" = "committed $_first_id $_first_page" ] || return 70 ;;
                                 *) return 70 ;;
                             esac
