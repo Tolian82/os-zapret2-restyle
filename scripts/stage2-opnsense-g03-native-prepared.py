@@ -43,7 +43,7 @@ def call(argv, *, locked=False, timeout=180, expected_rc=0):
         allowed = {"stage", "stage-partial", "stage-config", "stage-ordinary", "durable",
                    "crash-partial", "crash-config-save", "shared-apply-prepare",
                    "found-cold", "found-recover", "found-recover-prepared",
-                   "attest"}
+                   "attest", "bind"}
         if action not in allowed:
             action = "unknown"
         reason = re.search(r"G03_[A-Z0-9_]+(?:=REFUSED:[A-Z0-9_]+)?",
@@ -141,6 +141,32 @@ def main():
          "G03_S10_FOUND_PREPARED_SOURCE_CAS_DRIFT")
     print("G03_S10_FOUND_SOURCE_CAS=PASS_REAL_ORIGINAL_FD4_FD9_P2_SEAL_NO_WRITES",
           flush=True)
+    # Real candidate sibling + single original WAL bind, in the actual
+    # inherited native Config FD4/FD9/P2 route. The old running owner is
+    # legacy (unbound); do not forge a committed old immutable manifest.
+    work = Path("/var/db/zapret2/shared-work") / op
+    root = work / "manifest.json"
+    seal = (work / "bundle-seal.json").read_bytes()
+    need("manifest" not in pending and "previous_manifest" not in pending
+         and not root.exists() and not root.is_symlink(),
+         "G03_FOUND_BIND_INITIAL_PREIMAGE_REQUIRED")
+    result = call([PHP, NATIVE, "bind", op], locked=True)
+    bound = json.loads(WAL.read_bytes())
+    pin = bound.get("manifest", {})
+    need(result == "original-found-prepared-root-bound" and
+         bound == dict(pending, manifest=pin) and
+         pin.get("generation") == op and
+         pin.get("candidate_sha256") == pending["detail"]["candidate"] and
+         root.is_file() and not root.is_symlink() and
+         pin.get("root_sha256") == hashlib.sha256(root.read_bytes()).hexdigest() and
+         pin.get("seal_sha256") == hashlib.sha256(seal).hexdigest() and
+         (work / "bundle-seal.json").read_bytes() == seal and
+         snapshot() == original,
+         "G03_FOUND_NATIVE_BOUND_OR_PHYSICAL_DRIFT")
+    print("G03_S10_FOUND_BIND=PASS_REAL_FD4_FD9_P2_LEGACY_PREDECESSOR_NO_WRITES",
+          flush=True)
+    # Separate native PHP owner invocation after the binding child has
+    # exited: recovery must rediscover the immutable candidate from disk.
     receipt = json.loads(call([
         PHP, "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php",
         "found-recover-prepared", op, "strategies"], locked=True))
@@ -152,10 +178,16 @@ def main():
              "files_written":False, "service_restarted":False
          } and restored.get("phase") == "restored" and
          restored.get("previous") == previous["detail"] and
+         restored.get("manifest") == pin and
+         "previous_manifest" not in restored and
+         pin["root_sha256"] == hashlib.sha256(root.read_bytes()).hexdigest() and
+         (work / "bundle-seal.json").read_bytes() == seal and
          "found" not in restored and snapshot() == original and
          subprocess.run([SERVICE, "status"], timeout=30).returncode == 0,
          "G03_COLD_RESTORED_PREVIOUS_OWNER_UNPROVEN")
     print("G03_COLD_PREPARED=PASS_ORIGINAL_FD9_CONFIG_FD4_P2_NO_WRITES",
+          flush=True)
+    print("G03_S10_FOUND_BIND_RECOVER=PASS_REAL_NATIVE_PREPARED_NO_PHYSICAL_TRANSITION",
           flush=True)
 
 
