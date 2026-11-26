@@ -365,8 +365,27 @@ apply_runtime_preflight()
 apply_runtime_restore()
 {
     [ "${APPLY_PHASE:-idle}" != idle ] || return 69
-    supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE"
-    launcher_stop "$CHILD_PIDFILE" 5
+    # Same original Stop boundary as replacement Apply: retain the monitor
+    # PID even if its pidfile disappears, and prove the engine census empty
+    # before touching IPFW, the backup or the previous launcher.
+    _apply_restore_monitor_pid=
+    if supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then
+        _apply_restore_monitor_pid=$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE") || return 70
+    fi
+    supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" || return 70
+    launcher_stop "$CHILD_PIDFILE" 5 || return 70
+    if supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" ||
+       launcher_is_running "$CHILD_PIDFILE" ||
+       { [ -n "$_apply_restore_monitor_pid" ] &&
+         common_process_matches "$_apply_restore_monitor_pid" "$SUPERVISOR_LOOP"; }; then
+        common_error "RESTORE_FAILED: engine or monitor survived stop"
+        return 70
+    fi
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || {
+        common_error "RESTORE_FAILED: orphan engine after stop"
+        return 70
+    }
     if [ "$APPLY_IPFW_INSTALLED" = 1 ]; then
         firewall_shared_runtime rollback "$APPLY_OLD" "$APPLY_NEW" || {
             common_error "RESTORE_FAILED: IPFW rollback"

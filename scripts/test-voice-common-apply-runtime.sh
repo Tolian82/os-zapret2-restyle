@@ -12,8 +12,8 @@ launcher_is_running() { [ "$PROCESS" = 1 ]; }
 supervisor_is_running() { [ "$MONITOR" = 1 ]; }
 supervisor_pidfile_read() { echo 24680; }
 common_process_matches() { [ "$SURVIVING_MONITOR" = 1 ]; }
-launcher_stop() { [ "$SURVIVING_ENGINE" = 1 ] || PROCESS=0; }
-supervisor_stop() { MONITOR=0; }
+launcher_stop() { [ "$STOP_LAUNCHER_FAIL" = 0 ] || return 1; [ "$SURVIVING_ENGINE" = 1 ] || PROCESS=0; }
+supervisor_stop() { [ "$STOP_SUPERVISOR_FAIL" = 0 ] || return 1; MONITOR=0; }
 launcher_start_once() {
     LAUNCH_CALLS=$((LAUNCH_CALLS + 1))
     # Fail the replacement once, not the later restoration launch.
@@ -117,6 +117,7 @@ for name in one two off; do
 done
 PROCESS=0 MONITOR=0 FW=empty FW_STAGE=0 FAIL_LAUNCH=0 FAIL_FW=0 FAIL_STAGE_CHECK=0 FW_PREPARE=0
 SURVIVING_MONITOR=0 SURVIVING_ENGINE=0 ORPHAN_AFTER_STOP=0 LAUNCH_CALLS=0
+STOP_SUPERVISOR_FAIL=0 STOP_LAUNCHER_FAIL=0
 apply_runtime_clear
 apply_runtime_activate "$ROOT/one" 1 || fail "first activation"
 [ "$APPLY_PHASE" = activated ] && [ "$PROCESS" = 1 ] &&
@@ -162,6 +163,33 @@ for failure in monitor engine orphan; do
     [ "$(cat "$ACTIVE_DIR/voice-plan.json")" = one ] &&
     [ "$PROCESS" = 1 ] && [ "$MONITOR" = 1 ] ||
         fail "$failure did not restore original ON service"
+done
+# An aborted replacement must not restore IPFW/tree or launch the old
+# engine until the existing Stop and process census have succeeded.
+for failure in supervisor launcher monitor engine orphan; do
+    apply_runtime_activate "$ROOT/two" 1 || fail "rollback $failure setup"
+    _before_launches=$LAUNCH_CALLS
+    _before_backup=$APPLY_BACKUP
+    case "$failure" in
+        supervisor) STOP_SUPERVISOR_FAIL=1 ;;
+        launcher) STOP_LAUNCHER_FAIL=1 ;;
+        monitor) SURVIVING_MONITOR=1 ;;
+        engine) SURVIVING_ENGINE=1 ;;
+        orphan) ORPHAN_AFTER_STOP=1 ;;
+    esac
+    if apply_runtime_restore; then
+        fail "$failure allowed unsafe rollback"
+    else
+        [ "$?" -eq 70 ] || fail "$failure unexpected restore status"
+    fi
+    [ "$APPLY_PHASE" = activated ] && [ "$APPLY_BACKUP" = "$_before_backup" ] &&
+    [ -d "$APPLY_BACKUP" ] && [ "$(cat "$ACTIVE_DIR/voice-plan.json")" = two ] &&
+    [ "$FW" = active ] && [ "$FW_STAGE" = 1 ] &&
+    [ "$LAUNCH_CALLS" -eq "$_before_launches" ] || fail "$failure modified rollback evidence"
+    STOP_SUPERVISOR_FAIL=0 STOP_LAUNCHER_FAIL=0 SURVIVING_MONITOR=0 SURVIVING_ENGINE=0 ORPHAN_AFTER_STOP=0
+    apply_runtime_restore || fail "$failure safe recovery after fault cleared"
+    [ "$APPLY_PHASE" = idle ] && [ "$(cat "$ACTIVE_DIR/voice-plan.json")" = one ] &&
+    [ "$PROCESS" = 1 ] && [ "$MONITOR" = 1 ] && [ "$FW_STAGE" = 0 ] || fail "$failure recovery result"
 done
 apply_runtime_activate "$ROOT/two" 1 || fail "ON edit"
 [ "$FW_STAGE" = 1 ] || fail "precommit IPFW tables prematurely removed"
