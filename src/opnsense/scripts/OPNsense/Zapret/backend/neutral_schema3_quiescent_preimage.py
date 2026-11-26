@@ -772,6 +772,33 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool,
         raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_PREIMAGE_CHANGED")
 
 
+def _run_bound_restore_joined(command, *, budget: float, capture_output: bool = False,
+                              pass_fds: tuple[int, ...]) -> subprocess.CompletedProcess:
+    """Deadline refuses success but cannot kill a physical shell/PHP parent.
+
+    Both commands are synchronous, with no detached descendants. Wait for
+    their completion even after timeout or interrupted receipt; never use
+    subprocess.run(timeout=...), which kills only the direct child. This
+    protects the original parent-owned P2a/Config lock on managed failures.
+    """
+    import time
+
+    started = time.monotonic()
+    output = subprocess.PIPE if capture_output else subprocess.DEVNULL
+    with subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output,
+                          stderr=output, pass_fds=pass_fds, close_fds=True) as child:
+        try:
+            stdout, stderr = child.communicate(timeout=budget)
+        except BaseException:
+            # communicate(timeout) does NOT kill the child. Do not close
+            # descriptors or unwind the original lock before joining it.
+            child.communicate()
+            raise
+        if time.monotonic() - started >= budget:
+            raise subprocess.TimeoutExpired(command, budget)
+        return subprocess.CompletedProcess(command, child.returncode, stdout, stderr)
+
+
 def _restore_bound_installed_cold_locked(record: dict, *, config_fd: int,
                                          config_digest: str, queue_fd: int | None) -> bool:
     """Restore an exact installed inert candidate over a cold predecessor.
@@ -846,13 +873,12 @@ def _restore_bound_installed_cold_locked(record: dict, *, config_fd: int,
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     inherited = (9, config_fd) if queue_fd is None else (9, config_fd, queue_fd)
     try:
-        result = subprocess.run(
+        result = _run_bound_restore_joined(
             ("/bin/sh", "-c", '. "$1"; . "$2"; atomic_install_tree "$3" "$4" "$5"',
              "zapret-bound-installed", str(SCRIPT / "backend/common.sh"),
              str(SCRIPT / "backend/atomic.sh"), str(old_work / "release"),
              str(COMMON_ACTIVE), str(COMMON_ACTIVE.with_name("runtime-v2-backups"))),
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, pass_fds=inherited, timeout=20, check=False)
+            pass_fds=inherited, budget=20)
     except (OSError, subprocess.SubprocessError):
         raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_RESTORE_OUTCOME_UNCERTAIN") from None
     if result.returncode != 0:
@@ -897,11 +923,10 @@ def _remove_bound_pristine_stage_locked(record: dict, *, config_fd: int,
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     inherited = (9, config_fd) if queue_fd is None else (9, config_fd, queue_fd)
     try:
-        result = subprocess.run(
+        result = _run_bound_restore_joined(
             ("/bin/sh", "-c", '. "$1"; atomic_remove_tree "$2"',
              "zapret-bound-pristine", str(SCRIPT / "backend/atomic.sh"), str(stage)),
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, pass_fds=inherited, timeout=20, check=False)
+            pass_fds=inherited, budget=20)
     except (OSError, subprocess.SubprocessError):
         raise QuiescentPreimageRefused("BOUND_COLD_PRISTINE_STAGE_OUTCOME_UNCERTAIN") from None
     if result.returncode != 0 or _present(stage):
@@ -980,9 +1005,9 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
             raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
         args = command if fd is None else command + ["--queue-fd=" + str(fd)]
         try:
-            reply = subprocess.run(args, stdin=subprocess.DEVNULL, capture_output=True,
-                                   pass_fds=(9,) if fd is None else (fd, 9),
-                                   timeout=90, check=False)
+            reply = _run_bound_restore_joined(args, capture_output=True,
+                                                pass_fds=(9,) if fd is None else (fd, 9),
+                                                budget=90)
         except subprocess.SubprocessError:
             # Child may already have fsynced restored. Do not retry or
             # guess a terminal outcome from missing transport evidence.

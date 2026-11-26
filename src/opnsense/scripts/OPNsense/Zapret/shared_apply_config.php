@@ -344,12 +344,69 @@ final class SharedApplyConfigWorker
      * child inherited descriptors 4 + 9. No new lock owner and NO mutation.
      * It remains an unregistered internal FD9-only CLI, not a GUI Apply.
      */
+    /**
+     * Mutation child: a deadline refuses the receipt, never kills the child.
+     * Drain bounded output (discard excess) and join before Config::unlock.
+     * No extra writer, detached worker or second lock. The child must join
+     * its synchronous physical commands before returning.
+     */
+    private static function joinOrdinaryRestoreChild($proc, array &$pipes, float $budget = 40.0): array
+    {
+        $output = '';
+        $failed = false;
+        $deadline = hrtime(true) + (int)($budget * 1000000000);
+        try {
+            if (!stream_set_blocking($pipes[1], false)) {
+                $failed = true;
+            }
+            while (!feof($pipes[1])) {
+                if (hrtime(true) >= $deadline) {
+                    $failed = true;
+                }
+                $read = [$pipes[1]];
+                $write = [];
+                $except = [];
+                $ready = @stream_select($read, $write, $except, 1);
+                if ($ready === false) {
+                    // An interrupted read is not permission to terminate
+                    // the child. Fall back to a blocking drain and join.
+                    $failed = true;
+                    stream_set_blocking($pipes[1], true);
+                } elseif ($ready === 0) {
+                    continue;
+                }
+                $piece = @fread($pipes[1], 4096);
+                if ($piece === false) {
+                    $failed = true;
+                    break;
+                }
+                if (!$failed && strlen($output) + strlen($piece) <= 16384) {
+                    $output .= $piece;
+                } else {
+                    $failed = true;
+                }
+            }
+        } finally {
+            // Closing a broken receipt pipe is safe only because the
+            // original child writes its result AFTER physical commands.
+            foreach ($pipes as $key => $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+                unset($pipes[$key]);
+            }
+        }
+        $code = proc_close($proc);
+        return [$output, $failed || hrtime(true) >= $deadline, $code];
+    }
+
     private static function originalFoundLockedFileEvidence(
         object $config, string $id, string $mode = 'classify-locked',
         ?string $configDigest = null, ?string $runtimeMode = null,
         ?callable $whileP2Held = null, $queueStream = null, ?string $baseDigest = null
     ): array {
         $begin = $mode === 'begin-found-save-locked';
+        $ordinaryRestore = $mode === 'finish-ordinary-restore-locked';
         if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
                  !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
@@ -409,45 +466,53 @@ final class SharedApplyConfigWorker
                 throw new \RuntimeException('Original cold native child unavailable');
             }
             try {
-                stream_set_blocking($pipes[1], false);
-                $output = '';
-                $deadline = microtime(true) + 40;
-                while (!feof($pipes[1])) {
-                    if (microtime(true) >= $deadline || strlen($output) > 16384) {
-                        throw new \RuntimeException('Original cold native child timeout');
+                if ($ordinaryRestore) {
+                    [$output, $failed, $code] = self::joinOrdinaryRestoreChild($proc, $pipes);
+                    $proc = null;
+                    if ($failed || $code !== 0 || $output === '') {
+                        throw new \RuntimeException('Original ordinary restore outcome uncertain after join');
                     }
-                    $read = [$pipes[1]];
-                    $write = [];
-                    $except = [];
-                    $ready = @stream_select($read, $write, $except, 1);
-                    if ($ready === false) {
-                        throw new \RuntimeException('Original cold native child read failed');
-                    }
-                    if ($ready > 0) {
-                        $piece = @fread($pipes[1], 16385 - strlen($output));
-                        if ($piece === false) {
-                            throw new \RuntimeException('Original cold native child interrupted');
+                } else {
+                    stream_set_blocking($pipes[1], false);
+                    $output = '';
+                    $deadline = microtime(true) + 40;
+                    while (!feof($pipes[1])) {
+                        if (microtime(true) >= $deadline || strlen($output) > 16384) {
+                            throw new \RuntimeException('Original cold native child timeout');
                         }
-                        $output .= $piece;
-                        if ($begin && $output === "ready\n" && isset($pipes[0])) {
-                            // The original Python child keeps P2 held from
-                            // physical writes through the only native save.
-                            // Even a throwing save releases this scope.
-                            try {
-                                $whileP2Held();
-                            } finally {
-                                fclose($pipes[0]);
-                                unset($pipes[0]);
+                        $read = [$pipes[1]];
+                        $write = [];
+                        $except = [];
+                        $ready = @stream_select($read, $write, $except, 1);
+                        if ($ready === false) {
+                            throw new \RuntimeException('Original cold native child read failed');
+                        }
+                        if ($ready > 0) {
+                            $piece = @fread($pipes[1], 16385 - strlen($output));
+                            if ($piece === false) {
+                                throw new \RuntimeException('Original cold native child interrupted');
+                            }
+                            $output .= $piece;
+                            if ($begin && $output === "ready\n" && isset($pipes[0])) {
+                                // The original Python child keeps P2 held from
+                                // physical writes through the only native save.
+                                // Even a throwing save releases this scope.
+                                try {
+                                    $whileP2Held();
+                                } finally {
+                                    fclose($pipes[0]);
+                                    unset($pipes[0]);
+                                }
                             }
                         }
                     }
-                }
-                fclose($pipes[1]);
-                unset($pipes[1]);
-                $code = proc_close($proc);
-                $proc = null;
-                if ($code !== 0 || strlen($output) > 16384 || $output === '') {
-                    throw new \RuntimeException('Original FD9/P2 staged image unknown');
+                    fclose($pipes[1]);
+                    unset($pipes[1]);
+                    $code = proc_close($proc);
+                    $proc = null;
+                    if ($code !== 0 || strlen($output) > 16384 || $output === '') {
+                        throw new \RuntimeException('Original FD9/P2 staged image unknown');
+                    }
                 }
                 $reply = $begin && $output === "ready\n" && !isset($pipes[0])
                     ? ['result' => 'ready']
@@ -471,7 +536,11 @@ final class SharedApplyConfigWorker
                     if (is_resource($pipe)) { fclose($pipe); }
                 }
                 if (is_resource($proc)) {
-                    @proc_terminate($proc);
+                    if (!$ordinaryRestore) {
+                        @proc_terminate($proc);
+                    }
+                    // Never release Config while a synchronous ordinary
+                    // physical child is still running, even on read error.
                     @proc_close($proc);
                 }
             }

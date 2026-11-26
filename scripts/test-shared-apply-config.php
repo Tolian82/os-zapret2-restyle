@@ -51,6 +51,33 @@ try {
     // After Config::save the caller MUST return 70, not 69.
 }
 
+// Exercise actual process joining, not a simulated successful receipt.
+$join = new \ReflectionMethod(Worker::class, 'joinOrdinaryRestoreChild');
+foreach ([
+    ['usleep(120000); file_put_contents($argv[1], "done"); echo "receipt\n";', 5.0, false, 0],
+    ['usleep(120000); file_put_contents($argv[1], "done"); echo "receipt\n";', 0.01, true, 0],
+    ['echo str_repeat("x", 50000); usleep(120000); file_put_contents($argv[1], "done");', 5.0, true, 0],
+    ['fclose(STDOUT); usleep(120000); file_put_contents($argv[1], "done");', 0.01, true, 0],
+    ['file_put_contents($argv[1], "done"); exit(7);', 5.0, false, 7],
+] as [$program, $budget, $expectedFailed, $expectedCode]) {
+    $marker = $work . '/join-marker';
+    @unlink($marker);
+    $pipes = [];
+    $proc = proc_open([PHP_BINARY, '-r', $program, $marker],
+        [0=>['file','/dev/null','r'], 1=>['pipe','w'], 2=>['file','/dev/null','a']], $pipes);
+    must(is_resource($proc), 'ordinary child fixture unavailable');
+    [$output, $failed, $code] = $join->invokeArgs(null, [$proc, &$pipes, $budget]);
+    must(file_get_contents($marker) === 'done',
+         'ordinary deadline terminated child before completion');
+    must($failed === $expectedFailed && $code === $expectedCode,
+         'ordinary joined receipt classification');
+    must(strlen($output) <= 16384 && !$pipes, 'ordinary receipt bound or pipe cleanup');
+    if (!$failed && $code === 0) {
+        must($output === "receipt\n", 'ordinary joined receipt changed');
+    }
+    unlink($marker);
+}
+
 // Reproduce production OPNsense getNodes(): unchanged InterfaceField and
 // OptionField arrive as selected-option dictionaries, unlike HTML POST.
 $optionModel=$state;

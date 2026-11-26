@@ -267,7 +267,7 @@ class OriginalQuiescentTests(unittest.TestCase):
             staged = stack.enter_context(patch("voice_firewall_transaction.verify_staged_state"))
             rollback = stack.enter_context(patch("voice_firewall_transaction.rollback_uncommitted"))
             stack.enter_context(patch.object(gate, "_empty_kernel"))
-            run = stack.enter_context(patch.object(gate.subprocess, "run",
+            run = stack.enter_context(patch.object(gate, "_run_bound_restore_joined",
                                                    return_value=Mock(returncode=0)))
             self.assertTrue(gate._restore_bound_installed_cold_locked(
                 record, config_fd=4, config_digest=base, queue_fd=3))
@@ -317,6 +317,7 @@ class OriginalQuiescentTests(unittest.TestCase):
             def shell(argv, **kwargs):
                 self.assertEqual(kwargs.pop("pass_fds"), (9, 4, 3))
                 self.assertEqual(argv[-1], str(stage))
+                self.assertEqual(kwargs.pop("budget"), 20)
                 return actual_run(argv, **kwargs)
 
             with ExitStack() as stack:
@@ -333,7 +334,7 @@ class OriginalQuiescentTests(unittest.TestCase):
                     {"sha256": {"release": "old"}}, {"sha256": {"release": "new"}}]))
                 trees = stack.enter_context(patch.object(gate, "_cold_recovery_trees",
                     return_value=("old", "new", None, None)))
-                run = stack.enter_context(patch.object(subprocess, "run", side_effect=shell))
+                run = stack.enter_context(patch.object(gate, "_run_bound_restore_joined", side_effect=shell))
                 self.assertTrue(gate._remove_bound_pristine_stage_locked(
                     record, config_fd=4, queue_fd=3))
                 self.assertFalse(stage.exists())
@@ -351,6 +352,31 @@ class OriginalQuiescentTests(unittest.TestCase):
                     gate._remove_bound_pristine_stage_locked(record, config_fd=4, queue_fd=3)
                 self.assertTrue(stage.exists())
                 run.assert_called_once()
+
+    def test_bound_restore_deadline_joins_physical_child(self):
+        import fcntl
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            lockpath = root / "lock"
+            marker = root / "finished"
+            with lockpath.open("w") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                command = ["/bin/sh", "-c",
+                           'sleep 0.15; printf done > "$1"', "fixture", str(marker)]
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    gate._run_bound_restore_joined(command, budget=0.01,
+                                                   pass_fds=(lock.fileno(),))
+                self.assertEqual(marker.read_text(), "done")
+                with lockpath.open("r") as other:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                result = gate._run_bound_restore_joined(
+                    ["/bin/sh", "-c", "printf receipt"], budget=5,
+                    capture_output=True, pass_fds=(lock.fileno(),))
+                self.assertEqual((result.returncode, result.stdout), (0, b"receipt"))
 
     def test_bound_cold_restore_terminal_handoff_retains_native_locks(self):
         import json
@@ -410,7 +436,7 @@ class OriginalQuiescentTests(unittest.TestCase):
             proof = stack.enter_context(patch.object(gate, "attest_inert_bound_cold_recovery"))
             stack.enter_context(patch.object(gate, "_restore_bound_installed_cold_locked", return_value=False))
             stack.enter_context(patch.object(gate, "_remove_bound_pristine_stage_locked", return_value=False))
-            run = stack.enter_context(patch.object(subprocess, "run", side_effect=invoke))
+            run = stack.enter_context(patch.object(gate, "_run_bound_restore_joined", side_effect=invoke))
             store._advance_bound_ordinary.side_effect = advance
             self.assertEqual(gate.native_finish_bound_cold_restore(record), terminal)
             proof.assert_called_once_with(record, restored=True, config_fd=4,
