@@ -137,7 +137,7 @@ sys.path.insert(0, "/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
 from shared_apply_operation import SharedApplyOperation
 from neutral_shared_apply_source_gate import (
     native_attest_found_prepared_fd9, native_bind_found_prepared_fd9,
-    decode_pipe, MAX_PIPE)
+    native_plan_found_prepared_fd9, decode_pipe, MAX_PIPE)
 from auto_detect_destination_commit import (
     DestinationRefused, shared_apply_found_files_original_fd9)
 from shared_apply_operation import committed_manifest, SharedOperationError
@@ -179,6 +179,18 @@ if action == "bind":
             staged.authorization != "NONE" or staged.physical_transition_allowed or
             staged.promotion_allowed or staged.reattest_under_original_fd9 is not True):
         raise RuntimeError("G03_FOUND_NATIVE_BIND_NOT_PREPARED")
+    semantic = native_plan_found_prepared_fd9(witness, 4, config_digest=sys.argv[3])
+    if (semantic.previous_state != "ready" or
+            semantic.previous_generation != before["previous"]["id"] or
+            semantic.previous_root_sha256 is not None or
+            semantic.candidate_root_sha256 != staged.root_sha256 or
+            semantic.plan_sha256 != witness.plan_sha256 or
+            semantic.decision.kind != "RESTART_REQUIRED" or semantic.reload_candidate or
+            semantic.authorization != "NONE" or semantic.physical_transition_allowed or
+            semantic.promotion_allowed or
+            semantic.final_original_fd9_reattest_required is not True or
+            store.read() != expected):
+        raise RuntimeError("G03_FOUND_NATIVE_SEMANTIC_NOT_READONLY")
     # Exercise the actual native physical entrypoint: refuse BEFORE the
     # first P2 write, even though both the source and candidate are sealed.
     try:
@@ -198,12 +210,14 @@ if action == "bind":
         raise RuntimeError("G03_FOUND_NATIVE_FENCE_CHANGED_WAL")
     result = "original-found-prepared-root-bound-only"
     root_sha = staged.root_sha256
+    semantic_kind = semantic.decision.kind
 else:
     witness = native_attest_found_prepared_fd9(op, wire.stdout, 4)
     if store.read() != before:
         raise RuntimeError("G03_FOUND_NATIVE_ATTEST_CHANGED_WAL")
     result = "original-found-prepared-source-cas-only"
     root_sha = None
+    semantic_kind = None
 if (witness.authorization != "NONE" or witness.physical_transition_allowed or
         witness.promotion_allowed or witness.final_original_fd9_reattest_required is not True or
         witness.source.authorization != "NONE" or witness.source.physical_transition_allowed):
@@ -214,7 +228,7 @@ print(json.dumps({"result":result,
     "source_status":witness.source.status,
     "authorization":witness.authorization,
     "final_reattest":witness.final_original_fd9_reattest_required,
-    "root_sha256":root_sha},
+    "root_sha256":root_sha, "semantic":semantic_kind},
     sort_keys=True,separators=(",",":")))
 PY;
     }
@@ -239,8 +253,9 @@ PY;
                      ($result['result'] ?? null) === ($bind
                          ? 'original-found-prepared-root-bound-only'
                          : 'original-found-prepared-source-cas-only') &&
-                     (!$bind || preg_match('/^[a-f0-9]{64}$/D',
-                         (string)($result['root_sha256'] ?? '')) === 1) &&
+                     (!$bind || (preg_match('/^[a-f0-9]{64}$/D',
+                         (string)($result['root_sha256'] ?? '')) === 1 &&
+                         ($result['semantic'] ?? null) === 'RESTART_REQUIRED')) &&
                      ($result['generation'] ?? null) === $id &&
                      ($result['base'] ?? null) === $base &&
                      ($result['candidate'] ?? null) === $candidate &&

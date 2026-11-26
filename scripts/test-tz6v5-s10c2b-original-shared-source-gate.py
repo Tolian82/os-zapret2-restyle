@@ -1257,5 +1257,126 @@ class OriginalFd9SourceGate(unittest.TestCase):
                         operation, b"native-wire", 4, _expected_record=pending)
                 self.assertFalse(held[0])
 
+
+    def test_found_bound_semantic_uses_existing_diff_and_original_p2(self):
+        from contextlib import ExitStack, contextmanager
+        from unittest.mock import Mock
+        from neutral_effective_diff import EffectiveSnapshot
+        from neutral_native_parity import NativeParity
+        from neutral_root_bound_preflight import BoundRootReceipt
+
+        op, old_id = "d" * 32, "e" * 32
+        base, digest, seal, root_sha = "a" * 64, "b" * 64, "c" * 64, "d" * 64
+        raw = b"original sealed found plan"
+        plan_sha = hashlib.sha256(raw).hexdigest()
+        prior = {"id": old_id, "candidate": base}
+        pin = {"schema": 1, "root_sha256": root_sha,
+               "seal_sha256": seal, "candidate_sha256": digest}
+        old_pin = {"root_sha256": "e" * 64}
+        links = (("hostlist-youtube.txt", "1" * 64),
+                 ("hostlist-user.txt", "2" * 64))
+        old_effective = EffectiveSnapshot("3" * 64, "4" * 64, links, (), 0)
+        changed = (("hostlist-youtube.txt", "5" * 64), links[1])
+        candidate = replace(old_effective, linked=changed)
+        native = NativeParity("list", "4" * 64, "4" * 64, "absent",
+                              0, 1, 0, (), (), "6" * 64, 19000, 19001)
+        for case in ("legacy", "single", "multiple-active", "multiple-source",
+                     "stopped", "disabled", "bad-base", "cas-drift", "pid-drift"):
+            with self.subTest(case=case), ExitStack() as stack:
+                effective = (replace(candidate, linked=(changed[0],
+                    ("hostlist-user.txt", "7" * 64)))
+                    if case == "multiple-active" else candidate)
+                enabled = case != "disabled"
+                source = gate.SourceGateReceipt(
+                    "list", "8" * 64, (),
+                    status="ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY",
+                    generation=op, original_seal_sha256=seal,
+                    native=native, effective=effective, requested_enabled=enabled)
+                witness = gate.FoundPreparedSourceReceipt(
+                    source, plan_sha, base, digest)
+                before = {"phase": "prepared", "detail": {
+                    "id": op, "base": base, "candidate": digest},
+                    "found": {"plan_sha256": plan_sha}, "previous": prior,
+                    "manifest": pin}
+                if case != "legacy":
+                    before["previous_manifest"] = old_pin
+                store = Mock(read=Mock(return_value=before))
+                store.root = Path("/disposable/journal")
+                verified = {"youtube": (b"old", b"new"), "auto": (
+                    b"old", b"new" if case == "multiple-source" else b"old")}
+                held = [False]
+
+                @contextmanager
+                def p2(*args):
+                    self.assertFalse(held[0])
+                    held[0] = True
+                    try:
+                        yield
+                    finally:
+                        held[0] = False
+
+                def check(*args, **kwargs):
+                    self.assertTrue(held[0])
+                    if case == "cas-drift" and cas.call_count == 2:
+                        raise ValueError("changed original preimage")
+
+                def read_pinned(*, detail, **kwargs):
+                    self.assertTrue(held[0])
+                    return (effective, enabled) if detail["id"] == op else (
+                        old_effective, True)
+
+                stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+                stack.enter_context(patch(
+                    "auto_detect_destination_commit._native_found_wal_context",
+                    return_value=(store, before, raw, {}, {}, lambda: True)))
+                stack.enter_context(patch(
+                    "auto_detect_destination_commit._qualified_shared_found_batch",
+                    return_value=verified))
+                stack.enter_context(patch(
+                    "auto_detect_destination_commit.exclusive_destination_lock", side_effect=p2))
+                cas = stack.enter_context(patch(
+                    "auto_detect_effective_known._verify_planned_preimages_locked", side_effect=check))
+                stack.enter_context(patch.object(gate, "_s10_native_bound_engine_readback",
+                                                 return_value={"engine_version": "v1.0.7"}))
+                stack.enter_context(patch.object(gate, "_read_pinned_effective",
+                                                 side_effect=read_pinned))
+                bound = stack.enter_context(patch(
+                    "neutral_root_bound_preflight._attest_bound_candidate",
+                    return_value=BoundRootReceipt(op, root_sha, seal, digest)))
+                stack.enter_context(patch(
+                    "voice_live_inspect.examine_pending_found_previous",
+                    return_value={"id": old_id,
+                                  "state": "stopped" if case == "stopped" else "ready"}))
+                stack.enter_context(patch(
+                    "neutral_schema3_previous_physical._full_prior_tree",
+                    return_value="9" * 64))
+                running = stack.enter_context(patch(
+                    "neutral_schema3_previous_physical._running_native",
+                    side_effect=["pid-birth", "other-birth" if case == "pid-drift" else "pid-birth"]))
+                if case in ("bad-base", "cas-drift", "pid-drift"):
+                    with self.assertRaises(OriginalSourceGateRefused):
+                        gate.native_plan_found_prepared_fd9(
+                            witness, 4, config_digest="0" * 64 if case == "bad-base" else base)
+                else:
+                    receipt = gate.native_plan_found_prepared_fd9(witness, 4, config_digest=base)
+                    self.assertEqual(receipt.decision.kind,
+                        "RELOAD_SAFE_CANDIDATE" if case in ("single", "stopped")
+                        else "RESTART_REQUIRED")
+                    self.assertEqual(receipt.reload_candidate, case == "single")
+                    self.assertEqual(receipt.authorization, "NONE")
+                    self.assertFalse(receipt.physical_transition_allowed)
+                    self.assertFalse(receipt.promotion_allowed)
+                    self.assertEqual(receipt.plan_sha256, plan_sha)
+                    self.assertEqual(receipt.previous_root_sha256,
+                                     None if case == "legacy" else old_pin["root_sha256"])
+                    self.assertEqual(bound.call_count, 2)
+                    self.assertEqual(bound.call_args.kwargs["found_plan_sha256"], plan_sha)
+                    self.assertEqual(cas.call_count, 2)
+                    self.assertEqual(running.call_count, 0 if case == "stopped" else 2)
+                store._persist_record.assert_not_called()
+                store.advance.assert_not_called()
+                store.bind_prepared_manifest.assert_not_called()
+                self.assertFalse(held[0])
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

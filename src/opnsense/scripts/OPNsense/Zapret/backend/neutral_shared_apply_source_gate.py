@@ -1008,6 +1008,165 @@ def _read_pinned_effective(*, detail: dict, binding: dict, parent: Path,
 
 
 @dataclass(frozen=True)
+class FoundSemanticReceipt:
+    """Bound Found comparison, never a file/Config/lifecycle permission."""
+
+    generation: str
+    previous_generation: str
+    candidate_root_sha256: str
+    previous_root_sha256: str | None
+    plan_sha256: str
+    previous_state: str
+    candidate_enabled: bool
+    decision: EffectiveDecision
+    reload_candidate: bool
+    status: str = "ORIGINAL_FOUND_BOUND_SEMANTIC_PROPOSAL_ONLY"
+    authorization: str = "NONE"
+    physical_transition_allowed: bool = False
+    promotion_allowed: bool = False
+    final_original_fd9_reattest_required: bool = True
+
+
+def _found_effective_decision(old, candidate, changed_sources: int) -> EffectiveDecision:
+    """Use S08d; no old equality or atomic multi-list proof means restart."""
+    if old is None:
+        return EffectiveDecision("RESTART_REQUIRED", (), ())
+    decision = plan(old[0], candidate[0])
+    if (old[1] != candidate[1] or
+            (decision.kind == "RELOAD_SAFE_CANDIDATE" and
+             (len(decision.changed_active) > 1 or changed_sources > 1))):
+        return EffectiveDecision("RESTART_REQUIRED", decision.changed_active,
+                                 decision.changed_inactive)
+    return decision
+
+
+def native_plan_found_prepared_fd9(witness: FoundPreparedSourceReceipt,
+                                  config_fd: int, *,
+                                  config_digest: str) -> FoundSemanticReceipt:
+    """Read bound Found source and old native owner under original FD9/FD4/P2.
+
+    The original PHP Config owner supplies its current whole-model digest
+    while retaining the inherited FD4. Do NOT invoke ordinary PHP preflight
+    again from this child. No stage/bind, new journal, Config/P1 write or
+    lifecycle action. Even a reload candidate needs final original-owner
+    proof, including the commit/rollback and live mutable-reference contract.
+    STOPPED is observational only, not full retired-epoch qualification.
+    """
+    from auto_detect_destination_commit import (
+        _native_found_wal_context, _qualified_shared_found_batch,
+        exclusive_destination_lock)
+    from auto_detect_effective_known import _verify_planned_preimages_locked
+    from auto_detect_gui_hostlist import AUTO_LOCK
+    from auto_detect_owned_sources import OWNED_ROOT
+    from neutral_root_bound_preflight import BoundRootReceipt, _attest_bound_candidate
+    from neutral_schema3_previous_physical import _full_prior_tree, _running_native
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock
+    from voice_live_inspect import (
+        COMMON_ACTIVE, CHILD_PID, MONITOR_PID, examine_pending_found_previous)
+
+    try:
+        require_lifecycle_lock()
+        if (type(witness) is not FoundPreparedSourceReceipt or
+                witness.status != "ORIGINAL_FOUND_PREPARED_SOURCE_ONLY" or
+                witness.authorization != "NONE" or witness.physical_transition_allowed or
+                witness.promotion_allowed or
+                witness.final_original_fd9_reattest_required is not True or
+                type(witness.source) is not SourceGateReceipt or
+                type(config_digest) is not str or
+                not re.fullmatch(r"[a-f0-9]{64}", config_digest)):
+            raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_WITNESS_REQUIRED")
+        source = witness.source
+        if (source.status != "ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY" or
+                source.authorization != "NONE" or source.physical_transition_allowed or
+                type(source.native) is not NativeParity or
+                type(source.effective) is not EffectiveSnapshot or
+                type(source.requested_enabled) is not bool):
+            raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_SOURCE_REQUIRED")
+        generation = source.generation
+        store, before, raw, rows, targets, attest = _native_found_wal_context(
+            generation, config_fd)
+        detail = before["detail"]
+        prior = before.get("previous")
+        old_pin = before.get("previous_manifest")
+        pin = before.get("manifest")
+        plan_sha = hashlib.sha256(raw).hexdigest()
+        schema3 = source.mode == "auto" and source.requested_enabled
+        if (before["phase"] != "prepared" or type(pin) is not dict or
+                type(prior) is not dict or prior["id"] == generation or
+                detail["id"] != generation or
+                prior["candidate"] != config_digest or
+                detail["base"] != config_digest or
+                witness.config_base_sha256 != config_digest or
+                witness.config_candidate_sha256 != detail["candidate"] or
+                witness.plan_sha256 != plan_sha or
+                before["found"]["plan_sha256"] != plan_sha or
+                pin["seal_sha256"] != source.original_seal_sha256 or
+                pin["candidate_sha256"] != detail["candidate"] or
+                pin["schema"] != (2 if schema3 else 1)):
+            raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_BOUND_REQUIRED")
+        verified = _qualified_shared_found_batch(rows)
+        changed_sources = sum(row[0] != row[1] for row in verified.values())
+        engine = _s10_native_bound_engine_readback()
+        read = dict(parent=WORK, sources=Path(__file__).parent, owner_uid=0,
+                    engine_version=engine["engine_version"])
+        bound_args = dict(
+            generation=generation, effective=source.effective, native=source.native,
+            mode=source.mode, enabled=source.requested_enabled, parent=WORK,
+            journal_root=store.root, owner_uid=0, schema3=schema3,
+            found_plan_sha256=plan_sha)
+
+        def observe_locked():
+            if store.read() != before or attest() is not True:
+                raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_OWNER_CHANGED")
+            _verify_planned_preimages_locked(
+                verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+            root = _attest_bound_candidate(**bound_args)
+            if (type(root) is not BoundRootReceipt or root.authorization != "NONE" or
+                    root.physical_transition_allowed or root.promotion_allowed or
+                    root.generation != generation or
+                    root.root_sha256 != pin["root_sha256"] or
+                    root.original_seal_sha256 != pin["seal_sha256"] or
+                    root.original_candidate_sha256 != detail["candidate"]):
+                raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_ROOT_CHANGED")
+            candidate = _read_pinned_effective(detail=detail, binding=pin, **read)
+            if candidate != (source.effective, source.requested_enabled):
+                raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_EFFECTIVE_CHANGED")
+            old = None if old_pin is None else _read_pinned_effective(
+                detail=prior, binding=old_pin, **read)
+            observed = examine_pending_found_previous(before)
+            if (observed.get("id") != prior["id"] or
+                    observed.get("state") not in ("ready", "stopped") or
+                    (observed["state"] == "ready" and old is not None and not old[1])):
+                raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_PREVIOUS_REQUIRED")
+            tree = _full_prior_tree(WORK / prior["id"], COMMON_ACTIVE, 0)
+            runtime = (_running_native(
+                WORK / prior["id"] / "release", owner_uid=0,
+                child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+                if observed["state"] == "ready" else None)
+            if store.read() != before or attest() is not True:
+                raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_OWNER_CHANGED")
+            return root, old, candidate, observed, tree, runtime
+
+        with exclusive_destination_lock(AUTO_LOCK, 0):
+            first = observe_locked()
+            if (observe_locked() != first or
+                    _s10_native_bound_engine_readback() != engine or
+                    store.read() != before or attest() is not True):
+                raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_OBSERVATION_CHANGED")
+            _, old, candidate, observed, _, _ = first
+            decision = _found_effective_decision(old, candidate, changed_sources)
+            return FoundSemanticReceipt(
+                generation, prior["id"], pin["root_sha256"],
+                None if old_pin is None else old_pin["root_sha256"],
+                plan_sha, observed["state"], source.requested_enabled, decision,
+                observed["state"] == "ready" and source.requested_enabled and
+                decision.kind == "RELOAD_SAFE_CANDIDATE")
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+        raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_REFUSED") from None
+
+
+@dataclass(frozen=True)
 class OriginalSemanticReceipt:
     generation: str
     previous_generation: str | None

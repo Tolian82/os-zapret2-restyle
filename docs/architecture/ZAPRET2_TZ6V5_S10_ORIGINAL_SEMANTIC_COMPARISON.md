@@ -1,3 +1,15 @@
+## 26 November 2026 — S10 original Found semantic comparison, candidate v0.6.5_240
+
+Accepted `v0.6.5_239`, `10ee803522eb947c633509f76c086e30494774aa` / [PR #1360](https://github.com/Tolian82/os-zapret2-restyle/pull/1360): genuine native G03 source/FD4/FD9/P2 root bind, original physical writer refusal, pristine recovery; postmerge CI and Stage5 successful. No owner-device action.
+
+**S10 next bounded invariant:** reconstruct the original sealed candidate S08d `EffectiveSnapshot` and the exact physically pinned previous `EffectiveSnapshot`, when one genuinely exists. Under inherited native Config FD4 and original FD9, with original P2 read-only CAS, require both pins, exact Found `plan_sha256`, the existing native engine/previous owner inspection, and unchanged active release and PID/birth/argv before/after comparison. Reuse `neutral_effective_diff.plan` as the ONLY semantic classifier; do not invent a second profile/source/argv algorithm or pretend a bound old root exists for a running legacy predecessor. Multiple distinct changed active list references or multiple independent Found list after-images mean `RESTART_REQUIRED` in this preliminary classifier, as does enabled-state change. A legacy unpinned previous root cannot establish equality and also returns `RESTART_REQUIRED`. STOPPED is observational here; it does not certify retired epoch or permit Start/Reload. A single linked managed-list difference may be `RELOAD_SAFE_CANDIDATE` only as a **proposal**, requiring later final native owner/epoch/P1 commit and signal proof. `NO_CHANGE` and `SAVE_ONLY` are also proposals, not Config permissions.
+
+The new typed `FoundSemanticReceipt` always has `authorization=NONE`, `physical_transition_allowed=False`, `promotion_allowed=False`, and requires a final original FD9 witness. The existing native G03 now asserts a real legacy predecessor yields `RESTART_REQUIRED` and leaves original physical writer/checkpoints closed; the original no-write recovery still proves unchanged Config, P1, IPFW and running process. Portable tests inject realistic old/candidate snapshot shapes and adverse old-PID/CAS/base cases. This is NOT installed proof for a two-root active owner, physical write, STOP/Start, reload signal, or power-loss rollback.
+
+Next: prove genuine two-bound-root legacy-to-bound migration/epoch semantics and an original WAL-authorized physical P1/Config atomic rollback before permitting any physical action. S10 still OPEN; S11 blocked.
+
+---
+
 ## 26 November 2026 — S10 genuine native Found candidate bind and pristine restore, v0.6.5_239
 
 Accepted `v0.6.5_238` / `b7c61cf72f86e9c5cacda0d0f307d05c87e19039`, [PR #1359](https://github.com/Tolian82/os-zapret2-restyle/pull/1359), all seven exact-head workflows plus postmerge CI/classifier successful. The actual existing original Found PREPARED candidate binder is implemented and verified by portable exact two-root and post-fsync failure tests, still nonauthorizing.

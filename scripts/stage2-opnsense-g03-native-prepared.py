@@ -165,6 +165,8 @@ def main():
          "G03_FOUND_NATIVE_BOUND_OR_PHYSICAL_DRIFT")
     print("G03_S10_FOUND_BIND=PASS_REAL_FD4_FD9_P2_LEGACY_PREDECESSOR_NO_WRITES",
           flush=True)
+    print("G03_S10_FOUND_SEMANTIC=PASS_REAL_LEGACY_RESTART_REQUIRED_NO_ACTION",
+          flush=True)
     # Separate native PHP owner invocation after the binding child has
     # exited: recovery must rediscover the immutable candidate from disk.
     receipt = json.loads(call([
