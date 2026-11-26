@@ -402,11 +402,48 @@ final class SharedApplyConfigWorker
         return [$output, $failed || hrtime(true) >= $deadline, $code];
     }
 
+    private static function openFirstEnabledTrace()
+    {
+        // No extra journal and no named log: use an unlinked private stream.
+        $trace = @tmpfile();
+        if (!is_resource($trace)) {
+            return false;
+        }
+        $meta = stream_get_meta_data($trace);
+        if (!isset($meta['uri']) || !@unlink($meta['uri'])) {
+            @fclose($trace);
+            return false;
+        }
+        return $trace;
+    }
+
+    private static function firstEnabledTrace($trace): string
+    {
+        if (!is_resource($trace) || !@rewind($trace)) {
+            return '';
+        }
+        $raw = @stream_get_contents($trace, 8193);
+        if (!is_string($raw) || strlen($raw) > 8192) {
+            return '';
+        }
+        $lines = explode("\n", $raw);
+        array_pop($lines); // Only complete, newline-terminated fixed markers.
+        $safe = '';
+        foreach (array_slice($lines, 0, 64) as $line) {
+            if (preg_match('/\AS10_FIRST_TRACE=D(?:0[3-9]|[12][0-9]|30)\z/D', $line)) {
+                $safe .= $line . "\n";
+            }
+        }
+        return $safe;
+    }
+
     private static function originalLockedFileEvidence(
         object $config, string $id, string $mode = 'classify-locked',
         ?string $configDigest = null, ?string $runtimeMode = null,
         ?callable $whileP2Held = null, $queueStream = null, ?string $baseDigest = null
     ): array {
+        $firstTrace = $mode === 'write-first-enabled-handoff-locked';
+        if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D01\n"); }
         $begin = $mode === 'begin-found-save-locked';
         $managedWrite = in_array($mode, ['write-managed-handoff-locked',
             'write-first-disabled-handoff-locked', 'write-first-enabled-handoff-locked'], true);
@@ -445,7 +482,9 @@ final class SharedApplyConfigWorker
         if (!is_resource($fd9)) {
             throw new \RuntimeException('Original FD9 descriptor missing');
         }
+        $trace = false;
         try {
+            if ($firstTrace) { $trace = self::openFirstEnabledTrace(); }
             $pipes = [];
             $command = [
                 '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
@@ -460,7 +499,7 @@ final class SharedApplyConfigWorker
                 $command[] = $baseDigest;
             }
             $descriptors = [0 => $managedWrite ? STDIN : ($begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r']),
-                1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a'],
+                1 => ['pipe', 'w'], 2 => is_resource($trace) ? $trace : ['file', '/dev/null', 'a'],
                 4 => $handle, 9 => $fd9];
             if ($queueStream !== null) {
                 $descriptors[3] = $queueStream;
@@ -471,12 +510,25 @@ final class SharedApplyConfigWorker
                 $pipes, null, ['LC_ALL' => 'C', 'PATH' => '/usr/bin:/bin:/usr/local/bin']
             );
             if (!is_resource($proc)) {
+                if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D34\n"); }
                 throw new \RuntimeException('Original cold native child unavailable');
             }
+            if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D02\n"); }
             try {
                 if ($joined) {
                     [$output, $failed, $code] = self::joinOrdinaryRestoreChild($proc, $pipes);
                     $proc = null;
+                    if ($firstTrace) {
+                        if (is_resource($trace)) {
+                            @fwrite(STDERR, self::firstEnabledTrace($trace));
+                            @fclose($trace);
+                            $trace = false;
+                        }
+                        @fwrite(STDERR, "S10_FIRST_TRACE=D25\n");
+                        if ($code !== 0) { @fwrite(STDERR, "S10_FIRST_TRACE=D31\n"); }
+                        if ($failed) { @fwrite(STDERR, "S10_FIRST_TRACE=D32\n"); }
+                        if ($output === '') { @fwrite(STDERR, "S10_FIRST_TRACE=D33\n"); }
+                    }
                     if ($failed || $code !== 0 || $output === '') {
                         throw new \RuntimeException('Original locked operation outcome uncertain after join');
                     }
@@ -538,6 +590,7 @@ final class SharedApplyConfigWorker
                     throw new \RuntimeException('Native Config replaced during cold files proof');
                 }
                 SharedApplyLifecycleLock::assertHeld();
+                if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D26\n"); }
                 return $reply;
             } finally {
                 foreach ($pipes as $pipe) {
@@ -553,6 +606,10 @@ final class SharedApplyConfigWorker
                 }
             }
         } finally {
+            if (is_resource($trace)) {
+                @fwrite(STDERR, self::firstEnabledTrace($trace));
+                @fclose($trace);
+            }
             fclose($fd9);
         }
     }
@@ -1038,6 +1095,7 @@ final class SharedApplyConfigWorker
                     ['result'=>$phase, 'id'=>$id];
             };
             $managed = $action === 'managed-save' || $managedApply || $firstDisabled || $firstEnabled;
+            if ($firstEnabled) { @fwrite(STDERR, "S10_FIRST_TRACE=D00\n"); }
             $result = SharedConfigCommit::persist($plan, $page, $config, $factory,
                 $managed
                     ? static fn(string $base, string $candidate): bool => $attest(

@@ -3676,6 +3676,7 @@ service_dispatch()
         shared-apply-first-enabled-physical)
             # This private action is not part of the normal service lock
             # router; it REQUIRES original inherited FD9 and Config FD4.
+            printf '%s\n' S10_FIRST_TRACE=D12 >&2
             [ "$#" -eq 4 ] || return 64
             case "$2" in ""|*[!a-f0-9]*) return 64 ;; esac
             [ "$(expr length "$2")" -eq 32 ] || return 64
@@ -3685,11 +3686,19 @@ service_dispatch()
             _first_enabled_guard=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
                 guard-first-enabled-shell "$2" "$3" "$4") || return 70
             [ "$_first_enabled_guard" = first-enabled-shell=qualified ] || return 70
+            printf '%s\n' S10_FIRST_TRACE=D13 >&2
             # FD4 must not enter the long-lived engine/supervisor. The
             # original PHP parent still holds its Config flock, and both
             # original daemon launches already close the original FD9.
             apply_runtime_activate "/var/db/zapret2/shared-work/$2/release" 1 "$2" \
-                >/dev/null 4<&- || return 70
+                >/dev/null 4<&- || {
+                    case "$APPLY_ACTIVATION_STEP" in
+                        D14|D15|D16|D17|D18|D19|D20)
+                            printf '%s\n' "S10_FIRST_TRACE=$APPLY_ACTIVATION_STEP" >&2 ;;
+                    esac
+                    return 70
+                }
+            printf '%s\n' S10_FIRST_TRACE=D20 >&2
             [ "$APPLY_PHASE" = activated ] &&
             [ "$APPLY_NEW_RUNNING" = 1 ] && [ "$APPLY_OLD_RUNNING" = 0 ] &&
             [ "$APPLY_IPFW_INSTALLED" = 1 ] &&

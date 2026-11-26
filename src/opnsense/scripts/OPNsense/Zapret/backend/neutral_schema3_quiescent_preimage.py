@@ -1376,6 +1376,26 @@ def _stop_first_running_base_joined_locked(store, record: dict, *,
             store.read() != record):
         raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_POST_STOP_CHANGED")
 
+def _first_enabled_checkpoint(stage: str) -> None:
+    """Finite non-authorizing diagnostics; never print native data."""
+    import sys
+    if stage not in {f"D{i:02d}" for i in range(3, 31)}:
+        return
+    try:
+        print("S10_FIRST_TRACE=" + stage, file=sys.stderr, flush=True)
+    except (OSError, ValueError):
+        pass
+
+
+def _relay_first_enabled_trace(raw: bytes) -> None:
+    if type(raw) is not bytes or len(raw) > 8192:
+        return
+    # Incomplete lines, raw stderr, argv and exception messages are not forwarded.
+    for line in raw.split(b"\n")[:-1][:64]:
+        if line in {f"S10_FIRST_TRACE=D{i:02d}".encode() for i in range(3, 31)}:
+            _first_enabled_checkpoint(line[-3:].decode("ascii"))
+
+
 def native_guard_first_enabled_shell_locked(operation: str, candidate: str,
                                             wan: str, *, config_fd: int = 4) -> None:
     """Read-only FD9/FD4 gate before the single original shell actuator."""
@@ -1386,6 +1406,7 @@ def native_guard_first_enabled_shell_locked(operation: str, candidate: str,
     from neutral_schema3_saved_wan_preimage import _native_wan_locked, _DEVICE
     from shared_apply_operation import OP_ID, DIGEST
 
+    _first_enabled_checkpoint("D27")
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             type(operation) is not str or not OP_ID.fullmatch(operation) or
             type(candidate) is not str or not DIGEST.fullmatch(candidate) or
@@ -1394,6 +1415,7 @@ def native_guard_first_enabled_shell_locked(operation: str, candidate: str,
         raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_NATIVE_REQUIRED")
     require_lifecycle_lock()
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _first_enabled_checkpoint("D28")
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
     record = store.read()
     if (type(record) is not dict or record.get("phase") != "activating" or
@@ -1411,10 +1433,12 @@ def native_guard_first_enabled_shell_locked(operation: str, candidate: str,
     def observe():
         result = _first_inert_recovery_layout(record, config_fd=config_fd,
             config_digest=record["detail"]["base"], queue_fd=None, store=store)
+        _first_enabled_checkpoint("D29")
         if (result[0] is not None or result[1] is not None or
                 result[2] not in ("native-kernel-absent", "native-managed-kernel-empty") or
                 _native_wan_locked(config_fd) != wan):
             raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_PREIMAGE_CHANGED")
+        _first_enabled_checkpoint("D30")
         return result
 
     first = observe()
@@ -1434,6 +1458,7 @@ def native_install_first_enabled_bound_locked(record: dict, *, preimage: Quiesce
     from neutral_schema3_saved_wan_preimage import _native_wan_locked, _DEVICE
     from shared_apply_seal import _stat
 
+    _first_enabled_checkpoint("D06")
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             type(record) is not dict or record.get("phase") != "activating" or
             type(preimage) is not QuiescentPreimage or
@@ -1452,6 +1477,7 @@ def native_install_first_enabled_bound_locked(record: dict, *, preimage: Quiesce
         raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_PREIMAGE_REQUIRED")
     require_lifecycle_lock()
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _first_enabled_checkpoint("D07")
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
     active = COMMON_ACTIVE
     work = WORK / detail["id"]
@@ -1459,12 +1485,16 @@ def native_install_first_enabled_bound_locked(record: dict, *, preimage: Quiesce
     def observe():
         root = json.loads(_verify_original_pinned_root(
             detail=detail, binding=pin, parent=WORK, owner_uid=0))
+        _first_enabled_checkpoint("D08")
         if (root["service"]["enabled"] is not True or
                 root["service"]["target_mode"] not in ("all", "list") or
                 _native_wan_locked(config_fd) != wan):
             raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_MODE_CHANGED")
-        return _first_inert_recovery_layout(record, config_fd=config_fd,
+        _first_enabled_checkpoint("D09")
+        layout = _first_inert_recovery_layout(record, config_fd=config_fd,
             config_digest=config_digest, queue_fd=None, store=store)
+        _first_enabled_checkpoint("D10")
+        return layout
 
     first = observe()
     live, stage, kernel = first
@@ -1485,15 +1515,19 @@ def native_install_first_enabled_bound_locked(record: dict, *, preimage: Quiesce
         raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_LAYOUT_CHANGED")
     require_lifecycle_lock()
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _first_enabled_checkpoint("D11")
     command = ("/bin/sh", str(SCRIPT / "zapret_service.sh"),
                "shared-apply-first-enabled-physical", detail["id"], detail["candidate"], wan)
     reply = _run_bound_restore_joined(command, pass_fds=(9, config_fd), budget=120,
                                       capture_output=True)
+    _relay_first_enabled_trace(reply.stderr)
     if (reply.returncode != 0 or
             reply.stdout != b"first-enabled-physical=activated\n"):
         raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_OUTCOME_UNCERTAIN")
+    _first_enabled_checkpoint("D21")
     # No optimistic success. The original writer independently verifies the
     # full active tree, one engine/supervisor and reversible staged IPFW.
+    _first_enabled_checkpoint("D22")
     result, receipt = store._record_native_bound_activated(
         record, preimage=preimage, config_fd=config_fd, config_digest=config_digest)
     if (result["phase"] != "activated" or store.read() != result or
@@ -1501,6 +1535,7 @@ def native_install_first_enabled_bound_locked(record: dict, *, preimage: Quiesce
             receipt.pretraffic_sha256 is not None or
             receipt.kernel_state != "native-managed-kernel-staged"):
         raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_READBACK_CHANGED")
+    _first_enabled_checkpoint("D23")
     return result, receipt
 
 
@@ -1600,6 +1635,7 @@ def native_write_first_enabled_handoff_locked(operation: str, witness: str, stre
     from shared_apply_operation import DIGEST, OP_ID, _config_save_witness, _first_running_pin_matches
     from shared_apply_seal import verify_seal
 
+    _first_enabled_checkpoint("D03")
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             type(operation) is not str or not OP_ID.fullmatch(operation) or
             type(witness) is not str or not DIGEST.fullmatch(witness) or
@@ -1607,6 +1643,7 @@ def native_write_first_enabled_handoff_locked(operation: str, witness: str, stre
         raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_NATIVE_REQUIRED")
     require_lifecycle_lock()
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _first_enabled_checkpoint("D04")
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
     record = store.read()
     if (type(record) is not dict or record.get("phase") != "activating" or
@@ -1631,6 +1668,7 @@ def native_write_first_enabled_handoff_locked(operation: str, witness: str, stre
                         ensure_ascii=True, allow_nan=False) + "\n").encode("ascii")
     if exact != raw or store.read() != record:
         raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_WIRE_CHANGED")
+    _first_enabled_checkpoint("D05")
     result, receipt = native_install_first_enabled_bound_locked(
         record, preimage=preimage, config_fd=config_fd, config_digest=detail["base"])
     pinned = result.get("first_running_sha256") if type(result) is dict else None
@@ -1641,6 +1679,7 @@ def native_write_first_enabled_handoff_locked(operation: str, witness: str, stre
             receipt.kernel_state != "native-managed-kernel-staged" or
             not _first_running_pin_matches(result, receipt.running, config_fd)):
         raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_READBACK_REQUIRED")
+    _first_enabled_checkpoint("D24")
     return {"result": "first-enabled-activated", "id": operation}
 
 

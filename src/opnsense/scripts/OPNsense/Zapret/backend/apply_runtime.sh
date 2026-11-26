@@ -450,6 +450,7 @@ apply_runtime_abort()
 
 apply_runtime_activate()
 {
+    APPLY_ACTIVATION_STEP=D14
     APPLY_EARLY_ENGINE_FAILURE=
     APPLY_IPFW_ATTACH_FAILURE=
     [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || return 64
@@ -465,6 +466,7 @@ apply_runtime_activate()
         [ "${#4}" -eq 64 ] || return 64
     fi
     apply_runtime_preflight "$1" "$2" || return $?
+    APPLY_ACTIVATION_STEP=D15
     if [ "$#" -ge 3 ]; then
         APPLY_BACKUP=$(atomic_install_tree "$APPLY_CANDIDATE" "$ACTIVE_DIR" "$BACKUP_ROOT" "$3") || {
             apply_runtime_clear
@@ -509,6 +511,7 @@ apply_runtime_activate()
             return 70
         }
     fi
+    APPLY_ACTIVATION_STEP=D16
     if [ "$APPLY_NEW_RUNNING" = 1 ]; then
         APPLY_NEW="$ACTIVE_DIR"
         if /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto=' \
@@ -531,6 +534,7 @@ apply_runtime_activate()
             }
         fi
     fi
+    APPLY_ACTIVATION_STEP=D17
     if [ "$APPLY_OLD_RUNNING" = 1 ] || [ "$APPLY_NEW_RUNNING" = 1 ]; then
         # The original firewall_shared_runtime() shell function captures
         # only the adapter's exact fixed refusal. Do not use $(...) here:
@@ -557,6 +561,7 @@ apply_runtime_activate()
             return "$_apply_ipfw_abort_rc"
         fi
     fi
+    APPLY_ACTIVATION_STEP=D18
     # Before native Config commit, the staged old IPFW table values are
     # intentional. Ordinary verify is only valid after commit or rollback.
     if [ "$APPLY_IPFW_INSTALLED" = 1 ]; then
@@ -570,6 +575,7 @@ apply_runtime_activate()
             return $?
         }
     fi
+    APPLY_ACTIVATION_STEP=D19
     if [ "$APPLY_NEW_RUNNING" = 1 ]; then
         supervisor_start "$SUPERVISOR_LOOP" "$SUPERVISOR_DAEMON_PIDFILE" \
             "$SUPERVISOR_MONITOR_PIDFILE" "$CHILD_PIDFILE" \
@@ -579,6 +585,7 @@ apply_runtime_activate()
         }
     fi
     APPLY_PHASE=activated
+    APPLY_ACTIVATION_STEP=D20
     # Not yet committed: previous tree and stage tables remain available.
 }
 

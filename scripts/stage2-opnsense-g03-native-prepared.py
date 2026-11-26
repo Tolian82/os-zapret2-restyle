@@ -50,6 +50,8 @@ def call(argv, *, locked=False, timeout=180, expected_rc=0):
             r"^G03_FIRST_REPLY=rc:(?:-?[0-9]{1,3}|unknown);receipt:(?:invalid|empty|exact|mismatch);"
             r"wal:(?:prepared|activating|activated|config-saved|committed|restored|requires-review|unknown);"
             r"stderr:(?:save-uncertain|review|other|empty)$", p.stderr or "", re.MULTILINE)
+        for trace in re.findall(r"^G03_FIRST_TRACE=D(?:[012][0-9]|3[0-4])$", p.stderr or "", re.MULTILINE)[:64]:
+            print(trace, flush=True)
         if len(diagnostics) == 1:
             print(diagnostics[0], flush=True)
         reason = (re.search(r"^G03_BOUND_NATIVE_REFUSED_[A-Z0-9_]{1,100}$",
@@ -353,6 +355,12 @@ from neutral_shared_apply_source_gate import (
     native_bind_original_prepared_fd9, native_plan_original_prepared_fd9,
     native_coordinate_original_prepared_fd9, MAX_PIPE)
 from voice_ipfw_adapter import require_lifecycle_lock
+def first_trace_lines(raw):
+    if type(raw) is not bytes or len(raw) > 16384:
+        return ()
+    allowed = {f"S10_FIRST_TRACE=D{i:02d}".encode() for i in range(35)}
+    return tuple(line for line in raw.split(b"\n")[:-1] if line in allowed)[:64]
+
 def first_reply_diagnostic(reply, record, detail):
     # Never disclose Config, HOSTLIST, argv, digests or untrusted stderr.
     phase = record.get("phase") if type(record) is dict else None
@@ -373,9 +381,13 @@ def first_reply_diagnostic(reply, record, detail):
             shape = "exact" if json.dumps(value, sort_keys=True) == json.dumps(expected, sort_keys=True) else "mismatch"
         except (ValueError, TypeError, RecursionError):
             pass
+    stderr = reply.stderr
+    if type(stderr) is bytes and len(stderr) <= 16384:
+        import re
+        stderr = re.sub(rb"(?m)^S10_FIRST_TRACE=D(?:[012][0-9]|3[0-4])\n", b"", stderr)
     err = {b"ERROR: native shared Config save uncertain; retain recovery evidence\n": "save-uncertain",
-           b"ERROR: original managed Config outcome requires journal review\n": "review"}.get(reply.stderr, "other")
-    if reply.stderr == b"":
+           b"ERROR: original managed Config outcome requires journal review\n": "review"}.get(stderr, "other")
+    if stderr == b"":
         err = "empty"
     return "G03_FIRST_REPLY=rc:" + rc + ";receipt:" + shape + ";wal:" + phase + ";stderr:" + err
 
@@ -468,6 +480,8 @@ try:
                     observed = store.read()
                 except (OSError, RuntimeError, ValueError):
                     observed = None
+                for line in first_trace_lines(reply.stderr):
+                    print("G03_FIRST_TRACE=" + line[-3:].decode("ascii"), file=sys.stderr)
                 print(first_reply_diagnostic(reply, observed, detail), file=sys.stderr)
             return reply
         quiescent._run_bound_restore_joined = diagnosed_join

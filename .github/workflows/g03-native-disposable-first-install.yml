@@ -79,6 +79,11 @@ jobs:
           sh -n scripts/test-g03-first-install.sh
           python3.13 -m py_compile scripts/stage2-opnsense-g03-first-install.py
           python3.13 -m py_compile scripts/stage2-opnsense-g03-native-prepared.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_quiescent_preimage.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          php -l src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php
+          python3.13 scripts/test-s10-first-enabled-trace.py
           node scripts/test-gui-upstream-progress.mjs
           sh scripts/test-g03-first-install.sh
           sh scripts/test-setup-runtime-transaction.sh
