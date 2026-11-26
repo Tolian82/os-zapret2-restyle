@@ -72,7 +72,8 @@ def five_hostlist_native_apply(config_path: Path):
     journal = Path("/var/db/zapret2/shared-apply/operation.json")
     pidfile = Path("/var/run/dvtws2.pid")
     editor_names = {"youtube": "youtube_found", "user": "user_found", "auto": "shared_found"}
-    runpy.run_path(str(Path(__file__).with_name("p5b2b-native-witness.py")))["set_guest_lo0"]()
+    # G03 deliberately exercises all -> list; do not depend on the product default.
+    runpy.run_path(str(Path(__file__).with_name("p5b2b-native-witness.py")))["set_guest_lo0"](target_mode="all")
 
     if os.environ.get("ZAPRET2_G03_PRISTINE_FIRST_COMMIT") == "1":
         need(os.environ.get("ZAPRET2_G03_PRISTINE_COLD") == "1" and

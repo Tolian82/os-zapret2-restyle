@@ -164,6 +164,7 @@ class RealInstallContracts(unittest.TestCase):
         ET.SubElement(general, 'enabled').text = '0'
         strategy = ET.SubElement(root, 'strategy')
         hostlist = ET.SubElement(root, 'hostlist')
+        ET.SubElement(hostlist, 'mode').text = 'list'
         src = (HERE.parent / 'src/opnsense/scripts/OPNsense/Zapret'
                / 'initialize_config.php').read_text(encoding='utf-8')
         for constant, parent, field in (
@@ -181,6 +182,15 @@ class RealInstallContracts(unittest.TestCase):
             before, ET.tostring(installed))
         self.assertTrue(accepted['approved_lc05_first_config_initialized'])
         self.assertTrue(accepted['all_other_config_sections_unchanged'])
+
+        for incorrect in ('all', 'auto', ''):
+            hostlist.find('mode').text = incorrect
+            with self.assertRaisesRegex(mod.Refusal, 'INITIAL_CONFIG'):
+                mod.verify_official_first_install_registration(before, ET.tostring(installed))
+        hostlist.remove(hostlist.find('mode'))
+        with self.assertRaisesRegex(mod.Refusal, 'INITIAL_CONFIG'):
+            mod.verify_official_first_install_registration(before, ET.tostring(installed))
+        ET.SubElement(hostlist, 'mode').text = 'list'
 
         general.find('enabled').text = '1'
         with self.assertRaisesRegex(mod.Refusal, 'INITIAL_CONFIG'):

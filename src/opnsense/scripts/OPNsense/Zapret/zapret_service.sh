@@ -3679,9 +3679,9 @@ service_dispatch()
             printf '%s\n' S10_FIRST_TRACE=D12 >&2
             [ "$#" -eq 4 ] || return 64
             case "$2" in ""|*[!a-f0-9]*) return 64 ;; esac
-            [ "$(expr length "$2")" -eq 32 ] || return 64
+            [ "${#2}" -eq 32 ] || return 64
             case "$3" in ""|*[!a-f0-9]*) return 64 ;; esac
-            [ "$(expr length "$3")" -eq 64 ] || return 64
+            [ "${#3}" -eq 64 ] || return 64
             [ -x "$PYTHON_RUNTIME" ] || return 69
             _first_enabled_guard=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
                 guard-first-enabled-shell "$2" "$3" "$4") || return 70

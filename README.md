@@ -268,7 +268,7 @@ The plugin package and the upstream bol-van/zapret2 runtime intentionally have s
 
 ## Clean-install YouTube defaults
 
-On an **actually clean** first setup with no existing Zapret2 configuration, the plugin initializes exactly these ten entries in **YouTube Domains**, without automatically enabling traffic interception. Ordinary reinstall over saved user configuration does not re-seed or overwrite any user-edited or deliberately blank fields:
+On an **actually clean** first setup with no existing Zapret2 configuration, the plugin initializes exactly these ten entries in **YouTube Domains**, without automatically enabling traffic interception. The owner-approved clean-install target mode is **Only listed domains** (`list`) in the candidate implementing the 27 November 2026 requirement. Ordinary reinstall over saved user configuration does not re-seed or overwrite any user-edited or deliberately blank fields:
 
 ~~~text
 youtube.com

@@ -64,7 +64,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
       - name: Run setup/frontend/old-rollback regressions
@@ -84,6 +84,8 @@ jobs:
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
           php -l src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php
           python3.13 scripts/test-s10-first-enabled-trace.py
+          php scripts/test-g04-initial-config.php
+          python3.13 scripts/test-stage2-opnsense-real-native-clean-install.py RealInstallContracts.test_lc05_exact_native_first_config_is_only_new_subtree
           node scripts/test-gui-upstream-progress.mjs
           sh scripts/test-g03-first-install.sh
           sh scripts/test-setup-runtime-transaction.sh

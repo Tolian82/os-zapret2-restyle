@@ -85,6 +85,8 @@ route = service[service.index("        shared-apply-first-enabled-physical)"):
                 service.index("        extra-resources-preview-saved)", service.index("        shared-apply-first-enabled-physical)"))]
 mock = '''
 ACTIVE_DIR=$1; PYTHON_RUNTIME=$2; FAIL=$3; export FAIL
+# FreeBSD 15 expr has no GNU length operator. Any attempt is an error.
+expr() { echo "unexpected external expr" >&2; return 2; }
 BACKUP_ROOT=$1; BACKEND_DIR=$1; APPLY_IPFW_INSTALLED=0; APPLY_OLD=-; APPLY_NEW=-
 apply_runtime_preflight() { APPLY_CANDIDATE=$1; APPLY_NEW_RUNNING=$2; APPLY_OLD_RUNNING=0; [ "$FAIL" != D14 ]; }
 atomic_install_tree() { [ "$FAIL" != D15 ]; }

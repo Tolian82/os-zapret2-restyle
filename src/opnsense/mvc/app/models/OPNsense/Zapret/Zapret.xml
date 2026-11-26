@@ -115,7 +115,7 @@
         </strategylab>
         <hostlist>
             <mode type="OptionField">
-                <Default>all</Default>
+                <Default>list</Default>
                 <OptionValues>
                     <all>All traffic on configured ports</all>
                     <list>Only listed domains</list>
