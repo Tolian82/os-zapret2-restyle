@@ -83,8 +83,8 @@ def five_hostlist_native_apply(config_path: Path):
         checked = subprocess.run(
             [sys.executable, "/root/g03-native-prepared.py", "pristine-first-commit"],
             env={**os.environ, "ZAPRET2_G03_COLD_PREPARED": "1"},
-            timeout=600, check=False)
-        need(checked.returncode == 0, "G03_FIRST_BOUND_NATIVE_COMMIT_REFUSED")
+            timeout=1200, check=False)
+        need(checked.returncode == 0, "G03_TWO_BOUND_NATIVE_COMMITS_REFUSED")
         # The committed bound owner is not a legacy baseline. Do not run
         # legacy GUI/Found fixtures over it or remove its genuine journal.
         return

@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       s10_first_commit:
-        description: "S10: first protected native commit only (disposable guest)"
+        description: "S10: first protected commit and linked-list successor (disposable guest)"
         type: boolean
         default: false
         required: false
@@ -150,7 +150,7 @@ jobs:
             install -m 0700 scripts/stage2-opnsense-g03-native-prepared.py /root/g03-native-prepared.py
             install -m 0600 scripts/stage2-opnsense-g03-native-prepared.php /root/g03-native-prepared.php
             GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 ZAPRET2_G03_PRISTINE_COLD=1 ZAPRET2_G03_PRISTINE_FIRST_COMMIT="${{ github.event_name == 'workflow_dispatch' && inputs.s10_first_commit && '1' || '0' }}" /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
-            # The explicit first-commit run ends on this same disposable guest.
+            # The explicit two-bound-commit journey ends on this same disposable guest.
             if [ "${{ github.event_name == 'workflow_dispatch' && inputs.s10_first_commit && '1' || '0' }}" = 1 ]; then
               exit 0
             fi

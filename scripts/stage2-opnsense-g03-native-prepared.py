@@ -216,11 +216,38 @@ def verify_first_bound_commit(record, op, receipt, root, original, saved, status
          "G03_FIRST_BOUND_COMMIT_NATIVE_READBACK_UNPROVEN")
 
 
-def bound_manifest_main(*, stopped=False, cold=False, first_commit=False):
-    """One genuine original bound FD9 PREPARED proof for running/stopped owner.
+def verify_successor_commit(record, previous, op, receipt, root, original,
+                            observed, saved, status, saved_list, expected_list):
+    """Independent terminal readback of one linked-list change."""
+    detail = record.get("detail", {})
+    pin = record.get("manifest", {})
+    need(record.get("phase") == "committed" and detail.get("id") == op and
+         op != previous["detail"]["id"] and detail.get("page") == "strategies" and
+         detail.get("base") == previous["detail"]["candidate"] and
+         detail.get("candidate") != detail.get("base") and
+         detail.get("changed_fields") == ["hostlist.youtubedomains"] and
+         record.get("previous") == previous["detail"] and
+         record.get("previous_manifest") == previous["manifest"] and
+         "managed" not in record and "found" not in record and
+         pin.get("schema") == 1 and pin.get("generation") == op and
+         pin.get("candidate_sha256") == detail["candidate"] and
+         pin.get("root_sha256") != previous["manifest"]["root_sha256"] and
+         root.is_file() and not root.is_symlink() and
+         receipt == "G03_BOUND_SUCCESSOR_COMMIT=" + hashlib.sha256(root.read_bytes()).hexdigest() and
+         pin.get("root_sha256") == receipt.split("=", 1)[1],
+         "G03_BOUND_SUCCESSOR_WAL_OR_PIN_UNPROVEN")
+    need(saved == {"result": "committed", "snapshot": detail["candidate"], "enabled": "1"} and
+         saved_list.splitlines() == expected_list.splitlines() and
+         status.returncode == 0 and status.stdout.strip() == "zapret is running" and
+         observed[1:] == original[1:] and observed[0] != original[0],
+         "G03_BOUND_SUCCESSOR_NATIVE_READBACK_UNPROVEN")
 
-    The STOPPED branch runs only after an explicit service stop on the
-    disposable G03 guest. It does not grant product activation or mutation.
+
+def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, successor=False):
+    """Existing PREPARED proofs, plus the disposable first/successor commits.
+
+    The STOPPED branch follows an explicit service stop on the guest.
+    Only the opt-in two-generation journey calls the original coordinator.
     """
     script = Path(SERVICE).parent
     backend = script / "backend"
@@ -229,18 +256,21 @@ def bound_manifest_main(*, stopped=False, cold=False, first_commit=False):
                 else json.loads(WAL.read_bytes()))
 
     previous = journal()
-    prior = None if previous is None else previous.get("previous")
+    prior = None if previous is None else previous.get("detail" if successor else "previous")
     expected_status = 1 if stopped or cold else 0
     native_status = subprocess.run([SERVICE, "status"], capture_output=True,
                                    text=True, timeout=30)
     need(not (cold and stopped) and (not first_commit or cold) and
+         (not successor or not (cold or stopped or first_commit)) and
          (previous is None if cold else (
-             isinstance(previous, dict) and previous.get("phase") == "restored"
-             and isinstance(prior, dict))) and
+             isinstance(previous, dict) and
+             previous.get("phase") == ("committed" if successor else "restored") and
+             isinstance(prior, dict))) and
          native_status.returncode == expected_status and
          (not cold or native_status.stdout.strip() == "zapret is not running"),
          "G03_BOUND_PREVIOUS_OWNER_STATE_UNPROVEN")
     original = snapshot()
+    expected_list = None
     if cold:
         # G03's existing native lo0 fixture, before the first ordinary Apply.
         # Use the actual original native request worker, not a fabricated XML.
@@ -257,6 +287,21 @@ def bound_manifest_main(*, stopped=False, cold=False, first_commit=False):
             request, separators=(",", ":")).encode()).decode().rstrip("=")
         staged = call([PHP, str(script / "shared_apply_request.php"), "stage",
                        encoded], locked=True)
+    elif successor:
+        model = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
+        need(model is not None and model.findtext("general/enabled") == "1" and
+             model.findtext("hostlist/mode") == "list" and
+             model.findtext("general/waninterface") == "lo0",
+             "G03_BOUND_SUCCESSOR_SAVED_MODEL_UNPROVEN")
+        old_list = model.findtext("hostlist/youtubedomains") or ""
+        domain = "s10-g03-successor.example.org"
+        need(domain not in old_list.splitlines(), "G03_BOUND_SUCCESSOR_DOMAIN_PRESENT")
+        expected_list = old_list + ("" if not old_list or old_list.endswith("\n") else "\n") + domain
+        request = {"page": "strategies", "fields": {"hostlist": {"youtubedomains": expected_list}},
+                   "sync": {"telegramips_baseline": model.findtext("hostlist/telegramips") or ""}}
+        encoded = base64.urlsafe_b64encode(json.dumps(
+            request, separators=(",", ":")).encode()).decode().rstrip("=")
+        staged = call([PHP, str(script / "shared_apply_request.php"), "stage", encoded], locked=True)
     else:
         staged = call([PHP, NATIVE, "stage-ordinary"], locked=True)
     need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
@@ -287,10 +332,14 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
 '''
     child = r'''
 import sys
+from hashlib import sha256
 from pathlib import Path
 sys.path.insert(0, "/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
 from shared_apply_operation import SharedApplyOperation, SharedOperationError
-from shared_apply_seal import WORK, verify_seal
+from shared_apply_seal import WORK, verify_seal, _release_hash
+from neutral_root_stage import verify_original_operation_pins
+from neutral_schema3_previous_physical import (
+    CompletePriorPreimage, _full_prior_tree, _running_native, COMMON_ACTIVE, CHILD_PID, MONITOR_PID)
 from neutral_schema3_saved_wan_preimage import _native_preflight
 from neutral_schema3_quiescent_preimage import QuiescentPreimage
 from neutral_shared_apply_source_gate import (
@@ -302,24 +351,77 @@ try:
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     prior = store.read()
-    if mode not in ("running", "stopped", "cold", "first-commit"):
+    if mode not in ("running", "stopped", "cold", "first-commit", "successor"):
         raise RuntimeError("mode")
     if mode in ("cold", "first-commit"):
         if prior is not None:
             raise RuntimeError("G03_PRISTINE_COLD_WAL_ALREADY_PRESENT")
         old_owner = None
+    elif mode == "successor":
+        if (not isinstance(prior, dict) or prior["phase"] != "committed" or
+                prior.get("manifest", {}).get("schema") != 1 or
+                "previous" in prior or "previous_manifest" in prior or "found" in prior or
+                "first_running_sha256" not in prior or "failure" in prior):
+            raise RuntimeError("G03_BOUND_SUCCESSOR_PREDECESSOR_REQUIRED")
+        old_owner = prior["detail"]
+        verify_original_operation_pins(record=prior, parent=WORK, owner_uid=0)
+        old_work = WORK / old_owner["id"]
+        old_release = old_work / "release"
+        old_tree = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+        running = _running_native(old_release, owner_uid=0, child_pidfile=CHILD_PID,
+                                  monitor_pidfile=MONITOR_PID)
     else:
         if not isinstance(prior, dict) or prior["phase"] != "restored" or not prior.get("previous"):
             raise RuntimeError("previous")
         old_owner = prior["previous"]
-    verify_seal(WORK / op, owner=0)
+    seal = verify_seal(WORK / op, owner=0)
     native = _native_preflight(op, "strategies")
     if native["enabled"] != "1" or native["result"] != "prepared":
         raise RuntimeError("candidate")
     detail = {"id": op, "page": "strategies", "base": native["base"],
               "candidate": native["candidate"], "changed_fields": native["fields"]}
+    if mode == "successor":
+        if (detail["base"] != old_owner["candidate"] or detail["base"] == detail["candidate"] or
+                detail["changed_fields"] != ["hostlist.youtubedomains"] or store.read() != prior):
+            raise RuntimeError("G03_BOUND_SUCCESSOR_PLAN_CHANGED")
+        new_release = WORK / op / "release"
+        name = "managed/hostlist-youtube.txt"
+        before = (old_release / name).read_bytes()
+        after = (new_release / name).read_bytes()
+        new_tree = seal["sha256"]["release"]
+        # Refuse any other release change before invoking the physical writer.
+        marker = b"s10-g03-successor.example.org"
+        if (before == after or marker in before.splitlines() or marker not in after.splitlines() or
+                _release_hash(old_release, 0, replacement=(
+                    name, sha256(before).hexdigest(), sha256(after).hexdigest())) != new_tree):
+            raise RuntimeError("G03_BOUND_SUCCESSOR_NOT_SINGLE_FILE_DELTA")
     store.advance("prepared", detail)
     raw = sys.stdin.buffer.read(MAX_PIPE + 1)
+    if mode == "successor":
+        route, committed, source, semantic = native_coordinate_original_prepared_fd9(op, raw)
+        if (route != "managed-committed" or store.read() != committed or
+                committed.get("phase") != "committed" or committed.get("detail") != detail or
+                committed.get("previous") != old_owner or
+                committed.get("previous_manifest") != prior["manifest"] or
+                source.mode != "list" or source.requested_enabled is not True or
+                semantic.lifecycle_proposal != "RELOAD" or
+                semantic.decision.kind != "RELOAD_SAFE_CANDIDATE" or
+                semantic.decision.changed_active != ("hostlist-youtube.txt",) or
+                semantic.decision.changed_inactive or
+                type(semantic.previous_physical) is not CompletePriorPreimage or
+                semantic.previous_generation != old_owner["id"] or
+                semantic.previous_root_sha256 != prior["manifest"]["root_sha256"] or
+                semantic.candidate_root_sha256 != committed["manifest"]["root_sha256"]):
+            raise RuntimeError("G03_BOUND_SUCCESSOR_COORDINATOR_OUTCOME_UNPROVEN")
+        verify_original_operation_pins(record=committed, parent=WORK, owner_uid=0)
+        if (_full_prior_tree(WORK / op, COMMON_ACTIVE, 0) != new_tree or
+                verify_seal(old_work, owner=0)["sha256"]["release"] != old_tree or
+                _running_native(new_release, owner_uid=0, child_pidfile=CHILD_PID,
+                                monitor_pidfile=MONITOR_PID) != running or
+                store.read() != committed):
+            raise RuntimeError("G03_BOUND_SUCCESSOR_PHYSICAL_OWNER_CHANGED")
+        print("G03_BOUND_SUCCESSOR_COMMIT=" + committed["manifest"]["root_sha256"])
+        raise SystemExit(0)
     if mode == "first-commit":
         route, committed, source, semantic = native_coordinate_original_prepared_fd9(op, raw)
         if (route != "first-enabled-committed" or store.read() != committed or
@@ -398,11 +500,21 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
     raise SystemExit(69)
 '''
     pinned = call(["/bin/sh", "-c", shell, "g03-bound-native", op,
-                   child, "first-commit" if first_commit else (
-                       "cold" if cold else ("stopped" if stopped else "running"))],
-                  locked=True, timeout=300 if first_commit else 180)
+                   child, "successor" if successor else ("first-commit" if first_commit else (
+                       "cold" if cold else ("stopped" if stopped else "running")))],
+                  locked=True, timeout=300 if first_commit or successor else 180)
     record = json.loads(WAL.read_bytes())
     root = Path("/var/db/zapret2/shared-work") / op / "manifest.json"
+    if successor:
+        saved = json.loads(call([PHP, str(script / "shared_apply_config.php"), "saved",
+                                 op, "strategies"], locked=True))
+        status = subprocess.run([SERVICE, "status"], capture_output=True,
+                                text=True, timeout=30)
+        saved_list = ET.fromstring(CONFIG.read_bytes()).findtext("./OPNsense/Zapret/hostlist/youtubedomains") or ""
+        verify_successor_commit(record, previous, op, pinned, root, original,
+                                snapshot(), saved, status, saved_list, expected_list)
+        print("G03_S10_SUCCESSOR=PASS_REAL_TWO_BOUND_COMMITS_WITHOUT_RESTART", flush=True)
+        return
     if first_commit:
         saved = json.loads(call([PHP, str(script / "shared_apply_config.php"), "saved",
                                  op, "strategies"], locked=True))
@@ -470,6 +582,11 @@ def pristine_cold_native_main(*, first_commit=False):
              hashlib.sha256(engine.read_bytes()).hexdigest() == engine_sha and
              release.read_bytes() == release_bytes,
              "G03_PRISTINE_FIRST_COMMIT_OWNER_DRIFT")
+        # Same disposable guest and genuine predecessor; no journal reset.
+        bound_manifest_main(successor=True)
+        need(hashlib.sha256(engine.read_bytes()).hexdigest() == engine_sha and
+             release.read_bytes() == release_bytes,
+             "G03_BOUND_SUCCESSOR_ENGINE_PROVENANCE_DRIFT")
         return
     need(final.get("phase") == "restored" and "previous" not in final and
          "previous_manifest" not in final and isinstance(final.get("manifest"), dict) and
