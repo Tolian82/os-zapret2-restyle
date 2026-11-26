@@ -985,18 +985,23 @@ def _read_pinned_effective(*, detail: dict, binding: dict, parent: Path,
             service.get("target_mode") != mode or
             binding["schema"] != (2 if mode == "auto" and saved.enabled else 1)):
         raise OriginalSourceGateRefused("S10_PINNED_MODEL_MISMATCH")
-    # The original template's heredoc is loaded by shell command
-    # substitution; it strips trailing LF. The original builder then
-    # writes one LF. The portable original loader can preserve trailing LF.
-    # Permit ONLY that insignificant trailing-LF difference from the sealed
-    # model; never trust unsealed traffic.input as independent provenance.
+    # A committed predecessor must not depend on unsealed builder
+    # intermediates that can be removed after the original Apply. The
+    # exact pinned seal authenticates candidate.xml. Reproduce the original
+    # shell heredoc's trailing-LF normalization from that sealed model,
+    # then compare the resulting S08d identity to the immutable root below.
+    # If traffic.input still exists, it must agree; never use it as
+    # independent provenance or fall back from a mismatching input.
     strategy = model["strategy"].get("trafficargs")
     if type(strategy) is not str:
         raise OriginalSourceGateRefused("S10_PINNED_STRATEGY_MISSING")
-    traffic = _read(work / "traffic.input", owner_uid, 262145)
-    if (not traffic.endswith(b"\n") or
-            traffic.rstrip(b"\n") != strategy.encode("utf-8").rstrip(b"\n")):
-        raise OriginalSourceGateRefused("S10_PINNED_STRATEGY_MISMATCH")
+    traffic = strategy.encode("utf-8").rstrip(b"\n") + b"\n"
+    intermediate = work / "traffic.input"
+    if intermediate.exists() or intermediate.is_symlink():
+        observed_traffic = _read(intermediate, owner_uid, 262145)
+        if (not observed_traffic.endswith(b"\n") or
+                observed_traffic.rstrip(b"\n") != traffic.rstrip(b"\n")):
+            raise OriginalSourceGateRefused("S10_PINNED_STRATEGY_MISMATCH")
     targets = compile_target_profiles(saved, traffic, parse_original_policy(
         _read(sources / "target_mode.sh", owner_uid, 128 * 1024)))
     storage = parse_original_storage(

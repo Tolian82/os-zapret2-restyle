@@ -1451,6 +1451,25 @@ shared_apply_execute_service()
     _shared_apply_fields=$(printf "%s\n" "$_shared_apply_preview" |
         shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
     _shared_apply_enabled="$_shared_apply_mode"
+    # The combined original Apply now retains the exact generator scalars.
+    # Recheck their parity against the sealed release and freshly read
+    # Config candidate BEFORE runtime probing, retirement or journal writes.
+    # A standalone legacy build/execute has no same-shell receipt and still
+    # follows its existing unbound fence; this check grants no activation.
+    if [ "${_shared_prepare_receipt:-}" = "prepared-id=$_shared_apply_id" ]; then
+        if [ -f "$_shared_apply_root/release/auto-detect-source-map.json" ]; then
+            shared_apply_original_source_gate "$_shared_apply_id" \
+                "$_shared_apply_candidate" --sealed || {
+                printf '%s\n' preflight-rejected=seal
+                return 0
+            }
+        else
+            shared_apply_original_source_gate "$_shared_apply_id" --sealed || {
+                printf '%s\n' preflight-rejected=seal
+                return 0
+            }
+        fi
+    fi
     if [ "$_shared_found_scope" = found ] &&
        ! launcher_is_running "$CHILD_PIDFILE" &&
        [ "${3:-}" != after-retirement ]; then
@@ -1876,11 +1895,14 @@ shared_apply_run_after_found_retirement()
 {
     [ "$#" -eq 1 ] || return 64
     _found_old_owner="$1"
-    _found_rebuilt=$(
-        _shared_found_rebuild_running=1
-        shared_apply_build_service "$_shared_run_encoded"
-    ) || _found_rebuilt=
-    _found_new_receipt=$(printf '%s\n' "$_found_rebuilt" | tail -n 1)
+    # Rebuild in this same FD9 shell as the subsequent execute. The
+    # after-retirement build still has its original scoped mode override.
+    if _shared_found_rebuild_running=1 shared_apply_build_service \
+        "$_shared_run_encoded" >/dev/null; then
+        _found_new_receipt="${_shared_build_receipt:-}"
+    else
+        _found_new_receipt=
+    fi
     case "$_found_new_receipt" in
         prepared-id=*)
             _found_new_result=$(shared_apply_execute_service "${_found_new_receipt#prepared-id=}" \
@@ -2089,8 +2111,11 @@ shared_apply_run_service()
         fi
     fi
     preflight_shared_apply_journal common-apply || return 69
-    _shared_run_report=$(shared_apply_build_service "$_shared_run_encoded") || return $?
-    _shared_run_receipt=$(printf "%s\n" "$_shared_run_report" | tail -n 1)
+    # Do not put the original producer in a command-substitution subshell:
+    # its loaded scalars are the same-source input for the final FD9 gate.
+    # The build helper returns its bounded receipt separately from stdout.
+    shared_apply_build_service "$_shared_run_encoded" >/dev/null || return $?
+    _shared_run_receipt="${_shared_build_receipt:-}"
     case "$_shared_run_receipt" in
         preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal|preflight-rejected=found-intent|preflight-rejected=found-intent-config-changed|preflight-rejected=found-intent-upload-*|preflight-rejected=found-batch|preflight-rejected=found-youtube-line-*|preflight-rejected=found-user-line-*|preflight-rejected=found-auto-line-*)
             # Nothing reached shared_apply_execute_service: no Config save,
@@ -2112,6 +2137,8 @@ shared_apply_run_service()
 # entire detached shared runtime. No kernel, Config save, or engine changes.
 shared_apply_build_service()
 {
+    _shared_build_receipt=
+    _shared_prepare_receipt=
     [ "$#" -eq 1 ] || return 64
     case "$1" in
         ""|*[!A-Za-z0-9_-]*) return 64 ;;
@@ -2124,7 +2151,8 @@ shared_apply_build_service()
     case "$_shared_stage_result" in
         prepared-id=*) _shared_stage_id="${_shared_stage_result#prepared-id=}" ;;
         preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=found-intent|preflight-rejected=found-intent-config-changed|preflight-rejected=found-intent-upload-*|preflight-rejected=found-batch|preflight-rejected=found-youtube-line-*|preflight-rejected=found-user-line-*|preflight-rejected=found-auto-line-*)
-            printf '%s\n' "$_shared_stage_result"
+            _shared_build_receipt="$_shared_stage_result"
+            printf '%s\n' "$_shared_build_receipt"
             return 0
             ;;
         *) return 69 ;;
@@ -2133,15 +2161,15 @@ shared_apply_build_service()
         *[!a-f0-9]*|"") return 69 ;;
     esac
     [ "${#_shared_stage_id}" -eq 32 ] || return 69
-    _shared_build_result=$(shared_apply_prepare_service "$_shared_stage_id") || return $?
-    _shared_build_last=$(printf '%s\n' "$_shared_build_result" | tail -n 1)
-    case "$_shared_build_last" in
+    shared_apply_prepare_service "$_shared_stage_id" >/dev/null || return $?
+    case "${_shared_prepare_receipt:-}" in
         preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal)
-            printf '%s\n' "$_shared_build_last"
-            return 0
+            _shared_build_receipt="$_shared_prepare_receipt"
             ;;
+        "prepared-id=$_shared_stage_id") _shared_build_receipt="$_shared_prepare_receipt" ;;
+        *) return 69 ;;
     esac
-    printf "prepared-id=%s\n" "$_shared_stage_id"
+    printf '%s\n' "$_shared_build_receipt"
 }
 # Finalize only the public runtime root before sealing this private FD9 bundle.
 # The parent shared-work directory, candidate.xml and plan remain root-only.
@@ -2195,6 +2223,7 @@ shared_apply_original_source_gate()
 # shared-work directory; no arbitrary file paths can reach this command.
 shared_apply_prepare_service()
 {
+    _shared_prepare_receipt=
     [ "$#" -eq 1 ] || return 64
     case "$1" in
         *[!a-f0-9]*|"") return 64 ;;
@@ -2205,7 +2234,8 @@ shared_apply_prepare_service()
     _shared_work="/var/db/zapret2/shared-work/$1"
     [ -d "$_shared_work" ] && [ ! -L "$_shared_work" ] || return 69
     "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_render.py" render "$1" || {
-        printf '%s\n' preflight-rejected=render
+        _shared_prepare_receipt=preflight-rejected=render
+        printf '%s\n' "$_shared_prepare_receipt"
         return 0
     }
     _shared_template="$_shared_work/templates/usr/local/etc/zapret2/zapret.conf"
@@ -2220,20 +2250,26 @@ shared_apply_prepare_service()
         elif has("found_intent") or has("found_batch") then "invalid"
         else "ordinary" end
     ' "$_shared_work/plan.json") || {
-        printf '%s\n' preflight-rejected=runtime-build
+        _shared_prepare_receipt=preflight-rejected=runtime-build
+        printf '%s\n' "$_shared_prepare_receipt"
         return 0
     }
     _shared_found_build_id=
     case "$_shared_found_build_scope" in
         planned) _shared_found_build_id="$1" ;;
         ordinary) ;;
-        *) printf '%s\n' preflight-rejected=runtime-build; return 0 ;;
+        *)
+            _shared_prepare_receipt=preflight-rejected=runtime-build
+            printf '%s\n' "$_shared_prepare_receipt"
+            return 0
+            ;;
     esac
     orchestrator_build_release \
         "$_shared_template" "$ZAPRET_DIR" "$ACTIVE_DIR" \
         "$_shared_work" "$_shared_work/release" "$STAGE_FILE" \
         shared-candidate "$_shared_work/candidate.xml" "$_shared_found_build_id" || {
-        printf '%s\n' preflight-rejected=runtime-build
+        _shared_prepare_receipt=preflight-rejected=runtime-build
+        printf '%s\n' "$_shared_prepare_receipt"
         return 0
     }
     # The original FD9 and native PHP candidate must agree BEFORE seal.
@@ -2247,12 +2283,14 @@ shared_apply_prepare_service()
         _shared_auto_page=$(/usr/local/bin/jq -er \
             '.page | select(.=="voice" or .=="strategies")' \
             "$_shared_work/plan.json") || {
-            printf '%s\n' preflight-rejected=runtime-build
+            _shared_prepare_receipt=preflight-rejected=runtime-build
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
         _shared_auto_preflight=$(shared_apply_native_config preflight \
             "$1" "$_shared_auto_page") || {
-            printf '%s\n' preflight-rejected=runtime-build
+            _shared_prepare_receipt=preflight-rejected=runtime-build
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
         _shared_auto_mode=$(printf "%s\n" "$_shared_auto_preflight" |
@@ -2264,7 +2302,8 @@ shared_apply_prepare_service()
         # that exact identity BEFORE any schema2/schema3 promotion or seal.
         shared_apply_original_source_gate "$1" "$_shared_auto_digest" || {
             orchestrator_fail_stage "$STAGE_FILE" 8 8 source-gate "${_shared_original_gate_reason:-UNCLASSIFIED_PARITY_REFUSAL}" || return 69
-            printf '%s\n' preflight-rejected=runtime-build
+            _shared_prepare_receipt=preflight-rejected=runtime-build
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
         if [ "$_shared_found_build_scope" = planned ] &&
@@ -2281,14 +2320,16 @@ shared_apply_prepare_service()
             _shared_target_mode=$(/usr/local/bin/jq -er \
                 '.mode | select(.=="auto" or .=="list" or .=="all")' \
                 "$_shared_work/release/auto-detect-source-map.json") || {
-                printf '%s\n' preflight-rejected=runtime-build
+                _shared_prepare_receipt=preflight-rejected=runtime-build
+                printf '%s\n' "$_shared_prepare_receipt"
                 return 0
             }
             if [ "$_shared_target_mode" = auto ]; then
                 _shared_learning_preflight=$("$PYTHON_RUNTIME" \
                     "$BACKEND_DIR/auto_detect_origin_map.py" preflight-learning \
                     "$_shared_work" "$_shared_auto_digest") || {
-                    printf '%s\n' preflight-rejected=runtime-build
+                    _shared_prepare_receipt=preflight-rejected=runtime-build
+                    printf '%s\n' "$_shared_prepare_receipt"
                     return 0
                 }
                 # No eligible per-profile HOSTLIST means no learning epoch.
@@ -2299,14 +2340,16 @@ shared_apply_prepare_service()
                         .evidence == "TZ6V4_ORIGINAL_FD9_LEARNING_PREFLIGHT_NONACTIVATING") |
                      .learning_native_numbers | select(type == "array" and length > 0 and length <= 255)' \
                     >/dev/null; then
-                    printf '%s\n' preflight-rejected=runtime-build
+                    _shared_prepare_receipt=preflight-rejected=runtime-build
+                    printf '%s\n' "$_shared_prepare_receipt"
                     return 0
                 fi
                 if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
                     promote-learning "$_shared_work" "$_shared_auto_digest" >/dev/null ||
                    ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
                     verify-learning-active "$_shared_work" "$_shared_auto_digest" >/dev/null; then
-                    printf '%s\n' preflight-rejected=runtime-build
+                    _shared_prepare_receipt=preflight-rejected=runtime-build
+                    printf '%s\n' "$_shared_prepare_receipt"
                     return 0
                 fi
             else
@@ -2316,7 +2359,8 @@ shared_apply_prepare_service()
                     preview "$_shared_work" "$_shared_auto_digest" >/dev/null ||
                    ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
                     promote "$_shared_work" "$_shared_auto_digest" >/dev/null; then
-                    printf '%s\n' preflight-rejected=runtime-build
+                    _shared_prepare_receipt=preflight-rejected=runtime-build
+                    printf '%s\n' "$_shared_prepare_receipt"
                     return 0
                 fi
             fi
@@ -2326,7 +2370,8 @@ shared_apply_prepare_service()
         # no synthetic candidate digest. Same single preseal read-only gate.
         shared_apply_original_source_gate "$1" || {
             orchestrator_fail_stage "$STAGE_FILE" 8 8 source-gate "${_shared_original_gate_reason:-UNCLASSIFIED_PARITY_REFUSAL}" || return 69
-            printf '%s\n' preflight-rejected=runtime-build
+            _shared_prepare_receipt=preflight-rejected=runtime-build
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
     fi
@@ -2334,11 +2379,13 @@ shared_apply_prepare_service()
     # The native shared candidate needs the same normalization BEFORE SEAL.
     shared_apply_finalize_release_modes "$_shared_work/release" || {
         orchestrator_fail_stage "$STAGE_FILE" 8 8 release-modes VALIDATION_FAILED || return 69
-        printf '%s\n' preflight-rejected=runtime-build
+        _shared_prepare_receipt=preflight-rejected=runtime-build
+        printf '%s\n' "$_shared_prepare_receipt"
         return 0
     }
     shared_apply_bundle_service seal "$1" || {
-        printf '%s\n' preflight-rejected=seal
+        _shared_prepare_receipt=preflight-rejected=seal
+        printf '%s\n' "$_shared_prepare_receipt"
         return 0
     }
     # S10c2b3a: verify the SAME source + final ORIGINAL native refs AFTER
@@ -2346,15 +2393,20 @@ shared_apply_prepare_service()
     # candidate to the existing FD9 Apply. No journal, Config or IPFW write.
     if [ -f "$_shared_work/release/auto-detect-source-map.json" ]; then
         shared_apply_original_source_gate "$1" "$_shared_auto_digest" --sealed || {
-            printf '%s\n' preflight-rejected=seal
+            _shared_prepare_receipt=preflight-rejected=seal
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
     else
         shared_apply_original_source_gate "$1" --sealed || {
-            printf '%s\n' preflight-rejected=seal
+            _shared_prepare_receipt=preflight-rejected=seal
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
     fi
+    # In-memory receipt of this very producer, never a physical permit.
+    # Standalone prepare retains its old stdout contract.
+    _shared_prepare_receipt="prepared-id=$1"
 }
 # Original common owner is defined by the one shared Apply journal. Before
 # Remove Stop, independently attest saved Config, sealed release, exact active

@@ -601,6 +601,10 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     finally:
                         traffic.write_bytes(original_traffic)
                     self.assertEqual(gate._read_pinned_effective(**pinned), old)
+                    # Original producer inputs are needed at creation,
+                    # not a durable second configuration for the old root.
+                    traffic.unlink()
+                    self.assertEqual(gate._read_pinned_effective(**pinned), old)
                     self.assertEqual(receipt.authorization, "NONE")
                     self.assertFalse(receipt.physical_transition_allowed)
                     with self.assertRaises(OriginalSourceGateRefused):
