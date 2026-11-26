@@ -269,6 +269,37 @@ class OriginalQuiescentTests(unittest.TestCase):
             self.assertIn(unittest.mock.call(19000, 19099, allow_mutations=True),
                           native.call_args_list)
 
+    def test_first_saved_disabled_checkpoint_retains_exact_observation(self):
+        import tempfile
+
+        record = {**self.f.original.read(), "phase": "activated"}
+        store = Mock(read=Mock(return_value=record))
+        observation = (("candidate", 1, 2), None, "native-managed-kernel-empty")
+        def advance(phase, current, attest):
+            self.assertEqual(store.read(), current)
+            if not attest():
+                raise gate.QuiescentPreimageRefused("drift")
+            result = {**current, "phase": phase}
+            store.read.return_value = result
+            return result
+
+        store._advance_bound_ordinary.side_effect = advance
+        with tempfile.TemporaryFile() as config, ExitStack() as stack:
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            layout = stack.enter_context(patch.object(gate, "_first_inert_recovery_layout",
+                return_value=observation))
+            def recover(current):
+                return gate._finish_first_saved_locked(store, current,
+                    config_fd=config.fileno(), config_digest=current["detail"]["candidate"])
+            layout.side_effect = [observation] * 4 + [(None, None, "changed")]
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                recover(record)
+            self.assertEqual(store.read(), {**record, "phase": "config-saved"})
+            layout.side_effect = None
+            self.assertEqual(recover(store.read()), {**record, "phase": "committed"})
+            self.assertTrue(all(call.kwargs["saved"] for call in layout.call_args_list))
+
     def test_real_bound_cold_root_with_actual_empty_manifest_check(self):
         self.cold()
         record = self.f.original.read()

@@ -411,7 +411,7 @@ final class SharedApplyConfigWorker
         $managedWrite = $mode === 'write-managed-handoff-locked';
         $joined = in_array($mode, ['finish-ordinary-restore-locked', 'recover-managed-config-locked',
             'begin-managed-config-save-locked', 'confirm-managed-config-save-locked',
-            'write-managed-handoff-locked'], true);
+            'write-managed-handoff-locked', 'recover-first-config-locked'], true);
         if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
                  !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
@@ -858,7 +858,7 @@ final class SharedApplyConfigWorker
         }
         if (count($argv) !== ($action === 'found-save' || $queueFd !== null ? 5 : 4) ||
             !in_array($action, ['preflight', 'save', 'saved', 'managed-save', 'managed-apply',
-                'ordinary-cold', 'ordinary-restore-finish', 'managed-save-recover', ...$foundActions], true) ||
+                'ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover', 'managed-save-recover', ...$foundActions], true) ||
             !in_array($argv[3], $found || in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply'], true)
                 ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
@@ -873,7 +873,7 @@ final class SharedApplyConfigWorker
             if ($queueFd !== null) {
                 $queueStream = self::openOriginalFoundQueue($queueFd);
             }
-            if ($found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish',
+            if ($found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover',
                 'save', 'saved', 'managed-save', 'managed-save-recover', 'managed-apply'], true)) {
                 // Core may repair unreadable Config from a backup on load.
                 // A recovery reader must not trigger such implicit mutation.
@@ -915,20 +915,21 @@ final class SharedApplyConfigWorker
                 ));
                 return 0;
             }
-            if (in_array($action, ['ordinary-restore-finish', 'managed-save-recover'], true)) {
+            if (in_array($action, ['ordinary-restore-finish', 'managed-save-recover', 'ordinary-first-recover'], true)) {
                 // The outer original FD9 caller borrowed P2a first if
                 // necessary. Keep Config locked during the SAME WAL fsync.
                 $recoverManaged = $action === 'managed-save-recover';
+                $recoverFirst = $action === 'ordinary-first-recover';
                 $config->lock();
                 try {
                     self::requireReadableConfig();
                     $image = self::classifyOrdinaryConfigImage($plan, $factory()->getNodes());
-                    $admitted = $recoverManaged ? ['base-image', 'candidate-image']
+                    $admitted = ($recoverManaged || $recoverFirst) ? ['base-image', 'candidate-image']
                         : ['base-image', 'base-equals-candidate'];
                     $recoverySha = null;
                     if (!in_array($image['image'], $admitted, true) ||
                         self::readPlan($argv[2], self::ROOT, 0, $recoverySha) !== $plan ||
-                        ($recoverManaged && $recoverySha !== $planSha) ||
+                        (($recoverManaged || $recoverFirst) && $recoverySha !== $planSha) ||
                         self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
                         throw new \RuntimeException('Original ordinary restore Config changed');
                     }
@@ -940,9 +941,20 @@ final class SharedApplyConfigWorker
                         $expected = $image['image'] === 'candidate-image'
                             ? 'original-managed-config-committed' : 'original-managed-config-restored';
                     }
+                    if ($recoverFirst) {
+                        if ($image['image'] === 'candidate-image' && $image['enabled'] !== '0') {
+                            throw new \RuntimeException('First saved running owner requires native proof');
+                        }
+                        $planWitness = self::configSaveWitness($plan, $planSha, $image['base'], $image['candidate']);
+                        $witness = hash('sha256', $planWitness . "\0" . $image['snapshot']);
+                        if ($image['image'] === 'candidate-image') {
+                            $expected = 'original-first-config-committed';
+                        }
+                    }
                     $reply = self::originalLockedFileEvidence(
-                        $config, $argv[2], $recoverManaged ? 'recover-managed-config-locked'
-                            : 'finish-ordinary-restore-locked', $witness, null, null, $queueStream);
+                        $config, $argv[2], $recoverFirst ? 'recover-first-config-locked'
+                            : ($recoverManaged ? 'recover-managed-config-locked'
+                                : 'finish-ordinary-restore-locked'), $witness, null, null, $queueStream);
                     if ($reply !== ['result'=>$expected, 'id'=>$argv[2]] ||
                         self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
                         throw new \RuntimeException('Original ordinary restore receipt changed');
@@ -1028,7 +1040,7 @@ final class SharedApplyConfigWorker
             fwrite(STDERR, "ERROR: native shared Config save uncertain; retain recovery evidence\n");
             return 70;
         } catch (\Throwable $error) {
-            if (in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply'], true)) {
+            if (in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply', 'ordinary-first-recover'], true)) {
                 // A joined child may have fsynced its phase before losing the receipt.
                 fwrite(STDERR, "ERROR: original managed Config outcome requires journal review\n");
                 return 70;

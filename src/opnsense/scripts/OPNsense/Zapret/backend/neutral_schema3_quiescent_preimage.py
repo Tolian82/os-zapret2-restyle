@@ -1134,18 +1134,20 @@ def _rollback_first_inert_kernel(record: dict, release: Path, *, config_fd: int,
 
 
 def _first_inert_recovery_layout(record: dict, *, config_fd: int,
-                                 config_digest: str, queue_fd: int | None, store) -> tuple:
+                                 config_digest: str, queue_fd: int | None, store,
+                                 saved: bool = False) -> tuple:
     """Observe an empty or fully attributed first inert tree, without mutation."""
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
     from neutral_root_stage import verify_original_operation_pins, _original_plan_matches
     from shared_apply_seal import verify_seal, _release_hash, _stat
 
     detail = record["detail"]
-    if (record["phase"] not in ("activating", "activated") or "previous" in record or
-            "previous_manifest" in record or "found" in record or
+    if (type(saved) is not bool or
+            record["phase"] not in (("activated", "config-saved") if saved else ("activating", "activated")) or
+            "previous" in record or "previous_manifest" in record or "found" in record or
             record.get("manifest", {}).get("schema") != 1 or
-            config_digest != detail["base"] or queue_fd is not None or
-            (record["phase"] == "activated" and detail["base"] == detail["candidate"])):
+            config_digest != detail["candidate" if saved else "base"] or queue_fd is not None or
+            ((saved or record["phase"] == "activated") and detail["base"] == detail["candidate"])):
         raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SCOPE_REQUIRED")
     require_lifecycle_lock()
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
@@ -1158,6 +1160,13 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
             journal={"detail": detail}, owner_uid=0) or
             inspect_inert_release(release, owner_uid=0) != "inactive"):
         raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SOURCE_CHANGED")
+    if saved:
+        import json
+        from neutral_root_stage import _verify_original_pinned_root
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=record["manifest"], parent=WORK, owner_uid=0))
+        if root["service"]["enabled"] is not False:
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_DISABLED_REQUIRED")
     wanted = verify_seal(work, owner=0)["sha256"]["release"]
     active = COMMON_ACTIVE
     parent, name = active.parent, active.name
@@ -1188,8 +1197,13 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
     if (staged is not None and (record["phase"] != "activating" or
             (live is not None and live[0] != "empty"))):
         raise QuiescentPreimageRefused("FIRST_BOUND_TREE_LAYOUT_REFUSED")
-    kernel = _first_inert_kernel_state(record, release,
-        installed=live is not None and live[0] == "candidate" and staged is None)
+    if saved:
+        if live is None or live[0] != "candidate" or staged is not None:
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_INSTALLED_REQUIRED")
+        kernel = _empty_kernel(release)
+    else:
+        kernel = _first_inert_kernel_state(record, release,
+            installed=live is not None and live[0] == "candidate" and staged is None)
     _zero_processes(pidfiles)
     if (image(active), image(stage)) != first:
         raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
@@ -1252,6 +1266,71 @@ def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
     if result != {**record, "phase": "restored"} or store.read() != result:
         raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_READBACK_REQUIRED")
     return result
+
+
+def _finish_first_saved_locked(store, record: dict, *, config_fd: int,
+                               config_digest: str) -> dict:
+    """Recover a distinct saved disabled first candidate, without activation."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+
+    def observe(current):
+        return _first_inert_recovery_layout(current, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=None, store=store, saved=True)
+
+    first = observe(record)
+    if observe(record) != first:
+        raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_IMAGE_CHANGED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    os.fsync(config_fd)
+    current = record
+    if current["phase"] == "activated":
+        current = store._advance_bound_ordinary("config-saved", current,
+            lambda: observe(record) == first and observe(record) == first)
+        if current != {**record, "phase": "config-saved"} or store.read() != current:
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_READBACK_REQUIRED")
+    result = store._advance_bound_ordinary("committed", current,
+        lambda: observe(current) == first and observe(current) == first)
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if result != {**record, "phase": "committed"} or store.read() != result:
+        raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_READBACK_REQUIRED")
+    return result
+
+
+def finish_first_config_recovery_locked(operation: str, witness_sha256: str, *,
+                                         config_fd: int) -> dict:
+    """Classify the exact sealed plan and saved image under original FD4."""
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import DIGEST, OP_ID, _config_observation_witness
+    from shared_apply_seal import verify_seal
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(witness_sha256) is not str or not DIGEST.fullmatch(witness_sha256) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record["detail"]["id"] != operation or
+            record["phase"] not in ("activated", "config-saved") or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 1):
+        raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_OWNER_REQUIRED")
+    detail = record["detail"]
+    base, candidate = detail["base"], detail["candidate"]
+    if base == candidate:
+        raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_AMBIGUOUS_IMAGE")
+    plan_sha = verify_seal(WORK / operation, owner=0)["sha256"]["plan.json"]
+    if witness_sha256 == _config_observation_witness(detail, plan_sha, candidate):
+        _finish_first_saved_locked(store, record, config_fd=config_fd, config_digest=candidate)
+        return {"result": "original-first-config-committed", "id": operation}
+    if (record["phase"] == "activated" and
+            witness_sha256 == _config_observation_witness(detail, plan_sha, base)):
+        return finish_bound_cold_restore_locked(operation, base, config_fd=config_fd)
+    raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_IMAGE_REFUSED")
 
 
 def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
@@ -1371,15 +1450,18 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
     require_lifecycle_lock()
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
     if (type(record) is not dict or store.read() != record or
-            record.get("phase") not in ("activating", "activated", MANAGED_WRITING, MANAGED_CONFIG_SAVING) or
+            record.get("phase") not in ("activating", "activated", "config-saved", MANAGED_WRITING, MANAGED_CONFIG_SAVING) or
             "found" in record or record.get("manifest", {}).get("schema") != 1 or
+            (record["phase"] == "config-saved" and "previous" in record) or
             ("previous" in record and record["previous"]["candidate"] != record["detail"]["base"]) or
-            ("previous" not in record and (record["phase"] not in ("activating", "activated") or
+            ("previous" not in record and (record["phase"] not in ("activating", "activated", "config-saved") or
                                            "previous_manifest" in record))):
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
     detail = record["detail"]
     recover_save = record["phase"] == MANAGED_CONFIG_SAVING
-    action = "managed-save-recover" if recover_save else "ordinary-restore-finish"
+    first_save = "previous" not in record and record["phase"] in ("activated", "config-saved")
+    action = ("ordinary-first-recover" if first_save else
+              "managed-save-recover" if recover_save else "ordinary-restore-finish")
     command = ["/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
                action, detail["id"], detail["page"]]
 
@@ -1402,11 +1484,13 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
             raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_RECEIPT_REQUIRED")
         receipt = json.loads(reply.stdout)
         phase = "restored"
-        if recover_save and receipt == {"result": "original-managed-config-committed", "id": detail["id"]}:
+        if ((recover_save and receipt == {"result": "original-managed-config-committed", "id": detail["id"]}) or
+                (first_save and receipt == {"result": "original-first-config-committed", "id": detail["id"]})):
             phase = "committed"
         else:
             restored = "original-managed-config-restored" if recover_save else "original-bound-cold-restored"
-            if receipt != {"result": restored, "id": detail["id"]}:
+            if (receipt != {"result": restored, "id": detail["id"]} or
+                    record["phase"] == "config-saved"):
                 raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_RECEIPT_REQUIRED")
         result = store.read()
         expected = {**record, "phase": phase}
