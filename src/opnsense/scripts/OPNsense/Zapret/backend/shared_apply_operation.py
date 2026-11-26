@@ -1951,6 +1951,7 @@ def main(argv: list[str]) -> int:
                      bool(OP_ID.fullmatch(argv[2])))
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
+    first_pristine = len(argv) == 3 and argv[1] == "recover-first-activating" and bool(OP_ID.fullmatch(argv[2]))
     managed_recovery = len(argv) == 4 and argv[1] == "recover-managed" and all(
         OP_ID.fullmatch(value) for value in argv[2:4]
     )
@@ -1963,7 +1964,7 @@ def main(argv: list[str]) -> int:
     cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or managed_recovery or finish or pristine or cold_restore or native_gate_request):
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -2100,6 +2101,10 @@ def main(argv: list[str]) -> int:
             elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"])
+            elif (record["phase"] == "activating" and "previous" not in record and
+                    "found" not in record and record.get("manifest", {}).get("schema") == 1):
+                detail = record["detail"]
+                print("activating-first " + detail["id"] + " " + detail["page"])
             elif record["phase"] in ("activating", "activated", MANAGED_WRITING,
                                      MANAGED_CONFIG_SAVING) and "previous" in record:
                 detail, previous = record["detail"], record["previous"]
@@ -2108,6 +2113,20 @@ def main(argv: list[str]) -> int:
             else:
                 # Never make an incomplete operation look like no owner.
                 raise SharedOperationError("unfinished common Apply blocks native boot")
+        elif first_pristine:
+            from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
+
+            store = SharedApplyOperation(owner=0)
+            record = store.read()
+            if (record is None or record["phase"] != "activating" or
+                    record["detail"]["id"] != argv[2] or "previous" in record or
+                    "previous_manifest" in record or "found" in record or
+                    record.get("manifest", {}).get("schema") != 1):
+                raise SharedOperationError("first activating recovery owner mismatch")
+            result = native_finish_bound_cold_restore(record)
+            if result != {**record, "phase": "restored"} or store.read() != result:
+                raise SharedOperationError("first activating recovery readback mismatch")
+            print("first-activating-restored=" + argv[2])
         elif managed_recovery:
             from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
 

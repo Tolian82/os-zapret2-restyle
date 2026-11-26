@@ -89,6 +89,60 @@ class OriginalQuiescentTests(unittest.TestCase):
             os.chown(lock, 0, 0)
         lock.chmod(0o600)
 
+    def test_first_activating_pristine_restore_requires_exact_empty_state(self):
+        self.cold()
+        record = self.f.original.read()
+        # The native first-bound case has an inert schema1 candidate.
+        record = {**record, "phase": "activating",
+                  "manifest": {**record["manifest"], "schema": 1}}
+        store = Mock(read=Mock(return_value=record))
+        def advance(phase, expected, attest):
+            self.assertEqual(expected, record)
+            if not attest():
+                raise gate.QuiescentPreimageRefused("drift")
+            result = {**record, "phase": phase}
+            store.read.return_value = result
+            return result
+        store._advance_bound_ordinary.side_effect = advance
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate, "WORK", self.f.parent))
+            stack.enter_context(patch.object(gate, "COMMON_ACTIVE", self.active))
+            stack.enter_context(patch.object(gate, "PRODUCER_ROOT", self.producer))
+            stack.enter_context(patch.object(gate, "EPOCH_ROOT", self.epochs))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            stack.enter_context(patch("neutral_root_stage._original_plan_matches", return_value=True))
+            stack.enter_context(patch.object(gate, "inspect_inert_release", return_value="inactive"))
+            # Root ownership and native process/kernel observations are substituted;
+            # actual disposable directories must still remain pristine.
+            cold = stack.enter_context(patch.object(gate, "_cold_files", side_effect=
+                lambda *args: [gate._safe_empty_directory(p, os.geteuid()) for p in args[:-1]]))
+            processes = stack.enter_context(patch.object(gate, "_zero_processes"))
+            kernel = stack.enter_context(patch.object(gate, "_empty_kernel", return_value="empty"))
+            def recover(**kw):
+                options = dict(config_fd=4, config_digest=record["detail"]["base"], queue_fd=None)
+                options.update(kw)
+                return gate._finish_first_pristine_locked(store, record, **options)
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                recover(config_digest="0" * 64)
+            self.active.mkdir()
+            (self.active / "foreign").touch()
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                recover()
+            shutil.rmtree(self.active)
+            processes.side_effect = gate.QuiescentPreimageRefused("live process")
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                recover()
+            processes.side_effect = None
+            kernel.side_effect = ("empty", "absent")
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                recover()
+            kernel.side_effect = None
+            self.assertEqual(store.read(), record)
+            self.assertEqual(recover(), {**record, "phase": "restored"})
+            self.assertGreaterEqual(cold.call_count, 4)
+
     def test_real_bound_cold_root_with_actual_empty_manifest_check(self):
         self.cold()
         record = self.f.original.read()

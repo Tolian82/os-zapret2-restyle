@@ -1081,6 +1081,57 @@ def _finish_managed_recovery_locked(store, record: dict, *, config_fd: int,
             active=active, attest=attest, saved_base=saved_image)
 
 
+def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
+                                  config_digest: str, queue_fd: int | None) -> dict:
+    """Close a first bound ACTIVATING only if its pristine preimage survives."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import verify_original_operation_pins, _original_plan_matches
+
+    detail = record["detail"]
+    if (record["phase"] != "activating" or "previous" in record or
+            "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 1 or
+            config_digest != detail["base"] or queue_fd is not None):
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SCOPE_REQUIRED")
+    work = WORK / detail["id"]
+    backups = COMMON_ACTIVE.with_name("runtime-v2-backups")
+    pidfiles = (CHILD_PID, MONITOR_PID, DAEMON_PID)
+
+    def observe():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if store.read() != record:
+            raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_OWNER_CHANGED")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        if (not _original_plan_matches(parent=WORK, generation=detail["id"],
+                journal={"detail": detail}, owner_uid=0) or
+                inspect_inert_release(work / "release", owner_uid=0) != "inactive"):
+            raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SOURCE_CHANGED")
+        _cold_files(COMMON_ACTIVE, backups, PRODUCER_ROOT, EPOCH_ROOT, 0)
+        _reject_cold_recovery_residue(COMMON_ACTIVE)
+        if any(item.name != detail["id"] for item in WORK.iterdir()):
+            raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_WORK_RESIDUE")
+        _zero_processes(pidfiles)
+        kernel = _empty_kernel(work / "release")
+        _zero_processes(pidfiles)
+        _cold_files(COMMON_ACTIVE, backups, PRODUCER_ROOT, EPOCH_ROOT, 0)
+        _reject_cold_recovery_residue(COMMON_ACTIVE)
+        if any(item.name != detail["id"] for item in WORK.iterdir()):
+            raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_WORK_RESIDUE")
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if store.read() != record:
+            raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_OWNER_CHANGED")
+        return kernel
+
+    def exact():
+        return observe() == observe()
+
+    result = store._advance_bound_ordinary("restored", record, exact)
+    if result != {**record, "phase": "restored"} or store.read() != result:
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_READBACK_REQUIRED")
+    return result
+
+
 def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
                                      config_fd: int, queue_fd: int | None = None) -> dict:
     """Original PHP owns the native Config lock through the restored fsync."""
@@ -1102,8 +1153,13 @@ def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
     if (type(record) is not dict or record["detail"]["id"] != operation or
             record["phase"] not in ("activating", "activated", MANAGED_WRITING) or
             "found" in record or record.get("manifest", {}).get("schema") != 1 or
-            record.get("previous", {}).get("candidate") != config_digest or
             record["detail"]["base"] != config_digest):
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
+    if "previous" not in record:
+        _finish_first_pristine_locked(store, record, config_fd=config_fd,
+                                     config_digest=config_digest, queue_fd=queue_fd)
+        return {"result": "original-bound-cold-restored", "id": operation}
+    if record["previous"]["candidate"] != config_digest:
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
 
     def exact():
@@ -1195,7 +1251,9 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
     if (type(record) is not dict or store.read() != record or
             record.get("phase") not in ("activating", "activated", MANAGED_WRITING, MANAGED_CONFIG_SAVING) or
             "found" in record or record.get("manifest", {}).get("schema") != 1 or
-            record.get("previous", {}).get("candidate") != record["detail"]["base"]):
+            ("previous" in record and record["previous"]["candidate"] != record["detail"]["base"]) or
+            ("previous" not in record and (record["phase"] != "activating" or
+                                           "previous_manifest" in record))):
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
     detail = record["detail"]
     recover_save = record["phase"] == MANAGED_CONFIG_SAVING
@@ -1236,6 +1294,9 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
         return result
 
     retired = record.get("previous_manifest", {}).get("schema") == 2
+    if "previous" not in record:
+        _safe_empty_directory(PRODUCER_ROOT, 0)
+        return invoke()
     if _present(PRODUCER_ROOT):
         info = PRODUCER_ROOT.lstat()
         if (not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022):
