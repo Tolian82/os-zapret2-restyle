@@ -203,7 +203,7 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         with self.assertRaisesRegex(AdapterFirewallError, "staging"):
             shared_firewall_action(live, "verify-staged", previous, desired)
         del live.tables[key]
-        with self.assertRaisesRegex(IPFWAdapterError, "missing shared IPFW rollback"):
+        with self.assertRaisesRegex(AdapterFirewallError, "missing shared IPFW rollback"):
             shared_firewall_action(live, "verify-staged", previous, desired)
         clean = FakeIPFW(previous["rules"], previous["tables"])
         shared_firewall_action(clean, "install", previous, desired)
@@ -211,6 +211,30 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         shared_firewall_action(clean, "commit", previous, desired)
         shared_firewall_action(clean, "verify", previous, desired)
 
+
+    def test_precommit_retired_voice_table_must_survive_until_config_save(self):
+        previous = fixture(("telegram", "91.108.0.0/16"),
+                           ("discord", "203.0.113.0/24"))
+        desired = fixture(("telegram", "91.108.13.10"))
+        retired = "zapret2_voice_discord"
+        live = FakeIPFW(previous["rules"], previous["tables"])
+        shared_firewall_action(live, "install", previous, desired)
+        shared_firewall_action(live, "verify-staged", previous, desired)
+        del live.tables[retired]
+        before = (deepcopy(live.rules), deepcopy(live.tables), list(live.ops))
+        for action in ("verify-staged", "rollback"):
+            with self.assertRaisesRegex(AdapterFirewallError, "missing shared IPFW rollback retired"):
+                shared_firewall_action(live, action, previous, desired)
+            self.assertEqual((live.rules, live.tables, live.ops), before)
+        # Partial cleanup after commit remains retryable; it must NOT be
+        # mistaken for a reversible pre-Config image.
+        shared_firewall_action(live, "verify-cleanup", previous, desired)
+        shared_firewall_action(live, "commit", previous, desired)
+        shared_firewall_action(live, "verify", previous, desired)
+        clean = FakeIPFW(previous["rules"], previous["tables"])
+        shared_firewall_action(clean, "install", previous, desired)
+        shared_firewall_action(clean, "rollback", previous, desired)
+        self.assertEqual((clean.rules, clean.tables), (previous["rules"], previous["tables"]))
 
     def test_rejected_native_rule_add_retains_first_typed_cause_after_rollback(self):
         from voice_ipfw_adapter import IPFWRuleAddRejected

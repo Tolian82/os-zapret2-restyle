@@ -253,10 +253,7 @@ def apply_transaction(adapter, previous: dict, desired: dict) -> None:
         # A successful command is not proof of the resulting kernel state.
         # Check rules, active tables and retained rollback contents together
         # before returning the precommit state to the common lifecycle.
-        plan_postcommit_cleanup(adapter, previous, desired)
-        for table in desired["tables"]:
-            if adapter.get_table(table + "_stage") is None:
-                raise VoiceFirewallError("missing retained IPFW rollback table")
+        verify_staged_state(adapter, previous, desired)
     except Exception as original:
         # Roll back rules first while active tables still exist.
         rollback_errors = []
@@ -310,12 +307,15 @@ def apply_transaction(adapter, previous: dict, desired: dict) -> None:
 
 
 
-def plan_postcommit_cleanup(adapter, previous: dict, desired: dict) -> list[tuple[str, str, list[str]]]:
+def plan_postcommit_cleanup(adapter, previous: dict, desired: dict, *,
+                            require_rollback: bool = False) -> list[tuple[str, str, list[str]]]:
     """Plan cleanup only for verified obsolete and stage tables, without touching IPFW.
 
     Call after installing desired rules AND a durable ownership commit.
     Failed/partial cleanup can be retried, but only with the caller-held
     lifecycle lock. An unknown table or orphan stage fails closed.
+    Before commit, require_rollback additionally requires ALL original
+    rollback tables, including the still-present disabled services.
     """
     rule_first, rule_last = checked_transition_range(adapter, previous, desired)
     if adapter.list_rules(rule_first, rule_last) != desired["rules"]:
@@ -335,6 +335,8 @@ def plan_postcommit_cleanup(adapter, previous: dict, desired: dict) -> list[tupl
             # After swap, stage contains old active contents. New table's
             # stage is empty. Already-cleaned stage is also valid on retry.
             allowed_stage = prior_tables.get(name, [])
+            if require_rollback and stage is None:
+                raise VoiceFirewallError("missing shared IPFW rollback stage table")
             if stage is not None and not table_contents_equal(stage, allowed_stage):
                 raise VoiceFirewallError(f"Voice staging table changed unexpectedly: {name}")
             if stage is not None:
@@ -342,6 +344,8 @@ def plan_postcommit_cleanup(adapter, previous: dict, desired: dict) -> list[tupl
         elif name in prior_tables:
             # A just-disabled service loses its rule immediately; its
             # previous table is removed only after durable ownership commit.
+            if require_rollback and active is None:
+                raise VoiceFirewallError("missing shared IPFW rollback retired table")
             if active is not None and not table_contents_equal(active, prior_tables[name]):
                 raise VoiceFirewallError(f"unowned retired Voice table: {name}")
             if stage is not None:
@@ -351,6 +355,11 @@ def plan_postcommit_cleanup(adapter, previous: dict, desired: dict) -> list[tupl
         elif active is not None or stage is not None:
             raise VoiceFirewallError(f"unexpected foreign Voice table: {name}")
     return steps
+
+
+def verify_staged_state(adapter, previous: dict, desired: dict) -> None:
+    """Exact reversible kernel image before saving Config or rolling back."""
+    plan_postcommit_cleanup(adapter, previous, desired, require_rollback=True)
 
 
 def rollback_uncommitted(adapter, previous: dict, desired: dict) -> None:
@@ -364,16 +373,10 @@ def rollback_uncommitted(adapter, previous: dict, desired: dict) -> None:
     # This validates the full installed desired rules, every Voice table,
     # the former contents of all swapped stages and any retired tables.
     # No mutation occurs if the live state does not match the journal.
-    plan_postcommit_cleanup(adapter, previous, desired)
+    verify_staged_state(adapter, previous, desired)
     rule_first, rule_last = checked_transition_range(adapter, previous, desired)
     if adapter.list_rules(rule_first, rule_last) != desired["rules"]:
         raise VoiceFirewallError("installed Voice cutover rules changed before rollback")
-    for name in desired["tables"]:
-        stage = name + "_stage"
-        if adapter.get_table(stage) is None:
-            raise VoiceFirewallError(
-                "missing prior Voice table snapshot; rollback requires manual review"
-            )
     try:
         for number in sorted(desired["rules"]):
             adapter.delete_rule(number)

@@ -29,7 +29,7 @@ from ipset_policy import IPSetError, parse_ipset
 from voice_firewall_transaction import (
     SERVICES, TABLE_PREFIX, VoiceFirewallError,
     prepare_desired, apply_transaction, rollback_uncommitted,
-    cleanup_committed, verify_prior_state, checked_transition_range,
+    cleanup_committed, verify_prior_state, checked_transition_range, verify_staged_state,
 )
 
 MAX_IPFW_OUTPUT = 2 * 1024 * 1024
@@ -731,11 +731,7 @@ def shared_firewall_action(adapter, action: str, previous: dict, desired: dict) 
         # The new rules are installed but old IPSET contents MUST survive in
         # stage tables until the native Config save succeeds. Final verify
         # intentionally rejects these uncommitted rollback artifacts.
-        from voice_firewall_transaction import plan_postcommit_cleanup
-        plan_postcommit_cleanup(adapter, previous, desired)
-        for name in desired["tables"]:
-            if adapter.get_table(name + "_stage") is None:
-                raise IPFWAdapterError("missing shared IPFW rollback stage table")
+        verify_staged_state(adapter, previous, desired)
     elif action == "verify":
         actions[action](adapter, desired, desired)
     elif action in actions:
