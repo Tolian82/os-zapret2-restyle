@@ -170,7 +170,8 @@ class OwnerGenerationTests(unittest.TestCase):
 
     def witness(self, *, epoch_finalizing_operation=None,
                 reviewed_operation=None, learning_schema3=False,
-                pending_found_record=None, bound_staged_record=None):
+                pending_found_record=None, pending_ordinary_record=None,
+                bound_staged_record=None):
         return owner_mod._attest_core(
             journal=self.journal, work_root=self.work_root, active=self.active,
             child_pidfile=self.child, monitor_pidfile=self.monitor,
@@ -178,6 +179,7 @@ class OwnerGenerationTests(unittest.TestCase):
             epoch_finalizing_operation=epoch_finalizing_operation,
             reviewed_operation=reviewed_operation,
             pending_found_record=pending_found_record,
+            pending_ordinary_record=pending_ordinary_record,
             bound_staged_record=bound_staged_record,
             learning_schema3=learning_schema3,
             argv_reader=lambda pid: [EXE, *self.ps.args.split(),
@@ -442,6 +444,28 @@ class OwnerGenerationTests(unittest.TestCase):
             wrong = {**pending, "detail": {**detail, "id": "9" * 32}}
             with self.assertRaises(owner_mod.GenerationRefused):
                 self.witness(learning_schema3=True, pending_found_record=wrong)
+            # Ordinary PREPARED may inspect the same old learning owner,
+            # including a schema1 (List/All) successor. No worker authority.
+            ordinary = {key: value for key, value in pending.items() if key != "found"}
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(learning_schema3=True, pending_ordinary_record=ordinary)
+            for schema in (1, 2):
+                current = {**ordinary, "manifest": {**ordinary["manifest"], "schema": schema}}
+                self._write(self.journal / "operation.json", json.dumps(current))
+                self.assertEqual(self.witness(learning_schema3=True,
+                                              pending_ordinary_record=current), confirmed)
+                for scope in ({}, {"pending_found_record": current},
+                              {"pending_ordinary_record": current, "pending_found_record": current},
+                              {"pending_ordinary_record": current, "bound_staged_record": current},
+                              {"pending_ordinary_record": current, "epoch_finalizing_operation": OP_ID},
+                              {"pending_ordinary_record": current, "reviewed_operation": OP_ID}):
+                    with self.assertRaises(owner_mod.GenerationRefused):
+                        self.witness(learning_schema3=True, **scope)
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    self.witness(pending_ordinary_record=current)
+                stale = {**current, "phase": "activated"}
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    self.witness(learning_schema3=True, pending_ordinary_record=stale)
             self._write(self.journal / "operation.json",
                         json.dumps(self.record) + "\n")
         with patch.object(owner_mod.sys, "platform", "linux"):
@@ -467,6 +491,58 @@ class OwnerGenerationTests(unittest.TestCase):
                         held.side_effect = RuntimeError("FD9_missing")
                         with self.assertRaises(RuntimeError):
                             owner_mod.attest_learning_running_generation()
+
+    def test_prepared_ordinary_learning_epoch_private_wrapper(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from auto_detect_epoch_receipts import _canonical
+        prior = {"id": OP_ID, "candidate": CANDIDATE}
+        record = {"phase": "prepared", "previous": prior}
+        proof = owner_mod.LearningGenerationProof(
+            owner_mod.OwnerToken(PID, START, EXE), OP_ID, OP_ID, CANDIDATE,
+            "c" * 64, "d" * 64, ())
+        epoch = {"generation": OP_ID, "files": []}
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(owner_mod.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(owner_mod.os, "geteuid", return_value=0))
+            held = stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            config = stack.enter_context(patch(
+                "auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            pins = stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            core = stack.enter_context(patch.object(owner_mod, "_attest_core", return_value=proof))
+            store = stack.enter_context(patch.object(owner_mod, "SharedApplyOperation",
+                return_value=Mock(read=Mock(return_value=record))))
+            receipts = stack.enter_context(patch("auto_detect_epoch_receipts.EpochReceipts"))
+            verify = receipts.return_value.verify_learning_stopped_epoch
+            verify.return_value = epoch
+            run = owner_mod.attest_prepared_ordinary_learning_predecessor
+            self.assertEqual(run(record, 4),
+                             (proof, hashlib.sha256(_canonical(epoch)).hexdigest()))
+            self.assertEqual(core.call_count, 2)
+            self.assertEqual(pins.call_count, 3)
+            self.assertEqual(held.call_count, 3)
+            self.assertEqual(config.call_count, 3)
+            self.assertEqual(core.call_args.kwargs["pending_ordinary_record"], record)
+            self.assertNotIn("pending_found_record", core.call_args.kwargs)
+            core.reset_mock()
+            for invalid, fd in ((record, 9), (record, 2), ({**record, "found": {}}, 4)):
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    run(invalid, fd)
+            core.assert_not_called()
+            with self.assertRaises(owner_mod.GenerationRefused):
+                owner_mod.attest_prepared_found_learning_predecessor(record, 4)
+            core.assert_not_called()
+            verify.side_effect = (epoch, {**epoch, "generation": "f" * 32})
+            with self.assertRaises(owner_mod.GenerationRefused):
+                run(record, 4)
+            verify.side_effect = None
+            pins.side_effect = (None, None, ValueError("pin changed"))
+            with self.assertRaises(owner_mod.GenerationRefused):
+                run(record, 4)
+            pins.side_effect = None
+            store.return_value.read.return_value = {**record, "phase": "activated"}
+            with self.assertRaises(owner_mod.GenerationRefused):
+                run(record, 4)
 
     def test_freebsd_kernel_argv_above_ps_limit_and_malformed_refusal(self):
         long_argv = [EXE, "--port=989", "--lua-init=@" + "x" * 2200,
