@@ -293,6 +293,17 @@ class OriginalDurableRootBinding(unittest.TestCase):
                     shared_work_parent=self.case.fx.parent)
             self.assertEqual(self.owner.read(), pending)
             root.write_bytes(original)
+            # Structurally valid wrong hashes pass JSON shape checks, but
+            # NEVER pass the independent physical pinned-root recovery.
+            substituted = {**pending, "previous_manifest": {
+                **bound["manifest"], "root_sha256": "f" * 64}}
+            self.owner._persist_record(substituted)
+            with self.assertRaisesRegex(SharedOperationError, "predecessor pin"):
+                self.owner.finish_found_prepared_pristine(
+                    fresh["id"], plan, lambda *_: True,
+                    shared_work_parent=self.case.fx.parent)
+            self.assertEqual(self.owner.read(), substituted)
+            self.owner._persist_record(pending)
             recovered = self.owner.finish_found_prepared_pristine(
                 fresh["id"], plan, lambda *_: True,
                 shared_work_parent=self.case.fx.parent)
@@ -303,7 +314,7 @@ class OriginalDurableRootBinding(unittest.TestCase):
                 {**pending, "phase": "found-config-saving"},
                 {**pending, "manifest": bound["manifest"]},
                 {**pending, "previous_manifest": {
-                    **bound["manifest"], "root_sha256": "f" * 64}},
+                    **bound["manifest"], "root_sha256": "f"}},
             ):
                 with self.subTest(phase=forged.get("phase")):
                     with self.assertRaises(SharedOperationError):
