@@ -483,6 +483,7 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
                  epoch_finalizing_operation: str | None = None,
                  reviewed_operation: str | None = None,
                  pending_found_record: dict | None = None,
+                 bound_staged_record: dict | None = None,
                  argv_reader=None,
                  learning_schema3: bool = False) -> GenerationProof | LearningGenerationProof:
     if argv_reader is None:
@@ -491,7 +492,16 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
             learning_schema3 and reviewed_operation is not None):
         raise GenerationRefused("unsupported_learning_reviewed_owner")
     record = SharedApplyOperation(journal, owner=owner_uid).read()
-    if pending_found_record is not None:
+    if bound_staged_record is not None:
+        # Private read-only candidate inspection, never a terminal/ACK owner.
+        if (pending_found_record is not None or reviewed_operation is not None or
+                epoch_finalizing_operation is not None or not learning_schema3 or
+                type(bound_staged_record) is not dict or record != bound_staged_record or
+                record["phase"] not in ("activating", "activated") or
+                "found" in record or record.get("manifest", {}).get("schema") != 2):
+            raise GenerationRefused("unqualified_bound_staged_learning_candidate")
+        owner = record["detail"]
+    elif pending_found_record is not None:
         # Only the private, original-FD9/FD4 Found comparison can inspect
         # a running PREPARED predecessor. Never make it a worker/ACK owner.
         if (reviewed_operation is not None or epoch_finalizing_operation is not None or
@@ -738,6 +748,31 @@ def attest_prepared_found_learning_predecessor(record: dict, config_fd: int) -> 
     except (OSError, ValueError, TypeError, KeyError, RuntimeError,
             subprocess.SubprocessError, ReceiptRefused) as exc:
         raise GenerationRefused("prepared_found_learning_epoch_not_attested") from exc
+
+
+def attest_bound_learning_staged_generation(record: dict, config_fd: int) -> LearningGenerationProof:
+    """Private FD9/FD4 staged candidate; no minute, epoch write or ACK permit."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from voice_ipfw_adapter import require_lifecycle_lock
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise GenerationRefused("native_bound_staged_fd9_fd4_required")
+    try:
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        proof = _attest_core(
+            journal=Path("/var/db/zapret2/shared-apply"), work_root=WORK,
+            active=COMMON_ACTIVE, child_pidfile=CHILD_PID,
+            monitor_pidfile=MONITOR_PID, runner=subprocess.run, owner_uid=0,
+            learning_schema3=True, bound_staged_record=record)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("bound_staged_learning_owner_required")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return proof
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError,
+            subprocess.SubprocessError):
+        raise GenerationRefused("bound_staged_learning_owner_refused") from None
 
 
 def attest_learning_epoch_finalizing_generation(operation_id: str, *,

@@ -466,7 +466,7 @@ class StagedQuiescentTests(unittest.TestCase):
         record = {"phase": "activating", "detail": {"id": generation, "base": base},
                   "manifest": {"schema": 1, "root_sha256": "c" * 64}}
         receipt = gate.StagedBoundRuntimeReceipt(generation, "c" * 64, base,
-            "d" * 64, None, None, "native-managed-kernel-empty")
+            "d" * 64, None, None, "native-managed-kernel-empty", base)
         def advance(phase, expected, attest):
             self.assertEqual((phase, expected), ("activated", record))
             if not attest():

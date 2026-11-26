@@ -713,6 +713,7 @@ class EpochReceipts:
             "files", "learning", "ack_authorized",
         }
         if (not isinstance(seed, dict) or set(seed) != required or
+                seed_raw != _canonical(seed) or
                 type(seed["schema"]) is not int or seed["schema"] != 3 or
                 seed["kind"] != "original-fd9-learning-pretraffic-zero" or
                 seed["generation"] != proof.generation or
@@ -783,16 +784,15 @@ class EpochReceipts:
                 raise ReceiptRefused("learning_epoch_cursor_not_original_zero")
         return folder, seed, seed_raw
 
-    def finish_learning_running(
+    def _attest_learning_running_seed(
         self, proof: LearningGenerationProof, queue: DurableInbox, *,
-        workspace: Path, attest,
-    ) -> dict:
-        """Durably finish *one* schema3 epoch; never grants minute/P2 ACK.
+        workspace: Path, attest, unfinished: bool = False,
+    ) -> tuple[Path, dict]:
+        """One original live seed verifier, before either Config or epoch commit.
 
-        A genuine future original FD9/P2c callback must independently
-        verify shared Apply owner, active release, one actual PID/birth,
-        full kernel argv and monitor, exactly as legacy _attest_core.
-        No such callable is connected to production in this patch.
+        Borrow the caller's existing P2a scope. Never create an epoch here.
+        The native owner callback is independently rechecked around the
+        original immutable pretraffic and all current producer identities.
         """
         from auto_detect_fd import OwnerToken
         from voice_live_inspect import CHILD_EXEC
@@ -856,16 +856,42 @@ class EpochReceipts:
                 "learning": seed["learning"],
                 "ack_authorized": False,
             }
-            if (folder / "cursor-chain-v2").exists():
+            # Before Config commit only the original zero receipt may exist.
+            # During finalization allow an exact already-written epoch for
+            # idempotent retry, never cursor/retirement residue.
+            allowed = {"pretraffic.json"} if unfinished else {"pretraffic.json", "epoch.json"}
+            if set(os.listdir(folder)) - allowed:
                 raise ReceiptRefused("learning_running_cursor_chain_already_exists")
-            _write_once(folder, "epoch.json", _canonical(data), self.uid)
-            return data
+            if (_read(folder / "pretraffic.json", self.uid) != seed_raw or
+                    queue.segments() or attest() != proof):
+                raise ReceiptRefused("learning_running_seed_changed")
+            return folder, data
         except ReceiptRefused:
             raise
         except (OSError, ValueError, TypeError, KeyError, QueueSafetyError,
                 GenerationRefused, DebugWindowRefused,
                 SharedBundleError) as exc:
             raise ReceiptRefused("learning_running_epoch_not_attested") from exc
+
+
+    def verify_learning_running_pretraffic(
+        self, proof: LearningGenerationProof, queue: DurableInbox, *,
+        workspace: Path, attest,
+    ) -> str:
+        """Read-only pre-Config proof; never write epoch, cursor or ACK."""
+        _, data = self._attest_learning_running_seed(
+            proof, queue, workspace=workspace, attest=attest, unfinished=True)
+        return data["pretraffic_sha256"]
+
+    def finish_learning_running(
+        self, proof: LearningGenerationProof, queue: DurableInbox, *,
+        workspace: Path, attest,
+    ) -> dict:
+        """Finish the same original epoch, only after native saved-Config phase."""
+        folder, data = self._attest_learning_running_seed(
+            proof, queue, workspace=workspace, attest=attest)
+        _write_once(folder, "epoch.json", _canonical(data), self.uid)
+        return data
 
 
     def verify_learning_stopped_epoch(

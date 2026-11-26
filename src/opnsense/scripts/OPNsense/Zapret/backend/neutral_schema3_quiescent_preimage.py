@@ -267,16 +267,21 @@ class StagedBoundRuntimeReceipt:
     backup_sha256: str | None
     running: object
     kernel_state: str
+    observed_config_sha256: str | None = None
+    pretraffic_sha256: str | None = None
 
 
 def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: QuiescentPreimage,
-                                            config_fd: int, config_digest: str) -> StagedBoundRuntimeReceipt:
+                                            config_fd: int, config_digest: str,
+                                            queue_fd: int | None = None,
+                                            saved: bool = False) -> StagedBoundRuntimeReceipt:
     """Reversible ordinary cutover before Config::save, not cold recovery.
 
     Use the original in-flight quiescent preimage, not a reconstruction
-    of the old state after installation. Only inert schema1 candidates
-    from an empty or stopped inert predecessor qualify here. No new locks,
-    PHP calls, process signals, IPFW writes or journal mutations.
+    of the old state after installation. Inert and learning candidates
+    from an empty or stopped inert predecessor qualify here. Learning
+    borrows the original queue acquired BEFORE Config, not a second flock.
+    No PHP calls, process signals, IPFW writes or journal mutations.
     """
     import sys
     import json
@@ -286,24 +291,34 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
     from neutral_schema3_previous_physical import _running_native
     from voice_firewall_transaction import verify_staged_state
     from shared_apply_seal import _stat
+    from auto_detect_owner import attest_bound_learning_staged_generation
+    from auto_detect_post_drop import _original_epoch_queue, _qualified_learning_sources
 
     try:
         if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
                 type(record) is not dict or type(preimage) is not QuiescentPreimage or
-                type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+                type(saved) is not bool):
             raise QuiescentPreimageRefused("BOUND_STAGED_NATIVE_SCOPE_REQUIRED")
         require_lifecycle_lock()
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
         store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
         if (store.read() != record or record["phase"] not in ("activating", "activated") or
-                "found" in record or record.get("manifest", {}).get("schema") != 1 or
-                record.get("previous_manifest", {}).get("schema", 1) != 1):
-            raise QuiescentPreimageRefused("BOUND_STAGED_ORDINARY_INERT_REQUIRED")
+                "found" in record or record.get("manifest", {}).get("schema") not in (1, 2) or
+                record.get("previous_manifest", {}).get("schema", 1) != 1 or
+                (saved and record["phase"] != "activated")):
+            raise QuiescentPreimageRefused("BOUND_STAGED_ORDINARY_REQUIRED")
         detail, pin = record["detail"], record["manifest"]
+        learning = pin["schema"] == 2
+        if ((learning and (type(queue_fd) is not int or queue_fd < 3 or
+                          queue_fd in (9, config_fd))) or
+                (not learning and queue_fd is not None)):
+            raise QuiescentPreimageRefused("BOUND_STAGED_ORIGINAL_QUEUE_SCOPE_REQUIRED")
         prior = record.get("previous")
         old_id = None if prior is None else prior["id"]
         if (preimage.generation != detail["id"] or preimage.root_sha256 != pin["root_sha256"] or
-                preimage.config_base_sha256 != detail["base"] or config_digest != detail["base"] or
+                preimage.config_base_sha256 != detail["base"] or
+                config_digest != detail["candidate" if saved else "base"] or
                 preimage.config_candidate_sha256 != detail["candidate"] or
                 preimage.previous_generation != old_id or preimage.authorization != "NONE" or
                 preimage.physical_transition_allowed or preimage.promotion_allowed or
@@ -333,11 +348,11 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                 detail=detail, binding=pin, parent=WORK, owner_uid=0))
             service = root["service"]
             enabled = preimage.verified_wan_device is not None
-            if (root["schema"] != 1 or root["generation"] != detail["id"] or
+            if (root["schema"] != pin["schema"] or root["generation"] != detail["id"] or
                     service["enabled"] is not enabled or
                     service["target_mode"] not in ("all", "list", "auto") or
-                    (enabled and service["target_mode"] == "auto") or
-                    inspect_inert_release(release, owner_uid=0) != "inactive"):
+                    learning != (enabled and service["target_mode"] == "auto") or
+                    (not learning and inspect_inert_release(release, owner_uid=0) != "inactive")):
                 raise QuiescentPreimageRefused("BOUND_STAGED_ROOT_MODE_CHANGED")
             _stat(COMMON_ACTIVE.parent, 0, directory=True)
             _stat(backup.parent, 0, directory=True)
@@ -357,8 +372,9 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                 old_tree = _full_prior_tree(old_work, backup, 0)
                 if old_tree != preimage.previous_release_sha256:
                     raise QuiescentPreimageRefused("BOUND_STAGED_BACKUP_CHANGED")
-            _safe_empty_directory(PRODUCER_ROOT, 0)
-            process = None
+            if not learning:
+                _safe_empty_directory(PRODUCER_ROOT, 0)
+            process = pretraffic = None
             if enabled:
                 process = _running_native(release, owner_uid=0,
                                           child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
@@ -370,6 +386,20 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                 # sealed manifest describes previously enabled Voice rules.
                 verify_staged_state(FreeBSDIPFWAdapter(19000, 19099), empty, desired)
                 kernel = "native-managed-kernel-staged"
+                if learning:
+                    def attest():
+                        return attest_bound_learning_staged_generation(record, config_fd)
+
+                    proof = attest()
+                    if (proof.generation != detail["id"] or proof.operation_id != detail["id"] or
+                            proof.owner_candidate_sha256 != detail["candidate"] or
+                            (proof.owner.pid, proof.owner.started) != (process.pid, process.started)):
+                        raise QuiescentPreimageRefused("BOUND_STAGED_LEARNING_OWNER_CHANGED")
+                    _, names = _qualified_learning_sources(proof.learning, PRODUCER_ROOT)
+                    queue, receipts = _original_epoch_queue(names)
+                    with queue.inherited_exclusive(queue_fd):
+                        pretraffic = receipts.verify_learning_running_pretraffic(
+                            proof, queue, workspace=work, attest=attest)
             else:
                 _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
                 kernel = _empty_kernel(release)
@@ -377,8 +407,9 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
             assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
             if store.read() != record:
                 raise QuiescentPreimageRefused("BOUND_STAGED_OWNER_CHANGED")
-            return StagedBoundRuntimeReceipt(detail["id"], pin["root_sha256"], config_digest,
-                                             tree, old_tree, process, kernel)
+            return StagedBoundRuntimeReceipt(detail["id"], pin["root_sha256"], detail["base"],
+                                             tree, old_tree, process, kernel,
+                                             config_digest, pretraffic)
 
         first = observe()
         if observe() != first:

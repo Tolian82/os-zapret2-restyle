@@ -837,7 +837,8 @@ class SharedApplyOperation:
         return result
 
     def _record_native_bound_activated(self, record: dict, *, preimage,
-                                       config_fd: int, config_digest: str) -> dict:
+                                       config_fd: int, config_digest: str,
+                                       queue_fd: int | None = None) -> dict:
         """Same original WAL after physical promotion, before Config save.
 
         An unqualified staged image retains ACTIVATING. This internal
@@ -849,19 +850,63 @@ class SharedApplyOperation:
         if (self.root != DEFAULT_ROOT or self.owner != 0 or
                 type(record) is not dict or self.read() != record or
                 record.get("phase") != "activating" or "found" in record or
-                record.get("manifest", {}).get("schema") != 1):
+                record.get("manifest", {}).get("schema") not in (1, 2)):
             raise SharedOperationError("bound native activated scope refused")
 
         def attest():
             receipt = attest_bound_quiescent_staged_under_fd9(
                 record, preimage=preimage, config_fd=config_fd,
-                config_digest=config_digest)
+                config_digest=config_digest, queue_fd=queue_fd)
             return (type(receipt) is StagedBoundRuntimeReceipt and
                     receipt.generation == record["detail"]["id"] and
                     receipt.root_sha256 == record["manifest"]["root_sha256"] and
-                    receipt.config_base_sha256 == record["detail"]["base"])
+                    receipt.config_base_sha256 == record["detail"]["base"] and
+                    receipt.observed_config_sha256 == config_digest and
+                    (receipt.pretraffic_sha256 is not None) == (record["manifest"]["schema"] == 2))
 
         return self._advance_bound_ordinary("activated", record, attest)
+
+
+    def _record_native_bound_saved(self, record: dict, *, preimage,
+                                   config_fd: int, config_digest: str,
+                                   queue_fd: int | None = None) -> dict:
+        """Original Config owner's post-save readback while rollback survives.
+
+        The caller already holds a fresh native Config lock after Config::save;
+        fsync that descriptor and recheck the SAME staged image. For Auto the
+        original borrowed P2a remains held, and the zero receipt is still
+        unfinished. The existing finalizer, not this checkpoint, writes epoch.
+        """
+        from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+        from neutral_schema3_quiescent_preimage import (
+            StagedBoundRuntimeReceipt, attest_bound_quiescent_staged_under_fd9)
+        from voice_ipfw_adapter import require_lifecycle_lock
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                self.root != DEFAULT_ROOT or self.owner != 0 or
+                type(record) is not dict or self.read() != record or
+                record.get("phase") != "activated" or "found" in record or
+                record.get("manifest", {}).get("schema") not in (1, 2) or
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+                config_digest != record["detail"]["candidate"]):
+            raise SharedOperationError("bound native saved scope refused")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        os.fsync(config_fd)
+        learning = record["manifest"]["schema"] == 2
+
+        def attest():
+            receipt = attest_bound_quiescent_staged_under_fd9(
+                record, preimage=preimage, config_fd=config_fd,
+                config_digest=config_digest, queue_fd=queue_fd, saved=True)
+            return (type(receipt) is StagedBoundRuntimeReceipt and
+                    receipt.generation == record["detail"]["id"] and
+                    receipt.root_sha256 == record["manifest"]["root_sha256"] and
+                    receipt.config_base_sha256 == record["detail"]["base"] and
+                    receipt.observed_config_sha256 == config_digest and
+                    (receipt.pretraffic_sha256 is not None) == learning)
+
+        return self._advance_bound_ordinary(
+            "epoch-finalizing" if learning else "config-saved", record, attest)
 
 
     def _finish_native_bound_ordinary(self, record: dict, *, config_fd: int,
