@@ -222,6 +222,24 @@ def _read(path: Path, uid: int, maximum: int, *, allow_empty: bool = False) -> b
         os.close(fd)
 
 
+def _check_original_source_root(work: Path, owner_uid: int,
+                                bound_root_sha256: str | None) -> None:
+    """No root before binding; only the exact sibling pin afterwards."""
+    sibling = work / "manifest.json"
+    for root in (work / ".manifest.json.pending",
+                 work / "release/manifest.json",
+                 work / "release/.manifest.json.pending"):
+        if root.exists() or root.is_symlink():
+            raise OriginalSourceGateRefused("PREMATURE_OR_SECOND_ROOT_FORBIDDEN")
+    if bound_root_sha256 is None:
+        if sibling.exists() or sibling.is_symlink():
+            raise OriginalSourceGateRefused("PREMATURE_OR_SECOND_ROOT_FORBIDDEN")
+    elif (type(bound_root_sha256) is not str or
+            re.fullmatch(r"[a-f0-9]{64}", bound_root_sha256) is None or
+            hashlib.sha256(_read(sibling, owner_uid, 16384)).hexdigest() != bound_root_sha256):
+        raise OriginalSourceGateRefused("ORIGINAL_BOUND_SOURCE_ROOT_CHANGED")
+
+
 def qualify_source_to_managed(*, work: Path, sources: Path,
                               inputs: dict[str, bytes],
                               owned_known: dict[str, bytes] | None,
@@ -231,7 +249,8 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
                               active_managed: Path = Path(
                                   "/usr/local/etc/zapret2/runtime-v2/managed"),
                               sealed: bool = False,
-                              engine_version: str | None = None) -> SourceGateReceipt:
+                              engine_version: str | None = None,
+                              bound_root_sha256: str | None = None) -> SourceGateReceipt:
     """Pure observational witness of actual producer staged files.
 
     The original native wrapper supplies P2-qualified owned after-images.
@@ -244,6 +263,7 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
             not _ID.fullmatch(work.name) or type(owner_uid) is not int or
             owner_uid < 0 or type(sealed) is not bool or type(inputs) is not dict or
             set(inputs) != set(FIELDS) or
+            (bound_root_sha256 is not None and not sealed) or
             any(type(value) is not bytes for value in inputs.values())):
         raise OriginalSourceGateRefused("UNQUALIFIED_ORIGINAL_CONTEXT")
     inputs = decode_pipe(MARKER + b"\0" + b"\0".join(inputs[key] for key in FIELDS) + b"\0")
@@ -255,10 +275,7 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
     if sealed:
         original_seal = _read(work / "bundle-seal.json", owner_uid, 1024)
         initial_seal = verify_seal(work, owner=owner_uid)
-        for root in (work / "manifest.json", work / ".manifest.json.pending",
-                     release / "manifest.json", release / ".manifest.json.pending"):
-            if root.exists() or root.is_symlink():
-                raise OriginalSourceGateRefused("PREMATURE_OR_SECOND_ROOT_FORBIDDEN")
+        _check_original_source_root(work, owner_uid, bound_root_sha256)
     else:
         original_seal = None
         initial_seal = None
@@ -405,6 +422,7 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
             managed_sha256={name: hashlib.sha256(raw).hexdigest()
                             for name, raw in observed.items()})
     if sealed:
+        _check_original_source_root(work, owner_uid, bound_root_sha256)
         if (verify_seal(work, owner=owner_uid) != initial_seal or
                 _read(work / "bundle-seal.json", owner_uid, 1024) != original_seal or
                 final_args != _read(release / "dvtws.args", owner_uid, 262144) or
@@ -477,7 +495,8 @@ def _owned_under_original_p2(work: Path, uid: int, *, mode: bytes) -> dict[str, 
 def native_original_fd9(operation: str, raw_pipe: bytes,
                         candidate_sha256: str | None = None,
                         *, sealed: bool = False,
-                        engine_version: str | None = None) -> SourceGateReceipt:
+                        engine_version: str | None = None,
+                        bound_record: dict | None = None) -> SourceGateReceipt:
     """Only the installed original FD9 wrapper can invoke this native action."""
     from voice_ipfw_adapter import require_lifecycle_lock
     from shared_apply_seal import WORK
@@ -487,6 +506,18 @@ def native_original_fd9(operation: str, raw_pipe: bytes,
     require_lifecycle_lock()
     inputs = decode_pipe(raw_pipe)
     work = WORK / operation
+    root_sha = None
+    if bound_record is not None:
+        from shared_apply_operation import SharedApplyOperation
+        from neutral_root_stage import verify_original_operation_pins
+        store = SharedApplyOperation(owner=0)
+        if (not sealed or type(bound_record) is not dict or
+                store.read() != bound_record or bound_record.get("phase") != "prepared" or
+                "found" in bound_record or "manifest" not in bound_record or
+                bound_record["detail"]["id"] != operation):
+            raise OriginalSourceGateRefused("ORIGINAL_BOUND_SOURCE_OWNER_REQUIRED")
+        verify_original_operation_pins(record=bound_record, parent=WORK, owner_uid=0)
+        root_sha = bound_record["manifest"]["root_sha256"]
     known = _owned_under_original_p2(work, 0, mode=inputs["mode"])
     auto_bytes = None
     # Shared Auto is a runtime provider, NOT a managed hostlist and never
@@ -498,8 +529,13 @@ def native_original_fd9(operation: str, raw_pipe: bytes,
         work=work, sources=Path(__file__).parent, inputs=inputs,
         owned_known=known, runtime_auto=auto_bytes,
         candidate_sha256=candidate_sha256, owner_uid=0, sealed=sealed,
-        engine_version=engine_version)
+        engine_version=engine_version,
+        **({"bound_root_sha256": root_sha} if root_sha is not None else {}))
     require_lifecycle_lock()
+    if bound_record is not None:
+        verify_original_operation_pins(record=bound_record, parent=WORK, owner_uid=0)
+        if store.read() != bound_record:
+            raise OriginalSourceGateRefused("ORIGINAL_BOUND_SOURCE_OWNER_CHANGED")
     return receipt
 
 
@@ -523,7 +559,8 @@ def _s10_native_bound_engine_readback() -> dict:
 
 def native_original_bound_effective_fd9(
         operation: str, raw_pipe: bytes,
-        candidate_sha256: str | None = None) -> SourceGateReceipt:
+        candidate_sha256: str | None = None, *,
+        bound_record: dict | None = None) -> SourceGateReceipt:
     """Strict opt-in S10 source → genuine bound engine → S08d, read-only.
 
     No original Apply path calls this automatically: current legacy Apply and
@@ -554,7 +591,8 @@ def native_original_bound_effective_fd9(
         raise OriginalSourceGateRefused("S10_BOUND_ENGINE_UNQUALIFIED")
     source = native_original_fd9(
         operation, raw_pipe, candidate_sha256, sealed=True,
-        engine_version=bound["engine_version"])
+        engine_version=bound["engine_version"],
+        **({"bound_record": bound_record} if bound_record is not None else {}))
     if (type(source) is not SourceGateReceipt or
             source.generation != operation or
             source.status != "ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY" or
@@ -1353,6 +1391,61 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
             decision, physical, lifecycle_proposal=lifecycle)
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_SEMANTIC_PREPARED_REFUSED") from None
+
+def native_begin_quiescent_bound_promotion_fd9(operation: str, raw_pipe: bytes) -> dict:
+    """Durable first ordinary bound checkpoint, under the existing FD9.
+
+    Internal coordinator only: no new command or lifecycle action. A
+    running predecessor (including one requiring retirement) is refused
+    here. Both passes derive source and the native quiescent proof from
+    the original readers, not a caller-supplied semantic receipt. The
+    original physical coordinator must still implement final pre-action
+    reattestation, actual promotion and recovery before calling this.
+    """
+    from shared_apply_operation import SharedApplyOperation
+    from neutral_schema3_quiescent_preimage import QuiescentPreimage
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation)):
+        raise OriginalSourceGateRefused("NATIVE_ORIGINAL_FD9_REQUIRED")
+    try:
+        require_lifecycle_lock()
+        inputs = decode_pipe(raw_pipe)
+        store = SharedApplyOperation(owner=0)
+        before = store.read()
+        if (type(before) is not dict or before["phase"] != "prepared" or
+                "found" in before or "manifest" not in before or
+                before["detail"]["id"] != operation):
+            raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_PREPARED_REQUIRED")
+        digest = before["detail"]["candidate"] if inputs["mode"] == b"auto" else None
+
+        def observe():
+            if store.read() != before:
+                raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_OWNER_CHANGED")
+            source = native_original_bound_effective_fd9(
+                operation, raw_pipe, digest, bound_record=before)
+            semantic = native_plan_original_prepared_fd9(source)
+            if (type(semantic) is not OriginalSemanticReceipt or
+                    type(semantic.previous_physical) is not QuiescentPreimage or
+                    semantic.generation != operation or
+                    semantic.candidate_root_sha256 != before["manifest"]["root_sha256"] or
+                    semantic.lifecycle_proposal != ("START" if source.requested_enabled
+                                                   else "SAVE_ONLY") or
+                    semantic.previous_physical.old_state not in (
+                        "first-install-empty", "committed-stopped") or
+                    semantic.authorization != "NONE" or
+                    semantic.physical_transition_allowed or semantic.promotion_allowed or
+                    store.read() != before):
+                raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_QUIESCENT_REQUIRED")
+            return source, semantic
+
+        first = observe()
+        return store._advance_bound_ordinary(
+            "activating", before, lambda: observe() == first)
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError):
+        raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_PRECHECK_REFUSED") from None
+
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv

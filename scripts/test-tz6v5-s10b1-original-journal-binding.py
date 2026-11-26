@@ -139,6 +139,54 @@ class OriginalDurableRootBinding(unittest.TestCase):
             self.bind()
 
 
+    def test_bound_ordinary_transition_preserves_pins_and_requires_fresh_native_proof(self):
+        bound = self.bind()
+        root = self.case.fx.work / "manifest.json"
+        original = root.read_bytes()
+        def advance(phase, expected, attest):
+            return self.owner._advance_bound_ordinary(
+                phase, expected, attest, shared_work_parent=self.case.fx.parent)
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None):
+            # An exact bound PREPARED record is still not a legacy CLI permit.
+            with self.assertRaises(SharedOperationError):
+                self.owner.advance("activating", self.case.detail)
+            with self.assertRaises(SharedOperationError):
+                advance("activating", bound, lambda: False)
+            self.assertEqual(self.owner.read(), bound)
+
+            def drift():
+                root.write_bytes(original + b" ")
+                return True
+
+            with self.assertRaises(SharedOperationError):
+                advance("activating", bound, drift)
+            self.assertEqual(self.owner.read(), bound)
+            root.write_bytes(original)
+            # Portable journal evidence only. This callback deliberately
+            # substitutes native physical proof; no runtime is started.
+            activating = advance("activating", bound, lambda: True)
+            self.assertEqual(activating, {**bound, "phase": "activating"})
+            with self.assertRaises(SharedOperationError):
+                self.owner.advance("activated", self.case.detail)
+            with self.assertRaises(SharedOperationError):
+                advance("committed", activating, lambda: True)
+            with self.assertRaises(SharedOperationError):
+                advance("activated", bound, lambda: True)
+            activated = advance("activated", activating, lambda: True)
+            saved = advance("config-saved", activated, lambda: True)
+            with self.assertRaises(SharedOperationError):
+                self.owner.finish_saved(self.case.detail["id"], lambda: True)
+            # A pre-save restore is allowed by the phase table only with
+            # independent proof; a Config-saved rollback is not.
+            with self.assertRaises(SharedOperationError):
+                advance("restored", saved, lambda: True)
+            committed = advance("committed", saved, lambda: True)
+            self.assertEqual(committed_manifest(committed), bound["manifest"])
+            self.assertEqual(self.owner.read(), committed)
+            self.assertFalse(native_lifecycle_gate("common-apply",
+                             root=self.owner.root)["safe_to_mutate"])
+
     def test_restored_candidate_pin_is_not_active_owner_pin(self):
         bound = self.bind()
         restored = self.owner.recover_prepared(

@@ -258,6 +258,85 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
         raise QuiescentPreimageRefused("ORIGINAL_QUIESCENT_PREIMAGE_REFUSED") from None
 
 
+def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
+    """Qualify only the existing original ordinary cold rollback route.
+
+    Before the shell's existing parked/pristine/installed recovery, require
+    exact pinned work, saved predecessor Config and no live process or
+    producer. The original shell alone verifies and restores the native
+    staged IPFW and rename artifacts. Before terminal WAL restore, require
+    the whole restored old tree and empty managed kernel. Never infer an
+    Auto epoch or a Found rollback from inert bytes.
+    """
+    from neutral_root_stage import (
+        verify_original_operation_pins, _original_plan_matches)
+    from shared_apply_seal import verify_seal, _release_hash
+
+    require_lifecycle_lock()
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    if (type(restored) is not bool or type(record) is not dict or
+            store.read() != record or record.get("phase") not in (
+                "activating", "activated") or "found" in record or
+            record.get("manifest", {}).get("schema") != 1 or
+            ("previous_manifest" in record and
+             record["previous_manifest"]["schema"] != 1) or
+            type(record.get("previous")) is not dict or
+            record["previous"]["candidate"] != record["detail"]["base"]):
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_OWNER_REQUIRED")
+
+    def observe():
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        old, new = record["previous"], record["detail"]
+        old_work, new_work = WORK / old["id"], WORK / new["id"]
+        seals = []
+        for detail, work in ((old, old_work), (new, new_work)):
+            seals.append(verify_seal(work, owner=0))
+            if (not _original_plan_matches(
+                    parent=WORK, generation=detail["id"],
+                    journal={"detail": detail}, owner_uid=0) or
+                    inspect_inert_release(work / "release", owner_uid=0) != "inactive"):
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_SOURCE_CHANGED")
+        saved_raw = _native_call((
+            "/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
+            "saved", old["id"], old["page"]))
+        saved = json.loads(saved_raw)
+        if (type(saved) is not dict or set(saved) != {"result", "snapshot", "enabled"} or
+                saved["result"] != "committed" or saved["snapshot"] != old["candidate"] or
+                saved["enabled"] not in ("0", "1")):
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_CHANGED")
+        _safe_empty_directory(PRODUCER_ROOT, 0)
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        kernel = active_hash = None
+        if restored:
+            active_hash = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+            kernel = _empty_kernel(old_work / "release")
+            # The original parked recovery intentionally preserves exact
+            # transaction artifacts. Unknown/partial residue cannot be
+            # blessed by the terminal journal writer.
+            name = COMMON_ACTIVE.name
+            stage = COMMON_ACTIVE.parent / f".{name}.stage.{new['id']}"
+            parked = COMMON_ACTIVE.parent / f".{name}.old.{new['id']}"
+            backup = COMMON_ACTIVE.with_name("runtime-v2-backups") / f"{name}-{new['id']}"
+            if _present(parked) and _present(backup):
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_DUPLICATE_PRIOR")
+            for artifact, expected in (
+                    (stage, seals[1]["sha256"]["release"]),
+                    (parked, seals[0]["sha256"]["release"]),
+                    (backup, seals[0]["sha256"]["release"])):
+                if _present(artifact) and _release_hash(artifact, 0) != expected:
+                    raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_ARTIFACT_CHANGED")
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        if store.read() != record:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
+        return seals, saved_raw, active_hash, kernel
+
+    if observe() != observe():
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_PREIMAGE_CHANGED")
+
+
 def attest_quiescent_under_fd9(*, generation: str, native: NativeParity,
                               effective: EffectiveSnapshot, enabled: bool
                               ) -> QuiescentPreimage:

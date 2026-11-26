@@ -670,6 +670,9 @@ shared_apply_recover_activating_pristine_service()
         [ ! -L "$_shared_pristine_new_dir/release" ] || return 69
         atomic_verify_tree "$_shared_pristine_new_dir/release" "$_shared_pristine_stage" || return 69
         shared_apply_bundle_service verify "$_shared_pristine_id" || return 69
+        # Recheck immutable operation pins and saved old Config at the
+        # existing physical stage-removal boundary, not just entry.
+        preflight_shared_apply_journal common-recover-activating || return 69
         atomic_remove_tree "$_shared_pristine_stage" || return 70
         [ ! -e "$_shared_pristine_stage" ] && [ ! -L "$_shared_pristine_stage" ] || return 70
     fi
@@ -766,6 +769,9 @@ shared_apply_recover_activated_cold_service()
            supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then return 69; fi
         _apply_engine=0
         apply_runtime_attest_engine_inventory || return 69
+        if [ "$_shared_cold_phase" != config-saved ]; then
+            preflight_shared_apply_journal "common-recover-$_shared_cold_phase" || return 69
+        fi
         if firewall_shared_runtime verify-staged \
             "$_shared_cold_old_root/release" "$_shared_cold_new_root/release"; then
             # The existing IPFW transaction proves exact active new rules,
@@ -795,6 +801,9 @@ shared_apply_recover_activated_cold_service()
         atomic_verify_tree "$_shared_cold_new_root/release" "$ACTIVE_DIR" || return 69
         shared_apply_bundle_service verify "$_shared_cold_old" || return 69
         # Existing common atomic helper preserves failed candidate in BACKUP_ROOT.
+        if [ "$_shared_cold_phase" != config-saved ]; then
+            preflight_shared_apply_journal "common-recover-$_shared_cold_phase" || return 69
+        fi
         atomic_install_tree "$_shared_cold_old_root/release" "$ACTIVE_DIR" "$BACKUP_ROOT" >/dev/null || return 70
     fi
     atomic_verify_tree "$_shared_cold_old_root/release" "$ACTIVE_DIR" || return 70
@@ -878,6 +887,7 @@ shared_apply_recover_activating_parked_service()
     shared_apply_bundle_service verify "$_parked_old" || return 69
     atomic_verify_tree "$_parked_new_root/release" "$_parked_stage" || return 69
     atomic_verify_tree "$_parked_old_root/release" "$_parked_previous" || return 69
+    preflight_shared_apply_journal common-recover-activating || return 69
     atomic_install_tree "$_parked_old_root/release" "$ACTIVE_DIR" "$BACKUP_ROOT" >/dev/null || return 70
     atomic_verify_tree "$_parked_old_root/release" "$ACTIVE_DIR" || return 70
     atomic_verify_tree "$_parked_new_root/release" "$_parked_stage" || return 70

@@ -718,9 +718,12 @@ class SharedApplyOperation:
             if phase == "activating" and (
                     "manifest" in before or "previous_manifest" in before):
                 raise SharedOperationError("immutable root preactivation gate not implemented")
-            if (phase == "restored" and before["phase"] == "prepared" and
-                    ("manifest" in before or "previous_manifest" in before)):
-                raise SharedOperationError("bound prepared requires original pinned recovery")
+            if "manifest" in before or "previous_manifest" in before:
+                if phase == "restored" and before["phase"] == "prepared":
+                    raise SharedOperationError("bound prepared requires original pinned recovery")
+                # The legacy record CLI cannot terminalize a future bound
+                # operation merely because its phase is otherwise legal.
+                raise SharedOperationError("bound phase requires original physical witness")
             previous = before.get("previous")
             previous_manifest = before.get("previous_manifest")
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
@@ -733,6 +736,58 @@ class SharedApplyOperation:
         if phase != "prepared" and before is not None and "manifest" in before:
             record["manifest"] = before["manifest"]
         return self._persist_record(record)
+
+    def _advance_bound_ordinary(self, phase: str, expected: dict, attest, *,
+                                shared_work_parent: Path | None = None) -> dict:
+        """Internal original FD9 transition with exact immutable pins.
+
+        This is the same WAL writer and phase table as ordinary Apply.
+        The original coordinator MUST supply the phase-specific native
+        witness (not an analytic receipt or a generic CLI boolean).
+        PREPARED abort remains recover_prepared; Found remains fenced until
+        its original Config/P2 writer and recovery are integrated.
+        """
+        from neutral_root_stage import verify_original_operation_pins, RootStageRefused
+        from shared_apply_seal import WORK
+        from voice_ipfw_adapter import require_lifecycle_lock
+
+        parent = WORK if shared_work_parent is None else shared_work_parent
+        before = self.read()
+        if (type(expected) is not dict or before != expected or
+                type(before) is not dict or "found" in before or
+                "manifest" not in before or not isinstance(parent, Path) or
+                phase not in NEXT.get(before["phase"], frozenset()) or
+                (before["phase"] == "prepared" and phase != "activating") or
+                not callable(attest)):
+            raise SharedOperationError("bound ordinary transition refused")
+        if ("previous" in before and
+                before["previous"]["candidate"] != before["detail"]["base"]):
+            raise SharedOperationError("bound ordinary predecessor Config mismatch")
+
+        def pins():
+            require_lifecycle_lock()
+            verify_original_operation_pins(
+                record=before, parent=parent, owner_uid=self.owner)
+            if self.read() != before:
+                raise SharedOperationError("bound ordinary journal changed")
+
+        try:
+            pins()
+            if attest() is not True:
+                raise SharedOperationError("bound ordinary native witness refused")
+            pins()
+        except (RootStageRefused, OSError, ValueError, RuntimeError) as exc:
+            if isinstance(exc, SharedOperationError):
+                raise
+            raise SharedOperationError("bound ordinary pin or native proof refused") from None
+        # Persist the exact candidate/predecessor bindings through every
+        # allowed phase, including review/restore. No second writer or
+        # physical action; failure before fsync leaves the old phase.
+        result = self._persist_record({**before, "phase": phase})
+        # Failure after fsync is uncertain, not a verified old phase.
+        if self.read() != result:
+            raise SharedOperationError("bound ordinary durable readback refused")
+        return result
 
     def bind_prepared_manifest(self, generation: str, *,
                                effective, native, mode: str, enabled: bool,
@@ -840,6 +895,8 @@ class SharedApplyOperation:
         before = self.read()
         if before is None or before["phase"] != "committed":
             raise SharedOperationError("no committed Remove trial to revert")
+        if "manifest" in before or "previous_manifest" in before:
+            raise SharedOperationError("bound Remove requires original pinned recovery")
         trial, old = before["detail"], before.get("previous")
         if not isinstance(old, dict) or trial["id"] != trial_id or old["id"] != old_id:
             raise SharedOperationError("Remove trial or predecessor identity mismatch")
@@ -1136,6 +1193,8 @@ class SharedApplyOperation:
                 record["detail"]["id"] != identity or \
                 record.get("previous", {}).get("id") != previous_id:
             raise SharedOperationError("pristine activating recovery refused")
+        if "manifest" in record or "previous_manifest" in record:
+            return self._finish_bound_inert_cold_restore(record, attest)
         if not callable(attest) or attest() is not True:
             raise SharedOperationError("pristine activating attestation refused")
         if self.read() != record:
@@ -1157,11 +1216,27 @@ class SharedApplyOperation:
                 record["detail"]["id"] != identity or \
                 record.get("previous", {}).get("id") != previous_id:
             raise SharedOperationError(phase + " rollback completion refused")
+        if "manifest" in record or "previous_manifest" in record:
+            return self._finish_bound_inert_cold_restore(record, attest)
         if not callable(attest) or attest() is not True:
             raise SharedOperationError(phase + " rollback attestation refused")
         if self.read() != record:
             raise SharedOperationError(phase + " journal changed during recovery")
         return self.advance("restored", record["detail"])
+
+    def _finish_bound_inert_cold_restore(self, record: dict, attest) -> dict:
+        """Existing original cold recovery; never trust legacy seal alone."""
+        from neutral_schema3_quiescent_preimage import attest_inert_bound_cold_recovery
+        if self.root != DEFAULT_ROOT or self.owner != 0:
+            raise SharedOperationError("bound cold restore requires native original store")
+
+        def exact():
+            if not callable(attest) or attest() is not True:
+                return False
+            attest_inert_bound_cold_recovery(record, restored=True)
+            return True
+
+        return self._advance_bound_ordinary("restored", record, exact)
 
     def finish_activated_restore(self, identity: str, previous_id: str, attest) -> dict:
         return self._finish_cold_pre_save_restore(
@@ -1188,6 +1263,8 @@ class SharedApplyOperation:
         before = self.read()
         if before is None or before["phase"] != "config-saved":
             raise SharedOperationError("no config-saved Remove trial to restore")
+        if "manifest" in before or "previous_manifest" in before:
+            raise SharedOperationError("bound Remove requires original pinned recovery")
         proof = native_remove_prepared_trial(self.root, state)
         if (proof is None or proof["phase"] != "config-saved" or
                 proof["id"] != identity or proof["old"]["id"] != previous_id):
@@ -1230,6 +1307,7 @@ class SharedApplyOperation:
         """Inspect exactly one failed FIRST Voice handoff from Strategies."""
         record = self.read()
         if record is None or record["phase"] != "requires-review" or \
+                "manifest" in record or "previous_manifest" in record or \
                 "previous" in record or record["detail"]["page"] != "voice":
             raise SharedOperationError("not an initial reviewed Voice handoff")
         return record["detail"]
@@ -1243,7 +1321,8 @@ class SharedApplyOperation:
         Those independent facts must be proved by the original FD9 service.
         """
         record = self.read()
-        if record is None or record["phase"] != "requires-review":
+        if record is None or record["phase"] != "requires-review" or \
+                "manifest" in record or "previous_manifest" in record:
             raise SharedOperationError("no reviewed native generation")
         current, previous = record["detail"], record.get("previous")
         if (not isinstance(previous, dict) or
@@ -1433,6 +1512,20 @@ def native_lifecycle_gate(action: str | None = None, *,
     if committed_manifest(record) is not None or (
             phase not in TERMINAL and
             ("manifest" in record or "previous_manifest" in record)):
+        # Only the existing pre-save cold recovery functions may reconcile
+        # an exact inert bound owner. All Apply/Start/Stop/Lab, Found, live
+        # Auto and saved/uncertain recovery remain fenced.
+        if (root == DEFAULT_ROOT and "found" not in record and
+                (action, phase) in (
+                    ("common-recover-activating", "activating"),
+                    ("common-recover-activated", "activated"))):
+            from neutral_schema3_quiescent_preimage import attest_inert_bound_cold_recovery
+            try:
+                attest_inert_bound_cold_recovery(record, restored=False)
+            except (OSError, ValueError, RuntimeError, TypeError, KeyError):
+                pass
+            else:
+                return {"state": "clear", "safe_to_mutate": True}
         return {"state": "blocked", "reason": "immutable-root-preflight-required",
                 "phase": phase, "safe_to_mutate": False}
     if action == "strategy-lab-native":

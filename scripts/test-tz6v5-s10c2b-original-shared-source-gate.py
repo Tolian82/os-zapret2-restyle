@@ -324,6 +324,18 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 self.assertEqual(bound["manifest"]["root_sha256"], candidate.sha256)
                 self.assertEqual(recheck.root_sha256, candidate.sha256)
                 self.assertEqual(journal.read()["phase"], "prepared")
+                # Original source can be re-read only with its exact pinned
+                # sibling. The normal unbound source path still refuses it.
+                with self.assertRaises(OriginalSourceGateRefused):
+                    qualify_source_to_managed(
+                        **dict(kw, sealed=True, engine_version="v1.0.7"))
+                self.assertEqual(qualify_source_to_managed(
+                    **dict(kw, sealed=True, engine_version="v1.0.7",
+                           bound_root_sha256=bound["manifest"]["root_sha256"])), source)
+                with self.assertRaises(OriginalSourceGateRefused):
+                    qualify_source_to_managed(
+                        **dict(kw, sealed=True, engine_version="v1.0.7",
+                               bound_root_sha256="0" * 64))
                 with self.assertRaises(SharedOperationError):
                     journal.advance("activating", detail)
 

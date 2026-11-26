@@ -108,6 +108,64 @@ class OriginalQuiescentTests(unittest.TestCase):
         with self.assertRaisesRegex(SharedOperationError, "preactivation gate"):
             self.f.original.advance("activating", self.f.detail)
 
+    def test_bound_inert_cold_restore_requires_saved_old_config_and_exact_artifacts(self):
+        import json
+        old = {"id": "a" * 32, "page": "strategies", "base": "b" * 64,
+               "candidate": "c" * 64, "changed_fields": []}
+        new = {"id": "d" * 32, "page": "strategies", "base": old["candidate"],
+               "candidate": "e" * 64, "changed_fields": []}
+        pin = lambda d: dict(schema=1, generation=d["id"],
+                             root_sha256="f" * 64, seal_sha256="0" * 64,
+                             candidate_sha256=d["candidate"])
+        record = dict(schema=1, phase="activating", detail=new,
+                      previous=old, manifest=pin(new), previous_manifest=pin(old))
+        saved = {"result": "committed", "snapshot": old["candidate"], "enabled": "0"}
+        old_hash, new_hash = "1" * 64, "2" * 64
+        stage = self.active.parent / f".{self.active.name}.stage.{new['id']}"
+        stage.mkdir()
+        def seal(work, **_):
+            return {"sha256": {"release": old_hash if work.name == old["id"] else new_hash}}
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch.object(gate, "SharedApplyOperation",
+                return_value=Mock(read=Mock(return_value=record))))
+            stack.enter_context(patch.object(gate, "COMMON_ACTIVE", self.active))
+            stack.enter_context(patch.object(gate, "_safe_empty_directory"))
+            stack.enter_context(patch.object(gate, "_zero_processes"))
+            stack.enter_context(patch.object(gate, "inspect_inert_release",
+                                             return_value="inactive"))
+            pins = stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            stack.enter_context(patch("neutral_root_stage._original_plan_matches", return_value=True))
+            stack.enter_context(patch("shared_apply_seal.verify_seal", side_effect=seal))
+            artifact = stack.enter_context(patch("shared_apply_seal._release_hash",
+                                                  return_value=new_hash))
+            native = stack.enter_context(patch.object(gate, "_native_call",
+                return_value=(json.dumps(saved) + "\n").encode()))
+            full = stack.enter_context(patch.object(gate, "_full_prior_tree", return_value=old_hash))
+            kernel = stack.enter_context(patch.object(gate, "_empty_kernel",
+                                                       return_value="native-managed-kernel-empty"))
+            gate.attest_inert_bound_cold_recovery(record, restored=False)
+            full.assert_not_called()
+            kernel.assert_not_called()
+            gate.attest_inert_bound_cold_recovery(record, restored=True)
+            self.assertEqual(pins.call_count, 4)
+            artifact.assert_called_with(stage, 0)
+            # A partial/corrupted stage is not terminal old-owner evidence.
+            artifact.return_value = "3" * 64
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate.attest_inert_bound_cold_recovery(record, restored=True)
+            artifact.return_value = new_hash
+            native.return_value = (json.dumps({**saved, "snapshot": new["candidate"]}) + "\n").encode()
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate.attest_inert_bound_cold_recovery(record, restored=False)
+            # Bound learning, Found and post-save uncertainty cannot enter
+            # the ordinary inert cold rollback route.
+            for forbidden in (
+                    {**record, "manifest": {**record["manifest"], "schema": 2}},
+                    {**record, "found": {}}, {**record, "phase": "config-saved"}):
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    gate.attest_inert_bound_cold_recovery(forbidden, restored=False)
+
     def test_cold_native_absent_kernel_never_loads_adapter(self):
         self.cold()
         with ExitStack() as stack:
