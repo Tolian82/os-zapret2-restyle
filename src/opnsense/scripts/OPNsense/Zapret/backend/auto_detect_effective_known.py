@@ -956,11 +956,11 @@ def classify_native_planned(operation: str, *, config_fd: int | None = None) -> 
 
 
 def advance_native_found_locked(action: str, operation: str, digest: str,
-                                *, config_fd: int) -> dict:
+                                *, config_fd: int, queue_fd: int | None = None) -> dict:
     from auto_detect_destination_commit import (
         _attest_found_after_locked, _native_found_wal_context,
         _recover_found_preimages_locked, _bound_found_native_witness,
-        _attest_bound_inert_found_predecessor,
+        _attest_bound_found_predecessor, _bound_found_queue_scope,
     )
     from shared_apply_operation import FOUND_RESTORING, FOUND_ROLLBACK_FROM
     from voice_live_inspect import examine_pending_found_previous
@@ -972,17 +972,17 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
     if action == "recover-found-locked" and phase == "prepared":
         return recover_native_found_prepared_pristine(
             operation, config_fd=config_fd, config_digest=digest)
-    with exclusive_destination_lock(AUTO_LOCK, store.owner):
+    with _bound_found_queue_scope(queue_fd) as queue, exclusive_destination_lock(AUTO_LOCK, store.owner):
         original_bound = _bound_found_native_witness(store, record, attest)
         bound_attest = None
         if original_bound is not None:
             if action not in ("recover-found-locked", "confirm-found-save-locked"):
                 raise EffectiveKnownRefused("bound_found_runtime_witness_required")
-            physical = _attest_bound_inert_found_predecessor(record)
+            physical = _attest_bound_found_predecessor(record, config_fd, queue)
 
             def bound_attest(current):
                 return (original_bound(current) and
-                        _attest_bound_inert_found_predecessor(current) == physical)
+                        _attest_bound_found_predecessor(current, config_fd, queue) == physical)
 
             store._attest_bound_found_checkpoint(record, bound_attest)
         if read_owned(OWNED_ROOT, owner_uid=store.owner) is None:

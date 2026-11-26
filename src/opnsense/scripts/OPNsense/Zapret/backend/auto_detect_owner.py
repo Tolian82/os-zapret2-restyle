@@ -809,7 +809,8 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
                          child_pidfile: Path, monitor_pidfile: Path,
                          epoch_root: Path, runner, owner_uid: int,
                          allow_transition: bool = False,
-                         learning_schema3: bool = False
+                         learning_schema3: bool = False,
+                         pending_found_record: dict | None = None
                          ) -> GenerationProof | LearningGenerationProof:
     """Attest the SAME immutable original owner after its process has exited.
 
@@ -825,7 +826,22 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
     record = SharedApplyOperation(journal, owner=owner_uid).read()
     if record is None:
         raise GenerationRefused("stopped_original_committed_owner_required")
-    if record["phase"] == "committed":
+    if pending_found_record is not None:
+        # Private original Found scope only. The public stopped/retirement
+        # attesters do not supply this parameter and gain no authority.
+        from shared_apply_operation import FOUND_FILE_PHASES, FOUND_CONFIG_PHASES, FOUND_RESTORING
+        if (allow_transition or not learning_schema3 or
+                type(pending_found_record) is not dict or record != pending_found_record or
+                record["phase"] not in ({"prepared", FOUND_RESTORING} |
+                                        FOUND_FILE_PHASES | FOUND_CONFIG_PHASES) or
+                "found" not in record or "manifest" not in record or
+                record.get("previous_manifest", {}).get("schema") != 2 or
+                type(record.get("previous")) is not dict or
+                record["previous"]["id"] == record["detail"]["id"] or
+                record["previous"]["candidate"] != record["detail"]["base"]):
+            raise GenerationRefused("unqualified_stopped_bound_found_predecessor")
+        owner = record["previous"]
+    elif record["phase"] == "committed":
         owner = committed_owner(record)
     elif allow_transition and record["phase"] in ("prepared", "activating"):
         # The SAME journal pins one retired predecessor before swapping the
@@ -998,6 +1014,36 @@ def attest_learning_stopped_generation(*,
             SharedBundleError, ExclusionError, ReceiptRefused) as exc:
         raise GenerationRefused(
             "stopped_learning_original_owner_not_attested") from exc
+
+
+def attest_bound_found_stopped_learning_predecessor(
+        record: dict, config_fd: int) -> LearningGenerationProof:
+    """Private FD9/FD4 historical owner; no retirement, ACK or worker permission."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_epoch_receipts import ReceiptRefused
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or type(config_fd) is not int or config_fd < 3):
+        raise GenerationRefused("native_bound_found_stopped_fd9_fd4_required")
+    try:
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        proof = _attest_stopped_core(
+            journal=Path("/var/db/zapret2/shared-apply"), work_root=WORK,
+            active=COMMON_ACTIVE, child_pidfile=CHILD_PID,
+            monitor_pidfile=MONITOR_PID,
+            epoch_root=Path("/var/db/zapret2/auto-detect-epochs"),
+            runner=subprocess.run, owner_uid=0, learning_schema3=True,
+            pending_found_record=record)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("bound_found_stopped_learning_owner_required")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return proof
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError,
+            subprocess.SubprocessError, ReceiptRefused) as exc:
+        raise GenerationRefused("bound_found_stopped_learning_not_attested") from exc
 
 
 def attest_retiring_predecessor(*,

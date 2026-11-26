@@ -1858,38 +1858,111 @@ def _attest_bound_inert_found_predecessor(record: dict) -> tuple[str, str]:
     return tree, kernel
 
 
+@contextmanager
+def _bound_found_queue_scope(queue_fd: int | None):
+    """Borrow P2a from the original parent; never acquire it after Config."""
+    if queue_fd is None:
+        yield None
+        return
+    from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
+    from voice_ipfw_adapter import require_lifecycle_lock
+    import pwd
+
+    require_lifecycle_lock()
+    gid = pwd.getpwnam(ENGINE_USER).pw_gid
+    if gid <= 0:
+        raise DestinationRefused("bound_found_learning_gid_unqualified")
+    queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+    # No fresh Config lock on exit: the original PHP Config::save may
+    # already have released FD4 while the parent still owns P2a.
+    with queue.inherited_exclusive(queue_fd):
+        yield queue
+
+
+def _attest_bound_found_predecessor(record: dict, config_fd: int,
+                                    queue: DurableInbox | None):
+    """Full stopped original owner, inert or already terminal retired learning.
+
+    A running owner is never qualified for physical Found writes by this
+    function. Learning requires the original inherited P2a before Config,
+    immutable historical PID/epoch, terminal ACK/archive and all-PID P2b.
+    No retirement repair, queue acquisition, signal or Config save here.
+    """
+    if record.get("previous_manifest", {}).get("schema") != 2:
+        return _attest_bound_inert_found_predecessor(record)
+    if not isinstance(queue, DurableInbox) or not queue._held:
+        raise DestinationRefused("bound_found_original_queue_fd_required")
+
+    from auto_detect_owner import attest_bound_found_stopped_learning_predecessor
+    from auto_detect_learning_retirement import retired_learning_stopped, RETIRE_DIR, READY
+    from auto_detect_fd import _probe_original_inode
+    from neutral_schema3_quiescent_preimage import (
+        _zero_processes, _empty_kernel, CHILD_PID, MONITOR_PID, DAEMON_PID)
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from neutral_root_stage import verify_original_operation_pins
+    from shared_apply_seal import WORK
+    from voice_live_inspect import COMMON_ACTIVE
+
+    prior = record["previous"]
+    def attest():
+        return attest_bound_found_stopped_learning_predecessor(record, config_fd)
+
+    def inspect(path, device, inode, *, owner, writer_gid):
+        return _probe_original_inode(
+            path, device, inode, owner=owner, writer_gid=writer_gid,
+            attest_owner=lambda: attest().owner == owner)
+
+    verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    proof = attest()
+    if (proof.operation_id != prior["id"] or proof.generation != prior["id"] or
+            proof.owner_candidate_sha256 != prior["candidate"]):
+        raise DestinationRefused("bound_found_retired_owner_changed")
+    old_work = WORK / prior["id"]
+    tree = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+    receipts = EpochReceipts(owner_uid=0, writer_gid=queue.writer_gid)
+    ready = receipts._generation(proof.generation, create=False) / RETIRE_DIR / READY
+    before = _read(ready, 0)
+    if not retired_learning_stopped(
+            receipts, queue, proof, old_work,
+            attest=attest, inspect=inspect, repair=False):
+        raise DestinationRefused("bound_found_learning_retirement_incomplete")
+    kernel = _empty_kernel(old_work / "release")
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    if (attest() != proof or _read(ready, 0) != before or
+            _full_prior_tree(old_work, COMMON_ACTIVE, 0) != tree):
+        raise DestinationRefused("bound_found_retired_owner_changed")
+    return tree, kernel, proof, _sha(before)
+
+
 def shared_apply_bound_found_files_original_fd9(operation_id: str, config_fd: int,
                                                *, raw_pipe: bytes, config_digest: str,
-                                               before_save) -> dict:
+                                               before_save, queue_fd: int | None = None) -> dict:
     """Private original PHP/FD9 file-save integration, not a lifecycle command.
 
     Bind from the actual original source, then enter the existing three-file
     CAS and Config-saving checkpoint while the same final semantic P2 scope
     remains held. No alternate file or Config writer. The first supported
-    physical predecessor here is a fully inert stopped common owner; live
-    or retired learning predecessors remain fenced until their original
-    retirement proof can be joined without reversing Config/P2a lock order.
+    physical predecessor is stopped: inert or fully retired learning under
+    the original inherited P2a. A running predecessor remains fenced.
     """
     from neutral_shared_apply_source_gate import (
         native_bind_found_prepared_fd9, _with_native_found_prepared_semantic)
 
     if not callable(before_save):
         raise DestinationRefused("bound_found_original_save_scope_required")
-    witness, _ = native_bind_found_prepared_fd9(
-        operation_id, raw_pipe, config_fd, config_digest=config_digest)
-
     def write_locked(semantic, store, record, raw, rows, targets, attest):
         prior = record.get("previous")
         mode = record["found"].get("runtime_mode")
         if (type(prior) is not dict or semantic.previous_state != "stopped" or
                 semantic.previous_generation != prior["id"] or
                 semantic.candidate_root_sha256 != record["manifest"]["root_sha256"] or
-                mode not in ("0", "1") or (mode == "1" and not semantic.candidate_enabled) or
-                record.get("previous_manifest", {}).get("schema") == 2):
+                mode not in ("0", "1") or (mode == "1" and not semantic.candidate_enabled)):
             raise DestinationRefused("bound_found_stopped_inert_owner_required")
 
-        physical = _attest_bound_inert_found_predecessor(record)
-        if (_attest_bound_inert_found_predecessor(record) != physical or
+        physical = _attest_bound_found_predecessor(record, config_fd, queue)
+        if (_attest_bound_found_predecessor(record, config_fd, queue) != physical or
                 store.read() != record or attest() is not True):
             raise DestinationRefused("bound_found_old_owner_changed")
         native_witness = _bound_found_native_witness(store, record, attest)
@@ -1900,15 +1973,21 @@ def shared_apply_bound_found_files_original_fd9(operation_id: str, config_fd: in
             # FD9+FD4+P2 and immutable pins guard every durable inode stage.
             return (native_witness(current) and
                     (current["phase"] not in ("prepared", "found-files-written") or
-                     _attest_bound_inert_found_predecessor(current) == physical))
+                     _attest_bound_found_predecessor(current, config_fd, queue) == physical))
 
         return _write_shared_found_files_locked(
             store, record, raw, rows, targets, attest,
             before_save=before_save, bound_attest=bound_attest)
 
-    return _with_native_found_prepared_semantic(
-        witness, config_fd, config_digest=config_digest,
-        continue_locked=write_locked)
+    with _bound_found_queue_scope(queue_fd) as queue:
+        _, pending, _, _, _, _ = _native_found_wal_context(operation_id, config_fd)
+        if pending.get("previous_manifest", {}).get("schema") == 2 and queue is None:
+            raise DestinationRefused("bound_found_original_queue_fd_required")
+        witness, _ = native_bind_found_prepared_fd9(
+            operation_id, raw_pipe, config_fd, config_digest=config_digest)
+        return _with_native_found_prepared_semantic(
+            witness, config_fd, config_digest=config_digest,
+            continue_locked=write_locked)
 
 
 def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int,

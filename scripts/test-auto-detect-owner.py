@@ -740,7 +740,7 @@ class OwnerGenerationTests(unittest.TestCase):
         self.ps.stopped = True
         return proof, producer, folder
 
-    def _stopped_learning_witness(self, producer, learning):
+    def _stopped_learning_witness(self, producer, learning, **scope):
         with patch("auto_detect_storage.ROOT", producer):
             with patch.object(owner_mod, "_valid_learning_active",
                               return_value=learning):
@@ -748,7 +748,7 @@ class OwnerGenerationTests(unittest.TestCase):
                     journal=self.journal, work_root=self.work_root,
                     active=self.active, child_pidfile=self.child,
                     monitor_pidfile=self.monitor, epoch_root=self.epochs,
-                    runner=self.ps, owner_uid=UID, learning_schema3=True)
+                    runner=self.ps, owner_uid=UID, learning_schema3=True, **scope)
 
     def test_stopped_learning_original_epoch_and_no_process_reattested(self):
         proof, producer, folder = self._stopped_learning_fixture()
@@ -813,6 +813,50 @@ class OwnerGenerationTests(unittest.TestCase):
         self._write(self.journal / "operation.json",
                     json.dumps(self.record) + "\n")
         refuses()
+
+    def test_stopped_learning_pending_found_private_scope(self):
+        # Only the pending-owner selector is isolated here; the existing
+        # immutable epoch, active release and process census fixture is real.
+        proof, producer, _ = self._stopped_learning_fixture()
+        prior = dict(self.record["detail"])
+        pending = {
+            "phase": "found-config-saving",
+            "previous": prior,
+            "detail": dict(prior, id="f" * 32, base=prior["candidate"]),
+            "found": {}, "manifest": {"schema": 1},
+            "previous_manifest": {"schema": 2},
+        }
+        def witness(**scope):
+            return self._stopped_learning_witness(producer, proof.learning, **scope)
+
+        for phase in ("prepared", "found-files-writing", "found-files-written",
+                      "found-config-saving", "found-config-saved", "found-restoring"):
+            current = dict(pending, phase=phase)
+            with patch.object(owner_mod.SharedApplyOperation, "read", return_value=current):
+                self.assertEqual(witness(pending_found_record=current), proof)
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    witness()
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    witness(pending_found_record=pending if current != pending
+                            else dict(pending, manifest={"schema": 2}))
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    witness(pending_found_record=current, allow_transition=True)
+        for phase in ("activating", "activated", "committed"):
+            current = dict(pending, phase=phase)
+            with patch.object(owner_mod.SharedApplyOperation, "read", return_value=current):
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    witness(pending_found_record=current)
+        for change in ({"previous_manifest": {"schema": 1}},
+                       {"detail": dict(prior)},
+                       {"detail": dict(pending["detail"], base="0" * 64)}):
+            current = dict(pending, **change)
+            with patch.object(owner_mod.SharedApplyOperation, "read", return_value=current):
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    witness(pending_found_record=current)
+        self.ps.stopped = False
+        with patch.object(owner_mod.SharedApplyOperation, "read", return_value=pending):
+            with self.assertRaises(owner_mod.GenerationRefused):
+                witness(pending_found_record=pending)
 
     def test_stopped_learning_public_attester_never_authorizes_cleanup(self):
         proof, _, _ = self._stopped_learning_fixture()
