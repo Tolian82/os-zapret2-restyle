@@ -1270,6 +1270,33 @@ class OriginalSemanticReceipt:
     final_original_fd9_reattest_required: bool = True
 
 
+def _ordinary_effective_decision(old, candidate) -> EffectiveDecision:
+    """S08d proposal plus original ordinary Apply's multi-list safety fence.
+
+    No atomic multi-file active update has been proved for this path. An
+    active list change together with any other managed list change must
+    therefore be classified before mutation, not upgraded to Restart
+    after a failed Reload. Inactive-only edits remain SAVE_ONLY.
+    """
+    if old is None:
+        return EffectiveDecision("RESTART_REQUIRED", (), ())
+    decision = plan(old[0], candidate[0])
+    if (decision.kind == "RELOAD_SAFE_CANDIDATE" and
+            len(decision.changed_active) + len(decision.changed_inactive) > 1):
+        return EffectiveDecision("RESTART_REQUIRED", decision.changed_active,
+                                 decision.changed_inactive)
+    return decision
+
+
+def _running_lifecycle_proposal(enabled: bool, decision: EffectiveDecision) -> str:
+    return ("STOP" if enabled is False else {
+        "NO_CHANGE": "NO_CHANGE",
+        "SAVE_ONLY": "SAVE_ONLY",
+        "RELOAD_SAFE_CANDIDATE": "RELOAD",
+        "RESTART_REQUIRED": "RESTART",
+    }[decision.kind])
+
+
 def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSemanticReceipt:
     """Classify an original bound PREPARED by exact old-owner state, never act.
 
@@ -1406,16 +1433,10 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
             lifecycle = ("START" if source.requested_enabled else "SAVE_ONLY")
         # S08d remains the ONE pure structural classifier. Old unpinned
         # and true cold have no equality evidence, hence structural RESTART.
-        decision = (EffectiveDecision("RESTART_REQUIRED", (), ())
-                    if old is None else plan(old[0], candidate[0]))
+        decision = _ordinary_effective_decision(old, candidate)
         if lifecycle is None:
             # Physical state (RUNNING) dominates OFF even if equal S08d.
-            lifecycle = ("STOP" if source.requested_enabled is False else {
-                "NO_CHANGE": "NO_CHANGE",
-                "SAVE_ONLY": "SAVE_ONLY",
-                "RELOAD_SAFE_CANDIDATE": "RELOAD",
-                "RESTART_REQUIRED": "RESTART",
-            }[decision.kind])
+            lifecycle = _running_lifecycle_proposal(source.requested_enabled, decision)
         if (candidate != _read_pinned_effective(
                 detail=before["detail"], binding=current_pin, **read) or
                 (old is not None and old != _read_pinned_effective(
@@ -1431,6 +1452,103 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
             decision, physical, lifecycle_proposal=lifecycle)
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_SEMANTIC_PREPARED_REFUSED") from None
+
+def native_recheck_running_prepared_fd9(
+        operation: str, raw_pipe: bytes, *, source: SourceGateReceipt,
+        semantic: OriginalSemanticReceipt, config_fd: int, config_digest: str):
+    """Join the ordinary PREPARED proposal to the original locked native owner.
+
+    The original coordinator must obtain source/semantic before Config lock,
+    then supply the same original input and the actual locked Config digest.
+    No nested PHP preflight, no P2a acquisition, no WAL advance or signal.
+    This is not a Reload permit: list CAS, exact actual executable/argv,
+    atomic promotion and recovery still belong to the original executor.
+    """
+    from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
+    from shared_apply_seal import WORK
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_schema3_previous_physical import (
+        CompletePriorPreimage, LockedRunningPredecessor,
+        attest_bound_running_predecessor_under_fd9)
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(operation) is not str or not _ID.fullmatch(operation) or
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+                type(config_digest) is not str or not re.fullmatch(r"[a-f0-9]{64}", config_digest) or
+                type(source) is not SourceGateReceipt or source.generation != operation or
+                type(source.requested_enabled) is not bool or
+                type(semantic) is not OriginalSemanticReceipt or semantic.generation != operation or
+                type(semantic.previous_physical) is not CompletePriorPreimage or
+                semantic.status != "ORIGINAL_PREPARED_SEMANTIC_PROPOSAL_ONLY" or
+                semantic.authorization != "NONE" or semantic.physical_transition_allowed or
+                semantic.promotion_allowed or semantic.final_original_fd9_reattest_required is not True):
+            raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_SCOPE_REQUIRED")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        before = store.read()
+        if (type(before) is not dict or before.get("phase") != "prepared" or
+                "found" in before or type(before.get("manifest")) is not dict or
+                type(before.get("previous_manifest")) is not dict or
+                type(before.get("previous")) is not dict):
+            raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_BOUND_REQUIRED")
+        detail, prior = before["detail"], before["previous"]
+        pin, old_pin = before["manifest"], before["previous_manifest"]
+        if (detail["id"] != operation or prior["id"] == operation or
+                detail["base"] != config_digest or prior["candidate"] != config_digest or
+                semantic.previous_generation != prior["id"] or
+                semantic.candidate_root_sha256 != pin["root_sha256"] or
+                semantic.previous_root_sha256 != old_pin["root_sha256"] or
+                source.original_seal_sha256 != pin["seal_sha256"]):
+            raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_IDENTITY_CHANGED")
+        inputs = decode_pipe(raw_pipe)
+        digest = detail["candidate"] if inputs["mode"] == b"auto" else None
+
+        def observe():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != before:
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_JOURNAL_CHANGED")
+            engine = _s10_native_bound_engine_readback()
+            fresh = native_original_bound_effective_fd9(
+                operation, raw_pipe, digest, bound_record=before)
+            if fresh != source:
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_SOURCE_CHANGED")
+            read = dict(parent=WORK, sources=Path(__file__).parent, owner_uid=0,
+                        engine_version=engine["engine_version"])
+            candidate = _read_pinned_effective(detail=detail, binding=pin, **read)
+            old = _read_pinned_effective(detail=prior, binding=old_pin, **read)
+            if candidate != (fresh.effective, fresh.requested_enabled) or old[1] is not True:
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_EFFECTIVE_CHANGED")
+            decision = _ordinary_effective_decision(old, candidate)
+            if (decision != semantic.decision or
+                    _running_lifecycle_proposal(fresh.requested_enabled, decision) != semantic.lifecycle_proposal):
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_DECISION_CHANGED")
+            physical = attest_bound_running_predecessor_under_fd9(
+                before, preimage=semantic.previous_physical,
+                config_fd=config_fd, config_digest=config_digest)
+            if (type(physical) is not LockedRunningPredecessor or
+                    physical.generation != operation or physical.previous_generation != prior["id"] or
+                    physical.previous_root_sha256 != old_pin["root_sha256"] or
+                    physical.config_base_sha256 != config_digest or
+                    physical.authorization != "NONE" or physical.physical_transition_allowed or
+                    engine != _s10_native_bound_engine_readback() or store.read() != before):
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_PHYSICAL_CHANGED")
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            return fresh, candidate, old, decision, physical, engine
+
+        first = observe()
+        if observe() != first or store.read() != before:
+            raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_WITNESS_CHANGED")
+        # In-flight observation only. A caller must not manufacture an
+        # ACTIVATING or terminal record from this return value.
+        return first[4]
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError, AttributeError):
+        raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_PRECHECK_REFUSED") from None
+
 
 def native_begin_quiescent_bound_promotion_fd9(
         operation: str, raw_pipe: bytes) -> tuple[dict, "QuiescentPreimage"]:
