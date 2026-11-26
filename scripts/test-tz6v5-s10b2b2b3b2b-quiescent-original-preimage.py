@@ -161,6 +161,21 @@ class OriginalQuiescentTests(unittest.TestCase):
                 [("saved", old["id"], old["page"]),
                  ("ordinary-cold", new["id"], new["page"])] * 4)
             artifact.assert_called_with(stage, 0)
+            # Terminal child inherits Config rather than invoking PHP while
+            # it owns FD4, and borrows (never acquires) the original queue.
+            with patch.object(sys, "platform", "freebsd15"), \
+                    patch.object(os, "geteuid", return_value=0), \
+                    patch("auto_detect_original_lock_handoff.assert_inherited_config_fd") as lock, \
+                    patch.object(gate, "_cold_locked_producer", return_value=(None, None)) as producer:
+                native.reset_mock()
+                gate.attest_inert_bound_cold_recovery(
+                    record, restored=True, config_fd=4, config_digest=new["base"], queue_fd=3)
+                native.assert_not_called()
+                self.assertEqual(producer.call_count, 2)
+                self.assertGreaterEqual(lock.call_count, 5)
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    gate.attest_inert_bound_cold_recovery(
+                        record, restored=True, config_fd=4, config_digest=new["candidate"], queue_fd=3)
             # An apparently saved old Config is insufficient if the original
             # successor plan reports a different image. Both recovery gates
             # must refuse it (old implementation never read this receipt).
@@ -218,6 +233,82 @@ class OriginalQuiescentTests(unittest.TestCase):
                     {**record, "found": {}}, {**record, "phase": "config-saved"}):
                 with self.assertRaises(gate.QuiescentPreimageRefused):
                     gate.attest_inert_bound_cold_recovery(forbidden, restored=False)
+
+    def test_bound_cold_restore_terminal_handoff_retains_native_locks(self):
+        import json
+        import subprocess
+        from contextlib import contextmanager
+
+        base = "b" * 64
+        new = {"id": "d" * 32, "page": "strategies", "base": base,
+               "candidate": "c" * 64}
+        old = {"id": "a" * 32, "candidate": base}
+        record = dict(phase="activated", detail=new, previous=old,
+                      manifest={"schema": 1}, previous_manifest={"schema": 2})
+        terminal = {**record, "phase": "restored"}
+        store = Mock()
+        store.read.return_value = record
+        queue = Mock(root=gate.PRODUCER_ROOT, uid=0, locked_fd=7)
+        receipts = Mock(root=gate.EPOCH_ROOT)
+        held = [False]
+
+        @contextmanager
+        def exclusive(*, existing_only):
+            self.assertTrue(existing_only)
+            held[0] = True
+            try:
+                yield
+            finally:
+                held[0] = False
+
+        queue.exclusive.side_effect = exclusive
+
+        def advance(phase, expected, attest):
+            self.assertTrue(held[0])
+            self.assertEqual((phase, expected), ("restored", record))
+            self.assertTrue(attest())
+            store.read.return_value = terminal
+            return terminal
+
+        def invoke(argv, **kwargs):
+            self.assertTrue(held[0])
+            self.assertEqual(argv[-4:], ["ordinary-restore-finish", new["id"],
+                                          "strategies", "--queue-fd=7"])
+            self.assertEqual(kwargs["pass_fds"], (7, 9))
+            result = gate.finish_bound_cold_restore_locked(
+                new["id"], base, config_fd=4, queue_fd=3)
+            return Mock(returncode=0, stdout=(json.dumps(result) + "\n").encode())
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(os, "geteuid", return_value=0))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch.object(gate, "SharedApplyOperation", return_value=store))
+            stack.enter_context(patch.object(gate, "_present", return_value=False))
+            stack.enter_context(patch("auto_detect_post_drop._original_epoch_queue",
+                                       return_value=(queue, receipts)))
+            config_lock = stack.enter_context(patch(
+                "auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            proof = stack.enter_context(patch.object(gate, "attest_inert_bound_cold_recovery"))
+            run = stack.enter_context(patch.object(subprocess, "run", side_effect=invoke))
+            store._advance_bound_ordinary.side_effect = advance
+            self.assertEqual(gate.native_finish_bound_cold_restore(record), terminal)
+            proof.assert_called_once_with(record, restored=True, config_fd=4,
+                                          config_digest=base, queue_fd=3)
+            self.assertEqual(config_lock.call_count, 3)
+            store._advance_bound_ordinary.assert_called_once()
+            self.assertFalse(held[0])
+            store.read.return_value = record
+            store._advance_bound_ordinary.reset_mock()
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate.finish_bound_cold_restore_locked(
+                    new["id"], new["candidate"], config_fd=4, queue_fd=3)
+            store._advance_bound_ordinary.assert_not_called()
+            run.side_effect = subprocess.TimeoutExpired("php", 90)
+            with self.assertRaisesRegex(gate.QuiescentPreimageRefused, "OUTCOME_UNCERTAIN"):
+                gate.native_finish_bound_cold_restore(record)
+            self.assertFalse(held[0])
+            store._advance_bound_ordinary.assert_not_called()
 
     def test_cold_retired_predecessor_requires_existing_queue_and_complete_history(self):
         from contextlib import contextmanager

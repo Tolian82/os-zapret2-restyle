@@ -357,7 +357,8 @@ final class SharedApplyConfigWorker
                         $baseDigest === null || !preg_match('/^[a-f0-9]{64}$/D', $baseDigest))
                     : ($runtimeMode !== null || $whileP2Held !== null || $baseDigest !== null)) ||
             ($queueStream !== null && (!is_resource($queueStream) ||
-                !in_array($mode, ['recover-found-locked', 'confirm-found-save-locked'], true)))) {
+                !in_array($mode, ['recover-found-locked', 'confirm-found-save-locked',
+                    'finish-ordinary-restore-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
         }
         SharedApplyLifecycleLock::assertHeld();
@@ -768,12 +769,13 @@ final class SharedApplyConfigWorker
             'found-runtime-epoch-finalizing', 'found-runtime-committed'];
         $found = in_array($action, $foundActions, true);
         $queueFd = null;
-        if ($action === 'found-recover' && count($argv) === 5 &&
+        if (in_array($action, ['found-recover', 'ordinary-restore-finish'], true) &&
+            count($argv) === 5 &&
             preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D', $argv[4], $matches) === 1) {
             $queueFd = (int)$matches[1];
         }
         if (count($argv) !== ($action === 'found-save' || $queueFd !== null ? 5 : 4) ||
-            !in_array($action, ['preflight', 'save', 'saved', 'ordinary-cold', ...$foundActions], true) ||
+            !in_array($action, ['preflight', 'save', 'saved', 'ordinary-cold', 'ordinary-restore-finish', ...$foundActions], true) ||
             !in_array($argv[3], $found ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
@@ -787,7 +789,7 @@ final class SharedApplyConfigWorker
             if ($queueFd !== null) {
                 $queueStream = self::openOriginalFoundQueue($queueFd);
             }
-            if ($found || in_array($action, ['ordinary-cold', 'saved'], true)) {
+            if ($found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish', 'saved'], true)) {
                 // Core may repair unreadable Config from a backup on load.
                 // A recovery reader must not trigger such implicit mutation.
                 self::requireReadableConfig();
@@ -825,6 +827,32 @@ final class SharedApplyConfigWorker
                 echo self::postSaveReceipt(self::foundPhaseNative(
                     $action, $argv[2], $config, $factory, $queueStream
                 ));
+                return 0;
+            }
+            if ($action === 'ordinary-restore-finish') {
+                // The outer original FD9 caller borrowed P2a first if
+                // necessary. Keep Config locked during the SAME WAL fsync.
+                $config->lock();
+                try {
+                    self::requireReadableConfig();
+                    $image = self::classifyOrdinaryConfigImage($plan, $factory()->getNodes());
+                    if (!in_array($image['image'], ['base-image', 'base-equals-candidate'], true) ||
+                        self::readPlan($argv[2], self::ROOT, 0) !== $plan ||
+                        self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
+                        throw new \RuntimeException('Original ordinary restore Config changed');
+                    }
+                    $reply = self::originalFoundLockedFileEvidence(
+                        $config, $argv[2], 'finish-ordinary-restore-locked',
+                        $image['snapshot'], null, null, $queueStream);
+                    if ($reply !== ['result'=>'original-bound-cold-restored', 'id'=>$argv[2]] ||
+                        self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
+                        throw new \RuntimeException('Original ordinary restore receipt changed');
+                    }
+                    self::requireReadableConfig();
+                } finally {
+                    $config->unlock();
+                }
+                echo json_encode($reply, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
                 return 0;
             }
             if ($action === 'ordinary-cold') {

@@ -632,7 +632,34 @@ def _cold_rollback_config_image(record: dict, saved: dict) -> tuple:
     return image, digest, enabled
 
 
-def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
+def _cold_locked_producer(record: dict, queue_fd: int | None) -> tuple:
+    """Observe the original producer without acquiring P2a after Config."""
+    from auto_detect_post_drop import _original_epoch_queue
+
+    retired = record.get("previous_manifest", {}).get("schema") == 2
+    if queue_fd is None:
+        if retired:
+            raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_QUEUE_REQUIRED")
+        _safe_empty_directory(PRODUCER_ROOT, 0)
+        return None, None
+    queue, receipts = _original_epoch_queue()
+    if queue.root != PRODUCER_ROOT or queue.uid != 0 or receipts.root != EPOCH_ROOT:
+        raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_SCOPE_REQUIRED")
+    with queue.inherited_exclusive(queue_fd):
+        ready = None
+        if retired:
+            ready = _retired_ready_digest(EPOCH_ROOT, record["previous"]["id"], 0)
+            _verify_retired_history(record, queue, receipts, ready)
+        idle = _verify_idle_producer(queue, receipts)
+        if retired and _retired_ready_digest(EPOCH_ROOT, record["previous"]["id"], 0) != ready:
+            raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_READY_CHANGED")
+        return (ready, idle) if retired else None, idle
+
+
+def attest_inert_bound_cold_recovery(record: dict, *, restored: bool,
+                                     config_fd: int | None = None,
+                                     config_digest: str | None = None,
+                                     queue_fd: int | None = None) -> None:
     """Qualify only the existing original ordinary cold rollback route.
 
     Before the shell's existing parked/pristine/installed recovery, require
@@ -648,9 +675,19 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
     from neutral_root_stage import (
         verify_original_operation_pins, _original_plan_matches)
     from shared_apply_seal import verify_seal
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
     import json
+    import sys
 
     require_lifecycle_lock()
+    locked = config_fd is not None
+    if ((locked and (not restored or not sys.platform.startswith("freebsd") or
+                     os.geteuid() != 0 or type(config_fd) is not int or
+                     config_fd < 3 or config_fd == 9 or
+                     (queue_fd is not None and (type(queue_fd) is not int or
+                      queue_fd < 3 or queue_fd in (9, config_fd))))) or
+            (not locked and (config_digest is not None or queue_fd is not None))):
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_LOCK_SCOPE_INVALID")
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
     if (type(restored) is not bool or type(record) is not dict or
             store.read() != record or record.get("phase") not in (
@@ -662,8 +699,19 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
             record["previous"]["candidate"] != record["detail"]["base"]):
         raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_OWNER_REQUIRED")
 
+    def check_config_lock():
+        if locked:
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            detail = record["detail"]
+            if (config_digest != detail["base"] or
+                    (detail["base"] == detail["candidate"] and record["phase"] != "activating")):
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_OUTCOME_UNCERTAIN")
+
+    check_config_lock()
+
     def observe():
         require_lifecycle_lock()
+        check_config_lock()
         if store.read() != record:
             raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
         verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
@@ -683,18 +731,23 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
                 continue
             if inspect_inert_release(work / "release", owner_uid=0) != "inactive":
                 raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_SOURCE_CHANGED")
-        saved_raw = _native_call((
-            "/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
-            "saved", old["id"], old["page"]))
-        saved = json.loads(saved_raw)
-        if (type(saved) is not dict or set(saved) != {"result", "snapshot", "enabled"} or
-                saved["result"] != "committed" or saved["snapshot"] != old["candidate"] or
-                saved["enabled"] not in ("0", "1")):
-            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_CHANGED")
+        saved_raw = saved = None
+        if not locked:
+            saved_raw = _native_call((
+                "/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
+                "saved", old["id"], old["page"]))
+            saved = json.loads(saved_raw)
+            if (type(saved) is not dict or set(saved) != {"result", "snapshot", "enabled"} or
+                    saved["result"] != "committed" or saved["snapshot"] != old["candidate"] or
+                    saved["enabled"] not in ("0", "1")):
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_CHANGED")
         _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
-        retired_receipt = _observe_cold_retired_predecessor(record) if retired else None
-        idle = (retired_receipt[1] if retired else
-                _observe_idle_producer(PRODUCER_ROOT, 0))
+        if locked:
+            retired_receipt, idle = _cold_locked_producer(record, queue_fd)
+        else:
+            retired_receipt = _observe_cold_retired_predecessor(record) if retired else None
+            idle = (retired_receipt[1] if retired else
+                    _observe_idle_producer(PRODUCER_ROOT, 0))
         # Refuse damaged/foreign stage, hold, backup and active trees before
         # the existing shell may mutate IPFW or rename anything. Repeat the
         # same read at terminal completion, not a separate recovery ledger.
@@ -708,7 +761,8 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
             if active_hash != trees[0]:
                 raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_ACTIVE_TREE_CHANGED")
             kernel = _empty_kernel(old_work / "release")
-        config_image = _cold_rollback_config_image(record, saved)
+        config_image = (config_digest if locked else _cold_rollback_config_image(record, saved))
+        check_config_lock()
         _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
         if store.read() != record:
             raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
@@ -716,6 +770,101 @@ def attest_inert_bound_cold_recovery(record: dict, *, restored: bool) -> None:
 
     if observe() != observe():
         raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_PREIMAGE_CHANGED")
+
+
+def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
+                                     config_fd: int, queue_fd: int | None = None) -> dict:
+    """Original PHP owns the native Config lock through the restored fsync."""
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import DIGEST, OP_ID
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(config_digest) is not str or not DIGEST.fullmatch(config_digest) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record["detail"]["id"] != operation or
+            record["phase"] not in ("activating", "activated") or
+            "found" in record or record.get("manifest", {}).get("schema") != 1 or
+            record.get("previous", {}).get("candidate") != config_digest or
+            record["detail"]["base"] != config_digest):
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
+
+    def exact():
+        attest_inert_bound_cold_recovery(
+            record, restored=True, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=queue_fd)
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return True
+
+    result = store._advance_bound_ordinary("restored", record, exact)
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if result != {**record, "phase": "restored"} or store.read() != result:
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_READBACK_REQUIRED")
+    return {"result": "original-bound-cold-restored", "id": operation}
+
+
+def native_finish_bound_cold_restore(record: dict) -> dict:
+    """Existing FD9 caller -> original P2a if present -> PHP Config -> WAL."""
+    import json
+    import sys
+    from auto_detect_post_drop import _original_epoch_queue
+
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    if (type(record) is not dict or store.read() != record or
+            record.get("phase") not in ("activating", "activated") or
+            "found" in record or record.get("manifest", {}).get("schema") != 1 or
+            record.get("previous", {}).get("candidate") != record["detail"]["base"]):
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
+    detail = record["detail"]
+    command = ["/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
+               "ordinary-restore-finish", detail["id"], detail["page"]]
+
+    def invoke(fd=None):
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
+        args = command if fd is None else command + ["--queue-fd=" + str(fd)]
+        try:
+            reply = subprocess.run(args, stdin=subprocess.DEVNULL, capture_output=True,
+                                   pass_fds=(9,) if fd is None else (fd, 9),
+                                   timeout=90, check=False)
+        except subprocess.SubprocessError:
+            # Child may already have fsynced restored. Do not retry or
+            # guess a terminal outcome from missing transport evidence.
+            raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_OUTCOME_UNCERTAIN") from None
+        if (reply.returncode != 0 or type(reply.stdout) is not bytes or
+                len(reply.stdout) > 4096 or reply.stdout.count(b"\n") != 1 or
+                not reply.stdout.endswith(b"\n") or
+                json.loads(reply.stdout) != {
+                    "result": "original-bound-cold-restored", "id": detail["id"]}):
+            raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_RECEIPT_REQUIRED")
+        result = store.read()
+        if result != {**record, "phase": "restored"}:
+            raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_READBACK_REQUIRED")
+        return result
+
+    retired = record.get("previous_manifest", {}).get("schema") == 2
+    if _present(PRODUCER_ROOT):
+        info = PRODUCER_ROOT.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022):
+            raise QuiescentPreimageRefused("BOUND_IDLE_PRODUCER_UNTRUSTED")
+    if retired or (_present(PRODUCER_ROOT) and any(PRODUCER_ROOT.iterdir())):
+        queue, receipts = _original_epoch_queue()
+        if queue.root != PRODUCER_ROOT or queue.uid != 0 or receipts.root != EPOCH_ROOT:
+            raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_SCOPE_REQUIRED")
+        with queue.exclusive(existing_only=True):
+            return invoke(queue.locked_fd)
+    _safe_empty_directory(PRODUCER_ROOT, 0)
+    return invoke()
 
 
 def attest_quiescent_under_fd9(*, generation: str, native: NativeParity,

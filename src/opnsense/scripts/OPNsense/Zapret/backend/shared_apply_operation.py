@@ -1417,17 +1417,14 @@ class SharedApplyOperation:
 
     def _finish_bound_inert_cold_restore(self, record: dict, attest) -> dict:
         """Existing original cold recovery; never trust legacy seal alone."""
-        from neutral_schema3_quiescent_preimage import attest_inert_bound_cold_recovery
+        from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
         if self.root != DEFAULT_ROOT or self.owner != 0:
             raise SharedOperationError("bound cold restore requires native original store")
-
-        def exact():
-            if not callable(attest) or attest() is not True:
-                return False
-            attest_inert_bound_cold_recovery(record, restored=True)
-            return True
-
-        return self._advance_bound_ordinary("restored", record, exact)
+        if not callable(attest) or attest() is not True or self.read() != record:
+            raise SharedOperationError("bound cold restore bundle witness refused")
+        # The original PHP Config owner retains FD4 through the child WAL
+        # fsync. Do not also write restored from this outer CLI process.
+        return native_finish_bound_cold_restore(record)
 
     def finish_activated_restore(self, identity: str, previous_id: str, attest) -> dict:
         return self._finish_cold_pre_save_restore(

@@ -1169,6 +1169,18 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, UnicodeError, KeyError):
             print("ERROR: original Found recovery scope refused", file=sys.stderr)
             return 69
+    if argv and argv[0] == "finish-ordinary-restore-locked":
+        if len(argv) not in (3, 4) or (len(argv) == 4 and argv[3] != "--inherited-queue"):
+            return 64
+        try:
+            from neutral_schema3_quiescent_preimage import finish_bound_cold_restore_locked
+            reply = finish_bound_cold_restore_locked(
+                argv[1], argv[2], config_fd=4, queue_fd=3 if len(argv) == 4 else None)
+            print(json.dumps(reply, separators=(",", ":")))
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+            print("ERROR: original ordinary locked cold restore refused", file=sys.stderr)
+            return 69
     if argv and argv[0] == "begin-found-save-locked":
         if (len(argv) != 5 or argv[3] not in ("0", "1") or
                 not re.fullmatch(r"[a-f0-9]{64}", argv[4])):
