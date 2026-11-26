@@ -169,13 +169,15 @@ class OwnerGenerationTests(unittest.TestCase):
         self.ps.args = " ".join(self.argv.split())
 
     def witness(self, *, epoch_finalizing_operation=None,
-                reviewed_operation=None, learning_schema3=False):
+                reviewed_operation=None, learning_schema3=False,
+                pending_found_record=None):
         return owner_mod._attest_core(
             journal=self.journal, work_root=self.work_root, active=self.active,
             child_pidfile=self.child, monitor_pidfile=self.monitor,
             runner=self.ps, owner_uid=UID,
             epoch_finalizing_operation=epoch_finalizing_operation,
             reviewed_operation=reviewed_operation,
+            pending_found_record=pending_found_record,
             learning_schema3=learning_schema3,
             argv_reader=lambda pid: [EXE, *self.ps.args.split(),
                                      "--sockarg=0x200", "--user=nobody"],
@@ -413,6 +415,34 @@ class OwnerGenerationTests(unittest.TestCase):
             self._write(self.journal / "operation.json",
                         json.dumps(self.record) + "\n")
             self.assertEqual(self.witness(learning_schema3=True), confirmed)
+            # Same actual sealed fixture, now a pending successor in the
+            # one original journal. The private comparison may inspect the
+            # previous owner; the public worker must still refuse.
+            from shared_apply_operation import FOUND_KIND, FOUND_NAMES
+            successor = "f" * 32
+            def pin(detail):
+                return dict(schema=2, generation=detail["id"],
+                            root_sha256="c" * 64, seal_sha256="d" * 64,
+                            candidate_sha256=detail["candidate"])
+            prior = self.record["detail"]
+            detail = dict(id=successor, page="strategies", base=CANDIDATE,
+                          candidate="e" * 64, changed_fields=[])
+            pending = dict(schema=1, phase="prepared", detail=detail,
+                           previous=prior, manifest=pin(detail),
+                           previous_manifest=pin(prior),
+                           found=dict(schema=1, kind=FOUND_KIND,
+                                      plan_sha256="a" * 64,
+                                      sources=list(FOUND_NAMES)))
+            self._write(self.journal / "operation.json", json.dumps(pending))
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(learning_schema3=True)
+            self.assertEqual(self.witness(learning_schema3=True,
+                                          pending_found_record=pending), confirmed)
+            wrong = {**pending, "detail": {**detail, "id": "9" * 32}}
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(learning_schema3=True, pending_found_record=wrong)
+            self._write(self.journal / "operation.json",
+                        json.dumps(self.record) + "\n")
         with patch.object(owner_mod.sys, "platform", "linux"):
             with self.assertRaises(owner_mod.GenerationRefused):
                 owner_mod.attest_learning_running_generation()

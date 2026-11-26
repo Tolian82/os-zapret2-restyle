@@ -871,13 +871,14 @@ class EpochReceipts:
     def verify_learning_stopped_epoch(
         self, proof: LearningGenerationProof, *, workspace: Path,
     ) -> dict:
-        """STEP 15b3c: strict immutable schema3 epoch for STOPPED P2c.
+        """Strict immutable schema3 epoch, originally used by STOPPED P2c.
 
-        This is NOT the schema2 _epoch(), a live native source check or an
-        ACK permit. The original FD9 lifecycle attester separately proves
-        the shared Apply journal, that the real engine is absent, and
-        that no replacement engine/supervisor is running. No producer
-        inode or OLD archive is opened, changed, truncated or removed.
+        The historical method name is retained. This reads the original
+        immutable receipt only, not current producer files or process state.
+        The caller independently proves the required running/stopped owner.
+        It is NOT the schema2 _epoch(), a live native source check, a
+        retirement proof or an ACK permit. No producer inode or OLD archive
+        is opened, changed, truncated or removed.
         """
         from auto_detect_origin_map import ORIGIN_FILE
         from auto_detect_owner import _valid_learning_active

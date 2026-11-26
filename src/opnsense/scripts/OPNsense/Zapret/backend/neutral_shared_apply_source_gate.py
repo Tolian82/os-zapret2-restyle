@@ -1020,6 +1020,7 @@ class FoundSemanticReceipt:
     candidate_enabled: bool
     decision: EffectiveDecision
     reload_candidate: bool
+    previous_running_epoch_sha256: str | None = None
     status: str = "ORIGINAL_FOUND_BOUND_SEMANTIC_PROPOSAL_ONLY"
     authorization: str = "NONE"
     physical_transition_allowed: bool = False
@@ -1050,8 +1051,11 @@ def native_plan_found_prepared_fd9(witness: FoundPreparedSourceReceipt,
     again from this child. No stage/bind, new journal, Config/P1 write or
     lifecycle action. Even a reload candidate needs final original-owner
     proof, including the commit/rollback and live mutable-reference contract.
-    STOPPED is observational only, not full retired-epoch qualification.
+    A running pinned Auto predecessor also needs its original immutable
+    epoch. STOPPED remains observational, not full retired-epoch proof.
+    Never acquire the queue lock after Config FD4.
     """
+    from auto_detect_owner import attest_prepared_found_learning_predecessor
     from auto_detect_destination_commit import (
         _native_found_wal_context, _qualified_shared_found_batch,
         exclusive_destination_lock)
@@ -1144,9 +1148,22 @@ def native_plan_found_prepared_fd9(witness: FoundPreparedSourceReceipt,
                 WORK / prior["id"] / "release", owner_uid=0,
                 child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
                 if observed["state"] == "ready" else None)
+            epoch_sha = None
+            if (old_pin is not None and old_pin["schema"] == 2 and
+                    observed["state"] == "ready"):
+                learning, epoch_sha = attest_prepared_found_learning_predecessor(
+                    before, config_fd)
+                if (learning.operation_id != prior["id"] or
+                        learning.generation != prior["id"] or
+                        learning.owner_candidate_sha256 != prior["candidate"] or
+                        (learning.owner.pid, learning.owner.started) !=
+                        (runtime.pid, runtime.started) or
+                        type(epoch_sha) is not str or
+                        not re.fullmatch(r"[a-f0-9]{64}", epoch_sha)):
+                    raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_EPOCH_CHANGED")
             if store.read() != before or attest() is not True:
                 raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_OWNER_CHANGED")
-            return root, old, candidate, observed, tree, runtime
+            return root, old, candidate, observed, tree, runtime, epoch_sha
 
         with exclusive_destination_lock(AUTO_LOCK, 0):
             first = observe_locked()
@@ -1154,14 +1171,15 @@ def native_plan_found_prepared_fd9(witness: FoundPreparedSourceReceipt,
                     _s10_native_bound_engine_readback() != engine or
                     store.read() != before or attest() is not True):
                 raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_OBSERVATION_CHANGED")
-            _, old, candidate, observed, _, _ = first
+            _, old, candidate, observed, _, _, epoch_sha = first
             decision = _found_effective_decision(old, candidate, changed_sources)
             return FoundSemanticReceipt(
                 generation, prior["id"], pin["root_sha256"],
                 None if old_pin is None else old_pin["root_sha256"],
                 plan_sha, observed["state"], source.requested_enabled, decision,
                 observed["state"] == "ready" and source.requested_enabled and
-                decision.kind == "RELOAD_SAFE_CANDIDATE")
+                decision.kind == "RELOAD_SAFE_CANDIDATE",
+                previous_running_epoch_sha256=epoch_sha)
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_REFUSED") from None
 

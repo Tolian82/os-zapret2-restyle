@@ -1272,7 +1272,7 @@ class OriginalFd9SourceGate(unittest.TestCase):
         prior = {"id": old_id, "candidate": base}
         pin = {"schema": 1, "root_sha256": root_sha,
                "seal_sha256": seal, "candidate_sha256": digest}
-        old_pin = {"root_sha256": "e" * 64}
+        old_pin = {"schema": 1, "root_sha256": "e" * 64}
         links = (("hostlist-youtube.txt", "1" * 64),
                  ("hostlist-user.txt", "2" * 64))
         old_effective = EffectiveSnapshot("3" * 64, "4" * 64, links, (), 0)
@@ -1281,7 +1281,8 @@ class OriginalFd9SourceGate(unittest.TestCase):
         native = NativeParity("list", "4" * 64, "4" * 64, "absent",
                               0, 1, 0, (), (), "6" * 64, 19000, 19001)
         for case in ("legacy", "single", "multiple-active", "multiple-source",
-                     "stopped", "disabled", "bad-base", "cas-drift", "pid-drift"):
+                     "stopped", "disabled", "bad-base", "cas-drift", "pid-drift",
+                     "epoch", "epoch-drift", "epoch-refusal"):
             with self.subTest(case=case), ExitStack() as stack:
                 effective = (replace(candidate, linked=(changed[0],
                     ("hostlist-user.txt", "7" * 64)))
@@ -1299,7 +1300,8 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     "found": {"plan_sha256": plan_sha}, "previous": prior,
                     "manifest": pin}
                 if case != "legacy":
-                    before["previous_manifest"] = old_pin
+                    before["previous_manifest"] = {
+                        **old_pin, "schema": 2 if case.startswith("epoch") else 1}
                 store = Mock(read=Mock(return_value=before))
                 store.root = Path("/disposable/journal")
                 verified = {"youtube": (b"old", b"new"), "auto": (
@@ -1350,19 +1352,33 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 stack.enter_context(patch(
                     "neutral_schema3_previous_physical._full_prior_tree",
                     return_value="9" * 64))
+                from types import SimpleNamespace
+                runtime = SimpleNamespace(pid=1733, started="birth")
                 running = stack.enter_context(patch(
                     "neutral_schema3_previous_physical._running_native",
-                    side_effect=["pid-birth", "other-birth" if case == "pid-drift" else "pid-birth"]))
-                if case in ("bad-base", "cas-drift", "pid-drift"):
+                    side_effect=[runtime, SimpleNamespace(pid=1733, started="other-birth")
+                                 if case == "pid-drift" else runtime]))
+                learning = SimpleNamespace(operation_id=old_id, generation=old_id,
+                    owner_candidate_sha256=base, owner=runtime)
+                epoch = stack.enter_context(patch(
+                    "auto_detect_owner.attest_prepared_found_learning_predecessor",
+                    side_effect=(ValueError("epoch absent") if case == "epoch-refusal"
+                                 else [(learning, "1" * 64),
+                                       (learning, ("2" if case == "epoch-drift" else "1") * 64)])))
+                if case in ("bad-base", "cas-drift", "pid-drift",
+                            "epoch-drift", "epoch-refusal"):
                     with self.assertRaises(OriginalSourceGateRefused):
                         gate.native_plan_found_prepared_fd9(
                             witness, 4, config_digest="0" * 64 if case == "bad-base" else base)
                 else:
                     receipt = gate.native_plan_found_prepared_fd9(witness, 4, config_digest=base)
                     self.assertEqual(receipt.decision.kind,
-                        "RELOAD_SAFE_CANDIDATE" if case in ("single", "stopped")
+                        "RELOAD_SAFE_CANDIDATE" if case in ("single", "stopped", "epoch")
                         else "RESTART_REQUIRED")
-                    self.assertEqual(receipt.reload_candidate, case == "single")
+                    self.assertEqual(receipt.reload_candidate, case in ("single", "epoch"))
+                    self.assertEqual(receipt.previous_running_epoch_sha256,
+                                     "1" * 64 if case == "epoch" else None)
+                    self.assertEqual(epoch.call_count, 2 if case == "epoch" else 0)
                     self.assertEqual(receipt.authorization, "NONE")
                     self.assertFalse(receipt.physical_transition_allowed)
                     self.assertFalse(receipt.promotion_allowed)
