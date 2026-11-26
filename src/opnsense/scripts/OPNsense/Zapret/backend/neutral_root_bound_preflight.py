@@ -48,7 +48,8 @@ class BoundRootReceipt:
 def _attest_bound_candidate(*, generation: str, effective: EffectiveSnapshot,
                             native: NativeParity, mode: str, enabled: bool,
                             parent: Path, journal_root: Path,
-                            owner_uid: int, schema3: bool = False) -> BoundRootReceipt:
+                            owner_uid: int, schema3: bool = False,
+                            found_plan_sha256: str | None = None) -> BoundRootReceipt:
     """Detached testable physical/source proof, always nonauthorizing.
 
     Do not pass untrusted paths from a root JSON/GUI. Production uses only
@@ -58,7 +59,11 @@ def _attest_bound_candidate(*, generation: str, effective: EffectiveSnapshot,
         original = SharedApplyOperation(journal_root, owner=owner_uid)
         before = original.read()
         if (type(before) is not dict or before.get("phase") != "prepared" or
-                "found" in before or "manifest" not in before or
+                ("found" in before) != (found_plan_sha256 is not None) or
+                (found_plan_sha256 is not None and
+                 (type(found_plan_sha256) is not str or
+                  before["found"]["plan_sha256"] != found_plan_sha256)) or
+                "manifest" not in before or
                 type(before.get("detail")) is not dict or
                 before["detail"].get("id") != generation):
             raise BoundRootRefused("ORIGINAL_BOUND_PREPARED_REQUIRED")
@@ -74,6 +79,8 @@ def _attest_bound_candidate(*, generation: str, effective: EffectiveSnapshot,
             generation=generation, effective=effective, native=native,
             enabled=enabled, parent=parent, journal_root=journal_root,
             owner_uid=owner_uid)
+        if found_plan_sha256 is not None:
+            source["found_plan_sha256"] = found_plan_sha256
         if schema3:
             source["allow_bound_schema3"] = True
         else:
