@@ -285,6 +285,7 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
         verify_original_operation_pins, _verify_original_pinned_root, _original_plan_matches)
     from neutral_schema3_previous_physical import _running_native
     from voice_firewall_transaction import verify_staged_state
+    from shared_apply_seal import _stat
 
     try:
         if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
@@ -338,6 +339,8 @@ def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: Quiescent
                     (enabled and service["target_mode"] == "auto") or
                     inspect_inert_release(release, owner_uid=0) != "inactive"):
                 raise QuiescentPreimageRefused("BOUND_STAGED_ROOT_MODE_CHANGED")
+            _stat(COMMON_ACTIVE.parent, 0, directory=True)
+            _stat(backup.parent, 0, directory=True)
             tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
             if _present(stage) or _present(parked):
                 raise QuiescentPreimageRefused("BOUND_STAGED_ATOMIC_RESIDUE")

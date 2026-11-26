@@ -365,5 +365,130 @@ class OriginalQuiescentTests(unittest.TestCase):
             bound.assert_not_called()
 
 
+class StagedQuiescentTests(unittest.TestCase):
+    def test_exact_stopped_preimage_and_rollback_stage_required(self):
+        import json
+        import tempfile
+        from types import SimpleNamespace
+        from voice_firewall_transaction import TABLE_PREFIX
+        from shared_apply_seal import _stat
+        generation, old, base, candidate = "a" * 32, "b" * 32, "c" * 64, "d" * 64
+        record = {"phase": "activating",
+                  "detail": {"id": generation, "base": base, "candidate": candidate},
+                  "previous": {"id": old, "candidate": base},
+                  "manifest": {"schema": 1, "root_sha256": "e" * 64}}
+        preimage = gate.QuiescentPreimage(generation, "e" * 64, old, "f" * 64,
+            base, candidate, "tun0", "committed-stopped",
+            "native-managed-kernel-empty", "inert-no-producer-data")
+        root = {"schema": 1, "generation": generation,
+                "service": {"enabled": True, "target_mode": "list"}}
+        key = TABLE_PREFIX + "telegram"
+        manifest = {"rule_base": 19000, "rule_max": 19010,
+                    "rules": {19000: ["divert"]}, "tables": {key: ["192.0.2.1"]}}
+        tables = {key: ["192.0.2.1"], key + "_stage": []}
+        adapter = SimpleNamespace(rule_base=19000, rule_max=19099,
+            list_rules=Mock(return_value=manifest["rules"]),
+            get_table=Mock(side_effect=lambda name: tables.get(name)))
+        token = SimpleNamespace(pid=5432, started="original")
+
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            active = Path(tmp) / "runtime-v2"
+            backup = active.with_name("runtime-v2-backups") / f"runtime-v2-{generation}"
+            active.mkdir()
+            backup.mkdir(parents=True)
+            actual_uid = active.stat().st_uid
+            stack.enter_context(patch("sys.platform", "freebsd15"))
+            stack.enter_context(patch("os.geteuid", return_value=0))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch.object(gate, "SharedApplyOperation",
+                return_value=SimpleNamespace(read=lambda: record)))
+            stack.enter_context(patch.object(gate, "COMMON_ACTIVE", active))
+            stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root",
+                side_effect=lambda **kw: json.dumps(root).encode()))
+            stack.enter_context(patch("neutral_root_stage._original_plan_matches", return_value=True))
+            stack.enter_context(patch("shared_apply_seal._stat",
+                side_effect=lambda path, uid, **kw: _stat(path, actual_uid, **kw)))
+            tree = stack.enter_context(patch.object(gate, "_full_prior_tree",
+                side_effect=lambda work, target, uid: "f" * 64 if target == backup else "2" * 64))
+            stack.enter_context(patch.object(gate, "inspect_inert_release", return_value="inactive"))
+            stack.enter_context(patch.object(gate, "_safe_empty_directory"))
+            stack.enter_context(patch.object(gate, "shared_release_manifest", return_value=manifest))
+            stack.enter_context(patch.object(gate, "FreeBSDIPFWAdapter", return_value=adapter))
+            process = stack.enter_context(patch(
+                "neutral_schema3_previous_physical._running_native", return_value=token))
+
+            def run(**kw):
+                args = dict(preimage=preimage, config_fd=4, config_digest=base)
+                return gate.attest_bound_quiescent_staged_under_fd9(record, **(args | kw))
+
+            def refuses(**kw):
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    run(**kw)
+
+            result = run()
+            self.assertEqual((result.backup_sha256, result.running), ("f" * 64, token))
+            adapter.list_rules.assert_called_with(19000, 19099)
+            refuses(config_digest=candidate)
+            refuses(preimage=replace(preimage, retirement_state="original-epoch-ack-retired"))
+            del tables[key + "_stage"]
+            refuses()
+            tables[key + "_stage"] = ["192.0.2.2"]
+            refuses()
+            tables[key + "_stage"] = []
+            stage = active.parent / f".runtime-v2.stage.{generation}"
+            stage.mkdir()
+            refuses()
+            stage.rmdir()
+            tree.side_effect = lambda work, target, uid: "3" * 64
+            refuses()
+            tree.side_effect = lambda work, target, uid: "f" * 64 if target == backup else "2" * 64
+            parent = backup.parent
+            parked = parent.with_name("other-backups")
+            parent.rename(parked)
+            parent.symlink_to(parked, target_is_directory=True)
+            refuses()
+            parent.unlink()
+            parked.rename(parent)
+            process.side_effect = [token, SimpleNamespace(pid=5433)]
+            refuses()
+            process.side_effect = None
+            record["phase"] = "activated"
+            self.assertEqual(run().kernel_state, "native-managed-kernel-staged")
+            record["phase"] = "config-saved"
+            refuses()
+
+    def test_internal_activated_writer_cannot_accept_foreign_receipt(self):
+        from types import SimpleNamespace
+        from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
+        generation, base = "a" * 32, "b" * 64
+        record = {"phase": "activating", "detail": {"id": generation, "base": base},
+                  "manifest": {"schema": 1, "root_sha256": "c" * 64}}
+        receipt = gate.StagedBoundRuntimeReceipt(generation, "c" * 64, base,
+            "d" * 64, None, None, "native-managed-kernel-empty")
+        def advance(phase, expected, attest):
+            self.assertEqual((phase, expected), ("activated", record))
+            if not attest():
+                raise SharedOperationError("witness refused")
+            return dict(record, phase=phase)
+        store = SimpleNamespace(root=DEFAULT_ROOT, owner=0, read=lambda: record,
+                                _advance_bound_ordinary=Mock(side_effect=advance))
+        with patch.object(gate, "attest_bound_quiescent_staged_under_fd9",
+                          return_value=receipt) as physical:
+            def activate():
+                return SharedApplyOperation._record_native_bound_activated(
+                    store, record, preimage=None, config_fd=4, config_digest=base)
+            self.assertEqual(activate()["phase"], "activated")
+            physical.return_value = replace(receipt, root_sha256="e" * 64)
+            with self.assertRaises(SharedOperationError):
+                activate()
+            record["found"] = {"runtime_mode": "0"}
+            physical.reset_mock()
+            with self.assertRaises(SharedOperationError):
+                activate()
+            physical.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
