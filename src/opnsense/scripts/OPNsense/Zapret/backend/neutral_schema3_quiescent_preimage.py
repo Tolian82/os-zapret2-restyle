@@ -26,7 +26,9 @@ from neutral_schema3_saved_wan_preimage import (
     _qualified_config, SavedWanPreimageReceipt, SavedWanPreimageRefused,
     _DEVICE, _WAN_STATE_MARKERS,
 )
-from shared_apply_operation import SharedApplyOperation, SharedOperationError, DEFAULT_ROOT
+from shared_apply_operation import (
+    SharedApplyOperation, SharedOperationError, DEFAULT_ROOT, MANAGED_WRITING,
+)
 from shared_apply_seal import WORK, SharedBundleError
 from voice_ipfw_adapter import (
     FreeBSDIPFWAdapter, shared_release_manifest, require_lifecycle_lock,
@@ -1007,6 +1009,53 @@ def _remove_bound_pristine_stage_locked(record: dict, *, config_fd: int,
     return True
 
 
+def _finish_managed_cold_restore_locked(store, record: dict, *, config_fd: int,
+                                       queue_fd: int | None) -> dict:
+    """Restore one pre-save file with the original Config and producer locked."""
+    from auto_detect_destination_commit import (
+        exclusive_destination_lock, _restore_bound_managed_file_locked,
+    )
+    from auto_detect_gui_hostlist import AUTO_LOCK
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_seal import _stat
+
+    previous = WORK / record["previous"]["id"] / "release"
+    candidate = WORK / record["detail"]["id"] / "release"
+    active = COMMON_ACTIVE
+    prefix = active.name
+    backup = active.with_name("runtime-v2-backups") / f"{prefix}-{record['detail']['id']}"
+
+    def observe():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        _stat(active.parent, 0, directory=True)
+        if _present(backup.parent):
+            _stat(backup.parent, 0, directory=True)
+        # A managed CAS owns no directory staging or atomic tree backups.
+        if (_present(backup) or any(item.name.startswith((
+                f".{prefix}.stage.", f".{prefix}.old.", f"{prefix}.rollback-old."))
+                for item in active.parent.iterdir())):
+            raise QuiescentPreimageRefused("MANAGED_COLD_TREE_TRANSACTION_PRESENT")
+        if any(inspect_inert_release(path, owner_uid=0) != "inactive"
+               for path in (previous, candidate)):
+            raise QuiescentPreimageRefused("MANAGED_COLD_INERT_OWNER_REQUIRED")
+        kernel = _empty_kernel(previous)
+        producer = _cold_locked_producer(record, queue_fd)
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return kernel, producer
+
+    first = observe()
+
+    def attest():
+        return observe() == first
+
+    with exclusive_destination_lock(AUTO_LOCK, 0):
+        return _restore_bound_managed_file_locked(store, record, parent=WORK,
+                                                  active=active, attest=attest)
+
+
 def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
                                      config_fd: int, queue_fd: int | None = None) -> dict:
     """Original PHP owns the native Config lock through the restored fsync."""
@@ -1017,14 +1066,16 @@ def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             type(operation) is not str or not OP_ID.fullmatch(operation) or
             type(config_digest) is not str or not DIGEST.fullmatch(config_digest) or
-            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+            (queue_fd is not None and (type(queue_fd) is not int or queue_fd < 3 or
+                                       queue_fd in (9, config_fd)))):
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_SCOPE_REQUIRED")
     require_lifecycle_lock()
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
     record = store.read()
     if (type(record) is not dict or record["detail"]["id"] != operation or
-            record["phase"] not in ("activating", "activated") or
+            record["phase"] not in ("activating", "activated", MANAGED_WRITING) or
             "found" in record or record.get("manifest", {}).get("schema") != 1 or
             record.get("previous", {}).get("candidate") != config_digest or
             record["detail"]["base"] != config_digest):
@@ -1049,9 +1100,15 @@ def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
         return True
 
-    result = store._advance_bound_ordinary("restored", record, exact)
+    expected = {**record, "phase": "restored"}
+    if record["phase"] == MANAGED_WRITING:
+        expected.pop("managed")
+        result = _finish_managed_cold_restore_locked(store, record, config_fd=config_fd,
+                                                    queue_fd=queue_fd)
+    else:
+        result = store._advance_bound_ordinary("restored", record, exact)
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
-    if result != {**record, "phase": "restored"} or store.read() != result:
+    if result != expected or store.read() != result:
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_READBACK_REQUIRED")
     return {"result": "original-bound-cold-restored", "id": operation}
 
@@ -1067,7 +1124,7 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
     require_lifecycle_lock()
     store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
     if (type(record) is not dict or store.read() != record or
-            record.get("phase") not in ("activating", "activated") or
+            record.get("phase") not in ("activating", "activated", MANAGED_WRITING) or
             "found" in record or record.get("manifest", {}).get("schema") != 1 or
             record.get("previous", {}).get("candidate") != record["detail"]["base"]):
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
@@ -1095,7 +1152,10 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
                     "result": "original-bound-cold-restored", "id": detail["id"]}):
             raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_RECEIPT_REQUIRED")
         result = store.read()
-        if result != {**record, "phase": "restored"}:
+        expected = {**record, "phase": "restored"}
+        if record["phase"] == MANAGED_WRITING:
+            expected.pop("managed")
+        if result != expected:
             raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_READBACK_REQUIRED")
         return result
 

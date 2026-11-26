@@ -951,6 +951,87 @@ class OriginalManagedFileCAS(unittest.TestCase):
                         self.assertEqual(store.read(), prepared)
                         self.assertEqual(target.read_bytes(), before)
 
+    def test_managed_cold_recovery_reuses_original_boot_and_config_transport(self):
+        from contextlib import ExitStack, redirect_stdout, redirect_stderr
+        import io
+        import subprocess
+        from auto_detect_destination_commit import (
+            _write_bound_managed_file_locked, exclusive_destination_lock,
+        )
+        from auto_detect_minute import inspect_inert_release
+        from shared_apply_seal import _stat
+        import neutral_schema3_quiescent_preimage as gate
+        import shared_apply_operation as journal
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, before, after = self.fixture()
+            pending = _write_bound_managed_file_locked(store, prepared, row,
+                parent=parent, active=active, attest=lambda: True)
+            op, old = pending["detail"], pending["previous"]
+            self.assertEqual(target.read_bytes(), after)
+            cli = ["shared_apply_operation.py", "recover-managed", op["id"], old["id"]]
+
+            def php(command, *, pass_fds, budget, capture_output):
+                self.assertEqual(command[-3:], ["ordinary-restore-finish", op["id"], "strategies"])
+                self.assertEqual(pass_fds, (9,))
+                self.assertEqual(budget, 90)
+                self.assertTrue(capture_output)
+                receipt = gate.finish_bound_cold_restore_locked(op["id"], op["base"], config_fd=4)
+                return subprocess.CompletedProcess(command, 0, (json.dumps(receipt) + "\n").encode())
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(sys, "platform", "freebsd15"))
+                stack.enter_context(patch.object(os, "geteuid", return_value=0))
+                stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+                stack.enter_context(patch.object(journal, "SharedApplyOperation", return_value=store))
+                stack.enter_context(patch.object(gate, "SharedApplyOperation", return_value=store))
+                stack.enter_context(patch.object(gate, "WORK", parent))
+                stack.enter_context(patch.object(gate, "COMMON_ACTIVE", active))
+                stack.enter_context(patch.object(gate, "PRODUCER_ROOT", parent / "absent-producer"))
+                stack.enter_context(patch("shared_apply_seal._stat", side_effect=
+                    lambda path, uid, **kw: _stat(path, store.owner, **kw)))
+                stack.enter_context(patch.object(gate, "inspect_inert_release", side_effect=
+                    lambda path, **kw: inspect_inert_release(path, owner_uid=store.owner)))
+                stack.enter_context(patch("auto_detect_destination_commit.exclusive_destination_lock",
+                    side_effect=lambda *_: exclusive_destination_lock(parent / "p2.lock", store.owner)))
+                config = stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+                processes = stack.enter_context(patch.object(gate, "_zero_processes"))
+                kernel = stack.enter_context(patch.object(gate, "_empty_kernel",
+                                                        return_value="native-managed-kernel-empty"))
+                transport = stack.enter_context(patch.object(gate, "_run_bound_restore_joined", side_effect=php))
+                stdout = stack.enter_context(redirect_stdout(io.StringIO()))
+                stack.enter_context(redirect_stderr(io.StringIO()))
+
+                self.assertEqual(journal.main([cli[0], "inspect"]), 0)
+                self.assertEqual(stdout.getvalue(),
+                    f"managed-writing {op['id']} strategies {old['id']} {old['page']}\n")
+                self.assertEqual(journal.main([*cli[:-1], "7" * 32]), 69)
+                transport.assert_not_called()
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    gate.finish_bound_cold_restore_locked(op["id"], op["candidate"], config_fd=4)
+                processes.side_effect = gate.QuiescentPreimageRefused("live process")
+                self.assertEqual(journal.main(cli), 69)
+                processes.side_effect = None
+                kernel.side_effect = gate.QuiescentPreimageRefused("managed kernel is not empty")
+                self.assertEqual(journal.main(cli), 69)
+                kernel.side_effect = None
+                residue = parent / f".{active.name}.stage.{op['id']}"
+                residue.mkdir()
+                self.assertEqual(journal.main(cli), 69)
+                residue.rmdir()
+                self.assertEqual(store.read(), pending)
+                self.assertEqual(target.read_bytes(), after)
+
+                self.assertEqual(journal.main(cli), 0)
+                self.assertTrue(stdout.getvalue().endswith(f"managed-restored={op['id']}\n"))
+                self.assertEqual(journal.main([cli[0], "inspect"]), 0)
+                self.assertTrue(stdout.getvalue().endswith(f"committed {old['id']} {old['page']}\n"))
+                self.assertEqual(journal.main(cli), 69)
+                config.assert_called_with(4, Path("/conf/config.xml"), owner_uid=None)
+
+            self.assertEqual(target.read_bytes(), before)
+            self.assertEqual(committed_manifest(store.read()), prepared["previous_manifest"])
+
 
 if __name__ == "__main__":
     unittest.main()

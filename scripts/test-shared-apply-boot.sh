@@ -26,6 +26,13 @@ case "$#" in
             *) exit 1 ;;
         esac
         ;;
+    4)
+        [ "$1" = "$MOCK_BACKEND/shared_apply_operation.py" ] &&
+        [ "$2" = recover-managed ] && [ "$3" = "$MOCK_MANAGED_ID" ] &&
+        [ "$4" = "$MOCK_EXPECTED_ID" ] || exit 1
+        printf '%s\n' "$MOCK_MANAGED_REPLY"
+        exit "$MOCK_MANAGED_RC"
+        ;;
     *) exit 1 ;;
 esac
 MOCKPY
@@ -34,6 +41,7 @@ SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsens
 RUNTIME=$(dirname "$SOURCE")/backend/apply_runtime.sh
 sed -n '/^shared_apply_boot_service()$/,/^}$/p' "$SOURCE" > "$ROOT/boot.sh"
 sed -n '/^shared_apply_boot_receipt_verified_service()$/,/^}$/p' "$SOURCE" >> "$ROOT/boot.sh"
+sed -n '/^shared_apply_recover_managed_cold_service()$/,/^}$/p' "$SOURCE" >> "$ROOT/boot.sh"
 # Test the actual non-observer preflight called during a cold Boot; it
 # refuses spoofed old observer metadata and never pauses the native engine.
 sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/boot.sh"
@@ -970,5 +978,35 @@ grep -Fqx 'zapret is running' "$ROOT/status-entry-output" ||
     fail "status ignored unavailable lifecycle lock"
 
 echo 'PASS: generic status separates verified native and genuine legacy'
+
+(
+    MOCK_MANAGED_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    MOCK_MANAGED_REPLY="managed-restored=$MOCK_MANAGED_ID"
+    MOCK_MANAGED_RC=0
+    export MOCK_MANAGED_ID MOCK_MANAGED_REPLY MOCK_MANAGED_RC
+    old="committed $ID voice"
+    live_owner="$old"
+    shared_apply_inspect_service() { printf '%s\n' "$live_owner"; }
+    expect_rc() {
+        if shared_apply_recover_managed_cold_service "$2"; then
+            fail "managed recovery unexpectedly succeeded"
+        else
+            [ "$?" -eq "$1" ] || fail "managed recovery returned the wrong refusal"
+        fi
+    }
+    pending="managed-writing $MOCK_MANAGED_ID strategies $ID voice"
+    [ "$(shared_apply_recover_managed_cold_service "$pending")" = "$old" ] ||
+        fail "managed recovery did not return the verified previous owner"
+    live_owner="committed $MOCK_MANAGED_ID strategies"
+    expect_rc 70 "$pending"
+    live_owner="$old"
+    MOCK_MANAGED_REPLY="managed-restored=$ID"
+    expect_rc 70 "$pending"
+    MOCK_MANAGED_REPLY="managed-restored=$MOCK_MANAGED_ID"
+    MOCK_MANAGED_RC=69
+    expect_rc 70 "$pending"
+    expect_rc 69 "$pending extra"
+) || fail "managed cold recovery accepted an unknown receipt or predecessor"
+echo 'PASS: managed cold recovery returns only the verified prior owner'
 
 echo 'PASS: committed native common owner routes boot through sealed release and fresh saved Config'

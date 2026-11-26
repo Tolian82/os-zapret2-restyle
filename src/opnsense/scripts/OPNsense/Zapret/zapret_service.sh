@@ -991,6 +991,27 @@ shared_apply_inspect_service()
     "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" inspect
 }
 
+# The managed-file recovery has no whole-tree or IPFW rollback fallback.
+shared_apply_recover_managed_cold_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    IFS=' ' read -r _managed_phase _managed_id _managed_page _managed_old _managed_old_page <<EOF
+$1
+EOF
+    [ "$_managed_phase:$_managed_page" = managed-writing:strategies ] &&
+        [ "$1" = "$_managed_phase $_managed_id $_managed_page $_managed_old $_managed_old_page" ] || return 69
+    case "$_managed_id:$_managed_old" in *[!a-f0-9:]*) return 69 ;; esac
+    [ "${#_managed_id}" -eq 32 ] && [ "${#_managed_old}" -eq 32 ] || return 69
+    case "$_managed_old_page" in strategies|voice) ;; *) return 69 ;; esac
+
+    _managed_receipt=$("${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \
+        recover-managed "$_managed_id" "$_managed_old") || return 70
+    [ "$_managed_receipt" = "managed-restored=$_managed_id" ] || return 70
+    _managed_owner=$(shared_apply_inspect_service) || return 70
+    [ "$_managed_owner" = "committed $_managed_old $_managed_old_page" ] || return 70
+    printf '%s\n' "$_managed_owner"
+}
+
 # Stop exactly the committed common owner, using the original FD9 lifecycle.
 # Native Config and the durable committed owner stay unchanged: start can
 # bring the same sealed release back, without legacy fallback or a new Apply.
@@ -4011,6 +4032,12 @@ service_with_lifecycle_lock()
                             # the kernel contains NO active Zapret2 owner.
                             # Never invoke legacy start after native save.
                             shared_apply_recover_saved_service "$_shared_owner"
+                            service_api_complete "$?"
+                            return $?
+                            ;;
+                        managed-writing\ *)
+                            _shared_owner=$(shared_apply_recover_managed_cold_service "$_shared_owner") || return $?
+                            shared_apply_boot_service "$_shared_owner"
                             service_api_complete "$?"
                             return $?
                             ;;
