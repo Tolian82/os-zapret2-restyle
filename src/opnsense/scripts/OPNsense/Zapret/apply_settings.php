@@ -134,7 +134,8 @@ final class SharedConfigCommit
         string $page,
         object $config,
         callable $modelFactory,
-        ?callable $attestLocked = null
+        ?callable $attestLocked = null,
+        ?callable $confirmLocked = null
     ): array {
         // The original found-file CAS and cold-crash protocol are not yet
         // authorized. Never persist only XML (including a found-only click)
@@ -154,12 +155,18 @@ final class SharedConfigCommit
             $target = SettingsApply::mergeForCommit($current, $plan, $page);
             $targetSnapshot = VoiceSettingsSnapshot::digest($target);
             $changeCount = count($plan['changed_fields']);
+            if ($changeCount > 0) {
+                self::validateOwnedModelFields($model, $target, $plan['changed_fields']);
+            }
             if ($attestLocked !== null &&
                 $attestLocked(VoiceSettingsSnapshot::digest($current), $targetSnapshot) !== true) {
                 throw new \RuntimeException('Original ordinary Config save witness refused');
             }
             // Repeated Apply must not manufacture a second Config revision.
             if ($changeCount === 0) {
+                if ($confirmLocked !== null && $confirmLocked($targetSnapshot) !== true) {
+                    throw new \RuntimeException('Original unchanged Config confirmation refused');
+                }
                 return [
                     'result' => 'unchanged',
                     'saved' => false,
@@ -167,7 +174,6 @@ final class SharedConfigCommit
                     'change_count' => 0,
                 ];
             }
-            self::validateOwnedModelFields($model, $target, $plan['changed_fields']);
             if (!$model->serializeToConfig(false, true)) {
                 throw new \RuntimeException(
                     'Native OPNsense model serialization failed'
@@ -198,10 +204,14 @@ final class SharedConfigCommit
             $config->lock();
             try {
                 $saved = $modelFactory()->getNodes();
-                if (!hash_equals($targetSnapshot, VoiceSettingsSnapshot::digest($saved))) {
+                $savedSnapshot = VoiceSettingsSnapshot::digest($saved);
+                if (!hash_equals($targetSnapshot, $savedSnapshot)) {
                     throw new SharedConfigSaveUncertain(
                         'Native Config changed after save; runtime reconciliation required'
                     );
+                }
+                if ($confirmLocked !== null && $confirmLocked($savedSnapshot) !== true) {
+                    throw new SharedConfigSaveUncertain('Original saved Config confirmation refused');
                 }
             } finally {
                 $config->unlock();

@@ -907,7 +907,8 @@ class OriginalManagedFileCAS(unittest.TestCase):
                 stack.enter_context(patch("neutral_schema3_previous_physical._running_native", return_value=running))
                 stack.enter_context(patch("neutral_schema3_previous_physical._running_executable_identity",
                                           return_value=executable))
-                stack.enter_context(patch("voice_ipfw_adapter.shared_release_manifest"))
+                stack.enter_context(patch("voice_ipfw_adapter.shared_release_manifest",
+                    return_value={"rule_base": 19000, "rule_max": 19099}))
                 kernel = stack.enter_context(patch("voice_firewall_transaction.verify_prior_state"))
                 config = stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
                 stack.enter_context(patch("auto_detect_destination_commit.exclusive_destination_lock",
@@ -917,7 +918,7 @@ class OriginalManagedFileCAS(unittest.TestCase):
                     gate.native_write_running_managed_file_fd9(detail["id"], b"fixture",
                         source=None, semantic=semantic, config_fd=4, config_digest=detail["base"])
             self.assertGreaterEqual(config.call_count, 4)
-            self.assertEqual(config.call_count, kernel.call_count)
+            self.assertEqual(config.call_count, 2 * kernel.call_count)
             self.assertEqual(len(attempts), 2)
             self.assertEqual(attempts[1], before)
             self.assertEqual(target.read_bytes(), before)
@@ -1031,6 +1032,100 @@ class OriginalManagedFileCAS(unittest.TestCase):
 
             self.assertEqual(target.read_bytes(), before)
             self.assertEqual(committed_manifest(store.read()), prepared["previous_manifest"])
+
+    def test_managed_config_requires_installed_file_and_same_running_owner_through_commit(self):
+        from contextlib import ExitStack, redirect_stdout
+        import io
+        import auto_detect_effective_known as transport
+        from auto_detect_destination_commit import (
+            DestinationRefused, _restore_bound_managed_file_locked,
+            _write_bound_managed_file_locked, exclusive_destination_lock,
+        )
+        from shared_apply_operation import _config_save_witness
+        from shared_apply_seal import verify_seal
+        import neutral_shared_apply_source_gate as gate
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            for foreign_file in (False, True):
+                with self.subTest(foreign_file=foreign_file):
+                    store, prepared, row, parent, active, target, _, after = self.fixture()
+                    detail = prepared["detail"]
+                    running = "3" * 64
+                    witness = _config_save_witness(detail,
+                        verify_seal(parent / detail["id"], owner=store.owner)["sha256"]["plan.json"])
+                    kw = dict(parent=parent, active=active, attest=lambda: True)
+                    pending = _write_bound_managed_file_locked(store, prepared, row,
+                                                              running_sha256=running, **kw)
+                    with ExitStack() as stack:
+                        config = stack.enter_context((parent / "config.xml").open("w+b"))
+                        config.write(b"<opnsense/>\n")
+                        config.flush()
+                        stack.enter_context(patch.object(sys, "platform", "freebsd15"))
+                        stack.enter_context(patch.object(os, "geteuid", return_value=0))
+                        stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+                        stack.enter_context(patch("shared_apply_seal.WORK", parent))
+                        stack.enter_context(patch("shared_apply_seal.verify_seal", side_effect=
+                            lambda work, **_: verify_seal(work, owner=store.owner)))
+                        stack.enter_context(patch("neutral_schema3_previous_physical.COMMON_ACTIVE", active))
+                        stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+                        stack.enter_context(patch("auto_detect_destination_commit.exclusive_destination_lock",
+                            side_effect=lambda *_: exclusive_destination_lock(parent / "p2.lock", store.owner)))
+                        owner = stack.enter_context(patch.object(gate, "_native_managed_running_digest",
+                                                               return_value=running))
+
+                        native_checkpoint = gate.native_checkpoint_managed_config_fd9
+
+                        def checkpoint(*, saved=False, digest=witness):
+                            return native_checkpoint(detail["id"], digest,
+                                config_fd=config.fileno(), saved=saved)
+
+                        def request(mode, phase):
+                            def inherited(operation, digest, *, config_fd, saved):
+                                self.assertEqual(operation, detail["id"])
+                                self.assertEqual(config_fd, 4)
+                                return checkpoint(saved=saved, digest=digest)
+
+                            with patch.object(gate, "native_checkpoint_managed_config_fd9", side_effect=inherited), \
+                                 redirect_stdout(io.StringIO()) as output:
+                                self.assertEqual(transport.main([mode, detail["id"], witness]), 0)
+                            self.assertEqual(json.loads(output.getvalue()), {"result": phase, "id": detail["id"]})
+                            return store.read()
+
+                        with self.assertRaises(gate.OriginalSourceGateRefused):
+                            checkpoint(saved=True)
+                        with self.assertRaisesRegex(gate.OriginalSourceGateRefused, "MANAGED_CONFIG_PLAN_CHANGED"):
+                            checkpoint(digest="4" * 64)
+                        self.assertEqual(store.read(), pending)
+                        saving = request("begin-managed-config-save-locked", "managed-config-saving")
+                        self.assertEqual(saving, {**pending, "phase": "managed-config-saving"})
+                        self.assertEqual(store.read(), saving)
+                        with self.assertRaises(DestinationRefused):
+                            _restore_bound_managed_file_locked(store, saving, **kw)
+                        self.assertFalse(native_lifecycle_gate("common-recover-activating",
+                            root=store.root)["safe_to_mutate"])
+                        with self.assertRaises(gate.OriginalSourceGateRefused):
+                            checkpoint()
+                        with self.assertRaisesRegex(gate.OriginalSourceGateRefused, "MANAGED_CONFIG_PLAN_CHANGED"):
+                            checkpoint(saved=True, digest="4" * 64)
+                        owner.return_value = "5" * 64
+                        with self.assertRaises(SharedOperationError):
+                            checkpoint(saved=True)
+                        self.assertEqual(store.read(), saving)
+                        owner.return_value = running
+                        if foreign_file:
+                            sibling = target.with_name("substitute")
+                            sibling.write_bytes(after)
+                            sibling.replace(target)
+                            with self.assertRaisesRegex(DestinationRefused, "installed_image_changed"):
+                                checkpoint(saved=True)
+                            self.assertEqual(store.read(), saving)
+                        else:
+                            committed = request("confirm-managed-config-save-locked", "committed")
+                            self.assertEqual(committed, store.read())
+                            self.assertEqual(committed["phase"], "committed")
+                            self.assertEqual(committed_manifest(committed), prepared["manifest"])
+                            self.assertNotIn("managed", committed)
+                        self.assertEqual(target.read_bytes(), after)
 
 
 if __name__ == "__main__":

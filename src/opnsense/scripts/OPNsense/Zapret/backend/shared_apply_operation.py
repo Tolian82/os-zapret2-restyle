@@ -42,6 +42,7 @@ FOUND_POST_PHASES = frozenset(("found-files-written", *FOUND_CONFIG_PHASES))
 FOUND_ROLLBACK_FROM = frozenset((*FOUND_FILE_PHASES, "found-config-saving"))
 FOUND_RESTORING = "found-restoring"
 MANAGED_WRITING = "managed-writing"
+MANAGED_CONFIG_SAVING = "managed-config-saving"
 FOUND_RUNTIME_NEXT = {
     "found-config-saved": {"activating"},
     "activating": {"activated"},
@@ -63,6 +64,7 @@ PHASES = frozenset((
     "epoch-finalizing", "committed", "restored", "restore-failed", "requires-review",
     "found-files-writing", "found-files-written",
     "found-config-saving", "found-config-saved", FOUND_RESTORING, MANAGED_WRITING,
+    MANAGED_CONFIG_SAVING,
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -126,6 +128,12 @@ def _validate_detail(detail: object) -> dict:
     ) or len(fields) != len(set(fields)):
         raise SharedOperationError("invalid common Apply field proof")
     return detail
+
+
+def _config_save_witness(detail: dict, plan_sha256: str) -> str:
+    proof = "\0".join((detail["page"], detail["base"], detail["candidate"],
+                       plan_sha256, ",".join(detail["changed_fields"])))
+    return hashlib.sha256(proof.encode("ascii")).hexdigest()
 
 
 
@@ -234,18 +242,24 @@ def _validate_managed_write(record: dict) -> None:
 
     row = record["managed"]
     if (set(record) != {"schema", "phase", "detail", "previous", "manifest",
-                        "previous_manifest", "managed"} or record["phase"] != MANAGED_WRITING or
+                        "previous_manifest", "managed"} or
             record["detail"]["page"] != "strategies" or
             record["previous"]["candidate"] != record["detail"]["base"] or
             record["manifest"]["schema"] != 1 or record["previous_manifest"]["schema"] != 1 or
             type(row) is not dict or not _MANAGED_BASE <= row.keys() or
-            row.keys() - _MANAGED_BASE - {"ready", "installed", "restore"} or
+            row.keys() - _MANAGED_BASE - {"ready", "installed", "restore", "running_sha256"} or
             type(row["name"]) is not str or not _REF_FILE.fullmatch(row["name"]) or
             any(type(row[k]) is not str or not DIGEST.fullmatch(row[k])
                 for k in ("before_sha256", "after_sha256")) or
             row["before_sha256"] == row["after_sha256"] or
             ("ready" not in row and ("installed" in row or "restore" in row))):
         raise SharedOperationError("invalid original managed write intent")
+    if "running_sha256" in row and (type(row["running_sha256"]) is not str or
+                                    not DIGEST.fullmatch(row["running_sha256"])):
+        raise SharedOperationError("invalid managed running owner digest")
+    if (record["phase"] == MANAGED_CONFIG_SAVING and
+            (not {"running_sha256", "installed"} <= row.keys() or "restore" in row)):
+        raise SharedOperationError("managed Config save lacks installed owner")
     for key in ("before_identity", "installed"):
         if key not in row:
             continue
@@ -358,7 +372,7 @@ def _validate_record(record: object) -> dict:
         if ((prior is None and record["phase"] != "prepared") or
                 (prior is not None and prior["candidate"] != record["detail"]["base"])):
             raise SharedOperationError("bound found predecessor Config mismatch")
-    if ("managed" in record) != (record["phase"] == MANAGED_WRITING):
+    if ("managed" in record) != (record["phase"] in (MANAGED_WRITING, MANAGED_CONFIG_SAVING)):
         raise SharedOperationError("managed write phase lacks original intent")
     if "managed" in record:
         _validate_managed_write(record)
@@ -864,10 +878,7 @@ class SharedApplyOperation:
 
         check_root()
         seal = verify_seal(work, owner=self.owner)
-        detail = record["detail"]
-        proof = "\0".join((detail["page"], detail["base"], detail["candidate"],
-                           seal["sha256"]["plan.json"], ",".join(detail["changed_fields"])))
-        if hashlib.sha256(proof.encode("ascii")).hexdigest() != witness_sha256:
+        if _config_save_witness(record["detail"], seal["sha256"]["plan.json"]) != witness_sha256:
             raise SharedOperationError("ordinary Config save differs from original activation")
         check_root()
         if self.read() != record:
@@ -876,13 +887,11 @@ class SharedApplyOperation:
     def _checkpoint_managed_write(self, expected: dict, managed: dict | None, attest, *,
                                   shared_work_parent: Path) -> dict:
         """Fsync one managed list intent or inode pin in the original WAL."""
-        from neutral_root_stage import verify_original_operation_pins
-        from voice_ipfw_adapter import require_lifecycle_lock
-
         if self.read() != expected or not callable(attest):
             raise SharedOperationError("managed write owner changed")
         next_record = dict(expected)
-        if expected["phase"] == "prepared" and type(managed) is dict and managed.keys() == _MANAGED_BASE:
+        if (expected["phase"] == "prepared" and type(managed) is dict and
+                managed.keys() - {"running_sha256"} == _MANAGED_BASE):
             next_record.update(phase=MANAGED_WRITING, managed=managed)
         elif expected["phase"] == MANAGED_WRITING:
             if managed is None:
@@ -900,6 +909,29 @@ class SharedApplyOperation:
                 next_record["managed"] = managed
         else:
             raise SharedOperationError("managed write requires prepared owner")
+        return self._persist_managed_checkpoint(expected, next_record, attest,
+                                                shared_work_parent=shared_work_parent)
+
+    def _checkpoint_managed_config(self, expected: dict, *, saved: bool, attest,
+                                   shared_work_parent: Path) -> dict:
+        """Begin the uncertain Config window or publish the verified new owner."""
+        phase = MANAGED_CONFIG_SAVING if saved else MANAGED_WRITING
+        if self.read() != expected or expected["phase"] != phase:
+            raise SharedOperationError("managed Config checkpoint owner changed")
+        row = expected["managed"]
+        if not {"running_sha256", "installed"} <= row.keys() or "restore" in row:
+            raise SharedOperationError("managed Config checkpoint lacks installed owner")
+        next_record = {**expected, "phase": "committed" if saved else MANAGED_CONFIG_SAVING}
+        if saved:
+            next_record.pop("managed")
+        return self._persist_managed_checkpoint(expected, next_record, attest,
+                                                shared_work_parent=shared_work_parent)
+
+    def _persist_managed_checkpoint(self, expected: dict, next_record: dict, attest, *,
+                                    shared_work_parent: Path) -> dict:
+        from neutral_root_stage import verify_original_operation_pins
+        from voice_ipfw_adapter import require_lifecycle_lock
+
         _validate_record(next_record)
 
         def verify():

@@ -1624,6 +1624,38 @@ def native_recheck_running_prepared_fd9(
         raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_PRECHECK_REFUSED") from None
 
 
+def _managed_running_digest(running, executable: tuple) -> str:
+    from dataclasses import astuple
+
+    return hashlib.sha256(json.dumps((astuple(running), executable),
+                                     separators=(",", ":")).encode("ascii")).hexdigest()
+
+
+def _native_managed_running_digest(prior_release: Path, config_fd: int) -> str:
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_schema3_previous_physical import (
+        _running_native, _running_executable_identity, CHILD_EXEC, CHILD_PID, MONITOR_PID,
+    )
+    from voice_firewall_transaction import verify_prior_state
+    from voice_ipfw_adapter import (
+        require_lifecycle_lock, FreeBSDIPFWAdapter, shared_release_manifest,
+    )
+
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    observed = _running_native(prior_release, owner_uid=0,
+                               child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+    engine = _s10_native_bound_engine_readback()
+    executable = _running_executable_identity(observed.pid, engine["engine_sha256"],
+                                               executable=Path(CHILD_EXEC), runner=subprocess.run)
+    capture = shared_release_manifest(prior_release)
+    if capture["rule_base"] != 19000 or capture["rule_max"] not in (19010, 19099):
+        raise OriginalSourceGateRefused("S10_MANAGED_KERNEL_SCOPE_INVALID")
+    verify_prior_state(FreeBSDIPFWAdapter(19000, 19099), capture, capture)
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return _managed_running_digest(observed, executable)
+
+
 def native_write_running_managed_file_fd9(
         operation: str, raw_pipe: bytes, *, source: SourceGateReceipt,
         semantic: OriginalSemanticReceipt, config_fd: int, config_digest: str) -> dict:
@@ -1632,15 +1664,9 @@ def native_write_running_managed_file_fd9(
         exclusive_destination_lock, _write_bound_managed_file_locked,
         _restore_bound_managed_file_locked)
     from auto_detect_gui_hostlist import AUTO_LOCK
-    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
-    from neutral_schema3_previous_physical import (
-        _running_native, _running_executable_identity, CHILD_EXEC, CHILD_PID,
-        MONITOR_PID, COMMON_ACTIVE)
+    from neutral_schema3_previous_physical import COMMON_ACTIVE
     from shared_apply_operation import SharedApplyOperation, MANAGED_WRITING
     from shared_apply_seal import WORK
-    from voice_firewall_transaction import verify_prior_state
-    from voice_ipfw_adapter import (
-        require_lifecycle_lock, FreeBSDIPFWAdapter, shared_release_manifest)
 
     physical = native_recheck_running_prepared_fd9(
         operation, raw_pipe, source=source, semantic=semantic,
@@ -1662,26 +1688,16 @@ def native_write_running_managed_file_fd9(
             physical.managed_preimages[0][0] != semantic.decision.changed_active[0]):
         raise OriginalSourceGateRefused("S10_MANAGED_SINGLE_ACTIVE_SCOPE_REQUIRED")
     prior_release = WORK / physical.previous_generation / "release"
+    running_sha256 = _managed_running_digest(physical.running, physical.executable_identity)
 
     def attest():
-        require_lifecycle_lock()
-        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
-        observed = _running_native(prior_release, owner_uid=0,
-                                   child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
-        engine = _s10_native_bound_engine_readback()
-        if (observed != physical.running or _running_executable_identity(
-                observed.pid, engine["engine_sha256"], executable=Path(CHILD_EXEC),
-                runner=subprocess.run) != physical.executable_identity):
-            raise OriginalSourceGateRefused("S10_MANAGED_RUNNING_OWNER_CHANGED")
-        capture = shared_release_manifest(prior_release)
-        verify_prior_state(FreeBSDIPFWAdapter(19000, 19099), capture, capture)
-        return True
+        return _native_managed_running_digest(prior_release, config_fd) == running_sha256
 
     with exclusive_destination_lock(AUTO_LOCK, 0):
         try:
             return _write_bound_managed_file_locked(
                 store, record, physical.managed_preimages[0], parent=WORK,
-                active=COMMON_ACTIVE, attest=attest)
+                active=COMMON_ACTIVE, attest=attest, running_sha256=running_sha256)
         except (OSError, ValueError, RuntimeError):
             pending = store.read()
             if (pending is not None and pending["phase"] == MANAGED_WRITING and
@@ -1693,6 +1709,53 @@ def native_write_running_managed_file_fd9(
                 except (OSError, ValueError, RuntimeError):
                     raise OriginalSourceGateRefused("S10_MANAGED_RESTORE_UNCERTAIN") from None
             raise
+
+
+def native_checkpoint_managed_config_fd9(operation: str, witness_sha256: str, *,
+                                         config_fd: int, saved: bool) -> dict:
+    """Original PHP owner: durable intent before save, exact commit after relock."""
+    from auto_detect_destination_commit import (
+        exclusive_destination_lock, _attest_bound_managed_installed_locked,
+    )
+    from auto_detect_gui_hostlist import AUTO_LOCK
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_schema3_previous_physical import COMMON_ACTIVE
+    from shared_apply_operation import (
+        SharedApplyOperation, MANAGED_WRITING, MANAGED_CONFIG_SAVING, DIGEST, _config_save_witness,
+    )
+    from shared_apply_seal import WORK, verify_seal
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation) or
+            type(witness_sha256) is not str or not DIGEST.fullmatch(witness_sha256) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9 or type(saved) is not bool):
+        raise OriginalSourceGateRefused("S10_MANAGED_CONFIG_NATIVE_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    phase = MANAGED_CONFIG_SAVING if saved else MANAGED_WRITING
+    if (record is None or record["phase"] != phase or record["detail"]["id"] != operation or
+            not {"running_sha256", "installed"} <= record["managed"].keys() or
+            "restore" in record["managed"]):
+        raise OriginalSourceGateRefused("S10_MANAGED_CONFIG_OWNER_REQUIRED")
+    prior_release = WORK / record["previous"]["id"] / "release"
+
+    def attest():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        seal = verify_seal(WORK / operation, owner=0)
+        if _config_save_witness(record["detail"], seal["sha256"]["plan.json"]) != witness_sha256:
+            raise OriginalSourceGateRefused("S10_MANAGED_CONFIG_PLAN_CHANGED")
+        _attest_bound_managed_installed_locked(store, record, parent=WORK, active=COMMON_ACTIVE)
+        if saved:
+            os.fsync(config_fd)
+        return _native_managed_running_digest(prior_release, config_fd) == record["managed"]["running_sha256"]
+
+    with exclusive_destination_lock(AUTO_LOCK, 0):
+        return store._checkpoint_managed_config(record, saved=saved, attest=attest,
+                                                shared_work_parent=WORK)
 
 
 def native_begin_quiescent_bound_promotion_fd9(

@@ -408,7 +408,8 @@ final class SharedApplyConfigWorker
         ?callable $whileP2Held = null, $queueStream = null, ?string $baseDigest = null
     ): array {
         $begin = $mode === 'begin-found-save-locked';
-        $ordinaryRestore = $mode === 'finish-ordinary-restore-locked';
+        $joined = in_array($mode, ['finish-ordinary-restore-locked',
+            'begin-managed-config-save-locked', 'confirm-managed-config-save-locked'], true);
         if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
                  !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
@@ -468,11 +469,11 @@ final class SharedApplyConfigWorker
                 throw new \RuntimeException('Original cold native child unavailable');
             }
             try {
-                if ($ordinaryRestore) {
+                if ($joined) {
                     [$output, $failed, $code] = self::joinOrdinaryRestoreChild($proc, $pipes);
                     $proc = null;
                     if ($failed || $code !== 0 || $output === '') {
-                        throw new \RuntimeException('Original ordinary restore outcome uncertain after join');
+                        throw new \RuntimeException('Original locked operation outcome uncertain after join');
                     }
                 } else {
                     stream_set_blocking($pipes[1], false);
@@ -538,7 +539,7 @@ final class SharedApplyConfigWorker
                     if (is_resource($pipe)) { fclose($pipe); }
                 }
                 if (is_resource($proc)) {
-                    if (!$ordinaryRestore) {
+                    if (!$joined) {
                         @proc_terminate($proc);
                     }
                     // Never release Config while a synchronous ordinary
@@ -846,8 +847,9 @@ final class SharedApplyConfigWorker
             $queueFd = (int)$matches[1];
         }
         if (count($argv) !== ($action === 'found-save' || $queueFd !== null ? 5 : 4) ||
-            !in_array($action, ['preflight', 'save', 'saved', 'ordinary-cold', 'ordinary-restore-finish', ...$foundActions], true) ||
-            !in_array($argv[3], $found ? ['strategies'] : ['voice', 'strategies'], true)) {
+            !in_array($action, ['preflight', 'save', 'saved', 'managed-save',
+                'ordinary-cold', 'ordinary-restore-finish', ...$foundActions], true) ||
+            !in_array($argv[3], $found || $action === 'managed-save' ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
         }
@@ -860,7 +862,8 @@ final class SharedApplyConfigWorker
             if ($queueFd !== null) {
                 $queueStream = self::openOriginalFoundQueue($queueFd);
             }
-            if ($found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish', 'save', 'saved'], true)) {
+            if ($found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish',
+                'save', 'saved', 'managed-save'], true)) {
                 // Core may repair unreadable Config from a backup on load.
                 // A recovery reader must not trigger such implicit mutation.
                 self::requireReadableConfig();
@@ -962,17 +965,27 @@ final class SharedApplyConfigWorker
             }
             $id = $argv[2];
             $page = $argv[3];
-            $result = SharedConfigCommit::persist($plan, $page, $config, $factory,
-                static function (string $base, string $candidate) use ($config, $id, $page, $plan, $planSha): bool {
-                    // Commit the exact plan bytes consumed by this PHP owner
-                    // and the fresh before/after Model images under FD4.
-                    $digest = hash('sha256', implode("\0", [
-                        $page, $base, $candidate, $planSha, implode(',', $plan['changed_fields']),
-                    ]));
-                    $reply = self::originalLockedFileEvidence(
-                        $config, $id, 'attest-ordinary-save-locked', $digest);
-                    return $reply === ['result'=>'original-ordinary-save-verified', 'id'=>$id];
+            $attest = static function (string $mode, string $base, string $candidate, string $phase)
+                use ($config, $id, $page, $plan, $planSha): bool {
+                // Hash the same parsed plan bytes and native Model snapshots on both sides of FD4.
+                if ($mode === 'confirm-managed-config-save-locked') {
+                    self::requireReadableConfig();
                 }
+                $digest = hash('sha256', implode("\0", [
+                    $page, $base, $candidate, $planSha, implode(',', $plan['changed_fields']),
+                ]));
+                return self::originalLockedFileEvidence($config, $id, $mode, $digest) ===
+                    ['result'=>$phase, 'id'=>$id];
+            };
+            $managed = $action === 'managed-save';
+            $result = SharedConfigCommit::persist($plan, $page, $config, $factory,
+                $managed
+                    ? static fn(string $base, string $candidate): bool => $attest(
+                        'begin-managed-config-save-locked', $base, $candidate, 'managed-config-saving')
+                    : static fn(string $base, string $candidate): bool => $attest(
+                        'attest-ordinary-save-locked', $base, $candidate, 'original-ordinary-save-verified'),
+                $managed ? static fn(string $snapshot): bool => $attest(
+                    'confirm-managed-config-save-locked', $plan['dependencies'], $snapshot, 'committed') : null
             );
             $receipt = self::postSaveReceipt($result);
             // Even a short response write is uncertain to the caller:
@@ -987,6 +1000,11 @@ final class SharedApplyConfigWorker
             fwrite(STDERR, "ERROR: native shared Config save uncertain; retain recovery evidence\n");
             return 70;
         } catch (\Throwable $error) {
+            if ($action === 'managed-save') {
+                // A joined child may have fsynced its phase before losing the receipt.
+                fwrite(STDERR, "ERROR: original managed Config outcome requires journal review\n");
+                return 70;
+            }
             fwrite(STDERR, "ERROR: native shared Config refused before save: " .
                 $error->getMessage() . "\n");
             return 69;

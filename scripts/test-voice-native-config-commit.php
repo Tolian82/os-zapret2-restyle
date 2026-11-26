@@ -124,6 +124,37 @@ namespace {
             $guarded->disk === $prior && FakeModel::$state === $prior,
             'refused ordinary journal witness mutated original Config');
     }
+    foreach ([true, false] as $confirmSucceeds) {
+        $managedConfig = new FakeConfig($prior);
+        $checkpoints = [];
+        try {
+            SharedConfigCommit::persist($strategyPlan, 'strategies', $managedConfig,
+                static fn()=>new FakeModel(),
+                static function (string $base, string $candidate) use ($managedConfig, $strategyPlan, &$checkpoints): bool {
+                    verify($managedConfig->locks === 1 && $managedConfig->saves === 0,
+                        'managed intent must precede native Config save');
+                    verify($base === VoiceSettingsSnapshot::digest($managedConfig->disk) &&
+                        $candidate === VoiceSettingsSnapshot::digest($strategyPlan['candidate']),
+                        'managed save intent digests changed');
+                    $checkpoints[] = 'saving';
+                    return true;
+                },
+                static function (string $snapshot) use ($managedConfig, $confirmSucceeds, &$checkpoints): bool {
+                    verify($managedConfig->locks === 1 && $managedConfig->saves === 1 &&
+                        $snapshot === VoiceSettingsSnapshot::digest($managedConfig->disk),
+                        'managed publication requires fresh locked Config readback');
+                    $checkpoints[] = 'confirmed';
+                    return $confirmSucceeds;
+                }
+            );
+            verify($confirmSucceeds, 'managed Config confirmation refusal returned success');
+        } catch (\OPNsense\Zapret\Native\SharedConfigSaveUncertain $error) {
+            verify(!$confirmSucceeds, 'unexpected managed Config uncertainty');
+        }
+        verify($checkpoints === ['saving', 'confirmed'] &&
+            $managedConfig->saves === 1 && $managedConfig->locks === 0,
+            'managed Config checkpoints must share the original single writer');
+    }
     $config->disk['strategylab']['enablequic'] = '0';
     $result = SharedConfigCommit::persist(
         $strategyPlan,'strategies',$config,static fn()=>new FakeModel()

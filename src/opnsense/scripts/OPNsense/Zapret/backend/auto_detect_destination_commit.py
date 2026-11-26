@@ -1630,7 +1630,8 @@ def _managed_write_images(store, record: dict, name: str, parent: Path) -> tuple
 
 
 def _write_bound_managed_file_locked(store, record: dict, preimage: tuple, *,
-                                     parent: Path, active: Path, attest) -> dict:
+                                     parent: Path, active: Path, attest,
+                                     running_sha256: str | None = None) -> dict:
     """One original FD9/Config/P2 replacement. Keep the Config save fenced."""
     from shared_apply_seal import _release_hash, _stat
 
@@ -1654,6 +1655,8 @@ def _write_bound_managed_file_locked(store, record: dict, preimage: tuple, *,
         raise DestinationRefused("original_managed_preimage_changed")
     row = {"name": name, "before_sha256": old_sha, "after_sha256": new_sha,
            "before_identity": list(live_identity)}
+    if running_sha256 is not None:
+        row["running_sha256"] = running_sha256
     record = store._checkpoint_managed_write(record, row, attest, shared_work_parent=parent)
 
     def stage(phase, item, data, info):
@@ -1673,6 +1676,21 @@ def _write_bound_managed_file_locked(store, record: dict, preimage: tuple, *,
 
     _replace(path, content, desired, uid, stage_fn=stage, expected_identity=live_identity)
     return record
+
+
+def _attest_bound_managed_installed_locked(store, record: dict, *, parent: Path,
+                                          active: Path) -> None:
+    from shared_apply_seal import _release_hash, _stat
+
+    row = record["managed"]
+    before, _, after, _, _, after_hash = _managed_write_images(store, record, row["name"], parent)
+    _stat(active, store.owner, directory=True)
+    current, info = _target(active / "managed" / row["name"], store.owner)
+    if (current != after or (_sha(before), _sha(after)) !=
+            (row["before_sha256"], row["after_sha256"]) or
+            list(_target_identity(info)) != row["installed"] or
+            _release_hash(active, store.owner) != after_hash):
+        raise DestinationRefused("original_managed_installed_image_changed")
 
 
 def _restore_bound_managed_file_locked(store, record: dict, *, parent: Path,

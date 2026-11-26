@@ -1191,6 +1191,20 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError, RuntimeError, KeyError, TypeError):
             print("ERROR: original ordinary locked Config save refused", file=sys.stderr)
             return 69
+    if argv and argv[0] in ("begin-managed-config-save-locked", "confirm-managed-config-save-locked"):
+        if len(argv) != 3:
+            return 64
+        saved = argv[0] == "confirm-managed-config-save-locked"
+        try:
+            from neutral_shared_apply_source_gate import native_checkpoint_managed_config_fd9
+
+            record = native_checkpoint_managed_config_fd9(argv[1], argv[2], config_fd=4, saved=saved)
+            print(json.dumps({"result": record["phase"], "id": record["detail"]["id"]},
+                             separators=(",", ":")))
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+            print("ERROR: original managed locked Config phase refused", file=sys.stderr)
+            return 69
     if argv and argv[0] == "finish-ordinary-restore-locked":
         if len(argv) not in (3, 4) or (len(argv) == 4 and argv[3] != "--inherited-queue"):
             return 64
