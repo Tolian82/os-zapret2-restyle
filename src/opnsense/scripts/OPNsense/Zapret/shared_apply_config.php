@@ -409,11 +409,11 @@ final class SharedApplyConfigWorker
     ): array {
         $begin = $mode === 'begin-found-save-locked';
         $managedWrite = in_array($mode, ['write-managed-handoff-locked',
-            'write-first-disabled-handoff-locked'], true);
+            'write-first-disabled-handoff-locked', 'write-first-enabled-handoff-locked'], true);
         $joined = in_array($mode, ['finish-ordinary-restore-locked', 'recover-managed-config-locked',
             'begin-managed-config-save-locked', 'confirm-managed-config-save-locked',
             'write-managed-handoff-locked', 'write-first-disabled-handoff-locked',
-            'recover-first-config-locked'], true);
+            'write-first-enabled-handoff-locked', 'recover-first-config-locked'], true);
         if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
                  !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
@@ -861,7 +861,7 @@ final class SharedApplyConfigWorker
             $queueFd = (int)$matches[1];
         }
         if (count($argv) !== ($action === 'found-save' || $queueFd !== null ? 5 : 4) ||
-            !in_array($action, ['preflight', 'save', 'saved', 'managed-save', 'managed-apply', 'first-disabled-apply',
+            !in_array($action, ['preflight', 'save', 'saved', 'managed-save', 'managed-apply', 'first-disabled-apply', 'first-enabled-apply',
                 'ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover', 'managed-save-recover', ...$foundActions], true) ||
             !in_array($argv[3], $found || in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply'], true)
                 ? ['strategies'] : ['voice', 'strategies'], true)) {
@@ -879,7 +879,7 @@ final class SharedApplyConfigWorker
             }
             if ($found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover',
                 'save', 'saved', 'managed-save', 'managed-save-recover', 'managed-apply',
-                'first-disabled-apply'], true)) {
+                'first-disabled-apply', 'first-enabled-apply'], true)) {
                 // Core may repair unreadable Config from a backup on load.
                 // A recovery reader must not trigger such implicit mutation.
                 self::requireReadableConfig();
@@ -1007,19 +1007,22 @@ final class SharedApplyConfigWorker
             $page = $argv[3];
             $managedApply = $action === 'managed-apply';
             $firstDisabled = $action === 'first-disabled-apply';
+            $firstEnabled = $action === 'first-enabled-apply';
             $attest = static function (string $mode, string $base, string $candidate, string $phase)
-                use ($config, $id, $plan, $planSha, $managedApply, $firstDisabled): bool {
+                use ($config, $id, $plan, $planSha, $managedApply, $firstDisabled, $firstEnabled): bool {
                 // Hash the same parsed plan bytes and native Model snapshots on both sides of FD4.
                 if ($mode === 'confirm-managed-config-save-locked') {
                     self::requireReadableConfig();
                 }
                 $digest = self::configSaveWitness($plan, $planSha, $base, $candidate);
-                if ($firstDisabled && $mode === 'begin-managed-config-save-locked') {
+                if (($firstDisabled || $firstEnabled) && $mode === 'begin-managed-config-save-locked') {
                     return self::originalLockedFileEvidence(
-                        $config, $id, 'write-first-disabled-handoff-locked', $digest)
-                        === ['result'=>'first-disabled-activated', 'id'=>$id];
+                        $config, $id, $firstEnabled ? 'write-first-enabled-handoff-locked'
+                            : 'write-first-disabled-handoff-locked', $digest)
+                        === ['result'=>($firstEnabled ? 'first-enabled-activated'
+                            : 'first-disabled-activated'), 'id'=>$id];
                 }
-                if ($firstDisabled && $mode === 'confirm-managed-config-save-locked') {
+                if (($firstDisabled || $firstEnabled) && $mode === 'confirm-managed-config-save-locked') {
                     self::requireReadableConfig();
                     return self::originalLockedFileEvidence(
                         $config, $id, 'recover-first-config-locked',
@@ -1034,7 +1037,7 @@ final class SharedApplyConfigWorker
                 return self::originalLockedFileEvidence($config, $id, $mode, $digest) ===
                     ['result'=>$phase, 'id'=>$id];
             };
-            $managed = $action === 'managed-save' || $managedApply || $firstDisabled;
+            $managed = $action === 'managed-save' || $managedApply || $firstDisabled || $firstEnabled;
             $result = SharedConfigCommit::persist($plan, $page, $config, $factory,
                 $managed
                     ? static fn(string $base, string $candidate): bool => $attest(
@@ -1058,7 +1061,7 @@ final class SharedApplyConfigWorker
             return 70;
         } catch (\Throwable $error) {
             if (in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply',
-                    'first-disabled-apply', 'ordinary-first-recover'], true)) {
+                    'first-disabled-apply', 'first-enabled-apply', 'ordinary-first-recover'], true)) {
                 // A joined child may have fsynced its phase before losing the receipt.
                 fwrite(STDERR, "ERROR: original managed Config outcome requires journal review\n");
                 return 70;
