@@ -828,6 +828,51 @@ class OriginalFd9SourceGate(unittest.TestCase):
             store.return_value._advance_bound_ordinary.assert_not_called()
             nested.assert_not_called()
 
+    def test_original_prepared_dispatch_uses_only_first_disabled_save_owner(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from neutral_schema3_quiescent_preimage import QuiescentPreimage
+
+        op, base, candidate = "a" * 32, "b" * 64, "c" * 64
+        root, seal = "d" * 64, "e" * 64
+        before = {"phase": "prepared", "detail": {"id": op, "page": "voice",
+                  "base": base, "candidate": candidate, "changed_fields": ["general.enabled"]},
+                  "manifest": {"schema": 1, "root_sha256": root, "seal_sha256": seal}}
+        committed = {**before, "phase": "committed"}
+        preimage = QuiescentPreimage(op, root, None, None, base, candidate, None,
+            "first-install-empty", "native-kernel-absent", "no-prior-data")
+        source = gate.SourceGateReceipt("list", "f" * 64, (), generation=op,
+            original_seal_sha256=seal, requested_enabled=False)
+        semantic = gate.OriginalSemanticReceipt(op, None, root, None,
+            gate.EffectiveDecision("RESTART_REQUIRED", (), ()), preimage,
+            lifecycle_proposal="SAVE_ONLY")
+        store = Mock(read=Mock(return_value=before))
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"list"}))
+            stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
+                return_value=source))
+            stack.enter_context(patch.object(gate, "native_plan_original_prepared_fd9",
+                return_value=semantic))
+            managed = stack.enter_context(patch.object(gate, "native_run_managed_apply_fd9"))
+            first = stack.enter_context(patch.object(gate, "native_run_first_disabled_apply_fd9",
+                side_effect=lambda *a, **kw: (setattr(store.read, "return_value", committed) or committed)))
+            self.assertEqual(gate.native_coordinate_original_prepared_fd9(op, b"source"),
+                ("first-disabled-committed", committed, source, semantic))
+            managed.assert_not_called()
+            first.assert_called_once()
+            first.reset_mock()
+            store.read.return_value = before
+            stack.enter_context(patch.object(gate, "native_run_first_disabled_apply_fd9",
+                side_effect=RuntimeError("uncertain")))
+            with self.assertRaisesRegex(RuntimeError, "uncertain"):
+                gate.native_coordinate_original_prepared_fd9(op, b"source")
+            managed.assert_not_called()
+
+
     def test_s10_prepared_dispatch_joins_managed_route_without_lifecycle_fallback(self):
         from contextlib import ExitStack
         from unittest.mock import Mock

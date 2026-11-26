@@ -1336,6 +1336,56 @@ def native_install_first_disabled_bound_locked(record: dict, *, preimage: Quiesc
     return result, receipt
 
 
+def native_write_first_disabled_handoff_locked(operation: str, witness: str, stream, *,
+                                               config_fd: int) -> dict:
+    """Original FD4 child consumes its FD9 parent's exact first cold proof."""
+    import json
+    import sys
+    from dataclasses import asdict, fields
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import DIGEST, OP_ID, _config_save_witness
+    from shared_apply_seal import verify_seal
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(witness) is not str or not DIGEST.fullmatch(witness) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "activating" or
+            record["detail"]["id"] != operation or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 1):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_OWNER_REQUIRED")
+    detail = record["detail"]
+    plan = verify_seal(WORK / operation, owner=0)["sha256"]["plan.json"]
+    if (witness != _config_save_witness(detail, plan) or
+            detail["base"] == detail["candidate"]):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_CONFIG_CHANGED")
+    raw = stream.read(4097)
+    if (len(raw) > 4096 or not raw.endswith(b"\n") or raw.count(b"\n") != 1):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_WIRE_INVALID")
+    parsed = json.loads(raw)
+    if (type(parsed) is not dict or
+            set(parsed) != {field.name for field in fields(QuiescentPreimage)}):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_WIRE_INVALID")
+    preimage = QuiescentPreimage(**parsed)
+    exact = (json.dumps(asdict(preimage), sort_keys=True, separators=(",", ":"),
+                        ensure_ascii=True, allow_nan=False) + "\n").encode("ascii")
+    if exact != raw or store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_WIRE_CHANGED")
+    result, receipt = native_install_first_disabled_bound_locked(
+        record, preimage=preimage, config_fd=config_fd, config_digest=detail["base"])
+    if (result != {**record, "phase": "activated"} or
+            store.read() != result or type(receipt) is not StagedBoundRuntimeReceipt or
+            receipt.running is not None or receipt.pretraffic_sha256 is not None):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_READBACK_REQUIRED")
+    return {"result": "first-disabled-activated", "id": operation}
+
+
 def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
                                   config_digest: str, queue_fd: int | None) -> dict:
     """Restore first inert cold tree with exact base and reversible kernel."""
