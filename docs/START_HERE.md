@@ -1,6 +1,6 @@
-## 26 November 2026 — S10 original Found PREPARED source/CAS candidate
+## 26 November 2026 — S10 genuine native Found PREPARED source/CAS candidate
 
-**Accepted main:** `v0.6.5_234` / `21ed595a84c1c5435b0476a4258ae0bd5c66c176`; PR #1355 exact-head 6/6 SUCCESS. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=235`, `v0.6.5_235`, prospective CI-only `os-zapret2-restyle-0.6.5_235.pkg`. Import-only existing original FD4/FD9/P2 sealed Found PREPARED → S08d source bridge, no physical permission, no mixed WAL or new writer. See [S10](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md), [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Exact-head CI pending, S10 OPEN/S11 blocked.
+**Accepted main:** `v0.6.5_235` / `c0323d7eb29cc3638237cb25a704d8af93652eb0` (merged PR #1356, exact-head 8 successes/7 legitimate skips, postmerge main integrity and version/classification successful). No testing package published. **Candidate:** `VERSION=0.6.5`, `PLUGIN_REVISION=236`, source-only `v0.6.5_236`. Existing disposable G03 native original Config FD4/FD9/P2 Found PREPARED checks sealed source/CAS, unchanged original WAL, protected files, Config/PID/IPFW and original recovery. No production actor, physical activation or owner appliance action. Native exact-head G03 pending. [S10](architecture/ZAPRET2_TZ6V5_S10_ORIGINAL_SEMANTIC_COMPARISON.md), [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). S10 OPEN; S11 blocked.
 
 ---
 
