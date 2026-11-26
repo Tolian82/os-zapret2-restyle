@@ -306,7 +306,7 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
     except (QuiescentPreimageRefused, SavedWanPreimageRefused,
             BoundRootRefused, PreviousPhysicalRefused, SharedOperationError,
             SharedBundleError, VoiceFirewallError, GenerationRefused,
-            MinuteRefused, OSError, TypeError, KeyError, ValueError,
+            MinuteRefused, OSError, TypeError, KeyError, ValueError, RuntimeError,
             subprocess.SubprocessError):
         raise QuiescentPreimageRefused("ORIGINAL_QUIESCENT_PREIMAGE_REFUSED") from None
 

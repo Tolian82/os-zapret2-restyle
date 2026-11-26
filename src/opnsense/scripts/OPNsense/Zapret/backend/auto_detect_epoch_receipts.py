@@ -211,6 +211,8 @@ class EpochReceipts:
                 pinned_prior = record["previous"]["id"]
         _directory(self.root.parent, self.uid)
         if not self.root.exists() and not self.root.is_symlink():
+            if pinned_prior is not None:
+                raise ReceiptRefused("pinned_previous_learning_history_missing")
             return 0
         _directory(self.root, self.uid)
         all_names = os.listdir(self.root)

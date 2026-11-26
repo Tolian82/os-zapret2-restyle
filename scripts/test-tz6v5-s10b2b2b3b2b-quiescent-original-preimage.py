@@ -460,8 +460,34 @@ class StagedQuiescentTests(unittest.TestCase):
                              candidate)
             refuses(saved=True)
             refuses(queue_fd=3)
+            # Same original stopped predecessor, now a pinned learning
+            # generation with a genuine old retirement receipt identity.
+            from contextlib import nullcontext
+            retired = replace(preimage, retirement_state="original-epoch-ack-retired",
+                              retired_ready_sha256="9" * 64)
+            record["previous_manifest"] = {"schema": 2}
+            queue = SimpleNamespace(inherited_exclusive=Mock(return_value=nullcontext()))
+            receipts = object()
+            stack.enter_context(patch("auto_detect_post_drop._original_epoch_queue",
+                                      return_value=(queue, receipts)))
+            history = stack.enter_context(patch.object(gate, "_verify_retired_history"))
+            idle = stack.enter_context(patch.object(gate, "_verify_idle_retired_producer",
+                                                    return_value=((1, 2), (1, 3))))
+            refuses(preimage=retired)
+            self.assertEqual(run(preimage=retired, queue_fd=3).retired_ready_sha256,
+                             "9" * 64)
+            self.assertEqual(run(preimage=retired, queue_fd=3).idle_producer,
+                             ((1, 2), (1, 3)))
+            queue.inherited_exclusive.assert_called_with(3)
+            history.assert_called_with(record, queue, receipts, "9" * 64)
+            history.side_effect = ValueError("archive drift")
+            refuses(preimage=retired, queue_fd=3)
+            history.side_effect = None
+            idle.side_effect = ValueError("retired root data")
+            refuses(preimage=retired, queue_fd=3)
+            idle.side_effect = None
             record["phase"] = "config-saved"
-            refuses()
+            refuses(preimage=retired, queue_fd=3)
 
     def test_internal_activated_writer_cannot_accept_foreign_receipt(self):
         from types import SimpleNamespace

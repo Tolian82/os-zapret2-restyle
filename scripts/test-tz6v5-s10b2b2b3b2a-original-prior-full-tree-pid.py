@@ -303,14 +303,7 @@ class FinalBoundRuntimeReadOnly(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
             producer = Path(tmp)
             pending = producer / "pending"
-            pending.mkdir(mode=0o700)
             files = []
-            for name in ("inbox.txt", "debug.log", "learning-" + generation + "-1.txt"):
-                path = producer / name
-                path.write_bytes(b"")
-                st = path.stat()
-                files.append(dict(name=name, device=st.st_dev, inode=st.st_ino,
-                                  nlink=st.st_nlink))
             proof = SimpleNamespace(operation_id=generation, generation=generation,
                                     owner_candidate_sha256=digest,
                                     owner=SimpleNamespace(pid=PID, started=BIRTH))
@@ -346,7 +339,7 @@ class FinalBoundRuntimeReadOnly(unittest.TestCase):
             stack.enter_context(patch("auto_detect_storage._secure",
                                       side_effect=lambda path, **kw: path.lstat()))
             stack.enter_context(patch("auto_detect_queue.DurableInbox", return_value=queue))
-            actual_uid = pending.stat().st_uid
+            actual_uid = producer.stat().st_uid
             from neutral_schema3_quiescent_preimage import _safe_empty_directory
             stack.enter_context(patch("neutral_schema3_quiescent_preimage._safe_empty_directory",
                 side_effect=lambda path, uid: _safe_empty_directory(path, actual_uid)))
@@ -384,6 +377,16 @@ class FinalBoundRuntimeReadOnly(unittest.TestCase):
             refuses()
             cfg.side_effect = None
 
+            (producer / "foreign").write_bytes(b"x")
+            refuses()
+            (producer / "foreign").unlink()
+            pending.mkdir(mode=0o700)
+            for name in ("inbox.txt", "debug.log", "learning-" + generation + "-1.txt"):
+                path = producer / name
+                path.write_bytes(b"")
+                st = path.stat()
+                files.append(dict(name=name, device=st.st_dev, inode=st.st_ino,
+                                  nlink=st.st_nlink))
             record["phase"] = "epoch-finalizing"
             record["manifest"]["schema"] = root["schema"] = 2
             root["service"]["target_mode"] = "auto"
