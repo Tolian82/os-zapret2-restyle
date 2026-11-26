@@ -349,6 +349,7 @@ class LockedRunningPredecessor:
     authorization: str = "NONE"
     physical_transition_allowed: bool = False
     executable_identity: tuple | None = None
+    managed_preimages: tuple | None = None
 
 
 def attest_bound_running_predecessor_under_fd9(

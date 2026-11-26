@@ -691,6 +691,50 @@ class OriginalFd9SourceGate(unittest.TestCase):
         self.assertEqual(gate._ordinary_effective_decision(None, (single, True)).kind,
                          "RESTART_REQUIRED")
 
+    def test_s10_managed_change_preimages_pin_exact_old_and_new_bytes(self):
+        import hashlib
+        import tempfile
+        from neutral_effective_diff import EffectiveSnapshot, EffectiveDecision
+
+        sha = lambda data: hashlib.sha256(data).hexdigest()
+        name = "hostlist-youtube.txt"
+        before, after = b"old.example\n", b"new.example\n"
+        old = EffectiveSnapshot("1"*64, "2"*64, ((name, sha(before)),), (), 0)
+        new = replace(old, linked=((name, sha(after)),))
+        decision = gate._ordinary_effective_decision((old, True), (new, True))
+        with tempfile.TemporaryDirectory() as tmp:
+            previous, candidate, active = [Path(tmp) / n for n in ("old", "new", "active")]
+            for root in (previous, candidate, active):
+                (root / "managed").mkdir(parents=True)
+                (root / "managed" / name).write_bytes(after if root == candidate else before)
+            live = active / "managed" / name
+            args = dict(previous_release=previous, candidate_release=candidate,
+                        active=active, owner_uid=os.geteuid())
+
+            def observe():
+                return gate._managed_change_preimages(old, new, decision, **args)
+
+            first = observe()
+            self.assertEqual(first, observe())
+            self.assertEqual(first[0][:3], (name, sha(before), sha(after)))
+            self.assertEqual(first[0][-1][1], live.stat().st_ino)
+            temp = live.with_suffix(".temp")
+            temp.write_bytes(before)
+            os.replace(temp, live)
+            self.assertNotEqual(first, observe())
+            live.write_bytes(after)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                observe()
+            live.write_bytes(before)
+            (candidate / "managed" / name).write_bytes(before)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                observe()
+            (candidate / "managed" / name).write_bytes(after)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                gate._managed_change_preimages(old, new,
+                    EffectiveDecision("NO_CHANGE", (), ()), **args)
+            self.assertEqual(live.read_bytes(), before)
+
     def test_s10_locked_running_recheck_uses_same_original_source_and_decision(self):
         from contextlib import ExitStack
         from unittest.mock import Mock
@@ -739,13 +783,17 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 return_value=(1, 2, "a" * 64)))
             running = stack.enter_context(patch(
                 "neutral_schema3_previous_physical._running_native", return_value=physical.running))
+            managed = stack.enter_context(patch.object(gate, "_managed_change_preimages",
+                return_value=(("hostlist-youtube.txt", "old", "new", (1, 2), (1, 3), (1, 4)),)))
 
             def run(**kw):
                 args = dict(source=source, semantic=semantic, config_fd=4, config_digest=base)
                 args.update(kw)
                 return gate.native_recheck_running_prepared_fd9(op, b"original", **args)
 
-            self.assertEqual(run(), replace(physical, executable_identity=(1, 2, "a" * 64)))
+            self.assertEqual(run(), replace(physical, executable_identity=(1, 2, "a" * 64),
+                                            managed_preimages=managed.return_value))
+            self.assertEqual(managed.call_count, 2)
             self.assertEqual(exe.call_count, 2)
             self.assertEqual(running.call_count, 2)
             exe.side_effect = ((1, 2, "a" * 64), (1, 3, "a" * 64))
@@ -755,6 +803,10 @@ class OriginalFd9SourceGate(unittest.TestCase):
             self.assertEqual(fresh.call_count, 4)
             fresh.assert_called_with(op, b"original", None, bound_record=record)
             self.assertEqual(attested.call_count, 4)
+            managed.side_effect = (managed.return_value, (("changed-inode",),))
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                run()
+            managed.side_effect = None
             nested.assert_not_called()
             for bad in (dict(config_fd=9), dict(config_digest=candidate),
                         dict(semantic=replace(semantic, lifecycle_proposal="RESTART")),

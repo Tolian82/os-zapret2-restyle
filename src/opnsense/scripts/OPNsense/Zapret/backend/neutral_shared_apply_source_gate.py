@@ -1454,6 +1454,55 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_SEMANTIC_PREPARED_REFUSED") from None
 
+def _managed_change_preimages(old: EffectiveSnapshot, candidate: EffectiveSnapshot,
+                              decision: EffectiveDecision, *, previous_release: Path,
+                              candidate_release: Path, active: Path, owner_uid: int) -> tuple:
+    """Read exact changed managed bytes and CAS identities, never replace them.
+
+    Only same-structure no-restart proposals qualify. The sealed old bytes
+    must equal the live old bytes; the sealed candidate must match S08d.
+    Return in-flight evidence, not a durable intent or a Reload permit.
+    """
+    from auto_detect_destination_commit import _target, _file_identity
+
+    if (decision != _ordinary_effective_decision((old, True), (candidate, True)) or
+            decision.kind not in ("NO_CHANGE", "SAVE_ONLY", "RELOAD_SAFE_CANDIDATE")):
+        raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_DECISION_INVALID")
+    old_hashes = dict(old.linked + old.unlinked)
+    new_hashes = dict(candidate.linked + candidate.unlinked)
+    names = tuple(sorted(decision.changed_active + decision.changed_inactive))
+    if (set(old_hashes) != set(new_hashes) or len(names) != len(set(names)) or
+            names != tuple(sorted(name for name in old_hashes
+                                  if old_hashes[name] != new_hashes[name]))):
+        raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_SCOPE_INVALID")
+    if not names:
+        return ()
+    roots = (previous_release, candidate_release, active)
+    if len(set(roots)) != 3:
+        raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_ROOT_ALIAS")
+    for root in roots:
+        _stat(root, owner_uid, directory=True)
+        _stat(root / "managed", owner_uid, directory=True)
+
+    def read(root, name, expected):
+        data, info = _target(root / "managed" / name, owner_uid)
+        if hashlib.sha256(data).hexdigest() != expected:
+            raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_BYTES_CHANGED")
+        return data, (*_file_identity(info), info.st_mode, info.st_nlink)
+
+    rows = []
+    for name in names:
+        if re.fullmatch(r"(?:hostlist|ipset)-[a-z][a-z0-9-]{0,63}\.txt", name) is None:
+            raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_LOCATOR_INVALID")
+        former, former_id = read(previous_release, name, old_hashes[name])
+        wanted, wanted_id = read(candidate_release, name, new_hashes[name])
+        current, current_id = read(active, name, old_hashes[name])
+        if former != current or former == wanted or len({former_id[:2], wanted_id[:2], current_id[:2]}) != 3:
+            raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_ALIAS_OR_DRIFT")
+        rows.append((name, old_hashes[name], new_hashes[name], former_id, wanted_id, current_id))
+    return tuple(rows)
+
+
 def native_recheck_running_prepared_fd9(
         operation: str, raw_pipe: bytes, *, source: SourceGateReceipt,
         semantic: OriginalSemanticReceipt, config_fd: int, config_digest: str):
@@ -1462,8 +1511,9 @@ def native_recheck_running_prepared_fd9(
     The original coordinator must obtain source/semantic before Config lock,
     then supply the same original input and the actual locked Config digest.
     No nested PHP preflight, no P2a acquisition, no WAL advance or signal.
-    This is not a Reload permit: list CAS, exact actual executable/argv,
-    atomic promotion and recovery still belong to the original executor.
+    This is not a Reload permit: observe exact managed-list CAS preimages
+    and executable/argv, but mutation-bound CAS, atomic promotion and
+    recovery still belong to the original transaction coordinator.
     """
     from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
     from shared_apply_seal import WORK
@@ -1471,7 +1521,7 @@ def native_recheck_running_prepared_fd9(
     from neutral_schema3_previous_physical import (
         CompletePriorPreimage, LockedRunningPredecessor,
         attest_bound_running_predecessor_under_fd9, _running_executable_identity,
-        _running_native, CHILD_EXEC, CHILD_PID, MONITOR_PID)
+        _running_native, CHILD_EXEC, CHILD_PID, MONITOR_PID, COMMON_ACTIVE)
     from voice_ipfw_adapter import require_lifecycle_lock
 
     try:
@@ -1536,19 +1586,29 @@ def native_recheck_running_prepared_fd9(
                     physical.previous_root_sha256 != old_pin["root_sha256"] or
                     physical.config_base_sha256 != config_digest or
                     physical.authorization != "NONE" or physical.physical_transition_allowed or
-                    physical.executable_identity is not None):
+                    physical.executable_identity is not None or
+                    physical.managed_preimages is not None):
                 raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_PHYSICAL_CHANGED")
             executable = _running_executable_identity(
                 physical.running.pid, engine["engine_sha256"],
                 executable=Path(CHILD_EXEC), runner=subprocess.run)
-            # Bracket TEXT observation with original PID/birth/argv census,
+            managed = None
+            if fresh.requested_enabled and decision.kind in (
+                    "NO_CHANGE", "SAVE_ONLY", "RELOAD_SAFE_CANDIDATE"):
+                managed = _managed_change_preimages(
+                    old[0], candidate[0], decision,
+                    previous_release=WORK / prior["id"] / "release",
+                    candidate_release=WORK / detail["id"] / "release",
+                    active=COMMON_ACTIVE, owner_uid=0)
+            # Bracket TEXT and list observation with original PID/birth/argv census,
             # and original installed-engine guard, not a second provenance.
             if (_running_native(WORK / prior["id"] / "release", owner_uid=0,
                                 child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
                     != physical.running or engine != _s10_native_bound_engine_readback() or
                     store.read() != before):
                 raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_EXECUTABLE_CHANGED")
-            physical = replace(physical, executable_identity=executable)
+            physical = replace(physical, executable_identity=executable,
+                               managed_preimages=managed)
             require_lifecycle_lock()
             assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
             return fresh, candidate, old, decision, physical, engine
