@@ -1383,7 +1383,7 @@ def native_guard_first_enabled_shell_locked(operation: str, candidate: str,
     import sys
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
     from neutral_root_stage import _verify_original_pinned_root
-    from neutral_schema3_saved_wan_preimage import _native_wan, _DEVICE
+    from neutral_schema3_saved_wan_preimage import _native_wan_locked, _DEVICE
     from shared_apply_operation import OP_ID, DIGEST
 
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
@@ -1413,7 +1413,7 @@ def native_guard_first_enabled_shell_locked(operation: str, candidate: str,
             config_digest=record["detail"]["base"], queue_fd=None, store=store)
         if (result[0] is not None or result[1] is not None or
                 result[2] not in ("native-kernel-absent", "native-managed-kernel-empty") or
-                _native_wan() != wan):
+                _native_wan_locked(config_fd) != wan):
             raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_PREIMAGE_CHANGED")
         return result
 
@@ -1431,7 +1431,7 @@ def native_install_first_enabled_bound_locked(record: dict, *, preimage: Quiesce
     import sys
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
     from neutral_root_stage import _verify_original_pinned_root
-    from neutral_schema3_saved_wan_preimage import _native_wan, _DEVICE
+    from neutral_schema3_saved_wan_preimage import _native_wan_locked, _DEVICE
     from shared_apply_seal import _stat
 
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
@@ -1461,7 +1461,7 @@ def native_install_first_enabled_bound_locked(record: dict, *, preimage: Quiesce
             detail=detail, binding=pin, parent=WORK, owner_uid=0))
         if (root["service"]["enabled"] is not True or
                 root["service"]["target_mode"] not in ("all", "list") or
-                _native_wan() != wan):
+                _native_wan_locked(config_fd) != wan):
             raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_MODE_CHANGED")
         return _first_inert_recovery_layout(record, config_fd=config_fd,
             config_digest=config_digest, queue_fd=None, store=store)

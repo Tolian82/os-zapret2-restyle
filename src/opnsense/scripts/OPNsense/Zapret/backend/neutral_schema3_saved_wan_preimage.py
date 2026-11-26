@@ -180,6 +180,68 @@ def _native_wan() -> str:
     return text[:-1]
 
 
+def _native_wan_locked(config_fd: int) -> str:
+    """Recheck saved WAN under the inherited original Config lock, never relock PHP."""
+    import xml.etree.ElementTree as ET
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_seal import FILES
+
+    if type(config_fd) is not int or config_fd < 3 or config_fd == 9:
+        raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_FD_REQUIRED")
+
+    def image():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        before = os.fstat(config_fd)
+        identity = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+        if not 0 < before.st_size <= FILES["candidate.xml"]:
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_CONFIG_SIZE")
+        raw = os.pread(config_fd, before.st_size + 1, 0)
+        if len(raw) != before.st_size or identity(os.fstat(config_fd)) != identity(before):
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_CONFIG_CHANGED")
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return identity(before), raw
+
+    try:
+        before = image()
+        xml = before[1].decode("utf-8")
+        if "<!DOCTYPE" in xml or "<!ENTITY" in xml:
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_CONFIG_INVALID")
+        node = ET.fromstring(xml)
+        if node.tag != "opnsense":
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_CONFIG_INVALID")
+        for tag in ("OPNsense", "Zapret", "general", "waninterface"):
+            nodes = node.findall(tag)
+            if len(nodes) != 1:
+                raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_SELECTION_INVALID")
+            node = nodes[0]
+        logical = (node.text or "").strip()
+        if len(node) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]{0,31}", logical):
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_SELECTION_INVALID")
+        # Reuse the exact original interface resolver (direct devices, primary
+        # address mapping, assigned OPT/TUN fallback), NOT wan_preflight.php,
+        # which would acquire an independent blocking Config::lock(). The
+        # original FD4 remains held and is never inherited by resolver children.
+        result = subprocess.run(("/bin/sh", "-c",
+            '. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/common.sh; '
+            '. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/config.sh; '
+            'config_resolve_interface "$1"', "s10-locked-wan", logical),
+            stdin=subprocess.DEVNULL, capture_output=True, timeout=12, check=False,
+            close_fds=True, pass_fds=(),
+            env={"LC_ALL": "C", "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"})
+        raw = result.stdout
+        if result.returncode != 0 or type(raw) is not bytes or not 0 < len(raw) <= _SIZE:
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_RESOLVER_REFUSED")
+        text = raw.decode("ascii")
+        if (not text.endswith("\n") or text[:-1] in _WAN_STATE_MARKERS or
+                not _DEVICE.fullmatch(text[:-1]) or image() != before):
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_DEVICE_CHANGED")
+        require_lifecycle_lock()
+        return text[:-1]
+    except (OSError, subprocess.SubprocessError, UnicodeError, ET.ParseError):
+        raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_UNAVAILABLE") from None
+
+
 def _qualified_config(receipt: object, detail: dict, enabled: bool) -> tuple:
     # The ORIGINAL PHP implementation obtains a fresh Config model under
     # Config->lock and SettingsApply::mergeForCommit verifies dependency SHA.

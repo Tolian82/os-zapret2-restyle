@@ -29,6 +29,179 @@ p = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p)
 
 
+class LockedWanRegression(unittest.TestCase):
+    def test_original_fd4_wan_read_does_not_reopen_config_lock(self):
+        import fcntl
+        import tempfile
+        import auto_detect_original_lock_handoff as handoff
+
+        def xml(value):
+            return ("<opnsense><OPNsense><Zapret><general><waninterface>" + value +
+                    "</waninterface></general></Zapret></OPNsense></opnsense>").encode()
+
+        real_run = subprocess.run
+        original_assert = handoff.assert_inherited_config_fd
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "config.xml"
+            config.write_bytes(xml("lo0"))
+            config.chmod(0o600)
+            common = root / "common.sh"
+            common.write_text('common_error() { echo "refused" >&2; }\n')
+            plugin = root / "pluginctl"
+            plugin.write_text('#!/bin/sh\ncase "$1" in\n'
+                ' -4) printf "{}\\n" ;;\n'
+                ' -g) [ "$2" = interfaces.opt0.if ] || exit 2; printf "%s\\n" "$ASSIGNED" ;;\n'
+                ' *) exit 2 ;;\nesac\n')
+            jq = root / "jq"
+            jq.write_text('#!/bin/sh\ncat >/dev/null\nprintf "%s\\n" "$IPV4"\n')
+            plugin.chmod(0o700)
+            jq.chmod(0o700)
+            source = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/config.sh"
+            resolver = root / "config.sh"
+            resolver.write_text(source.read_text().replace("/usr/local/sbin/pluginctl", str(plugin))
+                .replace("/usr/local/bin/jq", str(jq)))
+            calls = []
+            state = {"devices": "lo0", "ipv4": "", "assigned": "", "mutate": False}
+            with config.open("r+b") as held:
+                fd = held.fileno()
+                fcntl.flock(fd, fcntl.LOCK_EX)
+                os.lseek(fd, 2, os.SEEK_SET)
+
+                def attest(number, path, *, owner_uid):
+                    self.assertIsNone(owner_uid)
+                    self.assertEqual(number, fd)
+                    original_assert(number, path, owner_uid=os.geteuid())
+
+                def run(argv, **kwargs):
+                    if argv[0] == gate._WAN:
+                        # Same blocking flock as the original independent PHP
+                        # Config::lock, with a short disposable fixture deadline.
+                        return real_run([sys.executable, "-c",
+                            'import fcntl,sys; f=open(sys.argv[1],"r+b"); '
+                            'fcntl.flock(f,fcntl.LOCK_EX); print("wan-ready")', str(config)],
+                            timeout=0.15, capture_output=True)
+                    self.assertEqual(argv[:2], ("/bin/sh", "-c"))
+                    self.assertEqual(argv[3], "s10-locked-wan")
+                    self.assertEqual(kwargs["pass_fds"], ())
+                    self.assertTrue(kwargs["close_fds"])
+                    self.assertIn("/sbin", kwargs["env"]["PATH"].split(":"))
+                    self.assertNotIn("wan_preflight.php", argv[2])
+                    calls.append(argv[4])
+                    shell = ('ifconfig() { case " $DEVICES " in *" $1 "*) return 0 ;; esac; return 1; }; '
+                        + argv[2].replace("/usr/local/opnsense/scripts/OPNsense/Zapret/backend/common.sh", str(common))
+                        .replace("/usr/local/opnsense/scripts/OPNsense/Zapret/backend/config.sh", str(resolver)))
+                    reply = real_run(("/bin/sh", "-c", shell, argv[3], argv[4]),
+                        **{**kwargs, "env": {**kwargs["env"], "DEVICES": state["devices"],
+                            "IPV4": state["ipv4"], "ASSIGNED": state["assigned"]}})
+                    if state["mutate"]:
+                        os.pwrite(fd, xml("tun"), 0)
+                    return reply
+
+                with patch.object(handoff, "CONFIG_PATH", config), \
+                     patch.object(handoff, "assert_inherited_config_fd", side_effect=attest), \
+                     patch.object(gate, "require_lifecycle_lock"), \
+                     patch.object(gate.subprocess, "run", side_effect=run):
+                    with self.assertRaises(gate.SavedWanPreimageRefused):
+                        gate._native_wan()
+                    for logical, devices, ipv4, assigned, expected in (
+                        ("lo0", "lo0", "", "", "lo0"),
+                        ("tun42", "tun42", "", "", "tun42"),
+                        ("wan", "vtnet1", "vtnet1", "", "vtnet1"),
+                        ("opt0", "tun42", "", "tun42", "tun42"),
+                        ("opt0", "vtnet1", "", "tun42", None),
+                        ("opt0", "tun42", "", "tun42;bad", None),
+                    ):
+                        with self.subTest(logical=logical, expected=expected):
+                            config.write_bytes(xml(logical))
+                            state.update(devices=devices, ipv4=ipv4, assigned=assigned)
+                            if expected is None:
+                                with self.assertRaises(gate.SavedWanPreimageRefused):
+                                    gate._native_wan_locked(fd)
+                            else:
+                                self.assertEqual(gate._native_wan_locked(fd), expected)
+                            self.assertEqual(calls[-1], logical)
+                            self.assertEqual(os.lseek(fd, 0, os.SEEK_CUR), 2)
+                    count = len(calls)
+                    for raw in (xml(""), xml("lo0;bad"), xml("<x>lo0</x>"),
+                                xml("lo0</waninterface><waninterface>tun42"),
+                                b"<!DOCTYPE opnsense><opnsense/>", b"<broken"):
+                        config.write_bytes(raw)
+                        with self.assertRaises(gate.SavedWanPreimageRefused):
+                            gate._native_wan_locked(fd)
+                    self.assertEqual(len(calls), count)
+                    config.write_bytes(xml("lo0"))
+                    state.update(devices="lo0", ipv4="", assigned="", mutate=True)
+                    with self.assertRaises(gate.SavedWanPreimageRefused):
+                        gate._native_wan_locked(fd)
+                    self.assertEqual(os.lseek(fd, 0, os.SEEK_CUR), 2)
+                    state["mutate"] = False
+                    config.write_bytes(xml("lo0"))
+                    count = len(calls)
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                    with self.assertRaises(handoff.OriginalLockRefused):
+                        gate._native_wan_locked(fd)
+                    self.assertEqual(len(calls), count)
+
+    def test_first_enabled_physical_boundaries_reuse_locked_wan(self):
+        from contextlib import ExitStack
+        import neutral_schema3_quiescent_preimage as quiescent
+        import neutral_root_stage as roots
+        import auto_detect_original_lock_handoff as handoff
+
+        op, base, candidate, root = "a" * 32, "b" * 64, "c" * 64, "d" * 64
+        record = {"phase": "activating", "detail": {"id": op, "page": "strategies",
+            "base": base, "candidate": candidate, "changed_fields": ["hostlist.mode"]},
+            "manifest": {"schema": 1, "root_sha256": root}}
+        preimage = quiescent.QuiescentPreimage(op, root, None, None, base, candidate,
+            "tun0", "first-install-empty", "native-kernel-absent", "no-prior-data")
+        store = Mock(read=Mock(return_value=record))
+        activated = {**record, "phase": "activated", "first_running_sha256": "e" * 64}
+        receipt = Mock(running=object(), pretraffic_sha256=None,
+                       kernel_state="native-managed-kernel-staged")
+
+        def activate(*args, **kwargs):
+            store.read.return_value = activated
+            return activated, receipt
+
+        store._record_native_bound_activated.side_effect = activate
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(os, "geteuid", return_value=0))
+            stack.enter_context(patch.object(quiescent, "require_lifecycle_lock"))
+            stack.enter_context(patch.object(handoff, "assert_inherited_config_fd"))
+            stack.enter_context(patch.object(quiescent, "SharedApplyOperation", return_value=store))
+            stack.enter_context(patch.object(roots, "_verify_original_pinned_root",
+                return_value=b'{"service":{"enabled":true,"target_mode":"list"}}'))
+            stack.enter_context(patch.object(quiescent, "_first_inert_recovery_layout",
+                return_value=(None, None, "native-kernel-absent")))
+            legacy = stack.enter_context(patch.object(gate, "_native_wan",
+                side_effect=AssertionError("independent Config reader under FD4")))
+            locked = stack.enter_context(patch.object(gate, "_native_wan_locked", return_value="tun0"))
+            actuator = stack.enter_context(patch.object(quiescent, "_run_bound_restore_joined",
+                return_value=Mock(returncode=0, stdout=b"first-enabled-physical=activated\n")))
+            quiescent.native_guard_first_enabled_shell_locked(op, candidate, "tun0", config_fd=4)
+            self.assertEqual([call.args for call in locked.call_args_list], [(4,), (4,)])
+            locked.reset_mock()
+            locked.side_effect = ("tun0", "tun1")
+            with self.assertRaises(quiescent.QuiescentPreimageRefused):
+                quiescent.native_guard_first_enabled_shell_locked(op, candidate, "tun0", config_fd=4)
+            locked.reset_mock()
+            locked.side_effect = ("tun0", "tun1")
+            with self.assertRaises(quiescent.QuiescentPreimageRefused):
+                quiescent.native_install_first_enabled_bound_locked(record, preimage=preimage,
+                    config_fd=4, config_digest=base)
+            actuator.assert_not_called()
+            locked.reset_mock()
+            locked.side_effect = None
+            self.assertEqual(quiescent.native_install_first_enabled_bound_locked(record,
+                preimage=preimage, config_fd=4, config_digest=base), (activated, receipt))
+            self.assertEqual([call.args for call in locked.call_args_list], [(4,), (4,), (4,)])
+            actuator.assert_called_once()
+            self.assertEqual(actuator.call_args.kwargs["pass_fds"], (9, 4))
+            legacy.assert_not_called()
+
+
 class SavedWanOriginalFd9(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
