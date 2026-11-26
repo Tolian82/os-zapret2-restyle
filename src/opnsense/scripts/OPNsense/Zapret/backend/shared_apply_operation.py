@@ -926,7 +926,7 @@ class SharedApplyOperation:
 
     def _finish_native_bound_ordinary(self, record: dict, *, config_fd: int,
                                       config_digest: str, enabled: bool,
-                                      runtime_mode: str) -> dict:
+                                      runtime_mode: str, activated_receipt) -> dict:
         """Original FD9/FD4 terminal checkpoint; not a public command.
 
         Do not accept a generic callback, a synthetic committed predecessor,
@@ -937,6 +937,7 @@ class SharedApplyOperation:
         from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
         from neutral_schema3_previous_physical import (
             FinalBoundRuntimeReceipt, attest_bound_candidate_final_under_fd9)
+        from neutral_schema3_quiescent_preimage import StagedBoundRuntimeReceipt
         from voice_ipfw_adapter import require_lifecycle_lock
 
         if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
@@ -945,7 +946,12 @@ class SharedApplyOperation:
                 "found" in record or "manifest" not in record or
                 record["phase"] not in ("config-saved", "epoch-finalizing") or
                 type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
-                config_digest != record["detail"]["candidate"]):
+                config_digest != record["detail"]["candidate"] or
+                type(activated_receipt) is not StagedBoundRuntimeReceipt or
+                activated_receipt.generation != record["detail"]["id"] or
+                activated_receipt.root_sha256 != record["manifest"]["root_sha256"] or
+                activated_receipt.config_base_sha256 != record["detail"]["base"] or
+                activated_receipt.observed_config_sha256 != record["detail"]["base"]):
             raise SharedOperationError("bound native terminal scope refused")
         require_lifecycle_lock()
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
@@ -959,6 +965,10 @@ class SharedApplyOperation:
                     receipt.generation == record["detail"]["id"] and
                     receipt.root_sha256 == record["manifest"]["root_sha256"] and
                     receipt.config_sha256 == config_digest and
+                    receipt.release_sha256 == activated_receipt.release_sha256 and
+                    receipt.running == activated_receipt.running and
+                    receipt.pretraffic_sha256 == activated_receipt.pretraffic_sha256 and
+                    (receipt.epoch_sha256 is not None) == (record["manifest"]["schema"] == 2) and
                     receipt.authorization == "NONE" and
                     receipt.physical_transition_allowed is False)
 

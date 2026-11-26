@@ -314,7 +314,7 @@ class FinalBoundRuntimeReadOnly(unittest.TestCase):
             proof = SimpleNamespace(operation_id=generation, generation=generation,
                                     owner_candidate_sha256=digest,
                                     owner=SimpleNamespace(pid=PID, started=BIRTH))
-            epoch = Mock(return_value={"files": files})
+            epoch = Mock(return_value={"files": files, "pretraffic_sha256": "a" * 64})
             queue = SimpleNamespace(pending=pending, _verify=Mock())
             # The independent platform, original locks, immutable receipts,
             # full tree and process readers are qualified separately. Inject
@@ -388,6 +388,7 @@ class FinalBoundRuntimeReadOnly(unittest.TestCase):
             record["manifest"]["schema"] = root["schema"] = 2
             root["service"]["target_mode"] = "auto"
             self.assertRegex(run().epoch_sha256, "^[0-9a-f]{64}$")
+            self.assertEqual(run().pretraffic_sha256, "a" * 64)
             epoch.side_effect = ValueError("missing epoch")
             refuses()
             epoch.side_effect = None
@@ -419,9 +420,13 @@ class FinalBoundRuntimeReadOnly(unittest.TestCase):
         from types import SimpleNamespace
         from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
         generation, digest = "a" * 32, "b" * 64
+        from neutral_schema3_quiescent_preimage import StagedBoundRuntimeReceipt
+        base = "b" * 64
         record = {"phase": "config-saved",
-                  "detail": {"id": generation, "candidate": digest},
+                  "detail": {"id": generation, "candidate": digest, "base": base},
                   "manifest": {"schema": 1, "root_sha256": "c" * 64}}
+        activated = StagedBoundRuntimeReceipt(generation, "c" * 64, base,
+            "d" * 64, None, None, "native-managed-kernel-empty", base)
         calls = []
         receipt = gate.FinalBoundRuntimeReceipt(generation, "c" * 64, digest,
             "d" * 64, None, None, "native-managed-kernel-empty")
@@ -443,13 +448,18 @@ class FinalBoundRuntimeReadOnly(unittest.TestCase):
                              return_value=receipt) as physical:
             def finish():
                 return SharedApplyOperation._finish_native_bound_ordinary(
-                    store, record, config_fd=4, config_digest=digest, enabled=False, runtime_mode="0")
+                    store, record, config_fd=4, config_digest=digest, enabled=False,
+                    runtime_mode="0", activated_receipt=activated)
 
             self.assertEqual(finish()["phase"], "committed")
             self.assertEqual(calls, [("fsync", 4), "wal-witness"])
-            physical.return_value = replace(receipt, root_sha256="e" * 64)
-            with self.assertRaises(SharedOperationError):
-                finish()
+            for foreign in (replace(receipt, root_sha256="e" * 64),
+                            replace(receipt, release_sha256="e" * 64),
+                            replace(receipt, running=SimpleNamespace(pid=5433)),
+                            replace(receipt, pretraffic_sha256="f" * 64)):
+                physical.return_value = foreign
+                with self.assertRaises(SharedOperationError):
+                    finish()
             record["found"] = {"runtime_mode": "0"}
             calls.clear()
             with self.assertRaises(SharedOperationError):

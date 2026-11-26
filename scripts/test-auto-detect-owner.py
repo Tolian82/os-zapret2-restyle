@@ -170,7 +170,7 @@ class OwnerGenerationTests(unittest.TestCase):
 
     def witness(self, *, epoch_finalizing_operation=None,
                 reviewed_operation=None, learning_schema3=False,
-                pending_found_record=None):
+                pending_found_record=None, bound_staged_record=None):
         return owner_mod._attest_core(
             journal=self.journal, work_root=self.work_root, active=self.active,
             child_pidfile=self.child, monitor_pidfile=self.monitor,
@@ -178,6 +178,7 @@ class OwnerGenerationTests(unittest.TestCase):
             epoch_finalizing_operation=epoch_finalizing_operation,
             reviewed_operation=reviewed_operation,
             pending_found_record=pending_found_record,
+            bound_staged_record=bound_staged_record,
             learning_schema3=learning_schema3,
             argv_reader=lambda pid: [EXE, *self.ps.args.split(),
                                      "--sockarg=0x200", "--user=nobody"],
@@ -813,6 +814,29 @@ class OwnerGenerationTests(unittest.TestCase):
         self._write(self.journal / "operation.json",
                     json.dumps(self.record) + "\n")
         refuses()
+
+    def test_bound_staged_learning_owner_private_exact_scope(self):
+        proof, _, _ = self._stopped_learning_fixture()
+        self._write(self.child, str(PID) + "\n")
+        self._write(self.monitor, str(MONITOR_PID) + "\n")
+        self.ps.stopped = False
+        for phase in ("activating", "activated"):
+            current = dict(self.record, phase=phase, manifest={"schema": 2})
+            with patch.object(owner_mod.SharedApplyOperation, "read", return_value=current), \
+                    patch.object(owner_mod, "_valid_learning_active", return_value=proof.learning):
+                self.assertEqual(self.witness(learning_schema3=True,
+                                             bound_staged_record=current), proof)
+                for scope in ({}, {"bound_staged_record": dict(current, phase="prepared")},
+                              {"bound_staged_record": current, "epoch_finalizing_operation": OP_ID},
+                              {"bound_staged_record": current, "pending_found_record": current}):
+                    with self.assertRaises(owner_mod.GenerationRefused):
+                        self.witness(learning_schema3=True, **scope)
+        for current in (dict(self.record, phase="prepared", manifest={"schema": 2}),
+                        dict(self.record, phase="activated", manifest={"schema": 1}),
+                        dict(self.record, phase="activated", manifest={"schema": 2}, found={})):
+            with patch.object(owner_mod.SharedApplyOperation, "read", return_value=current):
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    self.witness(learning_schema3=True, bound_staged_record=current)
 
     def test_bound_staged_learning_seed_is_read_only_and_refuses_finished_epoch(self):
         from auto_detect_epoch_receipts import _canonical

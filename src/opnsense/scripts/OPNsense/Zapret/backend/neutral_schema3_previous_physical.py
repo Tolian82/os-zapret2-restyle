@@ -270,6 +270,7 @@ class FinalBoundRuntimeReceipt:
     running: PriorRunningToken | None
     epoch_sha256: str | None
     kernel_state: str
+    pretraffic_sha256: str | None = None
     authorization: str = "NONE"
     physical_transition_allowed: bool = False
 
@@ -336,7 +337,7 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
                     learning != (service["target_mode"] == "auto" and enabled)):
                 raise PreviousPhysicalRefused("BOUND_FINAL_ROOT_MODE_CHANGED")
             tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
-            process = epoch_digest = None
+            process = epoch_digest = pretraffic_digest = None
             if runtime_mode == "1":
                 process = _running_native(release, owner_uid=0,
                                           child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
@@ -366,6 +367,7 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
                                 row["device"], row["inode"], row["nlink"]):
                             raise PreviousPhysicalRefused("BOUND_FINAL_LEARNING_INODE_CHANGED")
                     epoch_digest = sha256(_canonical(epoch)).hexdigest()
+                    pretraffic_digest = epoch["pretraffic_sha256"]
                 elif inspect_inert_release(release, owner_uid=0) != "inactive":
                     raise PreviousPhysicalRefused("BOUND_FINAL_INERT_RELEASE_REQUIRED")
             else:
@@ -379,7 +381,7 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
             if store.read() != record:
                 raise PreviousPhysicalRefused("BOUND_FINAL_OWNER_CHANGED")
             return FinalBoundRuntimeReceipt(detail["id"], pin["root_sha256"], config_digest,
-                                            tree, process, epoch_digest, kernel)
+                                            tree, process, epoch_digest, kernel, pretraffic_digest)
 
         first = observe()
         if observe() != first:
