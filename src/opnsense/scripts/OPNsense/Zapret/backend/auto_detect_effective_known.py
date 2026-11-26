@@ -1169,6 +1169,28 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, UnicodeError, KeyError):
             print("ERROR: original Found recovery scope refused", file=sys.stderr)
             return 69
+    if argv and argv[0] == "attest-ordinary-save-locked":
+        if len(argv) != 3:
+            return 64
+        try:
+            from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+            from shared_apply_operation import SharedApplyOperation, SharedOperationError
+            from shared_apply_seal import WORK
+            from voice_ipfw_adapter import require_lifecycle_lock
+
+            if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+                raise SharedOperationError("native ordinary Config save required")
+            require_lifecycle_lock()
+            assert_inherited_config_fd(4, CONFIG_PATH, owner_uid=None)
+            SharedApplyOperation(owner=0).attest_unbound_config_save(
+                argv[1], argv[2], shared_work_parent=WORK)
+            assert_inherited_config_fd(4, CONFIG_PATH, owner_uid=None)
+            require_lifecycle_lock()
+            print(json.dumps({"result": "original-ordinary-save-verified", "id": argv[1]}))
+            return 0
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+            print("ERROR: original ordinary locked Config save refused", file=sys.stderr)
+            return 69
     if argv and argv[0] == "finish-ordinary-restore-locked":
         if len(argv) not in (3, 4) or (len(argv) == 4 and argv[3] != "--inherited-queue"):
             return 64

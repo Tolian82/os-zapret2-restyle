@@ -784,6 +784,38 @@ class SharedApplyOperation:
             record["manifest"] = before["manifest"]
         return self._persist_record(record)
 
+    def attest_unbound_config_save(self, identity: str, witness_sha256: str, *,
+                                   shared_work_parent: Path) -> None:
+        """Check the original ordinary save under the caller's FD9/Config locks."""
+        from neutral_root_stage import ROOT_NAME, PENDING_NAME
+        from shared_apply_seal import verify_seal
+
+        if (type(identity) is not str or not OP_ID.fullmatch(identity) or
+                type(witness_sha256) is not str or not DIGEST.fullmatch(witness_sha256)):
+            raise SharedOperationError("invalid ordinary Config save witness")
+        record = self.read()
+        if (record is None or record["phase"] != "activated" or
+                record["detail"]["id"] != identity or
+                {"found", "manifest", "previous_manifest"} & record.keys()):
+            raise SharedOperationError("ordinary Config save requires unbound activated owner")
+        work = shared_work_parent / identity
+
+        def check_root():
+            for directory in (work, work / "release"):
+                if _exists(directory / ROOT_NAME) or _exists(directory / PENDING_NAME):
+                    raise SharedOperationError("ordinary Config save has unbound root artifacts")
+
+        check_root()
+        seal = verify_seal(work, owner=self.owner)
+        detail = record["detail"]
+        proof = "\0".join((detail["page"], detail["base"], detail["candidate"],
+                           seal["sha256"]["plan.json"], ",".join(detail["changed_fields"])))
+        if hashlib.sha256(proof.encode("ascii")).hexdigest() != witness_sha256:
+            raise SharedOperationError("ordinary Config save differs from original activation")
+        check_root()
+        if self.read() != record:
+            raise SharedOperationError("ordinary Config save owner changed")
+
     def _advance_bound_ordinary(self, phase: str, expected: dict, attest, *,
                                 shared_work_parent: Path | None = None) -> dict:
         """Internal original FD9 transition with exact immutable pins.

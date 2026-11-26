@@ -133,7 +133,8 @@ final class SharedConfigCommit
         array $plan,
         string $page,
         object $config,
-        callable $modelFactory
+        callable $modelFactory,
+        ?callable $attestLocked = null
     ): array {
         // The original found-file CAS and cold-crash protocol are not yet
         // authorized. Never persist only XML (including a found-only click)
@@ -153,6 +154,10 @@ final class SharedConfigCommit
             $target = SettingsApply::mergeForCommit($current, $plan, $page);
             $targetSnapshot = VoiceSettingsSnapshot::digest($target);
             $changeCount = count($plan['changed_fields']);
+            if ($attestLocked !== null &&
+                $attestLocked(VoiceSettingsSnapshot::digest($current), $targetSnapshot) !== true) {
+                throw new \RuntimeException('Original ordinary Config save witness refused');
+            }
             // Repeated Apply must not manufacture a second Config revision.
             if ($changeCount === 0) {
                 return [

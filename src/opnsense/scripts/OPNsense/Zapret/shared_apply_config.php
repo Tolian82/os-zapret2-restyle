@@ -37,8 +37,9 @@ final class SharedApplyConfigWorker
         }
     }
 
-    public static function readPlan(string $id, string $root = self::ROOT, ?int $owner = null): array
-    {
+    public static function readPlan(
+        string $id, string $root = self::ROOT, ?int $owner = null, ?string &$sha256 = null
+    ): array {
         if (!preg_match('/^[a-f0-9]{32}$/D', $id)) {
             throw new \InvalidArgumentException('Invalid common Apply ID');
         }
@@ -80,6 +81,7 @@ final class SharedApplyConfigWorker
         // The Config and full release must have been staged together; a
         // symlinked/missing XML is not authority to persist its plan.
         self::secureFile($dir . '/candidate.xml', false, $owner);
+        $sha256 = hash('sha256', $json);
         return $plan;
     }
 
@@ -400,7 +402,7 @@ final class SharedApplyConfigWorker
         return [$output, $failed || hrtime(true) >= $deadline, $code];
     }
 
-    private static function originalFoundLockedFileEvidence(
+    private static function originalLockedFileEvidence(
         object $config, string $id, string $mode = 'classify-locked',
         ?string $configDigest = null, ?string $runtimeMode = null,
         ?callable $whileP2Held = null, $queueStream = null, ?string $baseDigest = null
@@ -565,7 +567,7 @@ final class SharedApplyConfigWorker
                             throw new \RuntimeException('Original Found base Config changed');
                         }
                         $status = null;
-                        $ready = self::originalFoundLockedFileEvidence(
+                        $ready = self::originalLockedFileEvidence(
                             $config, $id, 'begin-found-save-locked', $candidate, $mode,
                             static function () use ($saveScope, &$status): void {
                                 $status = $saveScope();
@@ -579,7 +581,7 @@ final class SharedApplyConfigWorker
                     if ($scopes !== 2 || !hash_equals($candidate, $observedDigest)) {
                         throw new \RuntimeException('Original Found saved Config changed');
                     }
-                    $receipt = self::originalFoundLockedFileEvidence(
+                    $receipt = self::originalLockedFileEvidence(
                         $config, $id, 'confirm-found-save-locked', $observedDigest
                     );
                     if ($receipt !== ['result' => 'found-config-saved', 'mode' => $mode]) {
@@ -610,7 +612,7 @@ final class SharedApplyConfigWorker
         $config->lock();
         try {
             $digest = VoiceSettingsSnapshot::digest($factory()->getNodes());
-            return self::originalFoundLockedFileEvidence(
+            return self::originalLockedFileEvidence(
                 $config, $id, $action === 'found-recover' ? 'recover-found-locked' : $action,
                 $digest, null, null, $queueStream
             );
@@ -637,7 +639,7 @@ final class SharedApplyConfigWorker
         $config->lock();
         try {
             $before = $factory()->getNodes();
-            $files = self::originalFoundLockedFileEvidence($config, $id);
+            $files = self::originalLockedFileEvidence($config, $id);
             $after = $factory()->getNodes();
             if (!is_array($before) || !is_array($after) ||
                 VoiceSettingsSnapshot::digest($before) !==
@@ -682,7 +684,7 @@ final class SharedApplyConfigWorker
             // original FD9, same sealed plan and PREPARED WAL, three exact
             // BEFORE files and same physical previous runtime/IPFW TWICE.
             // Its ONLY write is original operation.json restored fsync.
-            $receipt = self::originalFoundLockedFileEvidence(
+            $receipt = self::originalLockedFileEvidence(
                 $config, $id, 'recover-prepared-locked', $base);
             $keys = array_keys($receipt);
             sort($keys);
@@ -858,13 +860,14 @@ final class SharedApplyConfigWorker
             if ($queueFd !== null) {
                 $queueStream = self::openOriginalFoundQueue($queueFd);
             }
-            if ($found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish', 'saved'], true)) {
+            if ($found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish', 'save', 'saved'], true)) {
                 // Core may repair unreadable Config from a backup on load.
                 // A recovery reader must not trigger such implicit mutation.
                 self::requireReadableConfig();
             }
             require_once('script/load_phalcon.php');
-            $plan = self::readPlan($argv[2], self::ROOT, 0);
+            $planSha = null;
+            $plan = self::readPlan($argv[2], self::ROOT, 0, $planSha);
             if ($plan['page'] !== $argv[3]) {
                 throw new \InvalidArgumentException('Stored native Apply page differs from request');
             }
@@ -910,7 +913,7 @@ final class SharedApplyConfigWorker
                         self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
                         throw new \RuntimeException('Original ordinary restore Config changed');
                     }
-                    $reply = self::originalFoundLockedFileEvidence(
+                    $reply = self::originalLockedFileEvidence(
                         $config, $argv[2], 'finish-ordinary-restore-locked',
                         $image['snapshot'], null, null, $queueStream);
                     if ($reply !== ['result'=>'original-bound-cold-restored', 'id'=>$argv[2]] ||
@@ -957,7 +960,20 @@ final class SharedApplyConfigWorker
                 echo json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
                 return 0;
             }
-            $result = SharedConfigCommit::persist($plan, $argv[3], $config, $factory);
+            $id = $argv[2];
+            $page = $argv[3];
+            $result = SharedConfigCommit::persist($plan, $page, $config, $factory,
+                static function (string $base, string $candidate) use ($config, $id, $page, $plan, $planSha): bool {
+                    // Commit the exact plan bytes consumed by this PHP owner
+                    // and the fresh before/after Model images under FD4.
+                    $digest = hash('sha256', implode("\0", [
+                        $page, $base, $candidate, $planSha, implode(',', $plan['changed_fields']),
+                    ]));
+                    $reply = self::originalLockedFileEvidence(
+                        $config, $id, 'attest-ordinary-save-locked', $digest);
+                    return $reply === ['result'=>'original-ordinary-save-verified', 'id'=>$id];
+                }
+            );
             $receipt = self::postSaveReceipt($result);
             // Even a short response write is uncertain to the caller:
             // Config is already persisted and runtime must not be rolled back.

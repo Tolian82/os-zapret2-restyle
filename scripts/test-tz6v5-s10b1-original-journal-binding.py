@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -137,6 +138,71 @@ class OriginalDurableRootBinding(unittest.TestCase):
         self.assertEqual(self.owner.read(), restored)
         with self.assertRaises(SharedOperationError):
             self.bind()
+
+    def test_ordinary_config_save_requires_exact_activated_journal_and_seal(self):
+        import auto_detect_effective_known as source
+
+        work = self.case.fx.work
+        root = work / "manifest.json"
+        root.unlink()
+        detail = self.case.detail
+        plan = work / "plan.json"
+        plan_bytes = plan.read_bytes()
+        parts = [detail["page"], detail["base"], detail["candidate"],
+                 hashlib.sha256(plan_bytes).hexdigest(), ",".join(detail["changed_fields"])]
+        witness = lambda values: hashlib.sha256("\0".join(values).encode("ascii")).hexdigest()
+        token = witness(parts)
+
+        def attest(sha=token):
+            self.owner.attest_unbound_config_save(detail["id"], sha,
+                                                   shared_work_parent=work.parent)
+
+        with self.assertRaisesRegex(SharedOperationError, "unbound activated owner"):
+            attest()
+        self.owner.advance("activating", detail)
+        with self.assertRaisesRegex(SharedOperationError, "unbound activated owner"):
+            attest()
+        activated = self.owner.advance("activated", detail)
+        attest()
+        self.assertEqual(self.owner.read(), activated)
+
+        for idx, value in enumerate(("voice", "8" * 64, "9" * 64, "a" * 64, "voice.telegram.enabled")):
+            with self.subTest(field=idx):
+                changed = parts.copy()
+                changed[idx] = value
+                with self.assertRaisesRegex(SharedOperationError, "differs from original activation"):
+                    attest(witness(changed))
+
+        for path in (root, work / "release" / ".manifest.json.pending"):
+            path.symlink_to(work / "missing-root")
+            with self.assertRaisesRegex(SharedOperationError, "unbound root artifacts"):
+                attest()
+            path.unlink()
+        from shared_apply_seal import SharedBundleError
+        plan.write_bytes(plan_bytes + b" ")
+        with self.assertRaises(SharedBundleError):
+            attest()
+        plan.write_bytes(plan_bytes)
+
+        with patch.object(source.sys, "platform", "freebsd15"), \
+             patch.object(source.os, "geteuid", return_value=0), \
+             patch("voice_ipfw_adapter.require_lifecycle_lock") as fd9, \
+             patch("auto_detect_original_lock_handoff.assert_inherited_config_fd") as fd4, \
+             patch("shared_apply_operation.SharedApplyOperation", return_value=self.owner), \
+             patch("shared_apply_seal.WORK", work.parent), \
+             patch("sys.stdout") as output, patch("sys.stderr"):
+            args = ["attest-ordinary-save-locked", detail["id"], token]
+            self.assertEqual(source.main(args), 0)
+            receipt = json.loads(output.write.call_args_list[0].args[0])
+            self.assertEqual(receipt, {"result": "original-ordinary-save-verified", "id": detail["id"]})
+            self.assertEqual(fd9.call_count, 2)
+            self.assertEqual(fd4.call_count, 2)
+            fd4.side_effect = RuntimeError("lost inherited Config lock")
+            self.assertEqual(source.main(args), 69)
+        self.assertEqual(self.owner.read(), activated)
+        self.owner.advance("config-saved", detail)
+        with self.assertRaisesRegex(SharedOperationError, "unbound activated owner"):
+            attest()
 
 
     def test_bound_ordinary_transition_preserves_pins_and_requires_fresh_native_proof(self):

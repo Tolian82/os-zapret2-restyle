@@ -100,6 +100,30 @@ namespace {
     $strategyPlan = SettingsApply::prepareStrategies($prior, [
         'strategy'=>['trafficargs'=>'--filter-tcp=80'],
     ], '91.108.0.0/16');
+    $guarded = new FakeConfig($prior);
+    foreach ([$strategyPlan, SettingsApply::prepareStrategies($prior, [], '91.108.0.0/16')] as $guardedPlan) {
+        $calls = 0;
+        try {
+            SharedConfigCommit::persist($guardedPlan, 'strategies', $guarded, static fn()=>new FakeModel(),
+                static function (string $base, string $candidate) use ($guarded, $guardedPlan, &$calls): bool {
+                    $calls++;
+                    verify($guarded->locks === 1 && $guarded->saves === 0,
+                        'ordinary journal witness must precede save under Config lock');
+                    verify($base === VoiceSettingsSnapshot::digest($guarded->disk) &&
+                        $candidate === VoiceSettingsSnapshot::digest($guardedPlan['candidate']),
+                        'ordinary journal witness did not receive exact locked model digests');
+                    return false;
+                }
+            );
+            verify(false, 'ordinary Config writer bypassed a refused journal witness');
+        } catch (\RuntimeException $error) {
+            verify(get_class($error) === \RuntimeException::class &&
+                str_contains($error->getMessage(), 'witness refused'), 'refusal wrongly classified as post-save');
+        }
+        verify($calls === 1 && $guarded->saves === 0 && $guarded->locks === 0 &&
+            $guarded->disk === $prior && FakeModel::$state === $prior,
+            'refused ordinary journal witness mutated original Config');
+    }
     $config->disk['strategylab']['enablequic'] = '0';
     $result = SharedConfigCommit::persist(
         $strategyPlan,'strategies',$config,static fn()=>new FakeModel()
