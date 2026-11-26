@@ -1028,7 +1028,12 @@ def _finish_managed_recovery_locked(store, record: dict, *, config_fd: int,
     prefix = active.name
     backup = active.with_name("runtime-v2-backups") / f"{prefix}-{record['detail']['id']}"
     pidfiles = (CHILD_PID, MONITOR_PID, DAEMON_PID)
-    running = saved_image is not None and any(_present(path) for path in pidfiles)
+    # A pre-save interruption can leave the exact original engine running.
+    # Select the physical witness from the process state, not the Config phase.
+    running = any(_present(path) for path in pidfiles)
+    expected_running = record["managed"].get("running_sha256")
+    if running and expected_running is None:
+        raise QuiescentPreimageRefused("MANAGED_RECOVERY_RUNNING_OWNER_REQUIRED")
 
     def observe():
         require_lifecycle_lock()
@@ -1047,7 +1052,7 @@ def _finish_managed_recovery_locked(store, record: dict, *, config_fd: int,
         producer = _cold_locked_producer(record, queue_fd)
         if running:
             runtime = _native_managed_running_digest(previous, config_fd)
-            if runtime != record["managed"]["running_sha256"]:
+            if runtime != expected_running:
                 raise QuiescentPreimageRefused("MANAGED_RECOVERY_RUNNING_OWNER_CHANGED")
         else:
             _zero_processes(pidfiles)

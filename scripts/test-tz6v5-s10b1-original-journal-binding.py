@@ -1046,7 +1046,8 @@ class OriginalManagedFileCAS(unittest.TestCase):
         import neutral_schema3_quiescent_preimage as gate
 
         with patch("voice_ipfw_adapter.require_lifecycle_lock"):
-            for mode in ("base", "candidate", "running", "foreign-inode", "equal"):
+            for mode in ("base", "candidate", "running", "foreign-inode", "equal",
+                         "pre-save-running", "pre-save-unpinned"):
                 with self.subTest(mode=mode):
                     store, prepared, row, parent, active, target, before, after = self.fixture(
                         equal_config=mode == "equal")
@@ -1054,9 +1055,11 @@ class OriginalManagedFileCAS(unittest.TestCase):
                     observed = detail["base" if mode == "base" else "candidate"]
                     owner = "3" * 64
                     pending = _write_bound_managed_file_locked(store, prepared, row,
-                        running_sha256=owner, parent=parent, active=active, attest=lambda: True)
-                    saving = store._checkpoint_managed_config(pending, saved=False, attest=lambda: True,
-                                                             shared_work_parent=parent)
+                        running_sha256=None if mode == "pre-save-unpinned" else owner,
+                        parent=parent, active=active, attest=lambda: True)
+                    saving = (pending if mode.startswith("pre-save-") else
+                              store._checkpoint_managed_config(pending, saved=False, attest=lambda: True,
+                                                               shared_work_parent=parent))
                     plan_sha = verify_seal(parent / detail["id"], owner=store.owner)["sha256"]["plan.json"]
 
                     def witness(image):
@@ -1085,11 +1088,46 @@ class OriginalManagedFileCAS(unittest.TestCase):
                         stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
                         stack.enter_context(patch("auto_detect_destination_commit.exclusive_destination_lock",
                             side_effect=lambda *_: exclusive_destination_lock(parent / "p2.lock", store.owner)))
-                        stack.enter_context(patch.object(gate, "_zero_processes"))
+                        processes = stack.enter_context(patch.object(gate, "_zero_processes"))
                         empty = stack.enter_context(patch.object(gate, "_empty_kernel",
                                                                return_value="native-managed-kernel-empty"))
                         running = stack.enter_context(patch(
                             "neutral_shared_apply_source_gate._native_managed_running_digest", return_value=owner))
+
+                        if mode.startswith("pre-save-"):
+                            pidfile.touch()
+                            processes.side_effect = gate.QuiescentPreimageRefused("live process")
+                            finish = gate.finish_bound_cold_restore_locked
+                            running.return_value = "5" * 64
+                            reason = ("RUNNING_OWNER_REQUIRED" if mode == "pre-save-unpinned"
+                                      else "RUNNING_OWNER_CHANGED")
+                            with self.assertRaisesRegex(gate.QuiescentPreimageRefused, reason):
+                                finish(detail["id"], detail["base"], config_fd=config.fileno())
+                            self.assertEqual(store.read(), pending)
+                            self.assertEqual(target.read_bytes(), after)
+                            if mode == "pre-save-unpinned":
+                                running.assert_not_called()
+                            else:
+                                # Change the witnessed process after the initial observation,
+                                # before the original writer can restore the attributed inode.
+                                running.side_effect = [owner, "5" * 64]
+                                with self.assertRaisesRegex(gate.QuiescentPreimageRefused,
+                                                            "RUNNING_OWNER_CHANGED"):
+                                    finish(detail["id"], detail["base"], config_fd=config.fileno())
+                                self.assertEqual(store.read(), pending)
+                                self.assertEqual(target.read_bytes(), after)
+                                running.side_effect = None
+                                running.return_value = owner
+                                self.assertEqual(finish(detail["id"], detail["base"],
+                                                       config_fd=config.fileno()),
+                                    {"result": "original-bound-cold-restored", "id": detail["id"]})
+                                self.assertEqual((store.read()["phase"], target.read_bytes()),
+                                                 ("restored", before))
+                                self.assertEqual(committed_manifest(store.read()),
+                                                 prepared["previous_manifest"])
+                            empty.assert_not_called()
+                            processes.assert_not_called()
+                            continue
 
                         finish = gate.finish_managed_config_recovery_locked
                         if mode == "running":
