@@ -1205,12 +1205,16 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, KeyError, TypeError):
             print("ERROR: original managed locked Config phase refused", file=sys.stderr)
             return 69
-    if argv and argv[0] == "finish-ordinary-restore-locked":
+    if argv and argv[0] in ("finish-ordinary-restore-locked", "recover-managed-config-locked"):
         if len(argv) not in (3, 4) or (len(argv) == 4 and argv[3] != "--inherited-queue"):
             return 64
         try:
-            from neutral_schema3_quiescent_preimage import finish_bound_cold_restore_locked
-            reply = finish_bound_cold_restore_locked(
+            from neutral_schema3_quiescent_preimage import (
+                finish_bound_cold_restore_locked, finish_managed_config_recovery_locked,
+            )
+            finish = (finish_managed_config_recovery_locked if argv[0] == "recover-managed-config-locked"
+                      else finish_bound_cold_restore_locked)
+            reply = finish(
                 argv[1], argv[2], config_fd=4, queue_fd=3 if len(argv) == 4 else None)
             print(json.dumps(reply, separators=(",", ":")))
             return 0

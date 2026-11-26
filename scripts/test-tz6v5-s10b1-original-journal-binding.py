@@ -727,7 +727,7 @@ class OriginalDurableRootBinding(unittest.TestCase):
 
 
 class OriginalManagedFileCAS(unittest.TestCase):
-    def fixture(self, *, extra_change=False):
+    def fixture(self, *, extra_change=False, equal_config=False):
         import shutil
         from auto_detect_destination_commit import _sha, _target_identity
         from neutral_root_manifest import compile_candidate
@@ -751,7 +751,7 @@ class OriginalManagedFileCAS(unittest.TestCase):
             bound = store._advance_bound_ordinary(phase, bound, lambda: True,
                                                    shared_work_parent=parent)
         detail = {**case.detail, "id": "e" * 32, "base": case.detail["candidate"],
-                  "candidate": "9" * 64}
+                  "candidate": case.detail["candidate"] if equal_config else "9" * 64}
         work = parent / detail["id"]
         work.mkdir(mode=0o700)
         shutil.copytree(case.fx.release, work / "release")
@@ -1032,6 +1032,131 @@ class OriginalManagedFileCAS(unittest.TestCase):
 
             self.assertEqual(target.read_bytes(), before)
             self.assertEqual(committed_manifest(store.read()), prepared["previous_manifest"])
+
+    def test_interrupted_managed_save_reconciles_exact_observed_image(self):
+        from contextlib import ExitStack, redirect_stdout
+        import io
+        import subprocess
+        from auto_detect_destination_commit import (
+            _write_bound_managed_file_locked, exclusive_destination_lock,
+        )
+        from shared_apply_operation import _config_observation_witness
+        from shared_apply_seal import _stat, verify_seal
+        import auto_detect_effective_known as worker
+        import neutral_schema3_quiescent_preimage as gate
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            for mode in ("base", "candidate", "running", "foreign-inode", "equal"):
+                with self.subTest(mode=mode):
+                    store, prepared, row, parent, active, target, before, after = self.fixture(
+                        equal_config=mode == "equal")
+                    detail = prepared["detail"]
+                    observed = detail["base" if mode == "base" else "candidate"]
+                    owner = "3" * 64
+                    pending = _write_bound_managed_file_locked(store, prepared, row,
+                        running_sha256=owner, parent=parent, active=active, attest=lambda: True)
+                    saving = store._checkpoint_managed_config(pending, saved=False, attest=lambda: True,
+                                                             shared_work_parent=parent)
+                    plan_sha = verify_seal(parent / detail["id"], owner=store.owner)["sha256"]["plan.json"]
+
+                    def witness(image):
+                        return _config_observation_witness(detail, plan_sha, image)
+
+                    with ExitStack() as stack:
+                        config = stack.enter_context((parent / "config.xml").open("w+b"))
+                        config.write(b"<opnsense/>\n")
+                        config.flush()
+                        stack.enter_context(patch.object(sys, "platform", "freebsd15"))
+                        stack.enter_context(patch.object(os, "geteuid", return_value=0))
+                        stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+                        stack.enter_context(patch.object(gate, "SharedApplyOperation", return_value=store))
+                        stack.enter_context(patch.object(gate, "WORK", parent))
+                        stack.enter_context(patch.object(gate, "COMMON_ACTIVE", active))
+                        stack.enter_context(patch.object(gate, "PRODUCER_ROOT", parent / "absent-producer"))
+                        pidfile = parent / "child.pid"
+                        stack.enter_context(patch.object(gate, "CHILD_PID", pidfile))
+                        stack.enter_context(patch.object(gate, "MONITOR_PID", parent / "monitor.pid"))
+                        stack.enter_context(patch.object(gate, "DAEMON_PID", parent / "daemon.pid"))
+                        stack.enter_context(patch("shared_apply_seal._stat", side_effect=
+                            lambda path, uid, **kw: _stat(path, store.owner, **kw)))
+                        stack.enter_context(patch("shared_apply_seal.verify_seal", side_effect=
+                            lambda work, **kw: verify_seal(work, owner=store.owner)))
+                        stack.enter_context(patch.object(gate, "inspect_inert_release", return_value="inactive"))
+                        stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+                        stack.enter_context(patch("auto_detect_destination_commit.exclusive_destination_lock",
+                            side_effect=lambda *_: exclusive_destination_lock(parent / "p2.lock", store.owner)))
+                        stack.enter_context(patch.object(gate, "_zero_processes"))
+                        empty = stack.enter_context(patch.object(gate, "_empty_kernel",
+                                                               return_value="native-managed-kernel-empty"))
+                        running = stack.enter_context(patch(
+                            "neutral_shared_apply_source_gate._native_managed_running_digest", return_value=owner))
+
+                        finish = gate.finish_managed_config_recovery_locked
+                        if mode == "running":
+                            pidfile.touch()
+                        if mode == "equal":
+                            with self.assertRaisesRegex(gate.QuiescentPreimageRefused, "AMBIGUOUS_IMAGE"):
+                                finish(detail["id"], witness(observed), config_fd=config.fileno())
+                            self.assertEqual(store.read(), saving)
+                            continue
+
+                        with self.assertRaisesRegex(gate.QuiescentPreimageRefused, "IMAGE_REFUSED"):
+                            finish(detail["id"], witness("8" * 64), config_fd=config.fileno())
+                        self.assertEqual(store.read(), saving)
+                        if mode == "foreign-inode":
+                            from auto_detect_destination_commit import DestinationRefused
+                            sibling = target.with_name("substitute")
+                            sibling.write_bytes(after)
+                            sibling.replace(target)
+                            with self.assertRaisesRegex(DestinationRefused, "installed_image_changed"):
+                                finish(detail["id"], witness(observed), config_fd=config.fileno())
+                            self.assertEqual(store.read(), saving)
+                            continue
+                        if mode == "running":
+                            running.return_value = "5" * 64
+                            with self.assertRaisesRegex(gate.QuiescentPreimageRefused, "RUNNING_OWNER_CHANGED"):
+                                finish(detail["id"], witness(observed), config_fd=config.fileno())
+                            running.return_value = owner
+                            empty.assert_not_called()
+                        if mode == "base":
+                            real_replace = os.replace
+
+                            def interrupted(source, dest, **kw):
+                                real_replace(source, dest, **kw)
+                                if Path(dest) == target:
+                                    raise OSError("interrupted restoring saved base")
+
+                            with patch("os.replace", side_effect=interrupted):
+                                with self.assertRaisesRegex(OSError, "interrupted restoring saved base"):
+                                    finish(detail["id"], witness(observed), config_fd=config.fileno())
+                            saving = store.read()
+                            self.assertIn("restore", saving["managed"])
+                            with self.assertRaisesRegex(gate.QuiescentPreimageRefused, "IMAGE_REFUSED"):
+                                finish(detail["id"], witness(detail["candidate"]), config_fd=config.fileno())
+
+                        def inherited(operation, proof, *, config_fd, queue_fd):
+                            self.assertEqual((operation, config_fd, queue_fd), (detail["id"], 4, None))
+                            return finish(operation, proof, config_fd=config.fileno())
+
+                        def php(command, *, pass_fds, budget, capture_output):
+                            self.assertEqual(command[-3:], ["managed-save-recover", detail["id"], "strategies"])
+                            self.assertEqual((pass_fds, budget, capture_output), ((9,), 90, True))
+                            with redirect_stdout(io.StringIO()) as output:
+                                rc = worker.main(["recover-managed-config-locked", detail["id"], witness(observed)])
+                            return subprocess.CompletedProcess(command, rc, output.getvalue().encode())
+
+                        stack.enter_context(patch.object(gate, "finish_managed_config_recovery_locked",
+                                                        side_effect=inherited))
+                        stack.enter_context(patch.object(gate, "_run_bound_restore_joined", side_effect=php))
+                        terminal = gate.native_finish_bound_cold_restore(saving)
+                        self.assertEqual(store.read(), terminal)
+                        self.assertNotIn("managed", terminal)
+                        if mode == "base":
+                            self.assertEqual((terminal["phase"], target.read_bytes()), ("restored", before))
+                            self.assertEqual(committed_manifest(terminal), prepared["previous_manifest"])
+                        else:
+                            self.assertEqual((terminal["phase"], target.read_bytes()), ("committed", after))
+                            self.assertEqual(committed_manifest(terminal), prepared["manifest"])
 
     def test_managed_config_requires_installed_file_and_same_running_owner_through_commit(self):
         from contextlib import ExitStack, redirect_stdout

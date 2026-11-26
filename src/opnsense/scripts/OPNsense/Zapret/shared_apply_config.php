@@ -408,7 +408,7 @@ final class SharedApplyConfigWorker
         ?callable $whileP2Held = null, $queueStream = null, ?string $baseDigest = null
     ): array {
         $begin = $mode === 'begin-found-save-locked';
-        $joined = in_array($mode, ['finish-ordinary-restore-locked',
+        $joined = in_array($mode, ['finish-ordinary-restore-locked', 'recover-managed-config-locked',
             'begin-managed-config-save-locked', 'confirm-managed-config-save-locked'], true);
         if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
@@ -418,7 +418,7 @@ final class SharedApplyConfigWorker
                     : ($runtimeMode !== null || $whileP2Held !== null || $baseDigest !== null)) ||
             ($queueStream !== null && (!is_resource($queueStream) ||
                 !in_array($mode, ['recover-found-locked', 'confirm-found-save-locked',
-                    'finish-ordinary-restore-locked'], true)))) {
+                    'finish-ordinary-restore-locked', 'recover-managed-config-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
         }
         SharedApplyLifecycleLock::assertHeld();
@@ -773,6 +773,14 @@ final class SharedApplyConfigWorker
         return ['result'=>'committed','snapshot'=>$actual,'enabled'=>$enabled];
     }
 
+    private static function configSaveWitness(array $plan, string $planSha,
+                                              string $base, string $candidate): string
+    {
+        return hash('sha256', implode("\0", [
+            $plan['page'], $base, $candidate, $planSha, implode(',', $plan['changed_fields']),
+        ]));
+    }
+
     /** The saved Config cannot be labelled pre-save if output encoding fails. */
     public static function postSaveReceipt(array $result): string
     {
@@ -841,15 +849,16 @@ final class SharedApplyConfigWorker
             'found-runtime-epoch-finalizing', 'found-runtime-committed'];
         $found = in_array($action, $foundActions, true);
         $queueFd = null;
-        if (in_array($action, ['found-recover', 'ordinary-restore-finish'], true) &&
+        if (in_array($action, ['found-recover', 'ordinary-restore-finish', 'managed-save-recover'], true) &&
             count($argv) === 5 &&
             preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D', $argv[4], $matches) === 1) {
             $queueFd = (int)$matches[1];
         }
         if (count($argv) !== ($action === 'found-save' || $queueFd !== null ? 5 : 4) ||
             !in_array($action, ['preflight', 'save', 'saved', 'managed-save',
-                'ordinary-cold', 'ordinary-restore-finish', ...$foundActions], true) ||
-            !in_array($argv[3], $found || $action === 'managed-save' ? ['strategies'] : ['voice', 'strategies'], true)) {
+                'ordinary-cold', 'ordinary-restore-finish', 'managed-save-recover', ...$foundActions], true) ||
+            !in_array($argv[3], $found || in_array($action, ['managed-save', 'managed-save-recover'], true)
+                ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
         }
@@ -863,7 +872,7 @@ final class SharedApplyConfigWorker
                 $queueStream = self::openOriginalFoundQueue($queueFd);
             }
             if ($found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish',
-                'save', 'saved', 'managed-save'], true)) {
+                'save', 'saved', 'managed-save', 'managed-save-recover'], true)) {
                 // Core may repair unreadable Config from a backup on load.
                 // A recovery reader must not trigger such implicit mutation.
                 self::requireReadableConfig();
@@ -904,22 +913,35 @@ final class SharedApplyConfigWorker
                 ));
                 return 0;
             }
-            if ($action === 'ordinary-restore-finish') {
+            if (in_array($action, ['ordinary-restore-finish', 'managed-save-recover'], true)) {
                 // The outer original FD9 caller borrowed P2a first if
                 // necessary. Keep Config locked during the SAME WAL fsync.
+                $recoverManaged = $action === 'managed-save-recover';
                 $config->lock();
                 try {
                     self::requireReadableConfig();
                     $image = self::classifyOrdinaryConfigImage($plan, $factory()->getNodes());
-                    if (!in_array($image['image'], ['base-image', 'base-equals-candidate'], true) ||
-                        self::readPlan($argv[2], self::ROOT, 0) !== $plan ||
+                    $admitted = $recoverManaged ? ['base-image', 'candidate-image']
+                        : ['base-image', 'base-equals-candidate'];
+                    $recoverySha = null;
+                    if (!in_array($image['image'], $admitted, true) ||
+                        self::readPlan($argv[2], self::ROOT, 0, $recoverySha) !== $plan ||
+                        ($recoverManaged && $recoverySha !== $planSha) ||
                         self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
                         throw new \RuntimeException('Original ordinary restore Config changed');
                     }
+                    $witness = $image['snapshot'];
+                    $expected = 'original-bound-cold-restored';
+                    if ($recoverManaged) {
+                        $planWitness = self::configSaveWitness($plan, $planSha, $image['base'], $image['candidate']);
+                        $witness = hash('sha256', $planWitness . "\0" . $image['snapshot']);
+                        $expected = $image['image'] === 'candidate-image'
+                            ? 'original-managed-config-committed' : 'original-managed-config-restored';
+                    }
                     $reply = self::originalLockedFileEvidence(
-                        $config, $argv[2], 'finish-ordinary-restore-locked',
-                        $image['snapshot'], null, null, $queueStream);
-                    if ($reply !== ['result'=>'original-bound-cold-restored', 'id'=>$argv[2]] ||
+                        $config, $argv[2], $recoverManaged ? 'recover-managed-config-locked'
+                            : 'finish-ordinary-restore-locked', $witness, null, null, $queueStream);
+                    if ($reply !== ['result'=>$expected, 'id'=>$argv[2]] ||
                         self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
                         throw new \RuntimeException('Original ordinary restore receipt changed');
                     }
@@ -966,14 +988,12 @@ final class SharedApplyConfigWorker
             $id = $argv[2];
             $page = $argv[3];
             $attest = static function (string $mode, string $base, string $candidate, string $phase)
-                use ($config, $id, $page, $plan, $planSha): bool {
+                use ($config, $id, $plan, $planSha): bool {
                 // Hash the same parsed plan bytes and native Model snapshots on both sides of FD4.
                 if ($mode === 'confirm-managed-config-save-locked') {
                     self::requireReadableConfig();
                 }
-                $digest = hash('sha256', implode("\0", [
-                    $page, $base, $candidate, $planSha, implode(',', $plan['changed_fields']),
-                ]));
+                    $digest = self::configSaveWitness($plan, $planSha, $base, $candidate);
                 return self::originalLockedFileEvidence($config, $id, $mode, $digest) ===
                     ['result'=>$phase, 'id'=>$id];
             };
@@ -1000,7 +1020,7 @@ final class SharedApplyConfigWorker
             fwrite(STDERR, "ERROR: native shared Config save uncertain; retain recovery evidence\n");
             return 70;
         } catch (\Throwable $error) {
-            if ($action === 'managed-save') {
+            if (in_array($action, ['managed-save', 'managed-save-recover'], true)) {
                 // A joined child may have fsynced its phase before losing the receipt.
                 fwrite(STDERR, "ERROR: original managed Config outcome requires journal review\n");
                 return 70;

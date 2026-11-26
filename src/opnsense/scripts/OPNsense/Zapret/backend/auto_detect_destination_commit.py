@@ -1694,12 +1694,14 @@ def _attest_bound_managed_installed_locked(store, record: dict, *, parent: Path,
 
 
 def _restore_bound_managed_file_locked(store, record: dict, *, parent: Path,
-                                       active: Path, attest) -> dict:
-    """Recover one interrupted pre-save CAS with an independently attested owner."""
-    from shared_apply_operation import MANAGED_WRITING
+                                       active: Path, attest, saved_base: str | None = None) -> dict:
+    """Restore one interrupted CAS with the previous Config established."""
+    from shared_apply_operation import MANAGED_WRITING, _managed_restore_has_base
     from shared_apply_seal import _release_hash, _stat
 
-    if record.get("phase") != MANAGED_WRITING or store.read() != record or attest() is not True:
+    allowed = (record.get("phase") == MANAGED_WRITING if saved_base is None
+               else _managed_restore_has_base(record, saved_base))
+    if not allowed or store.read() != record or attest() is not True:
         raise DestinationRefused("original_managed_restore_owner_required")
     row = record["managed"]
     name = row["name"]
@@ -1738,7 +1740,7 @@ def _restore_bound_managed_file_locked(store, record: dict, *, parent: Path,
             if phase == "ready":
                 row = {**row, "restore": {**_stage_pin(info, data), "temp": item.name}}
                 record = store._checkpoint_managed_write(record, row, attest,
-                                                         shared_work_parent=parent)
+                    shared_work_parent=parent, saved_base=saved_base)
 
         _replace(path, after, before, uid, stage_fn=stage, expected_identity=tuple(identity))
 
@@ -1748,7 +1750,8 @@ def _restore_bound_managed_file_locked(store, record: dict, *, parent: Path,
     def restored():
         return attest() is True and observe()[0] == "before" and _release_hash(active, uid) == old_hash
 
-    return store._checkpoint_managed_write(record, None, restored, shared_work_parent=parent)
+    return store._checkpoint_managed_write(record, None, restored, shared_work_parent=parent,
+                                            saved_base=saved_base)
 
 
 def _observe_found_source(path: Path, name: str, row: tuple,

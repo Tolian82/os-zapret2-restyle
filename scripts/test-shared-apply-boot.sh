@@ -1006,7 +1006,16 @@ echo 'PASS: generic status separates verified native and genuine legacy'
     MOCK_MANAGED_RC=69
     expect_rc 70 "$pending"
     expect_rc 69 "$pending extra"
+    MOCK_MANAGED_RC=0
+    MOCK_MANAGED_REPLY="managed-committed=$MOCK_MANAGED_ID"
+    live_owner="committed $MOCK_MANAGED_ID strategies"
+    expect_rc 70 "$pending"
+    saving="managed-config-saving $MOCK_MANAGED_ID strategies $ID voice"
+    [ "$(shared_apply_recover_managed_cold_service "$saving")" = "$live_owner" ] ||
+        fail "saved candidate was not accepted after exact Config recovery"
+    live_owner="$old"
+    expect_rc 70 "$saving"
 ) || fail "managed cold recovery accepted an unknown receipt or predecessor"
-echo 'PASS: managed cold recovery returns only the verified prior owner'
+echo 'PASS: managed recovery requires the exact receipt and verified owner'
 
 echo 'PASS: committed native common owner routes boot through sealed release and fresh saved Config'

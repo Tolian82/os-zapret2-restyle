@@ -136,6 +136,16 @@ def _config_save_witness(detail: dict, plan_sha256: str) -> str:
     return hashlib.sha256(proof.encode("ascii")).hexdigest()
 
 
+def _config_observation_witness(detail: dict, plan_sha256: str, observed: str) -> str:
+    proof = _config_save_witness(detail, plan_sha256) + "\0" + observed
+    return hashlib.sha256(proof.encode("ascii")).hexdigest()
+
+
+def _managed_restore_has_base(record: dict, saved_base: str | None) -> bool:
+    return (record.get("phase") == MANAGED_CONFIG_SAVING and
+            saved_base == record["detail"]["base"] and saved_base != record["detail"]["candidate"])
+
+
 
 def _validate_manifest_binding(binding: object, detail: dict) -> dict:
     """One S10 immutable root pin in the EXISTING original durable journal.
@@ -258,8 +268,11 @@ def _validate_managed_write(record: dict) -> None:
                                     not DIGEST.fullmatch(row["running_sha256"])):
         raise SharedOperationError("invalid managed running owner digest")
     if (record["phase"] == MANAGED_CONFIG_SAVING and
-            (not {"running_sha256", "installed"} <= row.keys() or "restore" in row)):
+            not {"running_sha256", "installed"} <= row.keys()):
         raise SharedOperationError("managed Config save lacks installed owner")
+    if (record["phase"] == MANAGED_CONFIG_SAVING and "restore" in row and
+            record["detail"]["base"] == record["detail"]["candidate"]):
+        raise SharedOperationError("managed Config restore requires distinct base image")
     for key in ("before_identity", "installed"):
         if key not in row:
             continue
@@ -885,15 +898,18 @@ class SharedApplyOperation:
             raise SharedOperationError("ordinary Config save owner changed")
 
     def _checkpoint_managed_write(self, expected: dict, managed: dict | None, attest, *,
-                                  shared_work_parent: Path) -> dict:
+                                  shared_work_parent: Path, saved_base: str | None = None) -> dict:
         """Fsync one managed list intent or inode pin in the original WAL."""
         if self.read() != expected or not callable(attest):
             raise SharedOperationError("managed write owner changed")
         next_record = dict(expected)
+        recovering_save = _managed_restore_has_base(expected, saved_base)
+        if saved_base is not None and not recovering_save:
+            raise SharedOperationError("managed restore requires exact saved base")
         if (expected["phase"] == "prepared" and type(managed) is dict and
                 managed.keys() - {"running_sha256"} == _MANAGED_BASE):
             next_record.update(phase=MANAGED_WRITING, managed=managed)
-        elif expected["phase"] == MANAGED_WRITING:
+        elif expected["phase"] == MANAGED_WRITING or recovering_save:
             if managed is None:
                 next_record.pop("managed")
                 next_record["phase"] = "restored"
@@ -904,6 +920,8 @@ class SharedApplyOperation:
                 available = {"restore"} if "ready" in stage else {"ready"}
                 if "ready" in stage and not {"installed", "restore"} & stage.keys():
                     available.add("installed")
+                if recovering_save:
+                    available = {"restore"}
                 if not stage.keys() <= managed.keys() or len(changed) != 1 or not changed <= available:
                     raise SharedOperationError("managed write checkpoint out of order")
                 next_record["managed"] = managed
@@ -2082,7 +2100,8 @@ def main(argv: list[str]) -> int:
             elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"])
-            elif record["phase"] in ("activating", "activated", MANAGED_WRITING) and "previous" in record:
+            elif record["phase"] in ("activating", "activated", MANAGED_WRITING,
+                                     MANAGED_CONFIG_SAVING) and "previous" in record:
                 detail, previous = record["detail"], record["previous"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"] +
                       " " + previous["id"] + " " + previous["page"])
@@ -2093,11 +2112,11 @@ def main(argv: list[str]) -> int:
             from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
 
             record = SharedApplyOperation(owner=0).read()
-            if (record is None or record["phase"] != MANAGED_WRITING or
+            if (record is None or record["phase"] not in (MANAGED_WRITING, MANAGED_CONFIG_SAVING) or
                     (record["detail"]["id"], record["previous"]["id"]) != tuple(argv[2:4])):
                 raise SharedOperationError("managed cold recovery owner mismatch")
-            native_finish_bound_cold_restore(record)
-            print("managed-restored=" + argv[2])
+            result = native_finish_bound_cold_restore(record)
+            print("managed-" + result["phase"] + "=" + argv[2])
         elif recovery:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)

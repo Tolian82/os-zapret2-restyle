@@ -998,17 +998,27 @@ shared_apply_recover_managed_cold_service()
     IFS=' ' read -r _managed_phase _managed_id _managed_page _managed_old _managed_old_page <<EOF
 $1
 EOF
-    [ "$_managed_phase:$_managed_page" = managed-writing:strategies ] &&
-        [ "$1" = "$_managed_phase $_managed_id $_managed_page $_managed_old $_managed_old_page" ] || return 69
+    case "$_managed_phase:$_managed_page" in
+        managed-writing:strategies|managed-config-saving:strategies) ;;
+        *) return 69 ;;
+    esac
+    [ "$1" = "$_managed_phase $_managed_id $_managed_page $_managed_old $_managed_old_page" ] || return 69
     case "$_managed_id:$_managed_old" in *[!a-f0-9:]*) return 69 ;; esac
     [ "${#_managed_id}" -eq 32 ] && [ "${#_managed_old}" -eq 32 ] || return 69
     case "$_managed_old_page" in strategies|voice) ;; *) return 69 ;; esac
 
     _managed_receipt=$("${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \
         recover-managed "$_managed_id" "$_managed_old") || return 70
-    [ "$_managed_receipt" = "managed-restored=$_managed_id" ] || return 70
+    case "$_managed_receipt" in
+        "managed-restored=$_managed_id") _managed_expected="committed $_managed_old $_managed_old_page" ;;
+        "managed-committed=$_managed_id")
+            [ "$_managed_phase" = managed-config-saving ] || return 70
+            _managed_expected="committed $_managed_id $_managed_page"
+            ;;
+        *) return 70 ;;
+    esac
     _managed_owner=$(shared_apply_inspect_service) || return 70
-    [ "$_managed_owner" = "committed $_managed_old $_managed_old_page" ] || return 70
+    [ "$_managed_owner" = "$_managed_expected" ] || return 70
     printf '%s\n' "$_managed_owner"
 }
 
@@ -4035,7 +4045,7 @@ service_with_lifecycle_lock()
                             service_api_complete "$?"
                             return $?
                             ;;
-                        managed-writing\ *)
+                        managed-writing\ *|managed-config-saving\ *)
                             _shared_owner=$(shared_apply_recover_managed_cold_service "$_shared_owner") || return $?
                             shared_apply_boot_service "$_shared_owner"
                             service_api_complete "$?"
