@@ -208,23 +208,117 @@ class OriginalDurableRootBinding(unittest.TestCase):
                 _validate_record(bad)
         self.assertEqual(self.owner.read(), prepared)
 
-    def test_bound_predecessor_cannot_enter_legacy_found_writer(self):
+    def _pinned_found_fixture(self):
         bound = self.bind()
-        previous = self.owner._persist_record({**bound, "phase": "committed"})
+        old = self.owner._persist_record({**bound, "phase": "committed"})
         fresh = {**self.case.detail, "id": "e" * 32,
-                 "base": self.case.detail["candidate"]}
+                 "base": old["detail"]["candidate"]}
         plan = json.dumps({
             "result": "prepared", "page": "strategies",
             "dependencies": fresh["base"],
+            "changed_fields": fresh["changed_fields"], "candidate": {},
             "found_intent": {"config_revision": fresh["base"],
                              "commit_authorized": False},
             "found_batch": {name: {} for name in ("youtube", "user", "auto")}
         }).encode()
-        def forbidden(_):
-            self.fail("legacy Found attestation called for immutable predecessor")
-        with self.assertRaisesRegex(SharedOperationError, "bound Found preflight"):
-            self.owner.prepare_found(fresh, plan, forbidden, runtime_mode="1")
-        self.assertEqual(self.owner.read(), previous)
+        return bound, old, fresh, plan
+
+    def test_pinned_found_prepared_retains_old_root_but_no_file_action(self):
+        bound, old, fresh, plan = self._pinned_found_fixture()
+        root = self.case.fx.work / "manifest.json"
+        original = root.read_bytes()
+        with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None):
+            pending = self.owner.prepare_found(
+                fresh, plan, lambda _: True, runtime_mode="1",
+                shared_work_parent=self.case.fx.parent)
+            self.assertEqual(pending["phase"], "prepared")
+            self.assertEqual(pending["previous"], old["detail"])
+            self.assertEqual(pending["previous_manifest"], bound["manifest"])
+            self.assertNotIn("manifest", pending)
+            self.assertEqual(root.read_bytes(), original)
+            with self.assertRaises(SharedOperationError):
+                self.owner.advance_found_files(
+                    "found-files-writing", fresh, plan, lambda *_: True)
+            self.assertEqual(self.owner.read(), pending)
+            recovered = self.owner.finish_found_prepared_pristine(
+                fresh["id"], plan, lambda raw, previous:
+                raw == plan and previous == old["detail"],
+                shared_work_parent=self.case.fx.parent)
+            self.assertEqual(recovered["phase"], "restored")
+            self.assertNotIn("found", recovered)
+            self.assertEqual(committed_manifest(recovered), bound["manifest"])
+            self.assertEqual(root.read_bytes(), original)
+
+    def test_pinned_found_prep_refuses_without_fd9_wrong_base_or_tamper(self):
+        _, old, fresh, plan = self._pinned_found_fixture()
+        first = self.owner.read()
+        with patch("voice_ipfw_adapter.require_lifecycle_lock",
+                   side_effect=RuntimeError("no original FD9")):
+            with self.assertRaisesRegex(SharedOperationError, "predecessor proof"):
+                self.owner.prepare_found(
+                    fresh, plan, lambda _: True,
+                    shared_work_parent=self.case.fx.parent)
+        self.assertEqual(self.owner.read(), first)
+        with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None):
+            with self.assertRaisesRegex(SharedOperationError, "previous Config mismatch"):
+                wrong = {**fresh, "base": "f" * 64}
+                wrong_plan = plan.replace(fresh["base"].encode(), b"f" * 64)
+                self.owner.prepare_found(
+                    wrong, wrong_plan, lambda _: True,
+                    shared_work_parent=self.case.fx.parent)
+        self.assertEqual(self.owner.read(), first)
+        root = self.case.fx.work / "manifest.json"
+        original = root.read_bytes()
+        root.write_bytes(original + b"foreign")
+        with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None):
+            with self.assertRaisesRegex(SharedOperationError, "predecessor proof"):
+                self.owner.prepare_found(
+                    fresh, plan, lambda _: True,
+                    shared_work_parent=self.case.fx.parent)
+        self.assertEqual(self.owner.read(), first)
+        root.write_bytes(original)
+
+    def test_pinned_found_recovery_refuses_changed_root_and_mixed_phases(self):
+        bound, _, fresh, plan = self._pinned_found_fixture()
+        with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None):
+            pending = self.owner.prepare_found(
+                fresh, plan, lambda _: True,
+                shared_work_parent=self.case.fx.parent)
+            root = self.case.fx.work / "manifest.json"
+            original = root.read_bytes()
+            root.write_bytes(original + b"drift")
+            with self.assertRaisesRegex(SharedOperationError, "predecessor pin"):
+                self.owner.finish_found_prepared_pristine(
+                    fresh["id"], plan, lambda *_: True,
+                    shared_work_parent=self.case.fx.parent)
+            self.assertEqual(self.owner.read(), pending)
+            root.write_bytes(original)
+            # Structurally valid wrong hashes pass JSON shape checks, but
+            # NEVER pass the independent physical pinned-root recovery.
+            substituted = {**pending, "previous_manifest": {
+                **bound["manifest"], "root_sha256": "f" * 64}}
+            self.owner._persist_record(substituted)
+            with self.assertRaisesRegex(SharedOperationError, "predecessor pin"):
+                self.owner.finish_found_prepared_pristine(
+                    fresh["id"], plan, lambda *_: True,
+                    shared_work_parent=self.case.fx.parent)
+            self.assertEqual(self.owner.read(), substituted)
+            self.owner._persist_record(pending)
+            recovered = self.owner.finish_found_prepared_pristine(
+                fresh["id"], plan, lambda *_: True,
+                shared_work_parent=self.case.fx.parent)
+            self.assertEqual(committed_manifest(recovered), bound["manifest"])
+            for forged in (
+                {**pending, "phase": "found-files-writing"},
+                {**pending, "phase": "found-files-written"},
+                {**pending, "phase": "found-config-saving"},
+                {**pending, "manifest": bound["manifest"]},
+                {**pending, "previous_manifest": {
+                    **bound["manifest"], "root_sha256": "f"}},
+            ):
+                with self.subTest(phase=forged.get("phase")):
+                    with self.assertRaises(SharedOperationError):
+                        _validate_record(forged)
 
     def test_terminal_selector_distinguishes_two_generation_pins(self):
         bound = self.bind()
