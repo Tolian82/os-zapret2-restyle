@@ -46,8 +46,15 @@ def call(argv, *, locked=False, timeout=180, expected_rc=0):
                    "attest", "bind"}
         if action not in allowed:
             action = "unknown"
-        reason = re.search(r"G03_[A-Z0-9_]+(?:=REFUSED:[A-Z0-9_]+)?",
-                           p.stderr or "")
+        diagnostics = re.findall(
+            r"^G03_FIRST_REPLY=rc:(?:-?[0-9]{1,3}|unknown);receipt:(?:invalid|empty|exact|mismatch);"
+            r"wal:(?:prepared|activating|activated|config-saved|committed|restored|requires-review|unknown);"
+            r"stderr:(?:save-uncertain|review|other|empty)$", p.stderr or "", re.MULTILINE)
+        if len(diagnostics) == 1:
+            print(diagnostics[0], flush=True)
+        reason = (re.search(r"^G03_BOUND_NATIVE_REFUSED_[A-Z0-9_]{1,100}$",
+                            p.stderr or "", re.MULTILINE) or
+                  re.search(r"G03_[A-Z0-9_]+(?:=REFUSED:[A-Z0-9_]+)?", p.stderr or ""))
         reason = reason.group(0) if reason else "NO_TEST_REASON"
         raise RuntimeError("G03_COLD_COMMAND_REFUSED_" + action + "_" +
                            str(p.returncode) + "_" + reason)
@@ -346,6 +353,32 @@ from neutral_shared_apply_source_gate import (
     native_bind_original_prepared_fd9, native_plan_original_prepared_fd9,
     native_coordinate_original_prepared_fd9, MAX_PIPE)
 from voice_ipfw_adapter import require_lifecycle_lock
+def first_reply_diagnostic(reply, record, detail):
+    # Never disclose Config, HOSTLIST, argv, digests or untrusted stderr.
+    phase = record.get("phase") if type(record) is dict else None
+    if phase not in ("prepared", "activating", "activated", "config-saved", "committed", "restored", "requires-review"):
+        phase = "unknown"
+    rc = reply.returncode
+    rc = str(rc) if type(rc) is int and -255 <= rc <= 255 else "unknown"
+    shape = "invalid"
+    raw = reply.stdout
+    if type(raw) is bytes and not raw:
+        shape = "empty"
+    elif (type(raw) is bytes and 0 < len(raw) <= 4096 and
+          raw.count(b"\n") == 1 and raw.endswith(b"\n")):
+        try:
+            value = json.loads(raw)
+            expected = {"result": "saved", "saved": True, "applied": False,
+                        "snapshot": detail["candidate"], "change_count": len(detail["changed_fields"])}
+            shape = "exact" if json.dumps(value, sort_keys=True) == json.dumps(expected, sort_keys=True) else "mismatch"
+        except (ValueError, TypeError, RecursionError):
+            pass
+    err = {b"ERROR: native shared Config save uncertain; retain recovery evidence\n": "save-uncertain",
+           b"ERROR: original managed Config outcome requires journal review\n": "review"}.get(reply.stderr, "other")
+    if reply.stderr == b"":
+        err = "empty"
+    return "G03_FIRST_REPLY=rc:" + rc + ";receipt:" + shape + ";wal:" + phase + ";stderr:" + err
+
 op, mode = sys.argv[1:]
 try:
     require_lifecycle_lock()
@@ -423,7 +456,25 @@ try:
         print("G03_BOUND_SUCCESSOR_COMMIT=" + committed["manifest"]["root_sha256"])
         raise SystemExit(0)
     if mode == "first-commit":
-        route, committed, source, semantic = native_coordinate_original_prepared_fd9(op, raw)
+        # Test-only observer of the same joined PHP call; never replace its
+        # result, repeat the action, or mutate the original journal.
+        import neutral_schema3_quiescent_preimage as quiescent
+        import json
+        original_join = quiescent._run_bound_restore_joined
+        def diagnosed_join(command, **kwargs):
+            reply = original_join(command, **kwargs)
+            if list(command[-3:]) == ["first-enabled-apply", op, "strategies"]:
+                try:
+                    observed = store.read()
+                except (OSError, RuntimeError, ValueError):
+                    observed = None
+                print(first_reply_diagnostic(reply, observed, detail), file=sys.stderr)
+            return reply
+        quiescent._run_bound_restore_joined = diagnosed_join
+        try:
+            route, committed, source, semantic = native_coordinate_original_prepared_fd9(op, raw)
+        finally:
+            quiescent._run_bound_restore_joined = original_join
         if (route != "first-enabled-committed" or store.read() != committed or
                 committed.get("phase") != "committed" or committed.get("detail") != detail or
                 source.mode != "list" or source.requested_enabled is not True or
