@@ -904,11 +904,16 @@ class EpochReceipts:
 
     def finish_learning_running(
         self, proof: LearningGenerationProof, queue: DurableInbox, *,
-        workspace: Path, attest,
+        workspace: Path, attest, expected_pretraffic_sha256: str | None = None,
     ) -> dict:
         """Finish the same original epoch, only after native saved-Config phase."""
         folder, data = self._attest_learning_running_seed(
             proof, queue, workspace=workspace, attest=attest)
+        if expected_pretraffic_sha256 is not None and (
+                type(expected_pretraffic_sha256) is not str or
+                not HEX64.fullmatch(expected_pretraffic_sha256) or
+                data["pretraffic_sha256"] != expected_pretraffic_sha256):
+            raise ReceiptRefused("learning_running_pretraffic_pin_changed")
         _write_once(folder, "epoch.json", _canonical(data), self.uid)
         return data
 

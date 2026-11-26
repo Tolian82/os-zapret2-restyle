@@ -493,6 +493,77 @@ def native_restore_learning_before_ipfw(
         raise PostDropRefused("learning_postdrop_owner_changed")
 
 
+def native_finish_first_bound_learning_epoch_locked(record: dict, *, config_fd: int,
+                                                     config_digest: str, queue_fd: int) -> dict:
+    """Finish the original first Auto epoch using borrowed FD9/P2a/FD4."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_owner import attest_learning_epoch_finalizing_generation
+    from neutral_root_stage import verify_original_operation_pins
+    from neutral_schema3_previous_physical import _full_prior_tree, _running_native
+    from shared_apply_operation import SharedApplyOperation, _first_running_pin_matches, DIGEST
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock, FreeBSDIPFWAdapter, shared_release_manifest
+    from voice_firewall_transaction import verify_prior_state
+    from voice_live_inspect import COMMON_ACTIVE, CHILD_PID, MONITOR_PID
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or record.get("phase") != "epoch-finalizing" or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 2 or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+            type(queue_fd) is not int or queue_fd < 3 or queue_fd in (9, config_fd) or
+            any(type(record.get(key)) is not str or not DIGEST.fullmatch(record[key])
+                for key in ("first_running_sha256", "first_pretraffic_sha256"))):
+        raise PostDropRefused("first_bound_epoch_scope_required")
+    detail = record["detail"]
+    if config_digest != detail["candidate"]:
+        raise PostDropRefused("first_bound_epoch_config_changed")
+    store = SharedApplyOperation(owner=0)
+    work = WORK / detail["id"]
+    release = work / "release"
+
+    def attest():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if store.read() != record:
+            raise PostDropRefused("first_bound_epoch_owner_changed")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        _full_prior_tree(work, COMMON_ACTIVE, 0)
+        proof = attest_learning_epoch_finalizing_generation(detail["id"])
+        running = _running_native(release, owner_uid=0, child_pidfile=CHILD_PID,
+                                  monitor_pidfile=MONITOR_PID)
+        if (proof.operation_id != detail["id"] or proof.generation != detail["id"] or
+                proof.owner_candidate_sha256 != config_digest or
+                (proof.owner.pid, proof.owner.started) != (running.pid, running.started) or
+                not _first_running_pin_matches(record, running, config_fd,
+                    pretraffic_sha256=record["first_pretraffic_sha256"])):
+            raise PostDropRefused("first_bound_epoch_running_changed")
+        desired = shared_release_manifest(release)
+        if desired["rule_base"] != 19000 or desired["rule_max"] not in (19010, 19099):
+            raise PostDropRefused("first_bound_epoch_kernel_scope_invalid")
+        verify_prior_state(FreeBSDIPFWAdapter(19000, 19099), desired, desired)
+        if store.read() != record:
+            raise PostDropRefused("first_bound_epoch_owner_changed")
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return proof
+
+    proof = attest()
+    workspace, candidate, sources = _learning_release_sources(COMMON_ACTIVE)
+    if (workspace != work or candidate != config_digest or sources != proof.learning):
+        raise PostDropRefused("first_bound_epoch_source_changed")
+    _, names = _qualified_learning_sources(sources, ROOT)
+    queue, receipts = _original_epoch_queue(names)
+    with queue.inherited_exclusive(queue_fd):
+        os.fsync(config_fd)
+        data = receipts.finish_learning_running(proof, queue, workspace=work,
+            attest=attest, expected_pretraffic_sha256=record["first_pretraffic_sha256"])
+        if (data.get("pretraffic_sha256") != record["first_pretraffic_sha256"] or
+                receipts.verify_learning_stopped_epoch(proof, workspace=work) != data or
+                attest() != proof):
+            raise PostDropRefused("first_bound_epoch_readback_changed")
+        return data
+
+
 def native_finish_learning_epoch(generation: str) -> None:
     """Finish original schema3 receipt only after real shared Apply PID gate."""
     from auto_detect_epoch_receipts import HEX32
@@ -502,6 +573,13 @@ def native_finish_learning_epoch(generation: str) -> None:
         raise PostDropRefused("learning_invalid_running_generation")
     attester = attest_learning_epoch_finalizing_generation
     proof = attester(generation)
+    from shared_apply_operation import SharedApplyOperation, _first_running_pin_scope
+    record = SharedApplyOperation(owner=0).read()
+    if (record is not None and record["detail"]["id"] == generation and
+            _first_running_pin_scope(record) and record["manifest"]["schema"] == 2):
+        # A bound first Auto generation must not bypass its durable pair or
+        # acquire another queue lock through the legacy FD9-only command.
+        raise PostDropRefused("first_bound_epoch_requires_original_config_queue")
     workspace, candidate, sources = _learning_release_sources(COMMON_ACTIVE)
     if (proof.operation_id != generation or
             workspace.name != generation or
