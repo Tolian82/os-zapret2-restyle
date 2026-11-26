@@ -2320,7 +2320,10 @@ shared_apply_prepare_service()
         *[!a-f0-9]*|"") return 64 ;;
     esac
     [ "${#1}" -eq 32 ] || return 64
-    preflight_shared_apply_journal common-apply || return 69
+    # A bound terminal owner may only authorize a fresh detached build.
+    # The old Apply/Start/Stop/Lab fences and physical route stay closed.
+    preflight_shared_apply_journal common-apply ||
+        preflight_shared_apply_journal common-bound-prepare "$1" || return 69
     [ -x "${PYTHON_RUNTIME}" ] || return 69
     _shared_work="/var/db/zapret2/shared-work/$1"
     [ -d "$_shared_work" ] && [ ! -L "$_shared_work" ] || return 69

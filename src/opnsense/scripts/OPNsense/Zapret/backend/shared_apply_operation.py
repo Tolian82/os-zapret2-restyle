@@ -1941,6 +1941,65 @@ def native_remove_rollback_pair(root: Path = DEFAULT_ROOT,
     return {"state": "trial", "old": owner, "trial": trial["id"]}
 
 
+def native_bound_prepare_gate(operation: str) -> None:
+    """Only a fresh detached ordinary candidate, never a lifecycle permit."""
+    from neutral_root_stage import verify_original_operation_pins
+    from shared_apply_render import regular
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation)):
+        raise SharedOperationError("bound prepare requires original native FD9")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "committed" or
+            record.get("manifest", {}).get("schema") != 1 or
+            "found" in record or "failure" in record or
+            operation in (record["detail"]["id"], record.get("previous", {}).get("id"))):
+        raise SharedOperationError("bound prepare requires ordinary terminal owner")
+    work = WORK / operation
+
+    def observe():
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise SharedOperationError("bound prepare owner changed")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        regular(WORK, 0, directory=True)
+        regular(work, 0, directory=True)
+        if set(os.listdir(work)) != {"candidate.xml", "plan.json"}:
+            raise SharedOperationError("bound prepare requires fresh detached work")
+        plan_path = work / "plan.json"
+        xml_path = work / "candidate.xml"
+        def identity(path):
+            info = regular(path, 0)
+            return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+                    info.st_ctime_ns, info.st_mode, info.st_uid, info.st_nlink)
+
+        identities = identity(plan_path), identity(xml_path)
+        plan_raw, xml_raw = plan_path.read_bytes(), xml_path.read_bytes()
+        if (identity(plan_path), identity(xml_path)) != identities:
+            raise SharedOperationError("bound prepare detached source changed")
+        plan = json.loads(plan_raw)
+        candidate = plan.get("candidate") if type(plan) is dict else None
+        general = candidate.get("general") if type(candidate) is dict else None
+        hostlist = candidate.get("hostlist") if type(candidate) is dict else None
+        if (type(plan) is not dict or plan.get("result") != "prepared" or
+                plan.get("page") != "strategies" or "found_intent" in plan or
+                "found_batch" in plan or plan.get("dependencies") != record["detail"]["candidate"] or
+                type(general) is not dict or general.get("enabled") != "1" or
+                type(hostlist) is not dict or hostlist.get("mode") not in ("all", "list")):
+            raise SharedOperationError("bound prepare detached plan scope refused")
+        if store.read() != record:
+            raise SharedOperationError("bound prepare owner changed")
+        return identities, plan_raw, xml_raw
+
+    first = observe()
+    if observe() != first:
+        raise SharedOperationError("bound prepare detached source changed")
+
+
 def native_lifecycle_gate(action: str | None = None, *,
                           root: Path = DEFAULT_ROOT) -> dict:
     """Read-only FD9 policy from the ONE current shared Apply journal.
@@ -2007,6 +2066,8 @@ def native_lifecycle_gate(action: str | None = None, *,
 def main(argv: list[str]) -> int:
     inspection = len(argv) == 2 and argv[1] == "inspect"
     found_pending = len(argv) == 2 and argv[1] == "found-pending"
+    bound_prepare_request = (len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-prepare"] and
+                             bool(OP_ID.fullmatch(argv[3])))
     native_gate_request = len(argv) in (2, 3) and argv[1] == "native-gate" and (
         len(argv) == 2 or argv[2] in (
             "common-apply", "common-recover-saved",
@@ -2052,7 +2113,7 @@ def main(argv: list[str]) -> int:
     cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request):
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -2092,6 +2153,8 @@ def main(argv: list[str]) -> int:
             record = SharedApplyOperation().read()
             if record is not None and "found" in record:
                 print(record["detail"]["id"])
+        elif bound_prepare_request:
+            native_bound_prepare_gate(argv[3])
         elif native_gate_request:
             action = argv[2] if len(argv) == 3 else None
             state = native_lifecycle_gate(action)

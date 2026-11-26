@@ -810,6 +810,82 @@ class TestJournal(unittest.TestCase):
             with self.assertRaises(SharedOperationError):
                 native_committed_owner_witness(j.root)
 
+    def test_bound_successor_prepare_is_detached_only(self):
+        import os
+        from shared_apply_operation import native_bound_prepare_gate
+        from shared_apply_render import regular
+
+        old = detail("1" * 32)
+        op = "2" * 32
+        pin = {"schema": 1, "generation": old["id"], "root_sha256": "c" * 64,
+               "seal_sha256": "d" * 64, "candidate_sha256": old["candidate"]}
+        record = {"schema": 1, "phase": "committed", "detail": old, "manifest": pin}
+        plan = {"result": "prepared", "page": "strategies", "dependencies": old["candidate"],
+                "candidate": {"general": {"enabled": "1"}, "hostlist": {"mode": "list"}}}
+        uid = os.geteuid()
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            root = Path(tmp)
+            work = root / "work"
+            work.mkdir(mode=0o700)
+            candidate = work / op
+            candidate.mkdir(mode=0o700)
+            xml = candidate / "candidate.xml"
+            xml.write_bytes(b"detached XML")
+            xml.chmod(0o600)
+            plan_file = candidate / "plan.json"
+            plan_file.write_text(json.dumps(plan))
+            plan_file.chmod(0o600)
+            store = SharedApplyOperation(root / "journal", owner=uid)
+            store._persist_record(record)
+            original = (store.root / "operation.json").read_bytes()
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            stack.enter_context(patch("shared_apply_operation.sys.platform", "freebsd15"))
+            stack.enter_context(patch("shared_apply_operation.os.geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("shared_apply_seal.WORK", work))
+            stack.enter_context(patch("shared_apply_render.regular", side_effect=
+                lambda path, owner, **kw: regular(path, uid, **kw)))
+            pins = stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            native_bound_prepare_gate(op)
+            self.assertEqual(pins.call_count, 2)
+            self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+            for patch_plan in ({"dependencies": "0" * 64}, {"found_intent": {}},
+                               {"candidate": {"general": {"enabled": "1"}, "hostlist": {"mode": "auto"}}},
+                               {"candidate": []}, {"page": "voice"}):
+                with self.subTest(plan=patch_plan):
+                    plan_file.write_text(json.dumps({**plan, **patch_plan}))
+                    with self.assertRaises(SharedOperationError):
+                        native_bound_prepare_gate(op)
+            plan_file.write_text(json.dumps(plan))
+            for bad in (old["id"], "invalid"):
+                with self.assertRaises(SharedOperationError):
+                    native_bound_prepare_gate(bad)
+            residue = candidate / "release"
+            residue.mkdir()
+            with self.assertRaises(SharedOperationError):
+                native_bound_prepare_gate(op)
+            residue.rmdir()
+            xml.unlink()
+            xml.symlink_to(plan_file)
+            with self.assertRaises(RuntimeError):
+                native_bound_prepare_gate(op)
+            xml.unlink()
+            xml.write_bytes(b"detached XML")
+            xml.chmod(0o600)
+            pins.side_effect = RuntimeError("foreign original pin")
+            with self.assertRaises(RuntimeError):
+                native_bound_prepare_gate(op)
+            pins.side_effect = None
+            for phase in ("activated", "restored"):
+                store._persist_record({**record, "phase": phase})
+                with self.assertRaises(SharedOperationError):
+                    native_bound_prepare_gate(op)
+            store._persist_record(record)
+            self.assertEqual((store.root / "operation.json").read_bytes(), original)
+            self.assertEqual(set(candidate.iterdir()), {xml, plan_file})
+            self.assertEqual(xml.read_bytes(), b"detached XML")
+            self.assertEqual(json.loads(plan_file.read_bytes()), plan)
+
     def test_native_gate_uses_only_trusted_shared_apply_owner(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)
