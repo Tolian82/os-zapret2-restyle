@@ -113,18 +113,21 @@ class DurableInbox:
         _stat_regular(self.inbox, self.uid, writer_gid=self.writer_gid)
 
     @contextmanager
-    def exclusive(self):
+    def exclusive(self, *, existing_only: bool = False):
         self._verify()
         # A new FreeBSD file inherits the parent directory group (nobody).
         # The ONE original P2a queue lock is instead root:root 0600.
         # Never reown or repair an EXISTING lock: reject all foreign state.
         fresh = False
-        try:
-            fd = os.open(self.lock, os.O_CREAT | os.O_EXCL |
-                         os.O_RDWR | os.O_NOFOLLOW, 0o600)
-            fresh = True
-        except FileExistsError:
+        if existing_only:
             fd = os.open(self.lock, os.O_RDWR | os.O_NOFOLLOW)
+        else:
+            try:
+                fd = os.open(self.lock, os.O_CREAT | os.O_EXCL |
+                             os.O_RDWR | os.O_NOFOLLOW, 0o600)
+                fresh = True
+            except FileExistsError:
+                fd = os.open(self.lock, os.O_RDWR | os.O_NOFOLLOW)
         try:
             if fresh:
                 expected_gid = self.pending.lstat().st_gid

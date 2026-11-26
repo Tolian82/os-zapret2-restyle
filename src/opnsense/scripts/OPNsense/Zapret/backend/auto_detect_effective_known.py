@@ -969,6 +969,11 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
         operation, config_fd)
     detail = record["detail"]
     phase = record["phase"]
+    if queue_fd is not None and (
+            action not in ("recover-found-locked", "confirm-found-save-locked") or
+            phase == "prepared" or "manifest" not in record or
+            record.get("previous_manifest", {}).get("schema") != 2):
+        raise EffectiveKnownRefused("bound_found_original_queue_scope_refused")
     if action == "recover-found-locked" and phase == "prepared":
         return recover_native_found_prepared_pristine(
             operation, config_fd=config_fd, config_digest=digest)
@@ -1045,8 +1050,57 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
         return {"result": record["phase"]}
 
 
+def native_found_recover_original_fd9(operation: str) -> int:
+    """One existing PHP Config recovery, with P2a BEFORE Config when required."""
+    import pwd
+    import subprocess
+    from auto_detect_queue import DurableInbox
+    from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
+    from shared_apply_operation import SharedApplyOperation, FOUND_ROLLBACK_FROM, FOUND_RESTORING
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not re.fullmatch(r"[a-f0-9]{32}", operation)):
+        raise EffectiveKnownRefused("native_found_recovery_fd9_required")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if (type(record) is not dict or "found" not in record or
+            record["detail"]["id"] != operation or record["detail"]["page"] != "strategies"):
+        raise EffectiveKnownRefused("native_found_recovery_owner_required")
+    command = ["/usr/local/bin/php",
+               "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php",
+               "found-recover", operation, "strategies"]
+
+    def invoke(fd=None):
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise EffectiveKnownRefused("native_found_recovery_owner_changed")
+        args = command if fd is None else command + ["--queue-fd=" + str(fd)]
+        result = subprocess.run(args, stdin=subprocess.DEVNULL,
+                                pass_fds=(9,) if fd is None else (fd, 9),
+                                check=False, close_fds=True)
+        return result.returncode if result.returncode in (0, 64, 69, 70) else 70
+
+    if ("manifest" in record and record.get("previous_manifest", {}).get("schema") == 2 and
+            record["phase"] in FOUND_ROLLBACK_FROM | {FOUND_RESTORING}):
+        gid = pwd.getpwnam(ENGINE_USER).pw_gid
+        if gid <= 0:
+            raise EffectiveKnownRefused("native_found_recovery_queue_gid_unqualified")
+        queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+        with queue.exclusive(existing_only=True):
+            return invoke(queue.locked_fd)
+    return invoke()
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 2 and argv[0] == "recover-found-original":
+        try:
+            return native_found_recover_original_fd9(argv[1])
+        except (ValueError, RuntimeError, OSError, UnicodeError, KeyError):
+            print("ERROR: original Found recovery scope refused", file=sys.stderr)
+            return 69
     if len(argv) == 4 and argv[0] == "begin-found-save-locked":
         try:
             from auto_detect_destination_commit import shared_apply_found_files_original_fd9
@@ -1066,13 +1120,17 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, UnicodeError):
             print("ERROR: original found-data save scope refused", file=sys.stderr)
             return 69
-    if len(argv) == 3 and argv[0] in (
+    inherited_queue = (len(argv) == 4 and argv[3] == "--inherited-queue" and
+                       argv[0] in ("recover-found-locked", "confirm-found-save-locked"))
+    if inherited_queue or (len(argv) == 3 and argv[0] in (
             "recover-found-locked", "confirm-found-save-locked",
             "found-runtime-activating", "found-runtime-activated",
             "found-runtime-config-saved", "found-runtime-epoch-finalizing",
-            "found-runtime-committed"):
+            "found-runtime-committed")):
         try:
-            reply = advance_native_found_locked(argv[0], argv[1], argv[2], config_fd=4)
+            reply = advance_native_found_locked(
+                argv[0], argv[1], argv[2], config_fd=4,
+                queue_fd=3 if inherited_queue else None)
             print(json.dumps(reply, separators=(",", ":")))
             return 0
         except (ValueError, RuntimeError, OSError, UnicodeError):

@@ -109,6 +109,31 @@ class StoppedLearningRetirementTests(unittest.TestCase):
         self.assertNotIn("ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH", code)
         self.assertNotIn("os._exit(86)", code)
 
+    def test_readonly_retirement_refuses_unsealed_cursor_without_cleanup(self):
+        from auto_detect_cursor_chain import CHAIN, CursorChainRefused
+        native = self.epoch / CHAIN / "00000000" / "native"
+        native.mkdir(parents=True, mode=0o700)
+        native.parent.chmod(0o700)
+        native.parent.parent.chmod(0o700)
+        staged = native / "001.json"
+        staged.write_bytes(b"{}\n")
+        staged.chmod(0o600)
+        pin = staged.stat()
+        tip = self.tip()
+        cursor = tip["state"][1]["streams"][0]
+        seed = {"learning": [dict(cursor, native_number=1)],
+                "files": [{}, tip["debug"]]}
+        with self.queue.exclusive(), patch.object(
+                CursorChain, "learning_epoch", return_value=(self.epoch, seed, b"epoch")):
+            with self.assertRaises((LearningRetirementRefused, CursorChainRefused)):
+                retired_learning_stopped(
+                    self.receipts, self.queue, self.proof, self.work,
+                    attest=lambda: self.proof, inspect=lambda *a, **k: FDState.DRAINED,
+                    repair=False)
+        self.assertEqual(staged.read_bytes(), b"{}\n")
+        self.assertEqual(staged.stat().st_ino, pin.st_ino)
+        self.assertFalse((self.epoch / "learning-retirement").exists())
+
     def test_terminal_archive_and_readonly_boot_ready(self):
         tip = self.tip()
         self.assertFalse(self.run_retire(repair=False, tip=tip))

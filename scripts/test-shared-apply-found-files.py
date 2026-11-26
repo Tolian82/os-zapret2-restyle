@@ -882,6 +882,67 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
 
     @unittest.skipIf(sys.platform.startswith("freebsd") and os.geteuid() == 0,
                      "A native root requires a real FD9 parent, not a fixture")
+    def test_retired_bound_recovery_hands_same_existing_queue_to_original_php(self):
+        from types import SimpleNamespace
+        from auto_detect_effective_known import native_found_recover_original_fd9
+        from auto_detect_queue import DurableInbox, QueueSafetyError
+        import fcntl
+
+        producer = self.root / "producer"
+        producer.mkdir(mode=0o700)
+        (producer / "pending").mkdir(mode=0o700)
+        queue = DurableInbox(producer, owner_uid=self.uid)
+        queue.inbox.write_bytes(b"")
+        queue.inbox.chmod(0o600)
+        operation = "a" * 32
+        record = {"detail": {"id": operation, "page": "strategies"},
+                  "found": {}, "manifest": {}, "previous_manifest": {"schema": 2},
+                  "phase": "found-config-saving"}
+        store = SimpleNamespace(read=lambda: record)
+        calls = []
+
+        def run(args, **kwargs):
+            calls.append(args)
+            self.assertEqual(args[2:5], ["found-recover", operation, "strategies"])
+            if "previous_manifest" in record:
+                self.assertEqual(kwargs["pass_fds"], (queue.locked_fd, 9))
+                self.assertEqual(args[5], "--queue-fd=" + str(queue.locked_fd))
+                self.assertEqual(os.fstat(queue.locked_fd).st_ino, pin)
+                foreign = os.open(queue.lock, os.O_RDONLY)
+                try:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(foreign, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                finally:
+                    os.close(foreign)
+            else:
+                self.assertFalse(queue._held)
+                self.assertEqual(kwargs["pass_fds"], (9,))
+                self.assertEqual(len(args), 5)
+            return SimpleNamespace(returncode=70)
+
+        with patch("sys.platform", "freebsd15"), patch("os.geteuid", return_value=0), \
+                patch("pwd.getpwnam", return_value=SimpleNamespace(pw_gid=65534)), \
+                patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                patch("shared_apply_operation.SharedApplyOperation", return_value=store), \
+                patch("auto_detect_queue.DurableInbox", return_value=queue), \
+                patch("subprocess.run", side_effect=run):
+            with self.assertRaises(FileNotFoundError):
+                native_found_recover_original_fd9(operation)
+            self.assertFalse(queue.lock.exists())
+            with queue.exclusive():
+                pin = queue.lock.stat().st_ino
+                with self.assertRaises(QueueSafetyError):
+                    native_found_recover_original_fd9(operation)
+            self.assertEqual(calls, [])
+            self.assertEqual(native_found_recover_original_fd9(operation), 70)
+            self.assertFalse(queue._held)
+            record.pop("previous_manifest")
+            self.assertEqual(native_found_recover_original_fd9(operation), 70)
+            self.assertEqual(len(calls), 2)
+            with self.assertRaises(RuntimeError):
+                native_found_recover_original_fd9("b" * 32)
+            self.assertEqual(len(calls), 2)
+
     def test_public_original_fd9_entry_refuses_non_native(self):
         with self.assertRaisesRegex(DestinationRefused,
                                     "original_native_fd9_required"):

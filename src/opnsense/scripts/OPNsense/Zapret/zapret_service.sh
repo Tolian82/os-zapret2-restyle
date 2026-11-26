@@ -541,6 +541,12 @@ shared_apply_workspace()
 }
 shared_apply_native_config()
 {
+    # Bound retired Found rollback needs the original P2a BEFORE the
+    # native Config lock. The Python parent invokes this SAME PHP owner.
+    if [ "$#" -eq 3 ] && [ "$1" = found-recover ] && [ "$3" = strategies ]; then
+        "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" recover-found-original "$2"
+        return $?
+    fi
     /usr/local/bin/php "${SCRIPT_DIR}/shared_apply_config.php" "$@"
 }
 shared_apply_json_field()

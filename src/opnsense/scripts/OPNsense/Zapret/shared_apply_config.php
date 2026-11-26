@@ -316,6 +316,29 @@ final class SharedApplyConfigWorker
         ];
     }
 
+    private static function openOriginalFoundQueue(int $fd)
+    {
+        if ($fd < 3 || $fd > 1024 || $fd === 9) {
+            throw new \RuntimeException('Invalid original Found queue descriptor');
+        }
+        $stream = @fopen('php://fd/' . $fd, 'r+b');
+        if (!is_resource($stream)) {
+            throw new \RuntimeException('Original Found queue descriptor unavailable');
+        }
+        $held = @fstat($stream);
+        $named = @lstat('/var/db/zapret2-auto-detect/worker.lock');
+        if (!is_array($held) || !is_array($named) ||
+            $held['dev'] !== $named['dev'] || $held['ino'] !== $named['ino'] ||
+            $held['uid'] !== 0 || $held['gid'] !== 0 || $held['nlink'] !== 1 ||
+            $named['nlink'] !== 1 || ($held['mode'] & 0177777) !== 0100600 ||
+            ($named['mode'] & 0177777) !== 0100600) {
+            fclose($stream);
+            throw new \RuntimeException('Foreign original Found queue descriptor');
+        }
+        // Python independently verifies the same locked open description.
+        return $stream;
+    }
+
     /**
      * Real cold inspection uses the ONE original PHP Config::lock and the
      * child inherited descriptors 4 + 9. No new lock owner and NO mutation.
@@ -324,14 +347,16 @@ final class SharedApplyConfigWorker
     private static function originalFoundLockedFileEvidence(
         object $config, string $id, string $mode = 'classify-locked',
         ?string $configDigest = null, ?string $runtimeMode = null,
-        ?callable $whileP2Held = null
+        ?callable $whileP2Held = null, $queueStream = null
     ): array {
         $begin = $mode === 'begin-found-save-locked';
         if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
                  !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
             ($begin ? (!in_array($runtimeMode, ['0', '1'], true) || $whileP2Held === null)
-                    : ($runtimeMode !== null || $whileP2Held !== null))) {
+                    : ($runtimeMode !== null || $whileP2Held !== null)) ||
+            ($queueStream !== null && (!is_resource($queueStream) ||
+                !in_array($mode, ['recover-found-locked', 'confirm-found-save-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
         }
         SharedApplyLifecycleLock::assertHeld();
@@ -366,11 +391,15 @@ final class SharedApplyConfigWorker
             if ($begin) {
                 $command[] = $runtimeMode;
             }
+            $descriptors = [0 => $begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r'],
+                1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a'],
+                4 => $handle, 9 => $fd9];
+            if ($queueStream !== null) {
+                $descriptors[3] = $queueStream;
+                $command[] = '--inherited-queue';
+            }
             $proc = @proc_open(
-                $command,
-                [0 => $begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r'],
-                 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a'],
-                 4 => $handle, 9 => $fd9],
+                $command, $descriptors,
                 $pipes, null, ['LC_ALL' => 'C', 'PATH' => '/usr/bin:/bin:/usr/local/bin']
             );
             if (!is_resource($proc)) {
@@ -498,14 +527,14 @@ final class SharedApplyConfigWorker
     }
 
     private static function foundPhaseNative(
-        string $action, string $id, object $config, callable $factory
+        string $action, string $id, object $config, callable $factory, $queueStream = null
     ): array {
         $config->lock();
         try {
             $digest = VoiceSettingsSnapshot::digest($factory()->getNodes());
             return self::originalFoundLockedFileEvidence(
                 $config, $id, $action === 'found-recover' ? 'recover-found-locked' : $action,
-                $digest
+                $digest, null, null, $queueStream
             );
         } finally {
             $config->unlock();
@@ -686,17 +715,26 @@ final class SharedApplyConfigWorker
             'found-runtime-activating', 'found-runtime-activated', 'found-runtime-config-saved',
             'found-runtime-epoch-finalizing', 'found-runtime-committed'];
         $found = in_array($action, $foundActions, true);
-        if (count($argv) !== ($action === 'found-save' ? 5 : 4) ||
+        $queueFd = null;
+        if ($action === 'found-recover' && count($argv) === 5 &&
+            preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D', $argv[4], $matches) === 1) {
+            $queueFd = (int)$matches[1];
+        }
+        if (count($argv) !== ($action === 'found-save' || $queueFd !== null ? 5 : 4) ||
             !in_array($action, ['preflight', 'save', 'saved', ...$foundActions], true) ||
             !in_array($argv[3], $found ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
         }
+        $queueStream = null;
         try {
             if (PHP_OS_FAMILY !== 'BSD' || SharedApplyLifecycleLock::effectiveUid() !== 0) {
                 throw new \RuntimeException('Root OPNsense native Config required');
             }
             SharedApplyLifecycleLock::assertHeld();
+            if ($queueFd !== null) {
+                $queueStream = self::openOriginalFoundQueue($queueFd);
+            }
             if ($found) {
                 self::requireReadableConfig();
             }
@@ -731,7 +769,7 @@ final class SharedApplyConfigWorker
             }
             if ($found) {
                 echo self::postSaveReceipt(self::foundPhaseNative(
-                    $action, $argv[2], $config, $factory
+                    $action, $argv[2], $config, $factory, $queueStream
                 ));
                 return 0;
             }
@@ -766,6 +804,10 @@ final class SharedApplyConfigWorker
             fwrite(STDERR, "ERROR: native shared Config refused before save: " .
                 $error->getMessage() . "\n");
             return 69;
+        } finally {
+            if (is_resource($queueStream)) {
+                fclose($queueStream);
+            }
         }
     }
 }
