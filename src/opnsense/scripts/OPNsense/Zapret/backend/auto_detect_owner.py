@@ -755,6 +755,7 @@ def attest_bound_learning_staged_generation(record: dict, config_fd: int) -> Lea
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
     from voice_ipfw_adapter import require_lifecycle_lock
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or
             type(config_fd) is not int or config_fd < 3 or config_fd == 9):
         raise GenerationRefused("native_bound_staged_fd9_fd4_required")
     try:

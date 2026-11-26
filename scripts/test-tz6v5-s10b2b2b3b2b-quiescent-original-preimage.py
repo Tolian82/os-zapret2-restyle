@@ -456,6 +456,10 @@ class StagedQuiescentTests(unittest.TestCase):
             process.side_effect = None
             record["phase"] = "activated"
             self.assertEqual(run().kernel_state, "native-managed-kernel-staged")
+            self.assertEqual(run(saved=True, config_digest=candidate).observed_config_sha256,
+                             candidate)
+            refuses(saved=True)
+            refuses(queue_fd=3)
             record["phase"] = "config-saved"
             refuses()
 
@@ -479,7 +483,9 @@ class StagedQuiescentTests(unittest.TestCase):
             def activate():
                 return SharedApplyOperation._record_native_bound_activated(
                     store, record, preimage=None, config_fd=4, config_digest=base)
-            self.assertEqual(activate()["phase"], "activated")
+            activated, evidence = activate()
+            self.assertEqual(activated["phase"], "activated")
+            self.assertEqual(evidence, receipt)
             physical.return_value = replace(receipt, root_sha256="e" * 64)
             with self.assertRaises(SharedOperationError):
                 activate()
@@ -488,6 +494,56 @@ class StagedQuiescentTests(unittest.TestCase):
             with self.assertRaises(SharedOperationError):
                 activate()
             physical.assert_not_called()
+
+
+    def test_internal_saved_writer_requires_same_activated_runtime(self):
+        from types import SimpleNamespace
+        from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
+        generation, base, candidate, root = "a" * 32, "b" * 64, "c" * 64, "d" * 64
+        record = {"phase": "activated", "detail": {"id": generation, "base": base,
+                                                   "candidate": candidate},
+                  "manifest": {"schema": 1, "root_sha256": root}}
+        calls = []
+        receipt = gate.StagedBoundRuntimeReceipt(generation, root, base,
+            "e" * 64, None, SimpleNamespace(pid=5432), "native-managed-kernel-staged", base)
+        def advance(phase, expected, attest):
+            self.assertEqual(expected, record)
+            calls.append(phase)
+            if not attest():
+                raise SharedOperationError("witness refused")
+            return dict(record, phase=phase)
+        store = SimpleNamespace(root=DEFAULT_ROOT, owner=0, read=lambda: record,
+                                _advance_bound_ordinary=Mock(side_effect=advance))
+        with patch("sys.platform", "freebsd15"), patch("os.geteuid", return_value=0), \
+                patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"), \
+                patch("os.fsync", side_effect=lambda fd: calls.append(("fsync", fd))), \
+                patch.object(gate, "attest_bound_quiescent_staged_under_fd9",
+                             return_value=replace(receipt, observed_config_sha256=candidate)) as physical:
+            def saved(evidence=receipt, digest=candidate, queue_fd=None):
+                return SharedApplyOperation._record_native_bound_saved(
+                    store, record, preimage=None, activated_receipt=evidence,
+                    config_fd=4, config_digest=digest, queue_fd=queue_fd)
+            self.assertEqual(saved()["phase"], "config-saved")
+            self.assertEqual(calls, [("fsync", 4), "config-saved"])
+            physical.assert_called_with(record, preimage=None, config_fd=4,
+                                       config_digest=candidate, queue_fd=None, saved=True)
+            calls.clear()
+            with self.assertRaises(SharedOperationError):
+                saved(digest=base)
+            self.assertEqual(calls, [])
+            physical.return_value = replace(receipt, observed_config_sha256=candidate,
+                                            running=SimpleNamespace(pid=5433))
+            with self.assertRaises(SharedOperationError):
+                saved()
+            record["manifest"]["schema"] = 2
+            learning = replace(receipt, pretraffic_sha256="f" * 64)
+            physical.return_value = replace(learning, observed_config_sha256=candidate)
+            self.assertEqual(saved(learning, queue_fd=3)["phase"], "epoch-finalizing")
+            physical.return_value = replace(learning, observed_config_sha256=candidate,
+                                            pretraffic_sha256="0" * 64)
+            with self.assertRaises(SharedOperationError):
+                saved(learning, queue_fd=3)
 
 
 if __name__ == "__main__":

@@ -814,6 +814,54 @@ class OwnerGenerationTests(unittest.TestCase):
                     json.dumps(self.record) + "\n")
         refuses()
 
+    def test_bound_staged_learning_seed_is_read_only_and_refuses_finished_epoch(self):
+        from auto_detect_epoch_receipts import _canonical
+        proof, producer, folder = self._stopped_learning_fixture()
+        epoch = folder / "epoch.json"
+        epoch_bytes = epoch.read_bytes()
+        epoch.unlink()
+        gid = os.getegid() or 65534
+        # Portable fixture with genuine files. Inject only the native
+        # layout/credential reader and exact running P2c owner.
+        queue = DurableInbox(producer, owner_uid=UID, writer_gid=gid)
+        receipts = EpochReceipts(self.epochs, owner_uid=UID, writer_gid=gid)
+        seed = (folder / "pretraffic.json").read_bytes()
+        def read_file(path, **kw):
+            return path.lstat(), path.read_bytes()
+        with patch.object(queue, "_verify"), patch.object(queue, "segments", return_value=[]), \
+                patch.object(owner_mod, "_valid_learning_active", return_value=proof.learning), \
+                patch("auto_detect_debug_window._read_exact", side_effect=read_file), \
+                patch("sys.platform", "linux"):
+            queue._held = True
+            try:
+                def verify():
+                    return receipts.verify_learning_running_pretraffic(
+                        proof, queue, workspace=self.work, attest=lambda: proof)
+                self.assertEqual(verify(), hashlib.sha256(seed).hexdigest())
+                self.assertEqual(set(os.listdir(folder)), {"pretraffic.json"})
+                path = Path(proof.learning[0][2])
+                path.write_bytes(b"native append")
+                self.assertEqual(verify(), hashlib.sha256(seed).hexdigest())
+                moved = path.with_suffix(".old")
+                path.rename(moved)
+                path.write_bytes(b"native append")
+                with self.assertRaises(ReceiptRefused):
+                    verify()
+                path.unlink()
+                moved.rename(path)
+                epoch.write_bytes(epoch_bytes)
+                epoch.chmod(0o600)
+                with self.assertRaises(ReceiptRefused):
+                    verify()
+                self.assertEqual(epoch.read_bytes(), epoch_bytes)
+                epoch.unlink()
+                result = receipts.finish_learning_running(
+                    proof, queue, workspace=self.work, attest=lambda: proof)
+                self.assertEqual(epoch.read_bytes(), _canonical(result))
+                self.assertEqual(epoch.read_bytes(), epoch_bytes)
+            finally:
+                queue._held = False
+
     def test_stopped_learning_pending_found_private_scope(self):
         # Only the pending-owner selector is isolated here; the existing
         # immutable epoch, active release and process census fixture is real.

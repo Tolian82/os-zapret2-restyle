@@ -838,7 +838,7 @@ class SharedApplyOperation:
 
     def _record_native_bound_activated(self, record: dict, *, preimage,
                                        config_fd: int, config_digest: str,
-                                       queue_fd: int | None = None) -> dict:
+                                       queue_fd: int | None = None) -> tuple[dict, "StagedBoundRuntimeReceipt"]:
         """Same original WAL after physical promotion, before Config save.
 
         An unqualified staged image retains ACTIVATING. This internal
@@ -853,7 +853,12 @@ class SharedApplyOperation:
                 record.get("manifest", {}).get("schema") not in (1, 2)):
             raise SharedOperationError("bound native activated scope refused")
 
+        if config_digest != record["detail"]["base"]:
+            raise SharedOperationError("bound native activated Config base refused")
+        receipt = None
+
         def attest():
+            nonlocal receipt
             receipt = attest_bound_quiescent_staged_under_fd9(
                 record, preimage=preimage, config_fd=config_fd,
                 config_digest=config_digest, queue_fd=queue_fd)
@@ -864,10 +869,14 @@ class SharedApplyOperation:
                     receipt.observed_config_sha256 == config_digest and
                     (receipt.pretraffic_sha256 is not None) == (record["manifest"]["schema"] == 2))
 
-        return self._advance_bound_ordinary("activated", record, attest)
+        result = self._advance_bound_ordinary("activated", record, attest)
+        # Keep the actual PID, tree, backup and zero-cut from this checkpoint
+        # in the SAME in-flight coordinator through Config::save. Do not
+        # reconstruct them from a different post-save process.
+        return result, receipt
 
 
-    def _record_native_bound_saved(self, record: dict, *, preimage,
+    def _record_native_bound_saved(self, record: dict, *, preimage, activated_receipt,
                                    config_fd: int, config_digest: str,
                                    queue_fd: int | None = None) -> dict:
         """Original Config owner's post-save readback while rollback survives.
@@ -877,6 +886,7 @@ class SharedApplyOperation:
         original borrowed P2a remains held, and the zero receipt is still
         unfinished. The existing finalizer, not this checkpoint, writes epoch.
         """
+        from dataclasses import replace
         from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
         from neutral_schema3_quiescent_preimage import (
             StagedBoundRuntimeReceipt, attest_bound_quiescent_staged_under_fd9)
@@ -887,7 +897,12 @@ class SharedApplyOperation:
                 record.get("phase") != "activated" or "found" in record or
                 record.get("manifest", {}).get("schema") not in (1, 2) or
                 type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
-                config_digest != record["detail"]["candidate"]):
+                config_digest != record["detail"]["candidate"] or
+                type(activated_receipt) is not StagedBoundRuntimeReceipt or
+                activated_receipt.generation != record["detail"]["id"] or
+                activated_receipt.root_sha256 != record["manifest"]["root_sha256"] or
+                activated_receipt.config_base_sha256 != record["detail"]["base"] or
+                activated_receipt.observed_config_sha256 != record["detail"]["base"]):
             raise SharedOperationError("bound native saved scope refused")
         require_lifecycle_lock()
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
@@ -902,7 +917,7 @@ class SharedApplyOperation:
                     receipt.generation == record["detail"]["id"] and
                     receipt.root_sha256 == record["manifest"]["root_sha256"] and
                     receipt.config_base_sha256 == record["detail"]["base"] and
-                    receipt.observed_config_sha256 == config_digest and
+                    receipt == replace(activated_receipt, observed_config_sha256=config_digest) and
                     (receipt.pretraffic_sha256 is not None) == learning)
 
         return self._advance_bound_ordinary(
