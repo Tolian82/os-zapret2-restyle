@@ -204,18 +204,23 @@ sh -n "$ROOT/first-running-base-stop.sh" || fail "first running base Stop syntax
 printf 'guard:%s\n' "$2" >> "$LOG"
 [ "${GUARD_FAIL:-0}" = 0 ] || exit 69
 case "$2" in
- guard-first-running-base-shell) printf '%s\n' "${OWNER_WIRE:-first-running-base-shell=qualified:321:654}" ;;
+ guard-first-running-base-shell)
+   if [ "${SECOND_GUARD_FAIL:-0}" = 1 ]; then
+      [ -e "$LOG.guardcall" ] && exit 69
+      : > "$LOG.guardcall"
+   fi
+   printf '%s\n' "${OWNER_WIRE:-first-running-base-shell=qualified:321:654}" ;;
  guard-first-running-base-stopped) printf '%s\n' "${AFTER_WIRE:-first-running-base-stopped=qualified}" ;;
  *) exit 69 ;;
 esac
 PY
     chmod +x "$PYTHON_RUNTIME"
-    export LOG GUARD_FAIL OWNER_WIRE AFTER_WIRE
+    export LOG GUARD_FAIL OWNER_WIRE AFTER_WIRE SECOND_GUARD_FAIL
     common_pidfile_read() { cat "$1"; }
     supervisor_pidfile_read() { cat "$1"; }
     supervisor_stop() { printf 'stop:supervisor\n' >> "$LOG"; [ "$STOP_SUP_FAIL" = 0 ]; }
     launcher_stop() { printf 'stop:launcher\n' >> "$LOG"; [ "$STOP_LAUNCH_FAIL" = 0 ]; }
-    reset() { printf '321\n' > "$CHILD_PIDFILE"; printf '654\n' > "$SUPERVISOR_MONITOR_PIDFILE"; : > "$LOG"; GUARD_FAIL=0; OWNER_WIRE=first-running-base-shell=qualified:321:654; AFTER_WIRE=first-running-base-stopped=qualified; STOP_SUP_FAIL=0; STOP_LAUNCH_FAIL=0; export GUARD_FAIL OWNER_WIRE AFTER_WIRE; }
+    reset() { printf '321\n' > "$CHILD_PIDFILE"; printf '654\n' > "$SUPERVISOR_MONITOR_PIDFILE"; : > "$LOG"; GUARD_FAIL=0; SECOND_GUARD_FAIL=0; rm -f "$LOG.guardcall"; OWNER_WIRE=first-running-base-shell=qualified:321:654; AFTER_WIRE=first-running-base-stopped=qualified; STOP_SUP_FAIL=0; STOP_LAUNCH_FAIL=0; export GUARD_FAIL OWNER_WIRE AFTER_WIRE SECOND_GUARD_FAIL; }
     fail() { echo "FAIL: $1" >&2; exit 1; }
     reset
     shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out" || fail positive
@@ -230,6 +235,9 @@ PY
     reset; OWNER_WIRE=first-running-base-shell=qualified:321:655; export OWNER_WIRE
     if shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out"; then fail replaced-monitor; fi
     ! grep -q '^stop:' "$LOG" || fail replaced-monitor-stop
+    reset; SECOND_GUARD_FAIL=1; export SECOND_GUARD_FAIL
+    if shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out"; then fail guard-window; fi
+    ! grep -q '^stop:' "$LOG" || fail guard-window-signalled
     reset; STOP_SUP_FAIL=1
     if shared_apply_first_running_base_stop_service "$ID" "$BASE" > "$ROOT/out"; then fail supervisor; fi
     ! grep -q 'stop:launcher' "$LOG" || fail supervisor-launcher
@@ -242,5 +250,5 @@ PY
     reset
     if shared_apply_first_running_base_stop_service "$ID" "${BASE}x" > "$ROOT/out"; then fail args; fi
     ! grep -q '^guard:' "$LOG" || fail malformed-guard
-    printf 'PASS: first running base shell stop cases\n'
+    printf 'PASS: first running base shell stop cases (including guard race)\n'
 )

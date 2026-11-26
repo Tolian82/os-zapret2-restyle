@@ -3579,6 +3579,10 @@ shared_apply_first_running_base_stop_service()
     [ "$_first_stop_child" != "$_first_stop_monitor" ] || return 70
     [ "$(common_pidfile_read "$CHILD_PIDFILE")" = "$_first_stop_child" ] || return 70
     [ "$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE")" = "$_first_stop_monitor" ] || return 70
+    # Close the original guard-to-signal window: reattest birth/argv/kernel.
+    _first_stop_immediate=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+        guard-first-running-base-shell "$1" "$2") || return 70
+    [ "$_first_stop_immediate" = "$_first_stop_guard" ] || return 70
     # Only the original service Stop helpers send signals, never this Python guard.
     supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" || return 70
     launcher_stop "$CHILD_PIDFILE" 5 || return 70
