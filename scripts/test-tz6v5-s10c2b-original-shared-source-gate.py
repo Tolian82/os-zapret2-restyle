@@ -1148,5 +1148,114 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 store.bind_prepared_manifest.assert_not_called()
                 self.assertFalse(held[0])
 
+
+    def test_found_root_binding_preserves_original_source_fence_and_p2(self):
+        from contextlib import ExitStack, contextmanager
+        from unittest.mock import Mock
+        from neutral_root_stage import PreparedRootReceipt
+
+        operation = "d" * 32
+        base = "b" * 64
+        candidate_sha = "c" * 64
+        plan = b'{"sealed":"original-found-plan"}'
+        seal = b'{"sealed":"original-bundle"}'
+        plan_sha = hashlib.sha256(plan).hexdigest()
+        seal_sha = hashlib.sha256(seal).hexdigest()
+        old = {"id": "e" * 32, "candidate": base}
+        old_pin = {"generation": old["id"], "root_sha256": "a" * 64}
+        pending = {"phase": "prepared", "detail": {
+            "id": operation, "base": base, "candidate": candidate_sha},
+            "found": {"plan_sha256": plan_sha}, "previous": old,
+            "previous_manifest": old_pin}
+        source = gate.SourceGateReceipt(
+            "list", "f" * 64, (), generation=operation,
+            original_args_sha256="a" * 64, final_args_sha256="a" * 64,
+            original_seal_sha256=seal_sha, requested_enabled=False)
+        first = gate.FoundPreparedSourceReceipt(source, plan_sha, base, candidate_sha)
+        staged = PreparedRootReceipt(operation, "1" * 64, seal_sha, candidate_sha)
+        bound = dict(pending, manifest={
+            "schema": 1, "generation": operation, "root_sha256": staged.root_sha256,
+            "seal_sha256": seal_sha, "candidate_sha256": candidate_sha})
+
+        for drift in ("none", "base", "prebind", "postbind"):
+            with self.subTest(drift=drift), ExitStack() as stack:
+                held = [False]
+                state = [pending]
+                store = Mock()
+                store.read.side_effect = lambda: state[0]
+                store.root = Path("/disposable/journal")
+                @contextmanager
+                def p2(*args):
+                    self.assertFalse(held[0], "nested original P2")
+                    held[0] = True
+                    try:
+                        yield
+                    finally:
+                        held[0] = False
+                def original_source(*args, **kwargs):
+                    self.assertFalse(held[0], "original source reader needs P2")
+                    self.assertEqual(state[0], pending)
+                    return first
+                def stage(**kwargs):
+                    self.assertTrue(held[0])
+                    self.assertEqual(kwargs["found_plan_sha256"], plan_sha)
+                    return staged
+                def bind(**kwargs):
+                    self.assertTrue(held[0])
+                    self.assertEqual(kwargs["found_plan_sha256"], plan_sha)
+                    state[0] = bound
+                    return bound
+                def cas(*args, **kwargs):
+                    self.assertTrue(held[0])
+                    if ((drift == "prebind" and check.call_count == 2) or
+                            (drift == "postbind" and check.call_count == 3)):
+                        raise ValueError("simulated CAS drift")
+
+                store.bind_prepared_manifest.side_effect = bind
+                stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+                stack.enter_context(patch.object(gate, "_s10_native_bound_engine_readback",
+                                                 return_value={"engine": "same"}))
+                stack.enter_context(patch(
+                    "auto_detect_destination_commit._native_found_wal_context",
+                    return_value=(store, pending, plan, {}, {}, lambda: True)))
+                stack.enter_context(patch(
+                    "auto_detect_destination_commit._qualified_shared_found_batch",
+                    return_value={}))
+                stack.enter_context(patch(
+                    "auto_detect_destination_commit.exclusive_destination_lock",
+                    side_effect=p2))
+                check = stack.enter_context(patch(
+                    "auto_detect_effective_known._verify_planned_preimages_locked",
+                    side_effect=cas))
+                reader = stack.enter_context(patch.object(
+                    gate, "native_attest_found_prepared_fd9", side_effect=original_source))
+                candidate = Mock(sha256=staged.root_sha256)
+                stack.enter_context(patch("neutral_root_stage.attest_prepared_source_root",
+                                          return_value=candidate))
+                writer = stack.enter_context(patch("neutral_root_stage._stage_candidate",
+                                                   side_effect=stage))
+                stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root"))
+                stack.enter_context(patch.object(
+                    gate, "_read", side_effect=lambda path, *args:
+                    seal if path.name == "bundle-seal.json" else plan))
+                if drift == "none":
+                    self.assertEqual(gate.native_bind_found_prepared_fd9(
+                        operation, b"native-wire", 4, config_digest=base), (first, staged))
+                    self.assertEqual(state[0], bound)
+                    self.assertEqual(check.call_count, 3)
+                else:
+                    with self.assertRaises(OriginalSourceGateRefused):
+                        gate.native_bind_found_prepared_fd9(
+                            operation, b"native-wire", 4,
+                            config_digest="0" * 64 if drift == "base" else base)
+                    self.assertEqual(state[0], bound if drift == "postbind" else pending)
+                if drift == "base":
+                    reader.assert_not_called()
+                    writer.assert_not_called()
+                else:
+                    reader.assert_called_once_with(
+                        operation, b"native-wire", 4, _expected_record=pending)
+                self.assertFalse(held[0])
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

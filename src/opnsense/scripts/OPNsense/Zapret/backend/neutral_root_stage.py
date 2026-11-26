@@ -55,12 +55,17 @@ class PreparedRootReceipt:
     reattest_under_original_fd9: bool = True
 
 
-def _journal(generation: str, *, journal_root: Path, owner_uid: int) -> tuple[dict, str]:
+def _journal(generation: str, *, journal_root: Path, owner_uid: int,
+             found_plan_sha256: str | None = None) -> tuple[dict, str]:
     try:
         record = SharedApplyOperation(journal_root, owner=owner_uid).read()
         if (type(record) is not dict or record.get("phase") != "prepared" or
-                "found" in record or type(record.get("detail")) is not dict or
-                record["detail"].get("id") != generation):
+                type(record.get("detail")) is not dict or
+                record["detail"].get("id") != generation or
+                ("found" in record) != (found_plan_sha256 is not None) or
+                (found_plan_sha256 is not None and
+                 (type(found_plan_sha256) is not str or
+                  record["found"]["plan_sha256"] != found_plan_sha256))):
             raise RootStageRefused("ORIGINAL_PREPARED_OWNER_REQUIRED")
         # The original sealed candidate hash must be this same operation's
         # immutable candidate. Exact record validation stays with original code.
@@ -109,7 +114,9 @@ def _original_plan_matches(*, parent: Path, generation: str,
                 plan.get("page") == detail["page"] and
                 plan.get("dependencies") == detail["base"] and
                 plan.get("changed_fields") == detail["changed_fields"] and
-                type(plan.get("candidate")) is dict)
+                type(plan.get("candidate")) is dict and
+                ("found" not in journal or
+                 hashlib.sha256(raw).hexdigest() == journal["found"]["plan_sha256"]))
     except (OSError, UnicodeError, ValueError, TypeError, RecursionError):
         return False
     finally:
@@ -123,12 +130,13 @@ def _original_preflight(*, generation: str, root_bytes: bytes,
                         effective: EffectiveSnapshot, native: NativeParity,
                         mode: str, enabled: bool, parent: Path,
                         journal_root: Path, owner_uid: int, schema3: bool = False,
-                        allow_bound_schema3: bool = False):
+                        allow_bound_schema3: bool = False,
+                        found_plan_sha256: str | None = None):
     if (type(schema3) is not bool or type(allow_bound_schema3) is not bool or
             (allow_bound_schema3 and not schema3)):
         raise RootStageRefused("ORIGINAL_ROOT_SOURCE_MODE_INVALID")
     before, candidate_sha = _journal(generation, journal_root=journal_root,
-                                     owner_uid=owner_uid)
+                                     owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)
     try:
         if schema3:
             # Same S10a writer and one original seal, with the REAL final
@@ -142,7 +150,8 @@ def _original_preflight(*, generation: str, root_bytes: bytes,
             source = _attest_physical_schema3(
                 generation=generation, native=native, effective=effective,
                 enabled=enabled, parent=parent, journal_root=journal_root,
-                owner_uid=owner_uid, allow_bound_schema3=allow_bound_schema3)
+                owner_uid=owner_uid, allow_bound_schema3=allow_bound_schema3,
+                found_plan_sha256=found_plan_sha256)
             if root_bytes != source.candidate.json_bytes:
                 raise RootStageRefused("ORIGINAL_SCHEMA3_ROOT_BYTES_MISMATCH")
             attested = PreparedRootReceipt(
@@ -159,14 +168,15 @@ def _original_preflight(*, generation: str, root_bytes: bytes,
     if (original.get("id") != generation or
             not _original_plan_matches(parent=parent, generation=generation,
                                        journal=before, owner_uid=owner_uid) or
-            _journal(generation, journal_root=journal_root, owner_uid=owner_uid)[0] != before):
+            _journal(generation, journal_root=journal_root, owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)[0] != before):
         raise RootStageRefused("ORIGINAL_JOURNAL_SEAL_CHANGED")
     return attested, candidate_sha, before
 
 
 def attest_prepared_source_root(*, source, candidate_sha256: str,
                                 enabled: bool, parent: Path,
-                                journal_root: Path, owner_uid: int) -> RootCandidate:
+                                journal_root: Path, owner_uid: int,
+                                found_plan_sha256: str | None = None) -> RootCandidate:
     """Connect the actual S10c2 sealed readback to existing PREPARED refs.
 
     Import-only, read-only. Candidate SHA/enabled come from the original PHP
@@ -190,7 +200,7 @@ def attest_prepared_source_root(*, source, candidate_sha256: str,
         raise RootStageRefused("ORIGINAL_TYPED_SEALED_SOURCE_REQUIRED")
     generation = source.generation
     record, digest = _journal(generation, journal_root=journal_root,
-                              owner_uid=owner_uid)
+                              owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)
     if (digest != candidate_sha256 or "manifest" in record or
             not _original_plan_matches(parent=parent, generation=generation,
                                        journal=record, owner_uid=owner_uid)):
@@ -205,7 +215,7 @@ def attest_prepared_source_root(*, source, candidate_sha256: str,
             proof = _attest_physical_schema3(
                 generation=generation, native=source.native, effective=source.effective,
                 enabled=enabled, parent=parent, journal_root=journal_root,
-                owner_uid=owner_uid)
+                owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)
             if (proof.seal_sha256 != source.original_seal_sha256 or
                     dict(proof.native_ref_sha256)["dvtws.args"] != source.final_args_sha256 or
                     proof.candidate_sha256 != digest):
@@ -245,7 +255,7 @@ def attest_prepared_source_root(*, source, candidate_sha256: str,
                 owner_uid=owner_uid)
             if witness.original_seal_sha256 != source.original_seal_sha256:
                 raise RootStageRefused("ORIGINAL_SOURCE_SEAL_CHANGED")
-        if _journal(generation, journal_root=journal_root, owner_uid=owner_uid)[0] != record:
+        if _journal(generation, journal_root=journal_root, owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)[0] != record:
             raise RootStageRefused("ORIGINAL_PREPARED_SOURCE_JOURNAL_CHANGED")
         return candidate
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
@@ -366,7 +376,8 @@ def _stage_candidate(*, generation: str, candidate: RootCandidate,
                      effective: EffectiveSnapshot, native: NativeParity,
                      mode: str, enabled: bool, parent: Path,
                      journal_root: Path, owner_uid: int,
-                     schema3: bool = False) -> PreparedRootReceipt:
+                     schema3: bool = False,
+                     found_plan_sha256: str | None = None) -> PreparedRootReceipt:
     # Internal writer. Public entry must have already attested ORIGINAL FD9.
     if (type(candidate) is not RootCandidate or
             candidate.status != "DETACHED_CANDIDATE_ONLY" or
@@ -379,7 +390,7 @@ def _stage_candidate(*, generation: str, candidate: RootCandidate,
         generation=generation, root_bytes=candidate.json_bytes,
         effective=effective, native=native, mode=mode, enabled=enabled,
         parent=parent, journal_root=journal_root, owner_uid=owner_uid,
-        schema3=schema3)
+        schema3=schema3, found_plan_sha256=found_plan_sha256)
     pfd = wfd = None
     try:
         pfd = _open_parent(parent, owner_uid)
@@ -387,7 +398,7 @@ def _stage_candidate(*, generation: str, candidate: RootCandidate,
         if not _absent(wfd, ROOT_NAME) or not _absent(wfd, PENDING_NAME):
             raise RootStageRefused("STAGED_ROOT_ALREADY_PRESENT_OR_INCOMPLETE")
         _require_only_sibling_root(wfd, owner_uid)
-        if _journal(generation, journal_root=journal_root, owner_uid=owner_uid)[0] != journal:
+        if _journal(generation, journal_root=journal_root, owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)[0] != journal:
             raise RootStageRefused("ORIGINAL_JOURNAL_CHANGED_BEFORE_STAGE")
         # One original-owner staging file. Crash before link leaves only
         # pending; crash after link before unlink leaves both. Both MUST block
@@ -416,7 +427,7 @@ def _stage_candidate(*, generation: str, candidate: RootCandidate,
         if _read_staged(wfd, owner_uid) != candidate.json_bytes:
             raise RootStageRefused("STAGED_ROOT_CONTENT_CHANGED")
         _verify_dir_still(pfd, generation, wfd)
-        if _journal(generation, journal_root=journal_root, owner_uid=owner_uid)[0] != journal:
+        if _journal(generation, journal_root=journal_root, owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)[0] != journal:
             raise RootStageRefused("ORIGINAL_JOURNAL_CHANGED_AFTER_STAGE")
         # Poststage cross-attestation catches release/owner races and the seal
         # remains the preexisting one (root is not in release inventory).
@@ -424,7 +435,7 @@ def _stage_candidate(*, generation: str, candidate: RootCandidate,
             generation=generation, root_bytes=candidate.json_bytes,
             effective=effective, native=native, mode=mode, enabled=enabled,
             parent=parent, journal_root=journal_root, owner_uid=owner_uid,
-            schema3=schema3)
+            schema3=schema3, found_plan_sha256=found_plan_sha256)
         if after != witness or after_sha != candidate_sha or (
                 _read_staged(wfd, owner_uid) != candidate.json_bytes):
             raise RootStageRefused("STAGED_ROOT_PROOF_CHANGED")
@@ -462,7 +473,8 @@ def attest_staged_candidate(*, generation: str,
                             mode: str, enabled: bool, parent: Path,
                             journal_root: Path, owner_uid: int,
                             schema3: bool = False,
-                            allow_bound_schema3: bool = False) -> PreparedRootReceipt:
+                            allow_bound_schema3: bool = False,
+                            found_plan_sha256: str | None = None) -> PreparedRootReceipt:
     """Strict read-only detached preflight, no physical authorization."""
     pfd = wfd = None
     try:
@@ -476,9 +488,10 @@ def attest_staged_candidate(*, generation: str,
             generation=generation, root_bytes=root, effective=effective,
             native=native, mode=mode, enabled=enabled, parent=parent,
             journal_root=journal_root, owner_uid=owner_uid,
-            schema3=schema3, allow_bound_schema3=allow_bound_schema3)
+            schema3=schema3, allow_bound_schema3=allow_bound_schema3,
+            found_plan_sha256=found_plan_sha256)
         if (_read_staged(wfd, owner_uid) != root or
-                _journal(generation, journal_root=journal_root, owner_uid=owner_uid)[0] != journal):
+                _journal(generation, journal_root=journal_root, owner_uid=owner_uid, found_plan_sha256=found_plan_sha256)[0] != journal):
             raise RootStageRefused("STAGED_ROOT_PROOF_CHANGED")
         _verify_dir_still(pfd, generation, wfd)
     except (OSError, SealedRefsRefused):
@@ -513,7 +526,8 @@ def attest_staged_schema3_candidate(*, generation: str,
                                     native: NativeParity, enabled: bool,
                                     parent: Path, journal_root: Path,
                                     owner_uid: int,
-                                    allow_bound_schema3: bool = False
+                                    allow_bound_schema3: bool = False,
+                                    found_plan_sha256: str | None = None
                                     ) -> PreparedRootReceipt:
     """Same S10a original staged byte reader, with actual final schema3 refs.
 
@@ -524,4 +538,5 @@ def attest_staged_schema3_candidate(*, generation: str,
         generation=generation, effective=effective, native=native,
         mode="auto", enabled=enabled, parent=parent,
         journal_root=journal_root, owner_uid=owner_uid,
-        schema3=True, allow_bound_schema3=allow_bound_schema3)
+        schema3=True, allow_bound_schema3=allow_bound_schema3,
+        found_plan_sha256=found_plan_sha256)
