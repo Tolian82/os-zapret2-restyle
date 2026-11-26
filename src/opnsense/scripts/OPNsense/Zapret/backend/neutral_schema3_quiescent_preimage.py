@@ -799,6 +799,83 @@ def _run_bound_restore_joined(command, *, budget: float, capture_output: bool = 
         return subprocess.CompletedProcess(command, child.returncode, stdout, stderr)
 
 
+def _reject_cold_recovery_residue(active: Path) -> None:
+    """A PID-scoped interrupted recovery is not an original operation-ID gap."""
+    import re
+
+    name = re.escape(active.name)
+    if any(re.fullmatch(r"\." + name + r"\.(?:stage|old)\.[0-9]{1,10}|" +
+                        name + r"\.rollback-old\.[0-9]+", item.name)
+           for item in active.parent.iterdir()):
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_RESIDUE")
+
+
+def _restore_bound_parked_cold_locked(record: dict, *, config_fd: int,
+                                      config_digest: str, queue_fd: int | None) -> bool:
+    """Original ACTIVATING rename gap, with retained exact old and new trees.
+
+    Only a missing active tree, complete new stage, exactly one old
+    hold/backup and an empty physical kernel qualify. Copy the old sealed
+    release using the existing atomic installer; consume neither artifact.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_seal import verify_seal
+
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if _present(COMMON_ACTIVE):
+        return False
+    if record["phase"] != "activating":
+        raise QuiescentPreimageRefused("BOUND_COLD_PARKED_PHASE_INVALID")
+    old, new = record["previous"], record["detail"]
+    old_work, new_work = WORK / old["id"], WORK / new["id"]
+    old_hash = verify_seal(old_work, owner=0)["sha256"]["release"]
+    new_hash = verify_seal(new_work, owner=0)["sha256"]["release"]
+
+    def exact():
+        attest_inert_bound_cold_recovery(
+            record, restored=False, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=queue_fd)
+        _reject_cold_recovery_residue(COMMON_ACTIVE)
+        trees = _cold_recovery_trees(
+            COMMON_ACTIVE, new["id"], old_hash, new_hash, phase="activating",
+            restored=False, owner_uid=0)
+        if trees not in ((None, new_hash, old_hash, None),
+                         (None, new_hash, None, old_hash)):
+            raise QuiescentPreimageRefused("BOUND_COLD_PARKED_ARTIFACTS_INVALID")
+        kernel = _empty_kernel(old_work / "release")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return trees, kernel
+
+    before = exact()
+    if exact() != before:
+        raise QuiescentPreimageRefused("BOUND_COLD_PARKED_PREIMAGE_CHANGED")
+    inherited = (9, config_fd) if queue_fd is None else (9, config_fd, queue_fd)
+    try:
+        result = _run_bound_restore_joined(
+            ("/bin/sh", "-c", '. "$1"; . "$2"; atomic_install_tree "$3" "$4" "$5"',
+             "zapret-bound-parked", str(SCRIPT / "backend/common.sh"),
+             str(SCRIPT / "backend/atomic.sh"), str(old_work / "release"),
+             str(COMMON_ACTIVE), str(COMMON_ACTIVE.with_name("runtime-v2-backups"))),
+            pass_fds=inherited, budget=20)
+    except (OSError, subprocess.SubprocessError):
+        raise QuiescentPreimageRefused("BOUND_COLD_PARKED_RESTORE_OUTCOME_UNCERTAIN") from None
+    if result.returncode != 0:
+        raise QuiescentPreimageRefused("BOUND_COLD_PARKED_RESTORE_FAILED")
+    attest_inert_bound_cold_recovery(
+        record, restored=True, config_fd=config_fd,
+        config_digest=config_digest, queue_fd=queue_fd)
+    _reject_cold_recovery_residue(COMMON_ACTIVE)
+    after = _cold_recovery_trees(
+        COMMON_ACTIVE, new["id"], old_hash, new_hash, phase="activating",
+        restored=True, owner_uid=0)
+    if after != (old_hash, *before[0][1:]):
+        raise QuiescentPreimageRefused("BOUND_COLD_PARKED_EVIDENCE_CHANGED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return True
+
+
 def _restore_bound_installed_cold_locked(record: dict, *, config_fd: int,
                                          config_digest: str, queue_fd: int | None) -> bool:
     """Restore an exact installed inert candidate over a cold predecessor.
@@ -813,7 +890,6 @@ def _restore_bound_installed_cold_locked(record: dict, *, config_fd: int,
     from shared_apply_seal import verify_seal, _release_hash
     from voice_firewall_transaction import verify_staged_state, rollback_uncommitted
     import json
-    import re
 
     require_lifecycle_lock()
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
@@ -838,11 +914,7 @@ def _restore_bound_installed_cold_locked(record: dict, *, config_fd: int,
                 restored=False, owner_uid=0) != (new_hash, None, None, old_hash):
             raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_BACKUP_REQUIRED")
         # Do not retry across an unexplained PID-named recovery rename gap.
-        name = re.escape(COMMON_ACTIVE.name)
-        if any(re.fullmatch(r"\." + name + r"\.(?:stage|old)\.[0-9]+|" +
-                            name + r"\.rollback-old\.[0-9]+", item.name)
-               for item in COMMON_ACTIVE.parent.iterdir()):
-            raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_RECOVERY_RESIDUE")
+        _reject_cold_recovery_residue(COMMON_ACTIVE)
 
     exact()
     release = new_work / "release"
@@ -959,8 +1031,11 @@ def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
         raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
 
     def exact():
-        _restore_bound_installed_cold_locked(
-            record, config_fd=config_fd, config_digest=config_digest, queue_fd=queue_fd)
+        _reject_cold_recovery_residue(COMMON_ACTIVE)
+        if not _restore_bound_parked_cold_locked(
+                record, config_fd=config_fd, config_digest=config_digest, queue_fd=queue_fd):
+            _restore_bound_installed_cold_locked(
+                record, config_fd=config_fd, config_digest=config_digest, queue_fd=queue_fd)
         attest_inert_bound_cold_recovery(
             record, restored=True, config_fd=config_fd,
             config_digest=config_digest, queue_fd=queue_fd)
@@ -970,6 +1045,7 @@ def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
             attest_inert_bound_cold_recovery(
                 record, restored=True, config_fd=config_fd,
                 config_digest=config_digest, queue_fd=queue_fd)
+        _reject_cold_recovery_residue(COMMON_ACTIVE)
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
         return True
 

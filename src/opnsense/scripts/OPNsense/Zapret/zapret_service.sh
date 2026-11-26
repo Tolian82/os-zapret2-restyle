@@ -936,6 +936,18 @@ shared_apply_recover_activating_parked_service()
     atomic_verify_tree "$_parked_new_root/release" "$_parked_stage" || return 69
     atomic_verify_tree "$_parked_old_root/release" "$_parked_previous" || return 69
     preflight_shared_apply_journal common-recover-activating || return 69
+    # Bound parked recovery must keep Config locked through the copy
+    # and the original journal fsync. Only a proven unbound owner may
+    # enter the legacy atomic installer below.
+    if [ ! -x "${PYTHON_RUNTIME}" ]; then return 70; fi
+    if "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \
+        finish-activating "$_parked_id" "$_parked_old" --bound-only; then
+        printf "recovered-parked-id=%s\n" "$_parked_id"
+        return 0
+    else
+        _parked_bound_rc=$?
+    fi
+    [ "$_parked_bound_rc" -eq 3 ] || return 70
     atomic_install_tree "$_parked_old_root/release" "$ACTIVE_DIR" "$BACKUP_ROOT" >/dev/null || return 70
     atomic_verify_tree "$_parked_old_root/release" "$ACTIVE_DIR" || return 70
     atomic_verify_tree "$_parked_new_root/release" "$_parked_stage" || return 70
@@ -4032,7 +4044,7 @@ service_with_lifecycle_lock()
                                 else
                                     _shared_recovery_rc=$?
                                     [ "$_shared_recovery_rc" -eq 69 ] || return "$_shared_recovery_rc"
-                                    shared_apply_recover_activating_parked_service "$_shared_owner" || return 69
+                                    shared_apply_recover_activating_parked_service "$_shared_owner" || return $?
                                 fi
                             fi
                             _shared_owner=$(shared_apply_inspect_service) || return 69

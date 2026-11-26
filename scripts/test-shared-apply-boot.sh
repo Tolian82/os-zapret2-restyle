@@ -753,11 +753,22 @@ from pathlib import Path
 import sys
 p=Path(sys.argv[1]); s=p.read_text()
 old='    [ -x "${PYTHON_RUNTIME}" ] || return 70\n    "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n        finish-activating "$_parked_id" "$_parked_old" || return 70'
+bound_start = s.index('    # Bound parked recovery')
+bound_end = s.index('    atomic_install_tree "$_parked_old_root/release"', bound_start)
+s = s[:bound_start] + '''    if mock_bound_parked; then
+        printf "recovered-parked-id=%s\\n" "$_parked_id"
+        return 0
+    else
+        _parked_bound_rc=$?
+    fi
+    [ "$_parked_bound_rc" -eq 3 ] || return 70
+''' + s[bound_end:]
 assert old in s, "parked recovery CLI phase gate missing"
 s=s.replace(old,'    echo finish-activating-parked >> "$LOG"; [ "$TERMINAL_OK" = 0 ] || return 70')
 p.write_text(s)
 PY
 . "$ROOT/parked.sh"
+mock_bound_parked() { echo bound-parked >> "$LOG"; return "${BOUND_PARKED_RC:-3}"; }
 ACTIVE_DIR="$ROOT/live-parked"
 BACKUP_ROOT="$ROOT/parked-backups"
 stage="$ROOT/.live-parked.stage.$CURRENT"
@@ -806,6 +817,18 @@ reset_parked
 mv "$hold" "$previous"
 parked_check 0 "activating $CURRENT voice $OLD voice"
 [ -d "$stage" ] && [ -d "$previous" ] || fail "backup evidence was consumed"
+reset_parked; BOUND_PARKED_RC=0
+parked_check 0 "activating $CURRENT voice $OLD voice"
+grep -Fqx bound-parked "$LOG" || fail "bound parked dispatch omitted"
+! grep -Eq 'restore-missing-active|finish-activating-parked' "$LOG" ||
+    fail "bound parked recovery repeated legacy work"
+for code in 69 70; do
+    reset_parked; BOUND_PARKED_RC=$code
+    parked_check 70 "activating $CURRENT voice $OLD voice"
+    ! grep -Eq 'restore-missing-active|finish-activating-parked' "$LOG" ||
+        fail "uncertain bound parked recovery selected legacy"
+done
+BOUND_PARKED_RC=3
 reset_parked; mkdir -p "$previous"
 parked_check 69 "activating $CURRENT voice $OLD voice"
 ! grep -Fqx restore-missing-active "$LOG" || fail "ambiguous two owners restored"

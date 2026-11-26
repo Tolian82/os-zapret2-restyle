@@ -234,6 +234,66 @@ class OriginalQuiescentTests(unittest.TestCase):
                 with self.assertRaises(gate.QuiescentPreimageRefused):
                     gate.attest_inert_bound_cold_recovery(forbidden, restored=False)
 
+    def test_bound_parked_restore_preserves_original_evidence(self):
+        import shutil
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp, ExitStack() as stack:
+            active = Path(temp) / "runtime-v2"
+            record = dict(phase="activating", detail={"id": "d" * 32},
+                          previous={"id": "a" * 32})
+            stage = active.parent / (".runtime-v2.stage." + record["detail"]["id"])
+            hold = active.parent / (".runtime-v2.old." + record["detail"]["id"])
+            stage.mkdir()
+            hold.mkdir()
+            (stage / "new").write_text("candidate")
+            (hold / "old").write_text("previous")
+            stack.enter_context(patch.object(gate, "COMMON_ACTIVE", active))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch("shared_apply_seal.verify_seal",
+                side_effect=lambda path, **kw: {"sha256": {"release":
+                    "old" if path.name == record["previous"]["id"] else "new"}}))
+            proof = stack.enter_context(patch.object(gate, "attest_inert_bound_cold_recovery"))
+            trees = stack.enter_context(patch.object(gate, "_cold_recovery_trees",
+                side_effect=lambda *a, **kw: ("old" if active.exists() else None,
+                                              "new", "old", None)))
+            stack.enter_context(patch.object(gate, "_empty_kernel", return_value="empty"))
+
+            def copy_old(argv, **kwargs):
+                self.assertEqual(kwargs, {"pass_fds": (9, 4, 3), "budget": 20})
+                self.assertEqual(argv[-2], str(active))
+                shutil.copytree(hold, active)
+                return Mock(returncode=0)
+
+            run = stack.enter_context(patch.object(gate, "_run_bound_restore_joined",
+                                                  side_effect=copy_old))
+            self.assertTrue(gate._restore_bound_parked_cold_locked(
+                record, config_fd=4, config_digest="b"*64, queue_fd=3))
+            self.assertEqual((active / "old").read_text(), "previous")
+            self.assertEqual((stage / "new").read_text(), "candidate")
+            self.assertEqual((hold / "old").read_text(), "previous")
+            self.assertEqual(proof.call_count, 3)
+            run.assert_called_once()
+            shutil.rmtree(active)
+            run.reset_mock()
+            trees.side_effect = None
+            trees.return_value = (None, "new", "old", "old")
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate._restore_bound_parked_cold_locked(
+                    record, config_fd=4, config_digest="b"*64, queue_fd=3)
+            run.assert_not_called()
+            trees.return_value = (None, "new", "old", None)
+            (active.parent / ".runtime-v2.stage.123").mkdir()
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate._restore_bound_parked_cold_locked(
+                    record, config_fd=4, config_digest="b"*64, queue_fd=3)
+            run.assert_not_called()
+            (active.parent / ".runtime-v2.stage.123").rmdir()
+            # A valid 32-hex ID may consist entirely of decimal digits.
+            (active.parent / (".runtime-v2.stage." + "1" * 32)).mkdir()
+            gate._reject_cold_recovery_residue(active)
+
     def test_installed_cold_rollback_uses_empty_prior_kernel_under_config(self):
         import json
         import tempfile
@@ -434,6 +494,8 @@ class OriginalQuiescentTests(unittest.TestCase):
             config_lock = stack.enter_context(patch(
                 "auto_detect_original_lock_handoff.assert_inherited_config_fd"))
             proof = stack.enter_context(patch.object(gate, "attest_inert_bound_cold_recovery"))
+            stack.enter_context(patch.object(gate, "_reject_cold_recovery_residue"))
+            stack.enter_context(patch.object(gate, "_restore_bound_parked_cold_locked", return_value=False))
             stack.enter_context(patch.object(gate, "_restore_bound_installed_cold_locked", return_value=False))
             stack.enter_context(patch.object(gate, "_remove_bound_pristine_stage_locked", return_value=False))
             run = stack.enter_context(patch.object(gate, "_run_bound_restore_joined", side_effect=invoke))
