@@ -1164,14 +1164,16 @@ def _rollback_first_inert_kernel(record: dict, release: Path, *, config_fd: int,
 
 def _first_inert_recovery_layout(record: dict, *, config_fd: int,
                                  config_digest: str, queue_fd: int | None, store,
-                                 saved: bool = False) -> tuple:
+                                 saved: bool = False, running_base: bool = False) -> tuple:
     """Observe an empty or fully attributed first inert tree, without mutation."""
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
     from neutral_root_stage import verify_original_operation_pins, _original_plan_matches
     from shared_apply_seal import verify_seal, _release_hash, _stat
 
     detail = record["detail"]
-    if (type(saved) is not bool or
+    if (type(saved) is not bool or type(running_base) is not bool or
+            (running_base and (saved or record["phase"] != "activated" or
+                              "first_running_sha256" not in record)) or
             record["phase"] not in (("activated", "config-saved") if saved else ("activating", "activated")) or
             "previous" in record or "previous_manifest" in record or "found" in record or
             record.get("manifest", {}).get("schema") != 1 or
@@ -1189,18 +1191,19 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
             journal={"detail": detail}, owner_uid=0) or
             inspect_inert_release(release, owner_uid=0) != "inactive"):
         raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SOURCE_CHANGED")
-    running_saved = False
-    if saved:
+    running = False
+    if saved or running_base:
         import json
         from neutral_root_stage import _verify_original_pinned_root
         root = json.loads(_verify_original_pinned_root(
             detail=detail, binding=record["manifest"], parent=WORK, owner_uid=0))
         enabled = root["service"]["enabled"]
-        if type(enabled) is not bool or enabled != ("first_running_sha256" in record):
+        if (type(enabled) is not bool or enabled != ("first_running_sha256" in record) or
+                (running_base and not enabled)):
             raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_PIN_REQUIRED")
         if enabled and root["service"]["target_mode"] not in ("all", "list"):
             raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_INERT_MODE_REQUIRED")
-        running_saved = enabled
+        running = enabled
     wanted = verify_seal(work, owner=0)["sha256"]["release"]
     active = COMMON_ACTIVE
     parent, name = active.parent, active.name
@@ -1225,22 +1228,22 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
         return ("candidate", info.st_dev, info.st_ino)
 
     pidfiles = (CHILD_PID, MONITOR_PID, DAEMON_PID)
-    if not running_saved:
+    if not running:
         _zero_processes(pidfiles)
     first = image(active), image(stage)
     live, staged = first
     if (staged is not None and (record["phase"] != "activating" or
             (live is not None and live[0] != "empty"))):
         raise QuiescentPreimageRefused("FIRST_BOUND_TREE_LAYOUT_REFUSED")
-    if saved:
+    if saved or running_base:
         if live is None or live[0] != "candidate" or staged is not None:
             raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_INSTALLED_REQUIRED")
         kernel = (_first_saved_running_kernel(record, release, config_fd=config_fd)
-                  if running_saved else _empty_kernel(release))
+                  if running else _empty_kernel(release))
     else:
         kernel = _first_inert_kernel_state(record, release,
             installed=live is not None and live[0] == "candidate" and staged is None)
-    if not running_saved:
+    if not running:
         _zero_processes(pidfiles)
     if (image(active), image(stage)) != first:
         raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
@@ -1248,6 +1251,19 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
     if store.read() != record:
         raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_OWNER_CHANGED")
     return live, staged, kernel
+
+
+def _attest_first_running_base_locked(store, record: dict, *, config_fd: int,
+                                      config_digest: str) -> tuple:
+    """Read-only base-image proof; never grants permission to signal a PID."""
+    def observe():
+        return _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=None, store=store, running_base=True)
+
+    first = observe()
+    if observe() != first or store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_BOUND_RUNNING_BASE_CHANGED")
+    return first
 
 
 def native_guard_first_enabled_shell_locked(operation: str, candidate: str,

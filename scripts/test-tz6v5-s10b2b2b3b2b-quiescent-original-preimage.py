@@ -546,6 +546,78 @@ class OriginalQuiescentTests(unittest.TestCase):
             self.assertEqual(recover()["phase"], "committed")
             self.assertEqual(calls, ["config-saved", "cleanup", "committed"])
 
+    def test_first_running_base_proof_is_read_only_and_refuses_drift(self):
+        import tempfile
+        import json
+        from hashlib import sha256
+
+        record = {"phase": "activated", "detail": {"id": "a" * 32,
+                   "base": "b" * 64, "candidate": "c" * 64},
+                  "manifest": {"schema": 1}, "first_running_sha256": "d" * 64}
+        store = Mock(read=Mock(return_value=record))
+        with tempfile.TemporaryDirectory() as temp, ExitStack() as stack:
+            parent = Path(temp)
+            work = parent / "work"
+            release = work / record["detail"]["id"] / "release"
+            release.mkdir(parents=True)
+            active = parent / "runtime-v2"
+            active.mkdir()
+            (active / "dvtws.args").write_bytes(b"candidate")
+            (release / "dvtws.args").write_bytes(b"candidate")
+            digest = lambda path: sha256((path / "dvtws.args").read_bytes()).hexdigest()
+            for key, value in (("WORK", work), ("COMMON_ACTIVE", active),
+                               ("PRODUCER_ROOT", parent / "producer"), ("EPOCH_ROOT", parent / "epochs")):
+                stack.enter_context(patch.object(gate, key, value))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            stack.enter_context(patch("neutral_root_stage._original_plan_matches", return_value=True))
+            root = stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root"))
+            root.return_value = json.dumps({"service": {"enabled": True, "target_mode": "list"}})
+            stack.enter_context(patch.object(gate, "inspect_inert_release", return_value="inactive"))
+            stack.enter_context(patch("shared_apply_seal._stat", side_effect=lambda path, *a, **kw: path.lstat()))
+            stack.enter_context(patch("shared_apply_seal.verify_seal", return_value={"sha256": {"release": digest(release)}}))
+            stack.enter_context(patch("shared_apply_seal._release_hash", side_effect=lambda path, owner: digest(path)))
+            zero = stack.enter_context(patch.object(gate, "_zero_processes"))
+            cold = stack.enter_context(patch.object(gate, "_first_inert_kernel_state"))
+            kernel = stack.enter_context(patch.object(gate, "_first_saved_running_kernel"))
+            proof = ("native-managed-kernel-staged", record["first_running_sha256"], (("stage", "table_stage", ()),))
+            kernel.return_value = proof
+
+            def attest(current=record, digest=record["detail"]["base"]):
+                store.read.return_value = current
+                return gate._attest_first_running_base_locked(store, current, config_fd=4, config_digest=digest)
+
+            self.assertEqual(attest(), (("candidate", active.stat().st_dev, active.stat().st_ino), None, proof))
+            self.assertEqual(kernel.call_count, 2)
+            for current, image in ((record, record["detail"]["candidate"]),
+                    ({**record, "phase": "config-saved"}, record["detail"]["base"]),
+                    ({k: v for k, v in record.items() if k != "first_running_sha256"}, record["detail"]["base"])):
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    attest(current, image)
+            for enabled, mode in ((False, "list"), (True, "auto")):
+                root.return_value = json.dumps({"service": {"enabled": enabled, "target_mode": mode}})
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    attest()
+            root.return_value = json.dumps({"service": {"enabled": True, "target_mode": "all"}})
+            kernel.side_effect = VoiceFirewallError("foreign kernel")
+            with self.assertRaises(VoiceFirewallError):
+                attest()
+            kernel.side_effect = (proof, ("native-managed-kernel-final", record["first_running_sha256"], ()))
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                attest()
+            kernel.side_effect = None
+            (active / "dvtws.args").write_bytes(b"foreign")
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                attest()
+            (active / "dvtws.args").write_bytes(b"candidate")
+            self.assertEqual(attest()[2], proof)
+            zero.assert_not_called()
+            cold.assert_not_called()
+            store._advance_bound_ordinary.assert_not_called()
+            self.assertEqual(store.read(), record)
+            self.assertEqual((active / "dvtws.args").read_bytes(), b"candidate")
+
     def test_first_saved_running_requires_all_rollback_stages_until_config_saved(self):
         names = ("zapret2_voice_telegram", "zapret2_voice_discord")
         pinned = "a" * 64
