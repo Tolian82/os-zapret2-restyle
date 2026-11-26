@@ -1637,10 +1637,9 @@ def _first_saved_running_kernel(record: dict, release: Path, *, config_fd: int) 
         raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_CHANGED")
     empty, desired = _first_inert_staged_manifests(record, release)
     reader = FreeBSDIPFWAdapter(19000, 19099)
-    steps = plan_postcommit_cleanup(reader, empty, desired)
-    if steps and record["phase"] == "activated":
-        # No stage cleanup before the durable Config-saved checkpoint.
-        steps = plan_postcommit_cleanup(reader, empty, desired, require_rollback=True)
+    # Even if ALL stages vanished, ACTIVATED still needs rollback evidence.
+    steps = plan_postcommit_cleanup(reader, empty, desired,
+                                    require_rollback=record["phase"] == "activated")
     if not steps:
         verify_prior_state(reader, desired, desired)
     if _first_running_digest(release, running, config_fd=config_fd) != pinned:

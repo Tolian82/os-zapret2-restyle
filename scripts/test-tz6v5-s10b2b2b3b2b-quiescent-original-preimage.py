@@ -546,6 +546,39 @@ class OriginalQuiescentTests(unittest.TestCase):
             self.assertEqual(recover()["phase"], "committed")
             self.assertEqual(calls, ["config-saved", "cleanup", "committed"])
 
+    def test_first_saved_running_requires_all_rollback_stages_until_config_saved(self):
+        names = ("zapret2_voice_telegram", "zapret2_voice_discord")
+        pinned = "a" * 64
+        empty = {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}
+        with ExitStack() as stack:
+            stack.enter_context(patch("neutral_schema3_previous_physical._running_native"))
+            stack.enter_context(patch.object(gate, "_first_running_digest", return_value=pinned))
+            manifests = stack.enter_context(patch.object(gate, "_first_inert_staged_manifests"))
+            adapter = stack.enter_context(patch.object(gate, "FreeBSDIPFWAdapter")).return_value
+            adapter.rule_base, adapter.rule_max = 19000, 19099
+            for phase, active, stages, expected in (
+                ("activated", names, (), None),
+                ("activated", names, names[:1], None),
+                ("activated", names, names, "native-managed-kernel-staged"),
+                ("activated", (), (), "native-managed-kernel-final"),
+                ("config-saved", names, (), "native-managed-kernel-final"),
+                ("config-saved", names, names[:1], "native-managed-kernel-staged"),
+            ):
+                with self.subTest(phase=phase, active=active, stages=stages):
+                    desired = {**empty, "rules": {19000: []},
+                               "tables": {name: ["91.108.0.0/16"] for name in active}}
+                    tables = {**desired["tables"], **{name + "_stage": [] for name in stages}}
+                    manifests.return_value = (empty, desired)
+                    adapter.list_rules.return_value = desired["rules"]
+                    adapter.get_table.side_effect = tables.get
+                    record = {"phase": phase, "first_running_sha256": pinned}
+                    if expected is None:
+                        with self.assertRaisesRegex(VoiceFirewallError, "missing shared IPFW rollback stage table"):
+                            gate._first_saved_running_kernel(record, Path("/unused"), config_fd=4)
+                    else:
+                        self.assertEqual(gate._first_saved_running_kernel(
+                            record, Path("/unused"), config_fd=4)[0], expected)
+
     def test_first_learning_saved_recovery_orders_epoch_and_keeps_failed_checkpoint(self):
         import tempfile
         from types import SimpleNamespace
