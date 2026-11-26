@@ -187,6 +187,88 @@ class OriginalQuiescentTests(unittest.TestCase):
             self.assertEqual(recover(), {**record, "phase": "restored"})
             self.assertEqual(removal.call_count, 2)
 
+    def test_first_inert_staged_kernel_uses_original_rollback(self):
+        import json
+        from copy import deepcopy
+        from voice_firewall_transaction import verify_prior_state
+
+        record = self.f.original.read()
+        release = self.f.parent / record["detail"]["id"] / "release"
+        live = ("candidate", 1, 2)
+        staged = (live, None, "native-managed-kernel-staged")
+        empty = {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}
+        table = "zapret2_voice_telegram"
+        desired = {**empty, "rules": {19001: ["divert", "989"]},
+                   "tables": {table: ["91.108.13.10"]}}
+        rules = {**deepcopy(desired["rules"]), 20000: ["unrelated"]}
+        tables = {**deepcopy(desired["tables"]), table + "_stage": []}
+        writes = []
+        adapter = Mock()
+        adapter.rule_base = 19000
+        adapter.rule_max = 19099
+        adapter.list_rules.side_effect = lambda a, b: {
+            k: v for k, v in rules.items() if a <= k <= b}
+        adapter.get_table.side_effect = tables.get
+
+        def delete(number):
+            writes.append(number)
+            del rules[number]
+
+        def destroy(name):
+            writes.append(name)
+            del tables[name]
+
+        adapter.delete_rule.side_effect = delete
+        adapter.destroy_table.side_effect = destroy
+
+        def empty_kernel(_):
+            verify_prior_state(adapter, empty, desired)
+            return "native-managed-kernel-empty"
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            root = stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root",
+                return_value=json.dumps({"service": {"enabled": True}}).encode()))
+            stack.enter_context(patch.object(gate, "shared_release_manifest", return_value=desired))
+            stack.enter_context(patch.object(gate, "_empty_kernel", side_effect=empty_kernel))
+            native = stack.enter_context(patch.object(gate, "FreeBSDIPFWAdapter", return_value=adapter))
+
+            def observe():
+                return live, None, gate._first_inert_kernel_state(record, release, installed=True)
+
+            self.assertEqual(observe(), staged)
+            with self.assertRaises(VoiceFirewallError):
+                gate._first_inert_kernel_state(record, release, installed=False)
+            root.return_value = json.dumps({"service": {"enabled": False}}).encode()
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                observe()
+            root.return_value = json.dumps({"service": {"enabled": True}}).encode()
+            rules[19002] = ["foreign"]
+            with self.assertRaises(VoiceFirewallError):
+                observe()
+            del rules[19002]
+            del tables[table + "_stage"]
+            with self.assertRaises(VoiceFirewallError):
+                observe()
+            tables[table + "_stage"] = []
+            tables["zapret2_voice_discord"] = ["91.108.13.10"]
+            with self.assertRaises(VoiceFirewallError):
+                observe()
+            del tables["zapret2_voice_discord"]
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                gate._rollback_first_inert_kernel(record, release, config_fd=4, first=staged,
+                    observe=lambda: (("candidate", 1, 3), None, staged[2]))
+            self.assertEqual(writes, [])
+            self.assertEqual(gate._rollback_first_inert_kernel(record, release,
+                config_fd=4, first=staged, observe=observe),
+                (live, None, "native-managed-kernel-empty"))
+            self.assertEqual(rules, {20000: ["unrelated"]})
+            self.assertEqual(tables, {})
+            self.assertEqual(writes, [19001, table, table + "_stage"])
+            self.assertIn(unittest.mock.call(19000, 19099, allow_mutations=True),
+                          native.call_args_list)
+
     def test_real_bound_cold_root_with_actual_empty_manifest_check(self):
         self.cold()
         record = self.f.original.read()

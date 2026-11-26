@@ -1081,6 +1081,58 @@ def _finish_managed_recovery_locked(store, record: dict, *, config_fd: int,
             active=active, attest=attest, saved_base=saved_image)
 
 
+def _first_inert_staged_manifests(record: dict, release: Path) -> tuple:
+    """The only admitted nonempty kernel is the original reversible candidate."""
+    import json
+    from neutral_root_stage import _verify_original_pinned_root
+
+    root = json.loads(_verify_original_pinned_root(
+        detail=record["detail"], binding=record["manifest"], parent=WORK, owner_uid=0))
+    if root["service"]["enabled"] is not True:
+        raise QuiescentPreimageRefused("FIRST_BOUND_DISABLED_STAGED_KERNEL")
+    desired = shared_release_manifest(release)
+    if desired["rule_base"] != 19000 or desired["rule_max"] not in (19010, 19099):
+        raise QuiescentPreimageRefused("FIRST_BOUND_KERNEL_SCOPE_INVALID")
+    return {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}, desired
+
+
+def _first_inert_kernel_state(record: dict, release: Path, *, installed: bool) -> str:
+    from voice_firewall_transaction import verify_staged_state
+
+    try:
+        return _empty_kernel(release)
+    except VoiceFirewallError:
+        if not installed:
+            raise
+        empty, desired = _first_inert_staged_manifests(record, release)
+        verify_staged_state(FreeBSDIPFWAdapter(19000, 19099), empty, desired)
+        return "native-managed-kernel-staged"
+
+
+def _rollback_first_inert_kernel(record: dict, release: Path, *, config_fd: int,
+                                 first: tuple, observe) -> tuple:
+    """Reuse the original reversible rollback before removing any tree."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from voice_firewall_transaction import rollback_uncommitted
+
+    live, stage, kernel = first
+    if (kernel != "native-managed-kernel-staged" or live is None or
+            live[0] != "candidate" or stage is not None):
+        raise QuiescentPreimageRefused("FIRST_BOUND_STAGED_LAYOUT_REQUIRED")
+    empty, desired = _first_inert_staged_manifests(record, release)
+    if observe() != first:
+        raise QuiescentPreimageRefused("FIRST_BOUND_STAGED_KERNEL_CHANGED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    rollback_uncommitted(
+        FreeBSDIPFWAdapter(19000, 19099, allow_mutations=True), empty, desired)
+    restored = observe()
+    if (restored[:2] != first[:2] or restored[2] not in
+            ("native-kernel-absent", "native-managed-kernel-empty")):
+        raise QuiescentPreimageRefused("FIRST_BOUND_KERNEL_RESTORE_UNCERTAIN")
+    return restored
+
+
 def _first_inert_recovery_layout(record: dict, *, config_fd: int,
                                  config_digest: str, queue_fd: int | None, store) -> tuple:
     """Observe an empty or fully attributed first inert tree, without mutation."""
@@ -1131,15 +1183,16 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
 
     pidfiles = (CHILD_PID, MONITOR_PID, DAEMON_PID)
     _zero_processes(pidfiles)
-    kernel = _empty_kernel(release)
     first = image(active), image(stage)
-    _zero_processes(pidfiles)
-    if (image(active), image(stage)) != first:
-        raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
     live, staged = first
     if (staged is not None and (record["phase"] != "activating" or
             (live is not None and live[0] != "empty"))):
         raise QuiescentPreimageRefused("FIRST_BOUND_TREE_LAYOUT_REFUSED")
+    kernel = _first_inert_kernel_state(record, release,
+        installed=live is not None and live[0] == "candidate" and staged is None)
+    _zero_processes(pidfiles)
+    if (image(active), image(stage)) != first:
+        raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     if store.read() != record:
         raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_OWNER_CHANGED")
@@ -1148,7 +1201,7 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
 
 def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
                                   config_digest: str, queue_fd: int | None) -> dict:
-    """Restore first inert cold tree only with exact base and empty kernel."""
+    """Restore first inert cold tree with exact base and reversible kernel."""
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
 
     def observe():
@@ -1158,6 +1211,10 @@ def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
     first = observe()
     if observe() != first:
         raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
+    if first[2] == "native-managed-kernel-staged":
+        first = _rollback_first_inert_kernel(record,
+            WORK / record["detail"]["id"] / "release", config_fd=config_fd,
+            first=first, observe=observe)
     live, staged, kernel = first
     target = None
     if staged is not None:
