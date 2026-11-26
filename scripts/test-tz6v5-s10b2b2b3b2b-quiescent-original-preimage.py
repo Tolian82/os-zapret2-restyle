@@ -300,6 +300,56 @@ class OriginalQuiescentTests(unittest.TestCase):
             self.assertEqual(recover(store.read()), {**record, "phase": "committed"})
             self.assertTrue(all(call.kwargs["saved"] for call in layout.call_args_list))
 
+    def test_first_saved_running_checkpoint_orders_cleanup_and_refuses_drift(self):
+        import tempfile
+        record = {**self.f.original.read(), "phase": "activated",
+                  "first_running_sha256": "a" * 64}
+        store = Mock(read=Mock(return_value=record))
+        live = ("candidate", 1, 2)
+        staged = ("native-managed-kernel-staged", "a" * 64, (("stage", "table_stage", ()),))
+        final = ("native-managed-kernel-final", "a" * 64, ())
+        state = [staged]
+        calls = []
+
+        def advance(phase, current, attest):
+            self.assertEqual(store.read(), current)
+            if not attest():
+                raise gate.QuiescentPreimageRefused("drift")
+            result = {**current, "phase": phase}
+            store.read.return_value = result
+            calls.append(phase)
+            return result
+
+        def cleanup(*args):
+            self.assertEqual(store.read()["phase"], "config-saved")
+            calls.append("cleanup")
+            state[0] = final
+
+        store._advance_bound_ordinary.side_effect = advance
+        with tempfile.TemporaryFile() as config, ExitStack() as stack:
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch.object(gate, "_first_inert_recovery_layout",
+                side_effect=lambda *args, **kw: (live, None, state[0])))
+            stack.enter_context(patch.object(gate, "_first_inert_staged_manifests",
+                return_value=({}, {})))
+            stack.enter_context(patch.object(gate, "FreeBSDIPFWAdapter"))
+            native = stack.enter_context(patch("voice_firewall_transaction.cleanup_committed",
+                side_effect=VoiceFirewallError("uncertain cleanup")))
+
+            def recover():
+                current = store.read()
+                return gate._finish_first_saved_locked(store, current,
+                    config_fd=config.fileno(), config_digest=current["detail"]["candidate"])
+
+            with self.assertRaises(VoiceFirewallError):
+                recover()
+            self.assertEqual(store.read()["phase"], "config-saved")
+            self.assertEqual(calls, ["config-saved"])
+            native.side_effect = cleanup
+            self.assertEqual(recover()["phase"], "committed")
+            self.assertEqual(calls, ["config-saved", "cleanup", "committed"])
+
     def test_real_bound_cold_root_with_actual_empty_manifest_check(self):
         self.cold()
         record = self.f.original.read()

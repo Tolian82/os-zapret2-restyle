@@ -1189,13 +1189,18 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
             journal={"detail": detail}, owner_uid=0) or
             inspect_inert_release(release, owner_uid=0) != "inactive"):
         raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SOURCE_CHANGED")
+    running_saved = False
     if saved:
         import json
         from neutral_root_stage import _verify_original_pinned_root
         root = json.loads(_verify_original_pinned_root(
             detail=detail, binding=record["manifest"], parent=WORK, owner_uid=0))
-        if root["service"]["enabled"] is not False:
-            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_DISABLED_REQUIRED")
+        enabled = root["service"]["enabled"]
+        if type(enabled) is not bool or enabled != ("first_running_sha256" in record):
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_PIN_REQUIRED")
+        if enabled and root["service"]["target_mode"] not in ("all", "list"):
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_INERT_MODE_REQUIRED")
+        running_saved = enabled
     wanted = verify_seal(work, owner=0)["sha256"]["release"]
     active = COMMON_ACTIVE
     parent, name = active.parent, active.name
@@ -1220,7 +1225,8 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
         return ("candidate", info.st_dev, info.st_ino)
 
     pidfiles = (CHILD_PID, MONITOR_PID, DAEMON_PID)
-    _zero_processes(pidfiles)
+    if not running_saved:
+        _zero_processes(pidfiles)
     first = image(active), image(stage)
     live, staged = first
     if (staged is not None and (record["phase"] != "activating" or
@@ -1229,11 +1235,13 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
     if saved:
         if live is None or live[0] != "candidate" or staged is not None:
             raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_INSTALLED_REQUIRED")
-        kernel = _empty_kernel(release)
+        kernel = (_first_saved_running_kernel(record, release, config_fd=config_fd)
+                  if running_saved else _empty_kernel(release))
     else:
         kernel = _first_inert_kernel_state(record, release,
             installed=live is not None and live[0] == "candidate" and staged is None)
-    _zero_processes(pidfiles)
+    if not running_saved:
+        _zero_processes(pidfiles)
     if (image(active), image(stage)) != first:
         raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
@@ -1297,10 +1305,37 @@ def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
     return result
 
 
+def _first_saved_running_kernel(record: dict, release: Path, *, config_fd: int) -> tuple:
+    """Observe the pinned running candidate and only its known IPFW stages."""
+    from neutral_schema3_previous_physical import _running_native
+    from voice_firewall_transaction import plan_postcommit_cleanup
+
+    pinned = record.get("first_running_sha256")
+    if pinned is None:
+        raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_PIN_REQUIRED")
+    running = _running_native(release, owner_uid=0, child_pidfile=CHILD_PID,
+                              monitor_pidfile=MONITOR_PID)
+    if _first_running_digest(release, running, config_fd=config_fd) != pinned:
+        raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_CHANGED")
+    empty, desired = _first_inert_staged_manifests(record, release)
+    reader = FreeBSDIPFWAdapter(19000, 19099)
+    steps = plan_postcommit_cleanup(reader, empty, desired)
+    if steps and record["phase"] == "activated":
+        # No stage cleanup before the durable Config-saved checkpoint.
+        steps = plan_postcommit_cleanup(reader, empty, desired, require_rollback=True)
+    if not steps:
+        verify_prior_state(reader, desired, desired)
+    if _first_running_digest(release, running, config_fd=config_fd) != pinned:
+        raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_CHANGED")
+    return ("native-managed-kernel-staged" if steps else "native-managed-kernel-final",
+            pinned, tuple((kind, name, tuple(sorted(entries))) for kind, name, entries in steps))
+
+
 def _finish_first_saved_locked(store, record: dict, *, config_fd: int,
                                config_digest: str) -> dict:
-    """Recover a distinct saved disabled first candidate, without activation."""
+    """Recover a distinct saved first inert candidate, without engine actions."""
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from voice_firewall_transaction import cleanup_committed
 
     def observe(current):
         return _first_inert_recovery_layout(current, config_fd=config_fd,
@@ -1318,8 +1353,20 @@ def _finish_first_saved_locked(store, record: dict, *, config_fd: int,
             lambda: observe(record) == first and observe(record) == first)
         if current != {**record, "phase": "config-saved"} or store.read() != current:
             raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_READBACK_REQUIRED")
+    kernel = first[2]
+    if type(kernel) is tuple and kernel[0] == "native-managed-kernel-staged":
+        if current["phase"] != "config-saved" or observe(current) != first:
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_IMAGE_CHANGED")
+        empty, desired = _first_inert_staged_manifests(current,
+            WORK / current["detail"]["id"] / "release")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        cleanup_committed(FreeBSDIPFWAdapter(19000, 19099, allow_mutations=True), empty, desired)
+        final = (first[0], first[1], ("native-managed-kernel-final", kernel[1], ()))
+    else:
+        final = first
     result = store._advance_bound_ordinary("committed", current,
-        lambda: observe(current) == first and observe(current) == first)
+        lambda: observe(current) == final and observe(current) == final)
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     if result != {**record, "phase": "committed"} or store.read() != result:
         raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_READBACK_REQUIRED")

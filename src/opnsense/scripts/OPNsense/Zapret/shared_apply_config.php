@@ -942,9 +942,8 @@ final class SharedApplyConfigWorker
                             ? 'original-managed-config-committed' : 'original-managed-config-restored';
                     }
                     if ($recoverFirst) {
-                        if ($image['image'] === 'candidate-image' && $image['enabled'] !== '0') {
-                            throw new \RuntimeException('First saved running owner requires native proof');
-                        }
+                        // The original FD4 child checks the pinned running owner
+                        // and exact native kernel before any publication.
                         $planWitness = self::configSaveWitness($plan, $planSha, $image['base'], $image['candidate']);
                         $witness = hash('sha256', $planWitness . "\0" . $image['snapshot']);
                         if ($image['image'] === 'candidate-image') {
