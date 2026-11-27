@@ -1,0 +1,80 @@
+name: S10 native real retired Auto -> Found transport
+
+on:
+  push:
+    branches: [draft/tz6v5-s10-integrated]
+    paths:
+      - scripts/test-s10-retired-auto-found-native.py
+      - .github/workflows/s10-retired-auto-found-native.yml
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
+      - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fast:
+    name: S10 retired Auto positive native exact-source and Linux refusal
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Verify source, no off-target native admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile scripts/test-s10-retired-auto-found-native.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          if GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_S10_RETIRED_AUTO_DISPOSABLE=1 \
+              ZAPRET2_NATIVE_PROJECT_SHA=${{ github.sha }} \
+              python3.13 scripts/test-s10-retired-auto-found-native.py run > /tmp/s10-retired-offtarget 2>&1; then
+            echo '::error::Off-target S10 Auto native accepted Linux'
+            exit 1
+          fi
+          grep -q S10_AUTO_DISPOSABLE_CLEAN_GUEST_ONLY /tmp/s10-retired-offtarget
+
+  native:
+    name: Real installed HTTPS Auto schema3 and original operator Stop/ACK
+    needs: fast
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Disposable official OPNsense Mk, authenticated HTTPS, original FD9 Stop
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1
+            export ZAPRET2_S10_RETIRED_AUTO_DISPOSABLE=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.sha }}"
+            /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
+            /usr/local/bin/python3 scripts/test-s10-retired-auto-found-native.py run
