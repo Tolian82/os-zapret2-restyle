@@ -1441,6 +1441,13 @@ def bound_original_http_upload_main():
     # These names and booleans contain no uploaded domains, native args,
     # Config contents, paths, PID values or private journal bytes.
     state = subprocess.run([SERVICE, "status"], capture_output=True, timeout=30)
+    # The five-editor P1 planner intentionally deduplicates and sorts the
+    # uploaded draft. The final file is NEVER required to retain the raw
+    # multipart text order: it must match the original immutable plan's
+    # exact, P2-CAS authorized after-image and retain the submitted addition.
+    work = Path("/var/db/zapret2/shared-work") / op
+    plan = json.loads((work / "plan.json").read_bytes())
+    rows = plan.get("found_batch", {}) if isinstance(plan, dict) else {}
     detail = final.get("detail") if isinstance(final, dict) else None
     manifest = final.get("manifest") if isinstance(final, dict) else None
     detail = detail if isinstance(detail, dict) else {}
@@ -1459,14 +1466,28 @@ def bound_original_http_upload_main():
         "CONFIG_PHYSICAL_SAVE": after[0] != original[0],
         "PID_PHYSICAL_STABLE": after[1] == original[1],
         "KERNEL_PHYSICAL_STABLE": after[3] == original[3],
-        "P1_YOUTUBE_AFTER": TARGETS[0].read_bytes() ==
-            intent["sources"]["youtube"]["draft"].encode("utf-8"),
-        "P1_USER_AFTER": TARGETS[1].read_bytes() ==
-            intent["sources"]["user"]["draft"].encode("utf-8"),
-        "P1_AUTO_AFTER": TARGETS[2].read_bytes() ==
-            intent["sources"]["auto"]["draft"].encode("utf-8"),
+        "P1_PLAN_ORIGINAL": plan.get("page") == "strategies"
+            and plan.get("result") == "prepared"
+            and isinstance(rows, dict)
+            and set(rows) == {"youtube", "user", "auto"},
         "SERVICE_STOPPED": state.returncode == 1,
     }
+    for name, target in zip(("youtube", "user", "auto"), TARGETS):
+        record = rows.get(name)
+        source = intent["sources"][name]
+        suffix = name.upper()
+        checks["P1_" + suffix + "_PINNED_AFTER"] = (
+            isinstance(record, dict) and
+            isinstance(record.get("after"), str) and
+            target.read_bytes() == record["after"].encode("utf-8"))
+        checks["P1_" + suffix + "_PINNED_BEFORE"] = (
+            isinstance(record, dict) and
+            record.get("before") == source["base"]["content"])
+        checks["P1_" + suffix + "_ADDITION_RETAINED"] = (
+            isinstance(record, dict) and
+            isinstance(record.get("after"), str) and
+            "native-http-" + name + "-proof.org" in record["after"].splitlines() and
+            record.get("before") != record["after"])
     failed = [name for name, ok in checks.items() if not ok]
     need(not failed, "G03_HTTP_ORIGINAL_" + "_".join(failed[:4]) + "_DRIFT")
     print("G03_S10_PUBLIC_HTTP_FOUND=PASS_REAL_MULTIPART_ORIGINAL_SERVICE_COMMITTED_STOPPED",
