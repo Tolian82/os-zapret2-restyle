@@ -4124,6 +4124,31 @@ service_with_lifecycle_lock()
         return "$_service_complete_rc"
     }
 
+    service_first_recover_pending()
+    {
+        [ "$#" -eq 1 ] || return 70
+        IFS=' ' read -r _first_phase _first_id _first_page <<EOF_FIRST
+$1
+EOF_FIRST
+        case "$_first_phase" in activating-first|activated-first|config-saved-first|epoch-finalizing-first) ;; *) return 70 ;; esac
+        [ "$1" = "$_first_phase $_first_id $_first_page" ] || return 70
+        _first_stage=${_first_phase%-first}
+        case "$_first_id" in ""|*[!a-f0-9]*) return 70 ;; esac
+        [ "${#_first_id}" -eq 32 ] || return 70
+        case "$_first_page" in strategies|voice) ;; *) return 70 ;; esac
+        _first_receipt=$("$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
+            "recover-first-$_first_stage" "$_first_id") || return 70
+        case "$_first_stage:$_first_receipt" in
+            "activating:first-activating-restored=$_first_id"|"activated:first-activated-restored=$_first_id")
+                [ "$(shared_apply_inspect_service)" = restored ] || return 70 ;;
+            "activated:first-activated-committed=$_first_id"|"config-saved:first-config-saved-committed=$_first_id"|"epoch-finalizing:first-epoch-finalizing-committed=$_first_id")
+                [ "$(shared_apply_inspect_service)" = "committed $_first_id $_first_page" ] || return 70 ;;
+            *) return 70 ;;
+        esac
+        # Recovery never reports that a new Start has run.
+        return 69
+    }
+
     # This function is also sourced alone by native fail-closed shell tests.
     : "${PKG_UPDATE_RECORD:=/var/db/zapret2/pkg-update/operation.json}"
     _service_lock_timeout="$1"
@@ -4222,7 +4247,28 @@ service_with_lifecycle_lock()
         # WAN-first before any native Start or Restart mutation. A strict
         # action-bound private refusal comes only from original WAN source.
         case "${1:-}" in
-            start) service_wan_first_private start require || return $? ;;
+            start)
+                # A pending FIRST_BASE may have saved Enabled=OFF and no WAN.
+                # Admit only original recovery, never a new Start without WAN.
+                if shared_apply_has_record_service &&
+                   "${PYTHON_RUNTIME}" --check >/dev/null 2>&1 &&
+                   _first_pending=$(shared_apply_inspect_service); then
+                    case "$_first_pending" in
+                        activated-first\ *)
+                            _wan_response=
+                            if wan_first_service if-start && [ "$_wan_response" = wan-not-required ]; then
+                                extra_resources_block_pending_start_service || return 69
+                                _first_found_pending=$(shared_apply_pending_found_service) || return 70
+                                [ -z "$_first_found_pending" ] || return 70
+                                [ "$(shared_apply_inspect_service)" = "$_first_pending" ] || return 70
+                                service_first_recover_pending "$_first_pending"
+                                return $?
+                            fi
+                            ;;
+                    esac
+                fi
+                service_wan_first_private start require || return $?
+                ;;
             restart) service_wan_first_private restart if-start || return $? ;;
             reconfigure) wan_first_service if-start || return $? ;;
             telegram-voice-enable) wan_first_service require || return $? ;;
@@ -4294,28 +4340,8 @@ service_with_lifecycle_lock()
                             return $?
                             ;;
                         activating-first\ *|activated-first\ *|config-saved-first\ *|epoch-finalizing-first\ *)
-                            # A first bound pristine recovery has no prior
-                            # owner to boot. Never fall through to legacy
-                            # or report that Start actually ran.
-                            IFS=' ' read -r _first_phase _first_id _first_page <<EOF
-$_shared_owner
-EOF
-                            case "$_first_phase" in activating-first|activated-first|config-saved-first|epoch-finalizing-first) ;; *) return 70 ;; esac
-                            [ "$_shared_owner" = "$_first_phase $_first_id $_first_page" ] || return 70
-                            _first_stage=${_first_phase%-first}
-                            case "$_first_id" in ""|*[!a-f0-9]*) return 70 ;; esac
-                            [ "${#_first_id}" -eq 32 ] || return 70
-                            case "$_first_page" in strategies|voice) ;; *) return 70 ;; esac
-                            _first_receipt=$("$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
-                                "recover-first-$_first_stage" "$_first_id") || return 70
-                            case "$_first_stage:$_first_receipt" in
-                                "activating:first-activating-restored=$_first_id"|"activated:first-activated-restored=$_first_id")
-                                    [ "$(shared_apply_inspect_service)" = restored ] || return 70 ;;
-                                "activated:first-activated-committed=$_first_id"|"config-saved:first-config-saved-committed=$_first_id"|"epoch-finalizing:first-epoch-finalizing-committed=$_first_id")
-                                    [ "$(shared_apply_inspect_service)" = "committed $_first_id $_first_page" ] || return 70 ;;
-                                *) return 70 ;;
-                            esac
-                            return 69
+                            service_first_recover_pending "$_shared_owner"
+                            return $?
                             ;;
                         activated\ *)
                             shared_apply_recover_activated_cold_service "$_shared_owner" || return 69

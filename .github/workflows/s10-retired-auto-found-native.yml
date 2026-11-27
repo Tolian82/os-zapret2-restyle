@@ -56,6 +56,8 @@ jobs:
           python3.13 scripts/test-shared-apply-found-files.py
           if [ ! -x /usr/local/bin/jq ]; then sudo ln -s "$(command -v jq)" /usr/local/bin/jq; fi
           sh scripts/test-shared-apply-execute.sh
+          sh -n scripts/test-shared-apply-boot.sh
+          sh scripts/test-shared-apply-boot.sh
           if GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_S10_RETIRED_AUTO_DISPOSABLE=1 \
               ZAPRET2_NATIVE_PROJECT_SHA=${{ github.sha }} \
               python3.13 scripts/test-s10-retired-auto-found-native.py run > /tmp/s10-retired-offtarget 2>&1; then

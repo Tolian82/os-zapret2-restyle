@@ -392,6 +392,77 @@ check_route 0 restart
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'shared-guard legacy:start ' ] ||
     fail "no common journal changed ordinary legacy startup"
+# FIRST_BASE must recover a pending transaction even with saved WAN absent,
+# but may never boot a new owner or bypass ordinary WAN validation.
+(
+    HAS_RECORD=1 OWNER_OK=1
+    FIRST_STATE="$ROOT/first-state"
+    FIRST_ID="$ID"
+    FIRST_EVENTS="$LOG"
+    export FIRST_STATE FIRST_ID FIRST_EVENTS
+    PYTHON_RUNTIME="$ROOT/first-python"
+    cat > "$PYTHON_RUNTIME" <<'FIRST_PY'
+#!/bin/sh
+if [ "$1" = --check ]; then exit 0; fi
+[ "$2" = recover-first-activated ] && [ "$3" = "$FIRST_ID" ] || exit 69
+echo first-recover >> "$FIRST_EVENTS"
+[ "$FIRST_RC" = 0 ] || exit "$FIRST_RC"
+printf '%s\n' "$FIRST_FINAL" > "$FIRST_STATE"
+printf '%s\n' "$FIRST_REPLY"
+FIRST_PY
+    chmod 700 "$PYTHON_RUNTIME"
+    shared_apply_inspect_service() { cat "$FIRST_STATE"; }
+    wan_first_service() {
+        if [ "$1" = if-start ]; then
+            _wan_response="$FIRST_WAN"
+            return 0
+        fi
+        _wan_response=wan-required
+        return 64
+    }
+    shared_apply_pending_found_service() { printf '%s' "$FIRST_FOUND"; return "$FIRST_FOUND_RC"; }
+    first_reset() {
+        printf 'activated-first %s strategies\n' "$FIRST_ID" > "$FIRST_STATE"
+        FIRST_RC=0 FIRST_FINAL=restored FIRST_REPLY="first-activated-restored=$FIRST_ID"
+        FIRST_WAN=wan-not-required FIRST_FOUND= FIRST_FOUND_RC=0 PENDING=0
+        export FIRST_RC FIRST_FINAL FIRST_REPLY
+    }
+    first_reset
+    check_route 69 start
+    [ "$(cat "$LOG")" = first-recover ] && [ "$(cat "$FIRST_STATE")" = restored ] ||
+        fail "first base rollback did not use sole original recovery"
+    check_route 64 start
+    [ ! -s "$LOG" ] || fail "restored first owner bypassed WAN"
+    first_reset; FIRST_RC=69
+    check_route 70 start
+    [ "$(cat "$LOG")" = first-recover ] || fail "first refusal fell through"
+    first_reset; FIRST_REPLY=foreign
+    check_route 70 start
+    [ "$(cat "$LOG")" = first-recover ] || fail "foreign first receipt fell through"
+    first_reset; FIRST_FINAL=foreign
+    check_route 70 start
+    [ "$(cat "$LOG")" = first-recover ] || fail "foreign first owner fell through"
+    first_reset; FIRST_WAN=wan-ready
+    check_route 64 start
+    [ ! -s "$LOG" ] || fail "runtime requested bypassed required WAN"
+    first_reset; FIRST_FOUND=foreign
+    check_route 70 start
+    [ ! -s "$LOG" ] || fail "pending Found was recovered through first route"
+    first_reset; FIRST_FOUND_RC=69
+    check_route 70 start
+    [ ! -s "$LOG" ] || fail "unreadable Found state bypassed recovery gate"
+    first_reset; PENDING=1
+    check_route 69 start
+    [ ! -s "$LOG" ] || fail "pending resource transaction bypassed recovery gate"
+    first_reset; printf 'activated-first invalid strategies\n' > "$FIRST_STATE"
+    check_route 70 start
+    [ ! -s "$LOG" ] || fail "malformed first owner reached mutation"
+    first_reset; HAS_RECORD=0
+    check_route 64 start
+    [ ! -s "$LOG" ] || fail "no journal bypassed WAN"
+)
+echo 'PASS: FIRST_BASE recovery only with disabled saved WAN; no legacy Start'
+
 # The original FD9 wrapper delegates compatibility names only after the
 # common journal preflight; owner/marker checks now live in their real adapter.
 for compat_action in telegram-voice-enable telegram-voice-disable; do

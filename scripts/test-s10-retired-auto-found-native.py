@@ -722,6 +722,12 @@ def native_positive():
             # Never truncate anything other than our exact test-only sentinel.
             need(all(not data for data in before_images.values()),
                  "S10_AUTO_FIRST_BASE_ZERO_FIXTURE_REQUIRED")
+            wan = SERVICE.with_name("wan_preflight.sh")
+            for mode, expected_wan in (("require", b"wan-required"), ("if-start", b"wan-not-required")):
+                observed_wan = subprocess.run([str(wan), mode], capture_output=True, timeout=30)
+                need(observed_wan.returncode == 0 and observed_wan.stdout.strip() == expected_wan,
+                     "S10_AUTO_FIRST_BASE_SAVED_WAN_FIXTURE_REQUIRED")
+            print("S10_FIRST_BASE_WAN=PASS_REQUIRED_FOR_START_NOT_FOR_DISABLED_RECOVERY", flush=True)
             pidfiles = tuple(Path(name) for name in ("/var/run/dvtws2.pid",
                 "/var/run/zapret2-supervisor-monitor.pid", "/var/run/zapret2-supervisor-daemon.pid"))
             def process_pins():
@@ -742,7 +748,8 @@ def native_positive():
                     os.fsync(handle.fileno())
                 expected = {**before_images, path.name: sentinel}
                 refusal = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180)
-                need(refusal.returncode != 0 and json.loads(WAL.read_bytes()) == pending and
+                print("S10_FIRST_BASE_NONZERO_RC=" + str(refusal.returncode), flush=True)
+                need(refusal.returncode == 70 and json.loads(WAL.read_bytes()) == pending and
                      CONFIG.read_bytes() == config_image and set(work.iterdir()) == work_before and
                      (root.stat().st_dev, root.stat().st_ino, root.read_bytes()) == root_pin and
                      seed.read_bytes() == seed_bytes and images() == expected and
@@ -770,6 +777,12 @@ def native_positive():
         need(all(after_images[name].startswith(data) for name, data in before_images.items()),
              "S10_FIRST_FAULT_RECOVERY_PRODUCER_DATA_LOST")
         if first_fault == "first-base":
+            print("S10_FIRST_BASE_RECOVERY_RC=" + str(recovery.returncode), flush=True)
+            if rec.get("phase") in ("activated", "restored"):
+                print("S10_FIRST_BASE_RECOVERY_PHASE=" + rec["phase"], flush=True)
+            for line in recovery.stderr.splitlines()[:32]:
+                if re.fullmatch(rb"ERROR: shared Apply operation cannot advance: [A-Z0-9_]{1,96}", line):
+                    print(line.decode("ascii"), flush=True)
             need(recovery.returncode == 69 and rec == {**pending, "phase": "restored"} and
                  all(not data for data in before_images.values()) and after_images == before_images and
                  set(path.name for path in epoch.iterdir()) == {"pretraffic.json"},
