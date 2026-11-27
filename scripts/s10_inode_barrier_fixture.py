@@ -130,6 +130,38 @@ def finish(root, target_parent, ready_temp, uid, pin, fault=lambda _: None, *, p
             os.fsync(parent)
 
 
+def finish_inplace(root, target_parent, ready_temp, uid, pin, fault=lambda _: None, *, payload=b""):
+    """Test-only single-inode local fsync; compare against two-inode replace."""
+    name = scratch_name(ready_temp)
+    with directory(root, uid) as parent:
+        check_device(parent, target_parent)
+        with directory(name, uid, dir_fd=parent, private=True) as fd:
+            if inode(os.fstat(fd)) != pin[0] or entries(fd, uid, payload) != {"record": pin[1]}:
+                raise ScratchRefused("scratch seed replaced")
+            writable = os.open("record", os.O_RDWR | os.O_NOFOLLOW, dir_fd=fd)
+            try:
+                if (inode(os.fstat(writable)) != pin[1] or
+                        empty_file(fd, "record", uid, payload) != pin[1]):
+                    raise ScratchRefused("scratch inode changed before overwrite")
+                os.lseek(writable, 0, os.SEEK_SET)
+                if os.write(writable, payload) != len(payload):
+                    raise ScratchRefused("short scratch rewrite")
+                os.fsync(writable)
+                fault("rewrite")
+                if (inode(os.fstat(writable)) != pin[1] or
+                        entries(fd, uid, payload) != {"record": pin[1]}):
+                    raise ScratchRefused("scratch changed after overwrite")
+            finally:
+                os.close(writable)
+            os.unlink("record", dir_fd=fd)
+            fault("unlink")
+            os.fsync(fd)
+            assert_named(parent, name, fd)
+            os.rmdir(name, dir_fd=parent)
+            fault("rmdir")
+            os.fsync(parent)
+
+
 def recover(root, target_parent, ready_temp, uid, *, payload=b""):
     """Fixture only: caller MUST prove exact original ready WAL and FD9 first.
 
@@ -241,6 +273,34 @@ class ScratchTests(unittest.TestCase):
             recover(*self.args, payload=b"b" * 64)
         recover(*self.args, payload=payload)
         self.assertFalse(self.path.exists())
+
+    def test_inplace_rewrite_and_refusals(self):
+        payload = b"a" * 64
+        pin = seed(*self.args, payload=payload)
+        with self.assertRaises(ScratchRefused):
+            finish_inplace(*self.args, pin, payload=b"b" * 64)
+        finish_inplace(*self.args, pin, payload=payload)
+        self.assertFalse(self.path.exists())
+        for point in ("rewrite", "unlink", "rmdir"):
+            with self.subTest(point=point):
+                pin = seed(*self.args, payload=payload)
+                def fault(label):
+                    if label == point:
+                        raise InterruptedError(label)
+                with self.assertRaisesRegex(InterruptedError, point):
+                    finish_inplace(*self.args, pin, fault=fault, payload=payload)
+                recover(*self.args, payload=payload)
+                self.assertFalse(self.path.exists())
+        pin = seed(*self.args, payload=payload)
+        record = self.path / "record"
+        record.rename(self.path / "old")
+        record.write_bytes(payload)
+        record.chmod(0o600)
+        (self.path / "old").unlink()
+        with self.assertRaises(ScratchRefused):
+            finish_inplace(*self.args, pin, payload=payload)
+        self.assertTrue(record.exists())
+
 
     def test_directory_symlink(self):
         self.path.symlink_to(self.target, target_is_directory=True)

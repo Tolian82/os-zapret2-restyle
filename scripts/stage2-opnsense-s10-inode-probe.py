@@ -38,7 +38,8 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
     modes = ("original", "late-pinned", "wal-file-barrier", "wal-dir-barrier",
              "wal-rewrite-barrier", "local-rewrite-barrier", "seeded-local-rewrite",
              "seeded-local-cleanup", "callback-cleanup", "wal-token-scratch", "no-rename-control")
-    token_modes = ("wal-token-scratch", "wal-token-payload", "pre-token-empty", "pre-token-payload")
+    token_modes = ("wal-token-scratch", "wal-token-payload", "wal-token-inplace",
+                   "pre-token-empty", "pre-token-payload")
     modes += token_modes[1:]
     if focused:
         modes = ("original", "callback-cleanup") + token_modes
@@ -111,7 +112,7 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                 row = report[mode]
                 token_mode = mode in token_modes
                 preseed = mode.startswith("pre-token-")
-                payload = b"a" * 64 if mode.endswith("-payload") else b""
+                payload = b"a" * 64 if mode.endswith("-payload") or mode == "wal-token-inplace" else b""
                 target = (active if mode == "callback-cleanup" or token_mode else root) / f"{mode}-{index}.txt"
                 before, after = b"before.example\n", b"after-long.example\n"
                 target.write_bytes(before)
@@ -153,7 +154,12 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                             else:
                                 if ready_temp is None or scratch_pin is None:
                                     raise RuntimeError("missing scratch seed")
-                                scratch.finish(root, item.parent, ready_temp, os.geteuid(), scratch_pin, payload=payload)
+                                if mode == "wal-token-inplace":
+                                    scratch.finish_inplace(root, item.parent, ready_temp,
+                                                           os.geteuid(), scratch_pin, payload=payload)
+                                else:
+                                    scratch.finish(root, item.parent, ready_temp,
+                                                   os.geteuid(), scratch_pin, payload=payload)
                                 if (root / scratch.scratch_name(ready_temp)).exists():
                                     raise RuntimeError("scratch residue")
                             pinned = snapshot(item, data, anchor)
