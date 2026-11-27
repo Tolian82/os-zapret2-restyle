@@ -92,7 +92,8 @@ def _identity(path: Path, *, uid: tuple[int, ...], gid: int,
 
 
 def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
-             engine_gid: int, learning_names: tuple[str, ...] = ()) -> OriginalProducer:
+             engine_gid: int, learning_names: tuple[str, ...] = (),
+             queue_fd: int | None = None) -> OriginalProducer:
     """Testable scoped precursor. Does not change either producer file."""
     if (not isinstance(root, Path) or not root.is_absolute() or
             type(root_uid) is not int or root_uid < 0 or
@@ -109,7 +110,9 @@ def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
     try:
         _check_layout(root, root_uid, root_gid, engine_gid, learning_names)
         queue = DurableInbox(root, owner_uid=root_uid, writer_gid=engine_gid)
-        with queue.exclusive():
+        # An in-flight bound Apply holds P2a BEFORE Config. Borrow that
+        # exact OFD, rather than opening/locking worker.lock a second time.
+        with (queue.exclusive() if queue_fd is None else queue.inherited_exclusive(queue_fd)):
             _check_layout(root, root_uid, root_gid, engine_gid, learning_names)
             if queue.segments():
                 raise PostDropRefused("unprocessed_original_pending_prelaunch")
@@ -435,9 +438,43 @@ def native_prepare_learning_producer(release: Path) -> None:
     prepare_native_learning(names)
 
 
-def native_capture_learning_before_launch(release: Path) -> str:
+def _learning_pretraffic_owner(workspace: Path, candidate: str, queue_fd: int | None):
+    """First bound learning launch borrows original P2a; legacy is unchanged."""
+    from shared_apply_operation import SharedApplyOperation
+    from shared_apply_seal import WORK
+    from neutral_root_stage import verify_original_operation_pins
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    bound_first = (type(record) is dict and
+                   record.get("manifest", {}).get("schema") == 2 and
+                   "previous" not in record and "previous_manifest" not in record and
+                   "found" not in record)
+    if queue_fd is None:
+        if bound_first:
+            raise PostDropRefused("first_bound_learning_requires_inherited_queue")
+        return None
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(queue_fd) is not int or queue_fd < 3 or queue_fd in (4, 9) or
+            not bound_first or record["phase"] != "activating" or
+            workspace != WORK / record["detail"]["id"] or
+            candidate != record["detail"]["candidate"]):
+        raise PostDropRefused("first_bound_learning_queue_scope_required")
+    verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    if store.read() != record:
+        raise PostDropRefused("first_bound_learning_queue_owner_changed")
+    return record
+
+
+def native_capture_learning_before_launch(release: Path, *, queue_fd: int | None = None) -> str:
     """Exact original P2a zero-cut witness for every learning native file."""
-    _, _, sources = _learning_release_sources(release)
+    from voice_live_inspect import COMMON_ACTIVE
+    workspace, candidate, sources = _learning_release_sources(release)
+    if queue_fd is not None and release != COMMON_ACTIVE:
+        raise PostDropRefused("first_bound_learning_active_release_required")
+    owner = _learning_pretraffic_owner(workspace, candidate, queue_fd)
     _, names = _qualified_learning_sources(sources, ROOT)
     _parent(ROOT, 0)
     identity = pwd.getpwnam(ENGINE_USER)
@@ -446,12 +483,15 @@ def native_capture_learning_before_launch(release: Path) -> str:
     witness = _capture(
         ROOT, root_uid=0, root_gid=0,
         engine_uid=identity.pw_uid, engine_gid=identity.pw_gid,
-        learning_names=names)
+        learning_names=names, queue_fd=queue_fd)
+    if (_learning_release_sources(release) != (workspace, candidate, sources) or
+            _learning_pretraffic_owner(workspace, candidate, queue_fd) != owner):
+        raise PostDropRefused("first_bound_learning_capture_owner_changed")
     return _witness_line_learning(witness, sources)
 
 
 def native_seal_learning_epoch(
-    generation: str, candidate: str, wire: str,
+    generation: str, candidate: str, wire: str, *, queue_fd: int | None = None,
 ) -> None:
     from auto_detect_epoch_receipts import HEX32, HEX64
     from voice_live_inspect import COMMON_ACTIVE
@@ -466,10 +506,13 @@ def native_seal_learning_epoch(
     _, names = _qualified_learning_sources(sources, ROOT)
     queue, receipts = _original_epoch_queue(names)
     identity = pwd.getpwnam(ENGINE_USER)
+    owner = _learning_pretraffic_owner(workspace, candidate, queue_fd)
+
     def same_owner() -> bool:
-        return _learning_release_sources(COMMON_ACTIVE) == (
-            workspace, candidate, sources)
-    with queue.exclusive():
+        return (_learning_release_sources(COMMON_ACTIVE) == (
+            workspace, candidate, sources) and
+            _learning_pretraffic_owner(workspace, candidate, queue_fd) == owner)
+    with (queue.exclusive() if queue_fd is None else queue.inherited_exclusive(queue_fd)):
         receipts.seal_learning_pretraffic(
             queue, workspace=workspace, candidate_sha256=candidate,
             wire=wire, root_gid=0, engine_uid=identity.pw_uid,
@@ -815,9 +858,15 @@ def original_fd9_command(args: list[str]) -> int:
               "authorize-learning": 2, "prepare-learning": 2,
               "capture-learning": 2, "seal-learning-epoch": 4,
               "restore-learning": 6, "finish-learning-epoch": 2}
+    borrowed = bool(args and args[-1] == "--inherited-queue")
+    if borrowed:
+        if args[0] not in ("capture-learning", "seal-learning-epoch"):
+            return 64
+        args = args[:-1]
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not args or len(args) != shapes.get(args[0], -1)):
         return 64
+    queue_fd = 3 if borrowed else None
     try:
         from voice_ipfw_adapter import require_lifecycle_lock
         require_lifecycle_lock()  # REAL original same-OFD held FD9, no new lock.
@@ -849,9 +898,9 @@ def original_fd9_command(args: list[str]) -> int:
             native_prepare_learning_producer(Path(args[1]))
             print("original-fd9-learning-producer=prepared")
         elif args[0] == "capture-learning":
-            print(native_capture_learning_before_launch(Path(args[1])))
+            print(native_capture_learning_before_launch(Path(args[1]), queue_fd=queue_fd))
         elif args[0] == "seal-learning-epoch":
-            native_seal_learning_epoch(args[1], args[2], args[3])
+            native_seal_learning_epoch(args[1], args[2], args[3], queue_fd=queue_fd)
             print("original-fd9-learning-pretraffic=sealed")
         elif args[0] == "restore-learning":
             native_restore_learning_before_ipfw(
