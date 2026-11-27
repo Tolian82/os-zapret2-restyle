@@ -6,6 +6,11 @@ on:
     branches: [draft/tz6v5-s10-integrated]
     paths:
       - scripts/stage2-opnsense-s10-inode-probe.py
+      - scripts/test-managed-inode-barrier.py
+      - scripts/test-tz6v5-s10b1-original-journal-binding.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/managed_inode_barrier.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_destination_commit.py
 
 permissions:
   contents: read
@@ -30,6 +35,10 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python3.13 -m py_compile scripts/stage2-opnsense-s10-inode-probe.py scripts/s10_inode_barrier_fixture.py
+          python3.13 -m py_compile scripts/test-managed-inode-barrier.py scripts/test-tz6v5-s10b1-original-journal-binding.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/managed_inode_barrier.py src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_destination_commit.py
+          python3.13 scripts/test-managed-inode-barrier.py -v
+          python3.13 scripts/test-tz6v5-s10b1-original-journal-binding.py -k managed
           python3.13 scripts/s10_inode_barrier_fixture.py -v
           python3.13 scripts/stage2-opnsense-s10-inode-probe.py --portable
   native:
@@ -58,6 +67,8 @@ jobs:
             probe=scripts/stage2-opnsense-s10-inode-probe.py
             py=/usr/local/bin/python3
             "$py" scripts/s10_inode_barrier_fixture.py -v
+            "$py" scripts/test-managed-inode-barrier.py -v
+            "$py" scripts/test-tz6v5-s10b1-original-journal-binding.py -k managed
             "$py" "$probe" --focused --expect-filesystem ufs --expect-wal-filesystem ufs
             # An isolated file-backed pool only; no existing device or pool is touched.
             /sbin/kldstat -q -m zfs || /sbin/kldload zfs

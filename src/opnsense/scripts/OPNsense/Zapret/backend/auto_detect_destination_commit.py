@@ -1634,6 +1634,8 @@ def _write_bound_managed_file_locked(store, record: dict, preimage: tuple, *,
                                      running_sha256: str | None = None) -> dict:
     """One original FD9/Config/P2 replacement. Keep the Config save fenced."""
     from shared_apply_seal import _release_hash, _stat
+    from managed_inode_barrier import (ManagedBarrierRefused, seed as barrier_seed,
+                                       finish as barrier_finish)
 
     if (record.get("phase") != "prepared" or "found" in record or
             record.get("manifest", {}).get("schema") != 1 or
@@ -1666,13 +1668,40 @@ def _write_bound_managed_file_locked(store, record: dict, preimage: tuple, *,
                                        "managed" / name, uid)
             if new_now != desired or _target_identity(new_info) != new_identity:
                 raise DestinationRefused("original_managed_candidate_changed")
-            changes = {"ready": {**_stage_pin(info, data), "temp": item.name}}
+            record = store._checkpoint_managed_write(record, {
+                **record["managed"], "ready": {**_stage_pin(info, data), "temp": item.name}
+            }, attest, shared_work_parent=parent)
+            # Only the original durable ready.temp grants a scratch namespace.
+            # A crash between seed and pin persistence leaves unowned residue:
+            # cold recovery MUST refuse it, not guess deletion.
+            try:
+                pin = barrier_seed(active.parent, path.parent, item.name, uid)
+            except (ManagedBarrierRefused, OSError) as exc:
+                raise DestinationRefused("original_managed_barrier_seed_refused") from exc
+            record = store._checkpoint_managed_write(
+                record, {**record["managed"], "barrier": pin},
+                attest, shared_work_parent=parent)
         else:
-            if _release_hash(active, uid) != new_hash:
+            ready = record["managed"].get("ready")
+            barrier = record["managed"].get("barrier")
+            if not isinstance(ready, dict) or not isinstance(barrier, dict):
+                raise DestinationRefused("original_managed_barrier_wal_missing")
+            try:
+                barrier_finish(active.parent, path.parent, ready["temp"], uid, barrier)
+            except (ManagedBarrierRefused, OSError) as exc:
+                raise DestinationRefused("original_managed_barrier_finish_refused") from exc
+            # Barrier I/O must settle UFS ctime BEFORE the exact installed
+            # inode is pinned, on either UFS or ZFS WAL storage.
+            installed, installed_stat = _target(item, uid)
+            before_barrier = _target_identity(info)
+            after_barrier = _target_identity(installed_stat)
+            if (installed != desired or before_barrier[:2] != after_barrier[:2] or
+                    before_barrier[3:] != after_barrier[3:] or
+                    _release_hash(active, uid) != new_hash):
                 raise DestinationRefused("original_managed_after_release_changed")
-            changes = {"installed": list(_target_identity(info))}
-        record = store._checkpoint_managed_write(record, {**record["managed"], **changes},
-                                                 attest, shared_work_parent=parent)
+            record = store._checkpoint_managed_write(record, {
+                **record["managed"], "installed": list(after_barrier)
+            }, attest, shared_work_parent=parent)
 
     _replace(path, content, desired, uid, stage_fn=stage, expected_identity=live_identity)
     return record
@@ -1742,6 +1771,19 @@ def _restore_bound_managed_file_locked(store, record: dict, *, parent: Path,
             return "after", identity
         raise DestinationRefused("original_managed_restore_foreign_image")
 
+    # The scratch is outside the sealed active release and must be resolved
+    # under the original WAL owner before any managed-file rollback. Never
+    # remove a same-name object without its original durable inode pin.
+    from managed_inode_barrier import ManagedBarrierRefused, recover as barrier_recover
+
+    state, identity = observe()
+    try:
+        barrier_recover(active.parent, path.parent, row["ready"]["temp"], uid,
+                        row.get("barrier"))
+    except (ManagedBarrierRefused, OSError) as exc:
+        raise DestinationRefused("original_managed_barrier_recovery_refused") from exc
+    # UFS may finalize metadata while completing the file-system-local
+    # barrier. Do not retain a pre-cleanup ctime identity as rollback proof.
     state, identity = observe()
     temps = [_found_temp(path, row[k], uid) for k in ("ready", "restore") if k in row]
     for temp in temps:

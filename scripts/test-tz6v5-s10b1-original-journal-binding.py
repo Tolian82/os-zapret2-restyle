@@ -829,6 +829,9 @@ class OriginalManagedFileCAS(unittest.TestCase):
                     pending = store.read()
                     self.assertEqual(target.read_bytes(), after)
                     self.assertEqual("installed" in pending["managed"], not interrupted)
+                    self.assertIn("barrier", pending["managed"])
+                    token = pending["managed"]["ready"]["temp"][13:-4]
+                    self.assertEqual((active.parent / (".s10-managed-barrier-" + token)).exists(), interrupted)
                     self.assertFalse(native_lifecycle_gate("common-recover-activating",
                         root=store.root)["safe_to_mutate"])
                     with self.assertRaises(SharedOperationError):
@@ -844,6 +847,7 @@ class OriginalManagedFileCAS(unittest.TestCase):
                         self.assertEqual(target.read_bytes(), before)
                         self.assertIn("restore", pending["managed"])
                     restored = _restore_bound_managed_file_locked(store, pending, **kw)
+                    self.assertFalse((active.parent / (".s10-managed-barrier-" + token)).exists())
                     self.assertEqual(restored["phase"], "restored")
                     self.assertEqual(committed_manifest(restored), prepared["previous_manifest"])
                     self.assertEqual(target.read_bytes(), before)
@@ -877,10 +881,83 @@ class OriginalManagedFileCAS(unittest.TestCase):
             pending = store.read()
             temp = target.with_name(pending["managed"]["ready"]["temp"])
             self.assertEqual(temp.stat().st_ino, pending["managed"]["ready"]["inode"])
+            self.assertIn("barrier", pending["managed"])
+            token = pending["managed"]["ready"]["temp"][13:-4]
+            scratch = active.parent / (".s10-managed-barrier-" + token)
+            self.assertTrue(scratch.is_dir())
             self.assertEqual(target.read_bytes(), before)
             self.assertEqual(_restore_bound_managed_file_locked(store, pending, **kw)["phase"], "restored")
             self.assertFalse(temp.exists())
+            self.assertFalse(scratch.exists())
             self.assertTrue(os.path.samestat(target.stat(), original))
+
+    def test_original_managed_barrier_seed_without_wal_pin_refuses_recovery(self):
+        """Crash between scratch seed and its durable WAL pin cannot delete by name."""
+        from auto_detect_destination_commit import (
+            DestinationRefused, _write_bound_managed_file_locked,
+            _restore_bound_managed_file_locked)
+        from managed_inode_barrier import seed as real_seed
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, before, _ = self.fixture()
+            kw = dict(parent=parent, active=active, attest=lambda: True)
+
+            def crash_after_seed(*args):
+                real_seed(*args)
+                raise OSError("power-loss-window-after-scratch-seed")
+
+            with patch("managed_inode_barrier.seed", side_effect=crash_after_seed):
+                with self.assertRaisesRegex(DestinationRefused, "barrier_seed_refused"):
+                    _write_bound_managed_file_locked(store, prepared, row, **kw)
+            pending = store.read()
+            self.assertEqual(pending["phase"], "managed-writing")
+            self.assertIn("ready", pending["managed"])
+            self.assertNotIn("barrier", pending["managed"])
+            token = pending["managed"]["ready"]["temp"][13:-4]
+            scratch = active.parent / (".s10-managed-barrier-" + token)
+            self.assertTrue(scratch.is_dir())
+            with self.assertRaisesRegex(DestinationRefused, "barrier_recovery_refused"):
+                _restore_bound_managed_file_locked(store, pending, **kw)
+            self.assertEqual(store.read(), pending)
+            self.assertEqual(target.read_bytes(), before)
+            self.assertTrue(scratch.exists())
+
+    def test_original_managed_barrier_foreign_identical_bytes_inode_refused(self):
+        """A same-length/same-content scratch substitution is never recovery authority."""
+        from auto_detect_destination_commit import (
+            DestinationRefused, _write_bound_managed_file_locked,
+            _restore_bound_managed_file_locked)
+        from managed_inode_barrier import _payload
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, _, after = self.fixture()
+            kw = dict(parent=parent, active=active, attest=lambda: True)
+            real_replace = os.replace
+
+            def crash_after_rename(source, dest, **kwargs):
+                result = real_replace(source, dest, **kwargs)
+                if Path(dest) == target:
+                    raise OSError("crash-after-target-rename")
+                return result
+
+            with patch("os.replace", side_effect=crash_after_rename):
+                with self.assertRaisesRegex(OSError, "crash-after-target-rename"):
+                    _write_bound_managed_file_locked(store, prepared, row, **kw)
+            pending = store.read()
+            self.assertIn("barrier", pending["managed"])
+            self.assertNotIn("installed", pending["managed"])
+            token = pending["managed"]["ready"]["temp"]
+            scratch = active.parent / (".s10-managed-barrier-" + token[13:-4])
+            original = scratch / "record"
+            original.rename(scratch / "original")
+            original.write_bytes(_payload(token))
+            original.chmod(0o600)
+            (scratch / "original").unlink()
+            with self.assertRaisesRegex(DestinationRefused, "barrier_recovery_refused"):
+                _restore_bound_managed_file_locked(store, pending, **kw)
+            self.assertEqual(store.read(), pending)
+            self.assertEqual(target.read_bytes(), after)
+
 
     def test_native_managed_write_restores_a_synchronous_interruption(self):
         from contextlib import ExitStack

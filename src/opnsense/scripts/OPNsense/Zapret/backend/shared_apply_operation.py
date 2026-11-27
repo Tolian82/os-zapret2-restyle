@@ -257,7 +257,7 @@ def _validate_managed_write(record: dict) -> None:
             record["previous"]["candidate"] != record["detail"]["base"] or
             record["manifest"]["schema"] != 1 or record["previous_manifest"]["schema"] != 1 or
             type(row) is not dict or not _MANAGED_BASE <= row.keys() or
-            row.keys() - _MANAGED_BASE - {"ready", "installed", "restore", "running_sha256"} or
+            row.keys() - _MANAGED_BASE - {"ready", "barrier", "installed", "restore", "running_sha256"} or
             type(row["name"]) is not str or not _REF_FILE.fullmatch(row["name"]) or
             any(type(row[k]) is not str or not DIGEST.fullmatch(row[k])
                 for k in ("before_sha256", "after_sha256")) or
@@ -289,11 +289,21 @@ def _validate_managed_write(record: dict) -> None:
             if (not pin.get("temp", "").startswith(".auto-detect-") or
                     pin["sha256"] != row[digest]):
                 raise SharedOperationError("invalid managed file checkpoint")
+    if "barrier" in row:
+        from managed_inode_barrier import ManagedBarrierRefused, _validate_pin
+        if "ready" not in row:
+            raise SharedOperationError("managed barrier requires original ready WAL")
+        try:
+            _validate_pin(row["barrier"], row["ready"]["temp"])
+        except ManagedBarrierRefused as exc:
+            raise SharedOperationError("invalid managed scratch inode pin") from exc
     if "ready" in row and [row["ready"]["device"], row["ready"]["inode"]] == row["before_identity"][:2]:
         raise SharedOperationError("managed staged inode aliases the preimage")
     if "restore" in row and row["restore"]["temp"] == row["ready"]["temp"]:
         raise SharedOperationError("managed restore aliases the forward temporary name")
     if "installed" in row:
+        if "barrier" not in row:
+            raise SharedOperationError("managed installed inode lacks scratch WAL proof")
         installed = row["installed"]
         ready = row["ready"]
         if ([installed[i] for i in (0, 1, 3, 4)] !=
@@ -960,7 +970,9 @@ class SharedApplyOperation:
                 changed = {key for key in stage.keys() | managed.keys()
                            if stage.get(key) != managed.get(key)}
                 available = {"restore"} if "ready" in stage else {"ready"}
-                if "ready" in stage and not {"installed", "restore"} & stage.keys():
+                if "ready" in stage and not {"barrier", "installed", "restore"} & stage.keys():
+                    available.add("barrier")
+                if "barrier" in stage and not {"installed", "restore"} & stage.keys():
                     available.add("installed")
                 if recovering_save:
                     available = {"restore"}
