@@ -1524,9 +1524,14 @@ def main(argv: list[str] | None = None) -> int:
             return 69
     if argv and argv[0] in ("begin-found-save-locked", "begin-bound-found-save-locked"):
         bound = argv[0] == "begin-bound-found-save-locked"
-        if (len(argv) != 5 or argv[3] not in ("0", "1") or
+        inherited_queue = (bound and len(argv) == 6 and
+                           argv[5] == "--inherited-queue")
+        if (len(argv) != (6 if inherited_queue else 5) or
+                argv[3] not in ("0", "1") or
                 (bound and argv[3] != "0") or
                 not re.fullmatch(r"[a-f0-9]{64}", argv[4])):
+            return 64
+        if len(argv) == 6 and not inherited_queue:
             return 64
         try:
             from auto_detect_destination_commit import shared_apply_found_files_original_fd9
@@ -1539,8 +1544,9 @@ def main(argv: list[str] | None = None) -> int:
                 sys.stdin.buffer.read(1)
 
             if bound:
-                # This first transport is intentionally limited to schema1
-                # STOPPED. Authenticate native descriptors before mutation.
+                # Exact original locked transport only. A schema2 retired
+                # owner REQUIRES inherited P2a; schema1 forbids it.
+                # Never infer an epoch/ACK from matching Config bytes.
                 from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
                 from shared_apply_operation import SharedApplyOperation, committed_manifest
                 from voice_ipfw_adapter import require_lifecycle_lock
@@ -1549,11 +1555,14 @@ def main(argv: list[str] | None = None) -> int:
                 require_lifecycle_lock()
                 assert_inherited_config_fd(4, CONFIG_PATH, owner_uid=None)
                 pin = committed_manifest(SharedApplyOperation(owner=0).read())
-                if type(pin) is not dict or pin.get("schema") != 1:
-                    raise EffectiveKnownRefused("bound_found_schema1_required")
+                if (type(pin) is not dict or
+                        pin.get("schema") not in (1, 2) or
+                        (pin["schema"] == 2) != inherited_queue):
+                    raise EffectiveKnownRefused("bound_found_queue_schema_required")
                 begin_native_bound_found_save_locked(
                     argv[1], 4, argv[2], runtime_mode=argv[3], base_digest=argv[4],
-                    source_fd=5, before_save=wait_for_save)
+                    source_fd=5, before_save=wait_for_save,
+                    queue_fd=3 if inherited_queue else None)
             else:
                 prepare_native_found_intent(
                     argv[1], 4, argv[2], runtime_mode=argv[3], base_digest=argv[4])

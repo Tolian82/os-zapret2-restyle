@@ -478,7 +478,8 @@ final class SharedApplyConfigWorker
                         $baseDigest === null || !preg_match('/^[a-f0-9]{64}$/D', $baseDigest))
                     : ($runtimeMode !== null || $whileP2Held !== null || $baseDigest !== null)) ||
             ($queueStream !== null && (!is_resource($queueStream) ||
-                !in_array($mode, ['recover-found-locked', 'confirm-found-save-locked',
+                !in_array($mode, ['begin-bound-found-save-locked',
+                    'recover-found-locked', 'confirm-found-save-locked',
                     'finish-ordinary-restore-locked', 'recover-managed-config-locked',
                     'recover-first-config-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
@@ -647,15 +648,19 @@ final class SharedApplyConfigWorker
 
     private static function saveFoundNative(
         array $plan, string $id, string $mode, object $config, callable $factory,
-        bool $bound = false
+        bool $bound = false, $queueStream = null
     ): array {
+        if ($queueStream !== null && (!$bound || !is_resource($queueStream))) {
+            throw new \InvalidArgumentException('Original bound Found queue scope required');
+        }
         $scopes = 0;
         $candidate = VoiceSettingsSnapshot::digest($plan['candidate']);
         try {
             return SharedConfigCommit::persistFoundUnderOriginalOwner(
                 $plan, 'strategies', $config, $factory,
                 static function (callable $saveScope, string $observedDigest) use (
-                    &$scopes, $config, $mode, $id, $candidate, $plan, $bound
+                    &$scopes, $config, $mode, $id, $candidate, $plan, $bound,
+                    $queueStream
                 ): string {
                     if (++$scopes === 1) {
                         if (!hash_equals($plan['dependencies'], $observedDigest)) {
@@ -667,7 +672,7 @@ final class SharedApplyConfigWorker
                                 'begin-found-save-locked', $candidate, $mode,
                             static function () use ($saveScope, &$status): void {
                                 $status = $saveScope();
-                            }, null, $observedDigest
+                            }, $queueStream, $observedDigest
                         );
                         if (($ready['result'] ?? null) !== 'ready' || !is_string($status)) {
                             throw new \RuntimeException('Original found save scope unavailable');
@@ -678,7 +683,8 @@ final class SharedApplyConfigWorker
                         throw new \RuntimeException('Original Found saved Config changed');
                     }
                     $receipt = self::originalLockedFileEvidence(
-                        $config, $id, 'confirm-found-save-locked', $observedDigest
+                        $config, $id, 'confirm-found-save-locked', $observedDigest,
+                        null, null, $queueStream
                     );
                     if ($receipt !== ['result' => 'found-config-saved', 'mode' => $mode]) {
                         throw new \RuntimeException('Original found save readback unavailable');
@@ -945,13 +951,21 @@ final class SharedApplyConfigWorker
             'found-runtime-epoch-finalizing', 'found-runtime-committed'];
         $found = in_array($action, $foundActions, true);
         $queueFd = null;
-        if (in_array($action, ['found-recover', 'ordinary-restore-finish', 'managed-save-recover',
-            'ordinary-first-recover'], true) &&
+        $queueSave = ($action === 'found-bound-save' && count($argv) === 6 &&
+            preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D',
+                (string)$argv[5], $matches) === 1);
+        $queueOther = (in_array($action, ['found-recover', 'ordinary-restore-finish',
+                'managed-save-recover', 'ordinary-first-recover'], true) &&
             count($argv) === 5 &&
-            preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D', $argv[4], $matches) === 1) {
+            preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D',
+                (string)$argv[4], $matches) === 1);
+        if ($queueSave || $queueOther) {
             $queueFd = (int)$matches[1];
         }
-        if (count($argv) !== (in_array($action, ['found-save', 'found-bound-save'], true) || $queueFd !== null ? 5 : 4) ||
+        $expectedCount = $queueSave ? 6 :
+            ((in_array($action, ['found-save', 'found-bound-save'], true) ||
+                $queueOther) ? 5 : 4);
+        if (count($argv) !== $expectedCount ||
             !in_array($action, ['preflight', 'save', 'saved', 'managed-save', 'managed-apply', 'first-disabled-apply', 'first-enabled-apply',
                 'ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover', 'managed-save-recover', ...$foundActions], true) ||
             !in_array($argv[3], $found || in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply'], true)
@@ -987,7 +1001,8 @@ final class SharedApplyConfigWorker
                 $bound = $action === 'found-bound-save';
                 if ($bound) {
                     // Internal FD9-only checkpoint, not configd/GUI or
-                    // a terminal promotion. Learning queue is not yet wired.
+                    // terminal promotion. An optional inherited P2a comes
+                    // ONLY from original outer FD9 BEFORE native Config.
                     $source = @fstat(STDIN);
                     if ($argv[4] !== '0' ||
                         ($plan['candidate']['general']['enabled'] ?? null) !== '0' ||
@@ -1000,7 +1015,9 @@ final class SharedApplyConfigWorker
                      (string)($plan['candidate']['general']['enabled'] ?? '') !== '1')) {
                     throw new \InvalidArgumentException('Invalid planned found runtime mode');
                 }
-                $result = self::saveFoundNative($plan, $argv[2], $argv[4], $config, $factory, $bound);
+                $result = self::saveFoundNative(
+                    $plan, $argv[2], $argv[4], $config, $factory,
+                    $bound, $queueStream);
                 $receipt = self::postSaveReceipt($result);
                 if (fwrite(STDOUT, $receipt) !== strlen($receipt)) {
                     throw new SharedConfigSaveUncertain('Original Found save receipt unavailable');

@@ -1563,9 +1563,17 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
     call(["/bin/sh", "-c", 'exec "$@" </dev/null', "g03-no-source",
           PHP, worker, "found-bound-save", op, "strategies", "0"],
          locked=True, expected_rc=69)
+    # No original P2a owner = no inherited queue capability. A fake fd3
+    # must not initialize the WAL, open Config for writing, or replace P1.
+    call([PHP, worker, "found-bound-save", op, "strategies", "0",
+          "--queue-fd=3"], locked=True, expected_rc=69)
+    call([PHP, worker, "found-bound-save", op, "strategies", "0",
+          "--queue-fd=bad"], locked=True, expected_rc=64)
     need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
          "G03_BOUND_STOPPED_SAVE_INVALID_FIFO_MUTATED")
     print("G03_BOUND_STOPPED_SAVE_FIFO=PASS_REFUSED_NONPIPE_NO_WRITES", flush=True)
+    print("G03_S10_FOUND_P2A_FAKE=PASS_MISSING_OR_INVALID_QUEUE_FD_NO_WRITES",
+          flush=True)
     if uncertain:
         # Use the existing real Config singleton crash adapter. Only the
         # PHP invocation changes: the source FIFO, native P1 writer and
