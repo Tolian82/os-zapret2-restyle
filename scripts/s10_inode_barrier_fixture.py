@@ -38,29 +38,39 @@ def directory(path, uid, *, dir_fd=None, private=False):
         os.close(fd)
 
 
-def empty_file(fd, name, uid):
+def empty_file(fd, name, uid, payload=b""):
     info = os.stat(name, dir_fd=fd, follow_symlinks=False)
     if (not stat.S_ISREG(info.st_mode) or info.st_uid != uid or
-            stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1 or info.st_size != 0):
+            stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1 or info.st_size != len(payload)):
         raise ScratchRefused("foreign scratch entry")
+    file_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+    try:
+        if (inode(os.fstat(file_fd)) != inode(info) or
+                os.read(file_fd, len(payload) + 1) != payload or
+                inode(os.stat(name, dir_fd=fd, follow_symlinks=False)) != inode(info)):
+            raise ScratchRefused("foreign scratch content")
+    finally:
+        os.close(file_fd)
     return inode(info)
 
 
-def entries(fd, uid):
+def entries(fd, uid, payload=b""):
     names = set(os.listdir(fd))
     if names - {"record", "pending"}:
         raise ScratchRefused("unknown scratch entry")
-    return {name: empty_file(fd, name, uid) for name in names}
+    return {name: empty_file(fd, name, uid, payload) for name in names}
 
 
-def create_empty(fd, name, uid, fault):
+def create_empty(fd, name, uid, fault, payload=b""):
     file_fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
                       0o600, dir_fd=fd)
     try:
         created = inode(os.fstat(file_fd))
         fault("create-" + name)
+        if payload and os.write(file_fd, payload) != len(payload):
+            raise ScratchRefused("short scratch write")
         os.fsync(file_fd)
-        if empty_file(fd, name, uid) != created:
+        if empty_file(fd, name, uid, payload) != created:
             raise ScratchRefused("scratch file replaced")
     finally:
         os.close(file_fd)
@@ -77,7 +87,7 @@ def check_device(parent, target_parent):
         raise ScratchRefused("scratch on different device")
 
 
-def seed(root, target_parent, ready_temp, uid, fault=lambda _: None):
+def seed(root, target_parent, ready_temp, uid, fault=lambda _: None, *, payload=b""):
     """Call only AFTER ready is durable; no scratch before that point."""
     name = scratch_name(ready_temp)
     with directory(root, uid) as parent:
@@ -87,7 +97,7 @@ def seed(root, target_parent, ready_temp, uid, fault=lambda _: None):
         with directory(name, uid, dir_fd=parent, private=True) as fd:
             if entries(fd, uid):
                 raise ScratchRefused("new scratch not empty")
-            record = create_empty(fd, "record", uid, fault)
+            record = create_empty(fd, "record", uid, fault, payload)
             os.fsync(fd)
             assert_named(parent, name, fd)
             os.fsync(parent)
@@ -95,21 +105,21 @@ def seed(root, target_parent, ready_temp, uid, fault=lambda _: None):
             return inode(os.fstat(fd)), record
 
 
-def finish(root, target_parent, ready_temp, uid, pin, fault=lambda _: None):
+def finish(root, target_parent, ready_temp, uid, pin, fault=lambda _: None, *, payload=b""):
     """Live writer: compare exact seeded directory and file before replacement."""
     name = scratch_name(ready_temp)
     with directory(root, uid) as parent:
         check_device(parent, target_parent)
         with directory(name, uid, dir_fd=parent, private=True) as fd:
-            if inode(os.fstat(fd)) != pin[0] or entries(fd, uid) != {"record": pin[1]}:
+            if inode(os.fstat(fd)) != pin[0] or entries(fd, uid, payload) != {"record": pin[1]}:
                 raise ScratchRefused("scratch seed replaced")
-            pending = create_empty(fd, "pending", uid, fault)
-            if entries(fd, uid) != {"record": pin[1], "pending": pending}:
+            pending = create_empty(fd, "pending", uid, fault, payload)
+            if entries(fd, uid, payload) != {"record": pin[1], "pending": pending}:
                 raise ScratchRefused("scratch pre-replace changed")
             os.replace("pending", "record", src_dir_fd=fd, dst_dir_fd=fd)
             fault("rename")
             os.fsync(fd)
-            if entries(fd, uid) != {"record": pending}:
+            if entries(fd, uid, payload) != {"record": pending}:
                 raise ScratchRefused("scratch post-replace changed")
             os.unlink("record", dir_fd=fd)
             fault("unlink")
@@ -120,7 +130,7 @@ def finish(root, target_parent, ready_temp, uid, pin, fault=lambda _: None):
             os.fsync(parent)
 
 
-def recover(root, target_parent, ready_temp, uid):
+def recover(root, target_parent, ready_temp, uid, *, payload=b""):
     """Fixture only: caller MUST prove exact original ready WAL and FD9 first.
 
     Scratch contents never authorize recovery of the actual HOSTLIST. Only the
@@ -134,9 +144,9 @@ def recover(root, target_parent, ready_temp, uid):
         except FileNotFoundError:
             return
         with directory(name, uid, dir_fd=parent, private=True) as fd:
-            observed = entries(fd, uid)
+            observed = entries(fd, uid, payload)
             for entry, identity in observed.items():
-                if empty_file(fd, entry, uid) != identity:
+                if empty_file(fd, entry, uid, payload) != identity:
                     raise ScratchRefused("scratch recovery entry replaced")
                 os.unlink(entry, dir_fd=fd)
             os.fsync(fd)
@@ -217,6 +227,20 @@ class ScratchTests(unittest.TestCase):
         with self.assertRaises(ScratchRefused):
             finish(*self.args, pin)
         self.assertTrue(record.exists())
+
+    def test_payload(self):
+        payload = b"a" * 64
+        pin = seed(*self.args, payload=payload)
+        self.assertEqual((self.path / "record").read_bytes(), payload)
+        with self.assertRaises(ScratchRefused):
+            finish(*self.args, pin, payload=b"b" * 64)
+        finish(*self.args, pin, payload=payload)
+        self.assertFalse(self.path.exists())
+        seed(*self.args, payload=payload)
+        with self.assertRaises(ScratchRefused):
+            recover(*self.args, payload=b"b" * 64)
+        recover(*self.args, payload=payload)
+        self.assertFalse(self.path.exists())
 
     def test_directory_symlink(self):
         self.path.symlink_to(self.target, target_is_directory=True)
