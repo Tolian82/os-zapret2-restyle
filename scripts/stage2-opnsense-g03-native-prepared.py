@@ -1435,22 +1435,40 @@ def bound_original_http_upload_main():
     saved = json.loads(call(
         [PHP, str(Path(SERVICE).parent / "shared_apply_config.php"),
          "saved", op, "strategies"], locked=True))
-    need(final["phase"] == "committed" and final["detail"]["id"] == op and
-         final["detail"]["base"] == previous["detail"]["candidate"] and
-         final["manifest"]["generation"] == op and
-         final["manifest"]["schema"] == 1 and
-         final["previous_manifest"] == previous["manifest"] and
-         final["previous"] == previous["detail"] and
-         "found" not in final and
-         saved == {"result":"committed",
-                   "snapshot":final["detail"]["candidate"], "enabled":"0"} and
-         after[0] != original[0] and after[1] == original[1] and
-         after[3] == original[3] and
-         all(p.read_bytes() == intent["sources"][name]["draft"].encode("utf-8")
-             for name, p in zip(("youtube", "user", "auto"), TARGETS)) and
-         subprocess.run([SERVICE, "status"], capture_output=True,
-                        timeout=30).returncode == 1,
-         "G03_HTTP_ORIGINAL_COMMITTED_OR_RUNTIME_DRIFT")
+    # The service has returned its positive applied-id. Keep every final
+    # physical invariant mandatory; classify each failure independently
+    # rather than obscuring WAL/Config/P1/kernel causes behind one assertion.
+    # These names and booleans contain no uploaded domains, native args,
+    # Config contents, paths, PID values or private journal bytes.
+    state = subprocess.run([SERVICE, "status"], capture_output=True, timeout=30)
+    detail = final.get("detail") if isinstance(final, dict) else None
+    manifest = final.get("manifest") if isinstance(final, dict) else None
+    detail = detail if isinstance(detail, dict) else {}
+    manifest = manifest if isinstance(manifest, dict) else {}
+    checks = {
+        "WAL_TERMINAL": final.get("phase") == "committed",
+        "WAL_IDENTITY": detail.get("id") == op,
+        "WAL_CONFIG_BASE": detail.get("base") == previous["detail"]["candidate"],
+        "ROOT_GENERATION": manifest.get("generation") == op,
+        "ROOT_SCHEMA": manifest.get("schema") == 1,
+        "ROOT_PREDECESSOR": final.get("previous_manifest") == previous["manifest"],
+        "WAL_PREDECESSOR": final.get("previous") == previous["detail"],
+        "WAL_NO_FOUND_PENDING": "found" not in final,
+        "NATIVE_SAVED": saved == {
+            "result":"committed", "snapshot":detail.get("candidate"), "enabled":"0"},
+        "CONFIG_PHYSICAL_SAVE": after[0] != original[0],
+        "PID_PHYSICAL_STABLE": after[1] == original[1],
+        "KERNEL_PHYSICAL_STABLE": after[3] == original[3],
+        "P1_YOUTUBE_AFTER": TARGETS[0].read_bytes() ==
+            intent["sources"]["youtube"]["draft"].encode("utf-8"),
+        "P1_USER_AFTER": TARGETS[1].read_bytes() ==
+            intent["sources"]["user"]["draft"].encode("utf-8"),
+        "P1_AUTO_AFTER": TARGETS[2].read_bytes() ==
+            intent["sources"]["auto"]["draft"].encode("utf-8"),
+        "SERVICE_STOPPED": state.returncode == 1,
+    }
+    failed = [name for name, ok in checks.items() if not ok]
+    need(not failed, "G03_HTTP_ORIGINAL_" + "_".join(failed[:4]) + "_DRIFT")
     print("G03_S10_PUBLIC_HTTP_FOUND=PASS_REAL_MULTIPART_ORIGINAL_SERVICE_COMMITTED_STOPPED",
           flush=True)
 
