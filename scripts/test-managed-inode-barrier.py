@@ -19,6 +19,16 @@ class Tests(unittest.TestCase):
         pin=seed(*self.kw)
         with self.assertRaisesRegex(ManagedBarrierRefused,'unbound'):recover(*self.kw,None)
         self.assertTrue(self.scratch.exists());recover(*self.kw,pin)
+    def test_recovery_replays_exact_fsync_barrier(self):
+        from unittest.mock import patch
+        import managed_inode_barrier
+
+        pin = seed(*self.kw)
+        with patch.object(managed_inode_barrier, "finish", wraps=finish) as finish_witness:
+            recover(*self.kw, pin)
+        finish_witness.assert_called_once_with(*self.kw, pin)
+        self.assertFalse(self.scratch.exists())
+
     def test_foreign_same_bytes_inode(self):
         pin=seed(*self.kw);original=self.scratch/'record';original.rename(self.scratch/'foreign');original.write_bytes(_payload(self.token));original.chmod(0o600)
         (self.scratch/'foreign').unlink()

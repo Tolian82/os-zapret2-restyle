@@ -211,15 +211,21 @@ def recover(root: Path, target_parent: Path, ready_temp: str, owner: int,
         with _scratch(root_fd, name, owner) as dir_fd:
             _check_scratch_pin(dir_fd, pin)
             record = _record(dir_fd, owner, payload)
-            if record is not None:
-                if record != pin["record"]:
-                    raise ManagedBarrierRefused("foreign barrier inode on recovery")
-                os.unlink("record", dir_fd=dir_fd)
-            if os.listdir(dir_fd):
-                raise ManagedBarrierRefused("foreign barrier recovery entries")
-            os.fsync(dir_fd)
-            _check_named(root_fd, name, dir_fd)
-            os.rmdir(name, dir_fd=root_fd)
-            os.fsync(root_fd)
+            if record is None:
+                if os.listdir(dir_fd):
+                    raise ManagedBarrierRefused("foreign barrier recovery entries")
+                os.fsync(dir_fd)
+                _check_named(root_fd, name, dir_fd)
+                os.rmdir(name, dir_fd=root_fd)
+                os.fsync(root_fd)
+                return
+            if record != pin["record"]:
+                raise ManagedBarrierRefused("foreign barrier inode on recovery")
+        # Recovery after a crashed target rename must settle deferred UFS
+        # metadata just like the normal installed callback. Merely unlinking
+        # a valid seeded scratch is insufficient: original rollback ready WAL
+        # can otherwise change target ctime during its second CAS.
+        # Recheck the full pinned inode in finish() before writing or removing.
+        finish(root, target_parent, ready_temp, owner, pin)
     finally:
         os.close(root_fd)
