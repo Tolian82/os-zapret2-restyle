@@ -846,6 +846,24 @@ class OriginalManagedFileCAS(unittest.TestCase):
                         store.attest_unbound_config_save(prepared["detail"]["id"], "d" * 64,
                                                         shared_work_parent=parent)
                     if interrupted:
+                        # Disposable native hypothesis: flush the STILL-OWNED
+                        # active target vnode and its directory before the
+                        # original rollback stages a new WAL record. Do not
+                        # modify any product guard or installed WAL pin.
+                        candidate_fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+                        try:
+                            self.assertEqual(_target_identity(os.fstat(candidate_fd)),
+                                             _target_identity(target.lstat()))
+                            os.fsync(candidate_fd)
+                        finally:
+                            os.close(candidate_fd)
+                        directory_fd = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
+                        try:
+                            os.fsync(directory_fd)
+                        finally:
+                            os.close(directory_fd)
+                        print("S10_NATIVE_RESTORE_PRESYNC=TARGET_AND_DIR_FSYNC_TEST_ONLY",
+                              flush=True)
                         # Native UFS-only diagnosis of the original _replace
                         # double-CAS. Report changed field names, NEVER raw
                         # inode, timestamp, content, native PID or path.
