@@ -456,6 +456,10 @@ def managed_fault_worker_self_test():
     http = fixture.split("function originalHttpFoundIntent(", 1)[1].split(
         "\nfunction durable(", 1)[0]
     handler = (Path(__file__).resolve().parent / "stage2-opnsense-g03-native-upload.php").read_text()
+    need(handler.count("preflight-rejected=") == 1 and
+         handler.count("'service-preflight-'") == 1 and
+         handler.count("in_array($matches[1], $allowed, true)") == 1,
+         "G03_HTTP_BOUNDED_PREFLIGHT_TRACE_DRIFT")
     need(handler.count("VoiceModelValues::text(") == 1 and
          handler.count("uploadedMetadata($_FILES)") == 1 and
          handler.count("SharedApplyEnvelope::encode(") == 1 and
@@ -1310,7 +1314,7 @@ def bound_original_http_upload_main():
                 r"G03_HTTP_UPLOAD_REFUSED:"
                 r"(scope|multipart|model|envelope|service-launch|service-result|"
                 r"service-receipt|service-rc64|service-rc69|service-rc70|"
-                r"service-rc75|service-rcother):"
+                r"service-rc75|service-rcother|service-preflight-[a-z0-9-]{1,64}):"
                 r"(runtime|argument|php-error|other)", reply)
             if known:
                 raise RuntimeError("G03_HTTP_ORIGINAL_" +

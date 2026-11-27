@@ -78,6 +78,29 @@ try {
                 69 => 'service-rc69', 70 => 'service-rc70',
                 75 => 'service-rc75', default => 'service-rcother',
             };
+            // The original service can intentionally return rc=0 with a
+            // fixed preflight-rejected receipt. Reveal ONLY an enumerated
+            // public stage, never the raw stdout, upload or Config bytes.
+            if ($rc === 0 && is_string($answer) &&
+                preg_match('/^preflight-rejected=([a-z0-9-]{1,64})\\n?$/D',
+                    $answer, $matches) === 1) {
+                $allowed = [
+                    'root-gate','bootstrap','model','decode','candidate',
+                    'wan-required','candidate-plan','candidate-validation',
+                    'candidate-xml','candidate-size','workspace','render',
+                    'runtime-build','seal','found-intent',
+                    'found-intent-config-changed','found-intent-upload-metadata',
+                    'found-intent-upload-path','found-intent-upload-directory',
+                    'found-intent-upload-inode','found-intent-upload-missing',
+                    'found-intent-upload-reader','found-intent-upload-changed',
+                    'found-batch','found-source-drift','runtime-preflight',
+                    'owned-baseline','manifest-unbound','config-preflight',
+                    'observer-generation','profile-source-drift',
+                ];
+                $phase = 'service-preflight-' .
+                    (in_array($matches[1], $allowed, true)
+                        ? $matches[1] : 'unknown');
+            }
             throw new \RuntimeException('G03_HTTP_ORIGINAL_SERVICE_REFUSED');
         }
     } finally {
