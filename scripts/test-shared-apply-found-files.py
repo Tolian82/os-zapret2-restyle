@@ -934,7 +934,8 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
 
         def run(args, **kwargs):
             calls.append(args)
-            expected = "found-bound-recover" if "previous_manifest" in record else "found-recover"
+            expected = ("found-bound-recover" if "previous_manifest" in record and
+                        record["phase"] != "prepared" else "found-recover")
             self.assertEqual(args[2:5], [expected, operation, "strategies"])
             if "previous_manifest" in record:
                 self.assertEqual(kwargs["pass_fds"], (queue.locked_fd, 9))
@@ -972,15 +973,17 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             self.assertEqual(native_found_recover_original_fd9(operation), 70)
             self.assertFalse(queue._held)
             record["phase"] = "prepared"
-            with self.assertRaises(RuntimeError):
-                native_found_recover_original_fd9(operation)
+            self.assertEqual(native_found_recover_original_fd9(operation), 70)
+            saved_pin = record.pop("manifest")
+            self.assertEqual(native_found_recover_original_fd9(operation), 70)
+            record["manifest"] = saved_pin
             record["phase"] = "found-config-saving"
             record.pop("previous_manifest")
             self.assertEqual(native_found_recover_original_fd9(operation), 70)
-            self.assertEqual(len(calls), 3)
+            self.assertEqual(len(calls), 5)
             with self.assertRaises(RuntimeError):
                 native_found_recover_original_fd9("b" * 32)
-            self.assertEqual(len(calls), 3)
+            self.assertEqual(len(calls), 5)
 
     def test_bound_found_recovery_chooses_locked_image_without_fallback(self):
         from types import SimpleNamespace

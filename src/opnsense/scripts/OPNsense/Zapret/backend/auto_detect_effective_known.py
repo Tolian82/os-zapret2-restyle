@@ -828,7 +828,8 @@ def classify_planned_file_images(
 
 
 def recover_native_found_prepared_pristine(
-        operation: str, *, config_fd: int, config_digest: str) -> dict:
+        operation: str, *, config_fd: int, config_digest: str,
+        queue_fd: int | None = None) -> dict:
     """Original FD9/Config/P2 cold PREPARED closure for a proven predecessor.
 
     IMPORT ONLY: the future existing PHP Config::lock owner must supply the
@@ -896,10 +897,39 @@ def recover_native_found_prepared_pristine(
     targets = {"youtube": OWNED_ROOT / "youtube.txt",
                "user": OWNED_ROOT / "user.txt", "auto": AUTO_HOSTLIST}
 
-    # The parent already owns FD9 -> native Config::lock. Acquire P2 only
-    # AFTER Config, and keep it continuously held across physical evidence,
-    # both runtime/IPFW observations and the existing operation.json fsync.
-    with exclusive_destination_lock(AUTO_LOCK, 0):
+    from auto_detect_destination_commit import (
+        _bound_found_queue_scope, _attest_bound_found_predecessor)
+    from auto_detect_epoch_receipts import EpochReceipts
+    from neutral_schema3_quiescent_preimage import _verify_idle_producer
+    retired = pending.get("previous_manifest", {}).get("schema") == 2
+    if retired != (queue_fd is not None) or (retired and (
+            pending["found"].get("runtime_mode") != "0" or
+            ("manifest" in pending and pending["manifest"]["schema"] != 1))):
+        raise EffectiveKnownRefused("native_found_pristine_queue_scope_refused")
+    # An incomplete root staging operation is evidence, not authority.
+    # Do not repair, remove or bind it during a pristine recovery.
+    from neutral_root_stage import ROOT_NAME, PENDING_NAME
+    def check_unbound():
+        if retired and "manifest" not in pending:
+            for name in (ROOT_NAME, PENDING_NAME):
+                path = work / name
+                if path.exists() or path.is_symlink():
+                    raise EffectiveKnownRefused("native_found_pristine_unbound_root_requires_review")
+
+    # FD9 -> inherited P2a (if learning) -> native Config -> P2.
+    # Preserve the exact historical owner and idle producer throughout.
+    with _bound_found_queue_scope(queue_fd) as queue, exclusive_destination_lock(AUTO_LOCK, 0):
+        def observe_previous():
+            check_unbound()
+            result = examine_pending_found_previous(pending)
+            if retired:
+                physical = _attest_bound_found_predecessor(pending, config_fd, queue)
+                idle = _verify_idle_producer(queue, EpochReceipts(
+                    owner_uid=0, writer_gid=queue.writer_gid))
+                if result["state"] != "stopped":
+                    raise EffectiveKnownRefused("native_found_pristine_retired_not_stopped")
+                return result, physical, idle
+            return result, None, None
         def attest_original(unchanged_plan: bytes, old: dict | None) -> bool:
             if unchanged_plan != raw or old != predecessor:
                 return False
@@ -919,23 +949,23 @@ def recover_native_found_prepared_pristine(
                 return False
             _verify_planned_preimages_locked(
                 verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
-            prior_again = examine_pending_found_previous(pending)
-            return (prior_again["id"] == predecessor["id"] and
-                    prior_again["state"] in ("ready", "stopped") and
+            prior_again = observe_previous()
+            return (prior_again[0]["id"] == predecessor["id"] and
+                    prior_again[0]["state"] in ("ready", "stopped") and
                     prior_again == observed)
 
         _verify_planned_preimages_locked(
             verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
-        observed = examine_pending_found_previous(pending)
-        if (observed["id"] != predecessor["id"] or
-                observed["state"] not in ("ready", "stopped")):
+        observed = observe_previous()
+        if (observed[0]["id"] != predecessor["id"] or
+                observed[0]["state"] not in ("ready", "stopped")):
             raise EffectiveKnownRefused("native_found_pristine_runtime_unproven")
         completed = store.finish_found_prepared_pristine(
             operation, raw, attest_original)
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     return {"result": "original-found-prepared-pristine-restored",
             "phase": completed["phase"],
-            "previous_id": predecessor["id"], "runtime_state": observed["state"],
+            "previous_id": predecessor["id"], "runtime_state": observed[0]["state"],
             "config_saved": False, "files_written": False,
             "service_restarted": False}
 
@@ -1268,12 +1298,12 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
     phase = record["phase"]
     if queue_fd is not None and (
             action not in ("recover-found-locked", "confirm-found-save-locked") or
-            phase == "prepared" or "manifest" not in record or
+            (phase != "prepared" and "manifest" not in record) or
             record.get("previous_manifest", {}).get("schema") != 2):
         raise EffectiveKnownRefused("bound_found_original_queue_scope_refused")
     if action == "recover-found-locked" and phase == "prepared":
         return recover_native_found_prepared_pristine(
-            operation, config_fd=config_fd, config_digest=digest)
+            operation, config_fd=config_fd, config_digest=digest, queue_fd=queue_fd)
     with _bound_found_queue_scope(queue_fd) as queue, exclusive_destination_lock(AUTO_LOCK, store.owner):
         original_bound = _bound_found_native_witness(store, record, attest)
         bound_attest = None
@@ -1572,12 +1602,11 @@ def native_found_recover_original_fd9(operation: str) -> int:
         raise EffectiveKnownRefused("native_found_recovery_owner_required")
     bound = record.get("manifest", {}).get("schema") == 1 and (
         record.get("previous_manifest", {}).get("schema") in (1, 2))
-    # PREPARED uses the existing pristine verifier only for the inert
-    # predecessor. Retired PREPARED needs a separate qualified no-write proof;
-    # never use the old recovery observer as a substitute for its epoch proof.
     retired = record.get("previous_manifest", {}).get("schema") == 2
-    if retired and (not bound or record["phase"] == "prepared"):
-        raise EffectiveKnownRefused("bound_retired_found_prepared_recovery_refused")
+    # A PREPARED record may precede candidate root binding; the original
+    # locked pristine verifier proves the old epoch and all three preimages.
+    if retired and not bound and (record["phase"] != "prepared" or "manifest" in record):
+        raise EffectiveKnownRefused("bound_retired_found_recovery_pin_refused")
     command = ["/usr/local/bin/php",
                "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php",
                "found-bound-recover" if bound and record["phase"] != "prepared" else "found-recover",
@@ -1594,7 +1623,7 @@ def native_found_recover_original_fd9(operation: str) -> int:
         return result.returncode if result.returncode in (0, 64, 69, 70) else 70
 
     if retired:
-        if record["phase"] not in FOUND_ROLLBACK_FROM | {FOUND_RESTORING, "found-config-saved"}:
+        if record["phase"] not in FOUND_ROLLBACK_FROM | {FOUND_RESTORING, "found-config-saved", "prepared"}:
             raise EffectiveKnownRefused("bound_retired_found_recovery_phase_refused")
         gid = pwd.getpwnam(ENGINE_USER).pw_gid
         if gid <= 0:

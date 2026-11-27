@@ -911,7 +911,8 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
                 type(pending_found_record) is not dict or record != pending_found_record or
                 record["phase"] not in ({"prepared", FOUND_RESTORING} |
                                         FOUND_FILE_PHASES | FOUND_CONFIG_PHASES) or
-                "found" not in record or "manifest" not in record or
+                "found" not in record or
+                ("manifest" not in record and record["phase"] != "prepared") or
                 record.get("previous_manifest", {}).get("schema") != 2 or
                 type(record.get("previous")) is not dict or
                 record["previous"]["id"] == record["detail"]["id"] or

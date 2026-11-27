@@ -198,7 +198,7 @@ def inspect_original_restored():
     store = SharedApplyOperation(owner=0)
     rec = store.read()
     need(type(rec) is dict and rec.get("phase") == "restored" and
-         rec.get("manifest", {}).get("schema") == 1 and
+         (rec.get("manifest") is None or rec["manifest"]["schema"] == 1) and
          committed_manifest(rec) == rec.get("previous_manifest") and
          rec["previous_manifest"]["schema"] == 2 and
          committed_owner(rec) == rec["previous"] and "found" not in rec,
@@ -291,7 +291,7 @@ def native_found_successor(web, voice, old, command):
             "X-CSRFToken": web.csrf_token, "Accept": "application/json",
             "Referer": voice.ORIGIN + "/ui/zapret/general"}, method="POST")
     fault = os.environ.get("ZAPRET2_S10_FOUND_FAULT", "normal")
-    need(fault in ("normal", "saved-gap", "presave"), "S10_AUTO_FOUND_FAULT_MODE_INVALID")
+    need(fault in ("normal", "saved-gap", "presave", "prepared-unbound", "prepared-bound"), "S10_AUTO_FOUND_FAULT_MODE_INVALID")
     paths = {"youtube": Path("/var/db/zapret2/auto-detect-owned/youtube.txt"),
              "user": Path("/var/db/zapret2/auto-detect-owned/user.txt"),
              "auto": Path("/usr/local/etc/zapret2/ipset/auto-domains.txt")}
@@ -300,6 +300,22 @@ def native_found_successor(web, voice, old, command):
     service_bytes = SERVICE.read_bytes()
     php = SERVICE.with_name("shared_apply_config.php")
     php_bytes = php.read_bytes()
+    backend = SERVICE.parent / "backend"
+    fault_script = backend / ("auto_detect_effective_known.py" if fault == "prepared-unbound"
+                              else "auto_detect_destination_commit.py")
+    fault_bytes = fault_script.read_bytes()
+    before_pins = {name: (path.stat().st_dev, path.stat().st_ino, path.stat().st_mtime_ns,
+                          path.stat().st_ctime_ns) if path.exists() else None
+                   for name, path in paths.items()}
+    if fault.startswith("prepared-"):
+        # Disposable only: stop after the existing PREPARED fsync, before
+        # binding or after binding, without invoking the P1 writer.
+        needle = (b"    return shared_apply_bound_found_files_original_fd9(" if fault == "prepared-unbound"
+                  else b"        return _with_native_found_prepared_semantic(")
+        need(fault_bytes.count(needle) == 1, "S10_AUTO_FOUND_PREPARED_FAULT_BOUNDARY_CHANGED")
+        indent = b"    " if fault == "prepared-unbound" else b"        "
+        fault_script.write_bytes(fault_bytes.replace(needle, indent +
+            b'raise RuntimeError("disposable PREPARED fault")\n' + needle))
     if fault == "presave":
         # Actual P1 writer and durable READY handshake run unchanged.
         # Interrupt ONLY the original PHP callback before Config::save.
@@ -322,7 +338,57 @@ def native_found_successor(web, voice, old, command):
             SERVICE.write_bytes(service_bytes)
         if fault == "presave":
             php.write_bytes(php_bytes)
+        if fault.startswith("prepared-"):
+            fault_script.write_bytes(fault_bytes)
     rec = json.loads(WAL.read_bytes())
+    if fault.startswith("prepared-"):
+        import base64
+        pending = rec
+        new_root = work / pending["detail"]["id"] / "manifest.json"
+        def pins():
+            return {name: (path.stat().st_dev, path.stat().st_ino, path.stat().st_mtime_ns,
+                           path.stat().st_ctime_ns) if path.exists() else None
+                    for name, path in paths.items()}
+        def root_pin():
+            return (new_root.stat().st_ino, new_root.read_bytes()) if new_root.exists() else None
+        candidate_pin = root_pin()
+        need(fault_script.read_bytes() == fault_bytes and reply.get("result") != "saved" and
+             pending["phase"] == "prepared" and pending["previous"] == old["detail"] and
+             pending["previous_manifest"] == old["manifest"] and
+             ("manifest" in pending) == (fault == "prepared-bound") and
+             (candidate_pin is not None) == (fault == "prepared-bound") and
+             pins() == before_pins and CONFIG.read_bytes() == initial_config and
+             all((path.read_bytes() if path.exists() else None) == before_files[name]
+                 for name, path in paths.items()), "S10_AUTO_FOUND_PREPARED_REAL_BOUNDARY_REQUIRED")
+        print("S10_AUTO_FOUND_PREPARED_FAULT=PASS_" + fault.upper().replace("-", "_"), flush=True)
+        work_before = set(work.iterdir())
+        envelope = {"page": "strategies", "fields": {"general": {"enabled": "0"}},
+                    "sync": {"telegramips_baseline": saved["hostlist"]["telegramips"]}}
+        encoded = base64.urlsafe_b64encode(json.dumps(envelope, separators=(",", ":")).encode()).decode().rstrip("=")
+        recovery = subprocess.run([str(SERVICE), "shared-apply-run", "strategies", encoded],
+                                  capture_output=True, text=True, timeout=180, check=False)
+        rec = json.loads(WAL.read_bytes())
+        if recovery.returncode != 0:
+            print("S10_AUTO_FOUND_PREPARED_RECOVERY_RC=" + str(recovery.returncode), flush=True)
+        need(recovery.returncode == 0 and recovery.stdout.strip() == "apply-recovered=" + pending["detail"]["id"] and
+             rec == {k: v for k, v in {**pending, "phase": "restored"}.items() if k != "found"} and
+             set(work.iterdir()) == work_before and root_pin() == candidate_pin and
+             pins() == before_pins and CONFIG.read_bytes() == initial_config and
+             all((path.read_bytes() if path.exists() else None) == before_files[name]
+                 for name, path in paths.items()) and
+             previous_root.read_bytes() == old_root and previous_root.stat().st_ino == old_root_inode and
+             history() == old_history and
+             subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout == kernel.stdout and
+             subprocess.run([str(SERVICE), "status"], capture_output=True, timeout=35).returncode == 1,
+             "S10_AUTO_FOUND_PREPARED_PUBLIC_RECOVERY_REFUSED")
+        proof = subprocess.run(["/bin/sh", "-c", command, "s10-original-fd9", PYTHON_RUNTIME,
+            str(Path(__file__).resolve()), "--inspect-restored"], capture_output=True, text=True,
+            timeout=180, check=False)
+        need(proof.returncode == 0 and "S10_AUTO_FOUND_RESTORED_HISTORY=PASS" in proof.stdout.splitlines(),
+             "S10_AUTO_FOUND_PREPARED_INDEPENDENT_PROOF_REFUSED")
+        print("S10_AUTO_FOUND_PREPARED=PASS_NO_P1_CONFIG_RUNTIME_WRITES_" +
+              fault.upper().replace("-", "_"), flush=True)
+        return
     if fault == "presave":
         import base64
         need(php.read_bytes() == php_bytes and reply.get("result") != "saved" and
