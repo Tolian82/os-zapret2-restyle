@@ -2,6 +2,7 @@
 """Disposable filesystem experiment; not an Apply or a G03 acceptance gate."""
 import argparse
 import ast
+from contextlib import ExitStack
 import hashlib
 import json
 import os
@@ -31,9 +32,11 @@ def load_writer():
     return scope
 
 
-def run_probe(base, count, waits):
+def run_probe(base, count, waits, *, wal_base=None, focused=False):
     modes = ("original", "late-pinned", "wal-file-barrier", "wal-dir-barrier",
-             "wal-rewrite-barrier", "no-rename-control")
+             "wal-rewrite-barrier", "local-rewrite-barrier", "no-rename-control")
+    if focused:
+        modes = ("original", "wal-rewrite-barrier", "local-rewrite-barrier", "no-rename-control")
     report = {m: dict(samples=0, ctime_drift=0, other_drift=0, refused=0,
                       first_drift={}, early_ctime_drift={}) for m in modes}
     scope = load_writer()
@@ -69,16 +72,20 @@ def run_probe(base, count, waits):
             if changed and key not in seen:
                 seen[key] = label
 
-    with tempfile.TemporaryDirectory(prefix="g03-inode-probe-", dir=base) as tmp:
-        root = Path(tmp)
-        wal = root / "wal"
+    with ExitStack() as stack:
+        root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="g03-inode-probe-", dir=base)))
+        wal_root = root if wal_base is None else Path(stack.enter_context(
+            tempfile.TemporaryDirectory(prefix="g03-wal-probe-", dir=wal_base)))
+        wal = wal_root / "wal"
         wal.mkdir()
+        local = root / "local-barrier"
+        local.mkdir()
 
-        def checkpoint(data, sample=None):
+        def checkpoint(data, sample=None, *, directory=wal):
             def step(label):
                 if sample is not None:
                     observe(sample, label)
-            pending = wal / ".pending"
+            pending = directory / ".pending"
             with pending.open("wb") as stream:
                 step("wal-open")
                 stream.write(hashlib.sha256(data).hexdigest().encode())
@@ -87,9 +94,9 @@ def run_probe(base, count, waits):
                 os.fsync(stream.fileno())
                 step("wal-file-fsync")
             step("wal-close")
-            os.replace(pending, wal / "record")
+            os.replace(pending, directory / "record")
             step("wal-rename")
-            scope["_sync"](wal)
+            scope["_sync"](directory)
             step("wal-dir-fsync")
 
         for index in range(count):
@@ -151,6 +158,9 @@ def run_probe(base, count, waits):
                         elif mode == "wal-rewrite-barrier":
                             # Synthetic extra WAL cycle, not a new production phase.
                             checkpoint(after)
+                        elif mode == "local-rewrite-barrier":
+                            # Test-only same-filesystem I/O, not a product journal.
+                            checkpoint(after, directory=local)
                         pinned = snapshot(target, after, anchor)
                         note_early(row, returned, pinned, "before-final-pin")
                         sample = (mode, target, after, pinned, {})
@@ -184,25 +194,44 @@ def run_probe(base, count, waits):
     return report
 
 
+def filesystem_type(path):
+    df = subprocess.run(["/bin/df", "-T", str(path)], capture_output=True, text=True, timeout=5, check=True)
+    fields = df.stdout.splitlines()[-1].split()
+    return fields[1] if len(fields) > 1 and fields[1] in ("ufs", "zfs") else "unknown"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--portable", action="store_true")
+    parser.add_argument("--base", type=Path)
+    parser.add_argument("--wal-base", type=Path)
+    parser.add_argument("--expect-filesystem", choices=("ufs", "zfs"))
+    parser.add_argument("--expect-wal-filesystem", choices=("ufs", "zfs"))
+    parser.add_argument("--focused", action="store_true")
     args = parser.parse_args()
     if args.portable:
+        if any((args.base, args.wal_base, args.expect_filesystem, args.expect_wal_filesystem)):
+            parser.error("native paths and filesystem assertions require native scope")
         base, count, waits = None, 2, [(0, "batch-complete"), (0.01, "short")]
-        filesystem = "portable"
+        filesystem = wal_filesystem = "portable"
+        same_device = True
     else:
         if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
                 os.environ.get("GITHUB_ACTIONS") != "true" or
                 os.environ.get("ZAPRET2_G03_DISPOSABLE_NATIVE") != "1"):
             raise SystemExit("G03_INODE_PROBE_NATIVE_SCOPE_REQUIRED")
-        base = "/usr/local/etc"
-        df = subprocess.run(["/bin/df", "-T", base], capture_output=True, text=True, timeout=5, check=True)
-        fields = df.stdout.splitlines()[-1].split()
-        filesystem = fields[1] if len(fields) > 1 and fields[1] in ("ufs", "zfs") else "unknown"
+        base = args.base or Path("/usr/local/etc")
+        wal_base = args.wal_base or base
+        filesystem, wal_filesystem = filesystem_type(base), filesystem_type(wal_base)
+        if (filesystem == "unknown" or wal_filesystem == "unknown" or
+                args.expect_filesystem not in (None, filesystem) or
+                args.expect_wal_filesystem not in (None, wal_filesystem)):
+            raise SystemExit("G03_INODE_PROBE_FILESYSTEM_MISMATCH")
+        same_device = base.stat().st_dev == wal_base.stat().st_dev
         count, waits = 8, [(0, "batch-complete"), (1, "1s"), (3, "4s"), (4, "8s")]
-    result = run_probe(base, count, waits)
-    print("G03_INODE_PROBE=" + json.dumps({"filesystem": filesystem, "variants": result,
+    result = run_probe(base, count, waits, wal_base=args.wal_base, focused=args.focused)
+    print("G03_INODE_PROBE=" + json.dumps({"filesystem": filesystem, "wal_filesystem": wal_filesystem,
+          "same_device": same_device, "variants": result,
           "g03_acceptance": False}, sort_keys=True), flush=True)
     if any(row["samples"] + row["refused"] != count for row in result.values()):
         raise SystemExit("G03_INODE_PROBE_INCOMPLETE")

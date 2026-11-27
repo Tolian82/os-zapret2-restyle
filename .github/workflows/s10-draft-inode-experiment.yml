@@ -41,7 +41,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Isolated native UFS experiment (not G03 acceptance)
+      - name: Isolated native UFS and ZFS experiment (not G03 acceptance)
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
           release: '26.7'
@@ -53,4 +53,30 @@ jobs:
           run: |
             set -eu
             /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
-            GITHUB_ACTIONS=true ZAPRET2_G03_DISPOSABLE_NATIVE=1 /usr/local/bin/python3 scripts/stage2-opnsense-s10-inode-probe.py
+            export GITHUB_ACTIONS=true ZAPRET2_G03_DISPOSABLE_NATIVE=1
+            probe=scripts/stage2-opnsense-s10-inode-probe.py
+            py=/usr/local/bin/python3
+            "$py" "$probe" --focused --expect-filesystem ufs --expect-wal-filesystem ufs
+            # An isolated file-backed pool only; no existing device or pool is touched.
+            /sbin/kldstat -q -m zfs || /sbin/kldload zfs
+            tmp=$(mktemp -d /var/tmp/s10-zfs-probe.XXXXXXXX)
+            pool=s10probe_$$
+            created=0
+            cleanup() {
+              if [ "$created" = 1 ]; then
+                /sbin/zpool destroy "$pool" || return 1
+              fi
+              rm -rf -- "$tmp"
+            }
+            trap cleanup EXIT
+            trap 'exit 1' HUP INT TERM
+            /usr/bin/truncate -s 512m "$tmp/vdev"
+            mkdir "$tmp/mount"
+            /sbin/zpool create -o cachefile=none -m "$tmp/mount" "$pool" "$tmp/vdev"
+            created=1
+            "$py" "$probe" --focused --base "$tmp/mount" --expect-filesystem zfs --expect-wal-filesystem zfs
+            "$py" "$probe" --focused --wal-base "$tmp/mount" --expect-filesystem ufs --expect-wal-filesystem zfs
+            "$py" "$probe" --focused --base "$tmp/mount" --wal-base /usr/local/etc --expect-filesystem zfs --expect-wal-filesystem ufs
+            /sbin/zpool destroy "$pool"
+            created=0
+            echo S10_DISPOSABLE_ZFS_POOL_CLEANUP=PASS
