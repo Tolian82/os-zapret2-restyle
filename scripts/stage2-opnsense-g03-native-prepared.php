@@ -35,7 +35,7 @@ function image(string $path, bool $canMiss): array {
             'revision'=>hash('sha256',"present\0" . $text), 'content'=>$text];
 }
 
-function stage($config, bool $partial = false, bool $withConfig = false, bool $secondBatch = false): string {
+function stage($config, bool $partial = false, bool $withConfig = false, bool $secondBatch = false, string $gapMode = ''): string {
     $current = (new \OPNsense\Zapret\Zapret())->getNodes();
     $xml = @file_get_contents('/conf/config.xml');
     required(is_string($xml), 'G03_COLD_CONFIG_UNREADABLE');
@@ -72,13 +72,16 @@ function stage($config, bool $partial = false, bool $withConfig = false, bool $s
             // Disposable crash fixture: require TWO genuine protected edits.
             $domain = $name === 'youtube'
                 ? 'native-partial-youtube-proof.org' : 'native-partial-user-proof.org';
-            if ($secondBatch) {
+            if ($gapMode !== '') {
+                $domain = 'gap-' . $gapMode . '-' . $domain;
+            } elseif ($secondBatch) {
                 $domain = 'next-' . $domain;
             }
             $draft = rtrim($draft, "\n") . "\n" . $domain . "\n";
         }
         if ($name === 'auto') {
-            $draft .= ($secondBatch ? "next-native-cold-prepared-proof.org\n" : "native-cold-prepared-proof.org\n");
+            $draft .= ($gapMode !== '' ? 'gap-' . $gapMode . '-' :
+                ($secondBatch ? 'next-' : '')) . "native-cold-prepared-proof.org\n";
         }
         $sources[$name] = ['base'=>$view, 'draft'=>$draft];
     }
@@ -505,9 +508,12 @@ try {
              getenv('ZAPRET2_G03_COLD_PREPARED') === '1' &&
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
              in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config','stage-config-next',
-                                         'durable','durable-stopped','stopped-presave','attest','bind','crash-partial','crash-config-save','crash-bound-config-save','stage-ordinary','bootstrap-known'], true) &&
+                                         'stage-config-gap-staged','stage-config-gap-parked',
+                                         'stage-config-gap-backed-up','durable','durable-stopped','stopped-presave','attest','bind','crash-partial','crash-config-save','crash-bound-config-save','stage-ordinary','bootstrap-known'], true) &&
              count($argv) === (in_array(($argv[1] ?? ''),
-                ['stage','stage-partial','stage-config','stage-config-next','stage-ordinary','bootstrap-known'], true) ? 2 : 3),
+                ['stage','stage-partial','stage-config','stage-config-next',
+                    'stage-config-gap-staged','stage-config-gap-parked',
+                    'stage-config-gap-backed-up','stage-ordinary','bootstrap-known'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
     SharedApplyLifecycleLock::assertHeld();
     require_once 'script/load_phalcon.php';
@@ -541,15 +547,19 @@ try {
                          $prepared['plan']['page'] === 'strategies',
                          'G03_BOUND_NATIVE_ORDINARY_PLAN_REQUIRED');
                 echo 'prepared-id=' . SharedApplyRequest::materialize($prepared) . "\n";
-            } elseif (in_array($argv[1], ['stage','stage-partial','stage-config','stage-config-next'], true)) {
+            } elseif (in_array($argv[1], ['stage','stage-partial','stage-config','stage-config-next',
+                        'stage-config-gap-staged','stage-config-gap-parked',
+                        'stage-config-gap-backed-up'], true)) {
                 $next = $argv[1] === 'stage-config-next';
-                if ($next) {
+                $gap = str_starts_with($argv[1], 'stage-config-gap-')
+                    ? substr($argv[1], strlen('stage-config-gap-')) : '';
+                if ($next || $gap !== '') {
                     required(getenv('ZAPRET2_G03_FIRST_DISABLED') === '1' &&
                              getenv('ZAPRET2_G03_BOUND_FOUND') === '1',
                              'G03_BOUND_NEXT_STAGE_SCOPE_REQUIRED');
                 }
                 echo 'prepared-id=' . stage($config,
-                    $argv[1] !== 'stage', $argv[1] === 'stage-config' || $next, $next) . "\n";
+                    $argv[1] !== 'stage', $argv[1] === 'stage-config' || $next || $gap !== '', $next, $gap) . "\n";
             } elseif (in_array($argv[1], ['durable-stopped', 'stopped-presave'], true)) {
                 durable($config, $argv[2], $argv[1]);
                 echo $argv[1] === 'stopped-presave'

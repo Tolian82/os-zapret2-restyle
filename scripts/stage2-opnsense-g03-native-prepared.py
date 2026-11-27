@@ -453,11 +453,13 @@ def managed_fault_worker_self_test():
     fixture = (Path(__file__).resolve().parent / "stage2-opnsense-g03-native-prepared.php").read_text()
     stage = fixture.split("function stage(", 1)[1].split("\nfunction durable(", 1)[0]
     need(stage.count("bool $secondBatch = false") == 1 and
+         stage.count("string $gapMode = ''") == 1 and
          re.search(r"\$secondBatch\s*=(?!=)", stage.split("): string {", 1)[1]) is None and
          stage.count("$nextInterval = $saved === 'off' ? 'hourly' : 'off';") == 1 and
          stage.count("'autorestart'=>$nextInterval") == 1 and
          stage.count("if ($secondBatch)") == 1 and
-         stage.count('$secondBatch ? "next-native-cold-prepared-proof.org') == 1,
+         stage.count("($secondBatch ? 'next-' : '')") == 1 and
+         stage.count("'gap-' . $gapMode . '-'") >= 1,
          "G03_BOUND_FOUND_DISTINCT_BATCH_SELECTOR_DRIFT")
     # The original G03 child is carried as a Python -c string: py_compile of
     # the wrapper alone would NOT detect an invalid native child statement.
@@ -1208,8 +1210,10 @@ def bound_stopped_found_presave_main():
 
 
 
-def bound_stopped_found_save_main(*, uncertain=False):
-    """Exercise normal commit, then independent actual Config save interruption."""
+def bound_stopped_found_save_main(*, uncertain=False, gap=None):
+    """Exercise normal, post-save crash and all exact atomic rename gaps."""
+    need(gap in (None, "staged", "parked", "backed-up"),
+         "G03_BOUND_STOPPED_GAP_MODE_INVALID")
     need(os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1" and
          os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1" and
          os.environ.get("GITHUB_ACTIONS") == "true" and
@@ -1226,7 +1230,8 @@ def bound_stopped_found_save_main(*, uncertain=False):
     need(old_model is not None and old_model.findtext("general/enabled") == "0",
          "G03_BOUND_STOPPED_SAVE_ORIGINAL_MODEL_REQUIRED")
     old_restart = old_model.findtext("general/autorestart") or "off"
-    staged = call([PHP, NATIVE, "stage-config-next" if uncertain else "stage-config"], locked=True)
+    staged = call([PHP, NATIVE, "stage-config-gap-" + gap if gap else
+                   "stage-config-next" if uncertain else "stage-config"], locked=True)
     need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
          snapshot() == original and json.loads(WAL.read_bytes()) == previous,
          "G03_BOUND_STOPPED_SAVE_STAGE_DRIFT")
@@ -1324,6 +1329,63 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
          "G03_BOUND_STOPPED_SAVED_RUNTIME_FENCE_DRIFT")
     print("G03_S10_BOUND_STOPPED_SAVED_FENCE=PASS_NO_LEGACY_RUNTIME_PROMOTION",
           flush=True)
+    if gap is not None:
+        # Test-only fault injection around the ORIGINAL atomic installer.
+        # Execute its unchanged copy/verify/rename sequence under original
+        # FD9. The selected mv is either not begun or has just succeeded.
+        # This is not a second production physical lifecycle implementation.
+        sys.path.insert(0, str(Path(SERVICE).parent / "backend"))
+        from shared_apply_seal import WORK, verify_seal, _release_hash
+        from voice_live_inspect import COMMON_ACTIVE
+        active = COMMON_ACTIVE
+        old_work = WORK / previous["detail"]["id"]
+        old_hash = verify_seal(old_work, owner=0)["sha256"]["release"]
+        new_hash = verify_seal(work, owner=0)["sha256"]["release"]
+        backup_root = active.with_name("runtime-v2-backups")
+        backup = backup_root / (active.name + "-" + op)
+        staged_path = active.parent / ("." + active.name + ".stage." + op)
+        park = active.parent / ("." + active.name + ".old." + op)
+        need(_release_hash(active, 0) == old_hash and old_hash != new_hash and
+             not staged_path.exists() and not staged_path.is_symlink() and
+             not park.exists() and not park.is_symlink() and
+             not backup.exists() and not backup.is_symlink(),
+             "G03_BOUND_ATOMIC_GAP_NATIVE_PREIMAGE_REQUIRED")
+        # A shell function shadows only mv inside the original installer
+        # on the disposable guest, without modifying installed sources.
+        # 1: stage completed, 2: old parked, 3: old backed up.
+        source = r"""
+set -eu
+. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/common.sh
+. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/atomic.sh
+g03_mode="$1"
+g03_count=0
+mv() {
+    g03_count=$((g03_count+1))
+    if [ "$g03_mode" = staged ] && [ "$g03_count" -eq 1 ]; then exit 73; fi
+    /bin/mv "$@" || return $?
+    if [ "$g03_mode" = parked ] && [ "$g03_count" -eq 1 ]; then exit 73; fi
+    if [ "$g03_mode" = backed-up ] && [ "$g03_count" -eq 2 ]; then exit 73; fi
+}
+atomic_install_tree "$2" "$3" "$4" "$5"
+"""
+        call(["/bin/sh", "-c", source, "g03-real-atomic-gap", gap,
+              str(work / "release"), str(active), str(backup_root), op],
+             locked=True, expected_rc=73)
+        def safe_hash(path):
+            return _release_hash(path, 0) if path.exists() or path.is_symlink() else None
+        native_trees = (safe_hash(active), safe_hash(staged_path),
+                        safe_hash(park), safe_hash(backup))
+        layouts = {
+            "staged": (old_hash, new_hash, None, None),
+            "parked": (None, new_hash, old_hash, None),
+            "backed-up": (None, new_hash, None, old_hash)}
+        need(native_trees == layouts[gap] and snapshot() == after and
+             json.loads(WAL.read_bytes()) == saved and
+             subprocess.run([SERVICE, "status"], capture_output=True,
+                            timeout=30).returncode == 2,
+             "G03_BOUND_ATOMIC_GAP_NATIVE_EVIDENCE_DRIFT")
+        print("G03_S10_ATOMIC_GAP_" + gap.upper().replace("-", "_") +
+              "=PASS_REAL_ORIGINAL_INSTALL_INTERRUPTED", flush=True)
     terminal = json.loads(call([PHP, worker, "found-bound-finish", op, "strategies"],
                                locked=True))
     final = json.loads(WAL.read_bytes())
@@ -1343,13 +1405,20 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
     call([PHP, worker, "found-bound-finish", op, "strategies"], locked=True, expected_rc=70)
     need(snapshot() == after and json.loads(WAL.read_bytes()) == final,
          "G03_BOUND_STOPPED_FINAL_REPLAY_DRIFT")
-    if uncertain:
+    if gap:
+        print("G03_S10_BOUND_STOPPED_ATOMIC_" + gap.upper().replace("-", "_") +
+              "=PASS_NATIVE_RESUMED_COMMITTED_STOPPED", flush=True)
+        modes = ("staged", "parked", "backed-up")
+        pos = modes.index(gap)
+        if pos + 1 < len(modes):
+            bound_stopped_found_save_main(gap=modes[pos + 1])
+    elif uncertain:
         print("G03_S10_BOUND_STOPPED_POSTSAVE=PASS_REAL_UNACKED_CONFIG_RECOVERED_COMMITTED",
               flush=True)
+        bound_stopped_found_save_main(gap="staged")
     else:
         print("G03_S10_BOUND_STOPPED_COMMITTED=PASS_NATIVE_P1_CONFIG_TREE_STOPPED", flush=True)
-        # Same native guest, a new real successor with three different
-        # domain changes; the terminal owner above is not fabricated.
+        # Same native guest and genuine previous COMMITTED generation.
         bound_stopped_found_save_main(uncertain=True)
 
 

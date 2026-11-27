@@ -1069,7 +1069,11 @@ def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
     if old_hash == new_hash:
         raise EffectiveKnownRefused("bound_stopped_found_ambiguous_tree")
     pristine = (old_hash, None, None, None)
+    staged = (old_hash, new_hash, None, None)
+    parked = (None, new_hash, old_hash, None)
+    backed_up = (None, new_hash, None, old_hash)
     installed = (new_hash, None, None, old_hash)
+    interrupted = {staged: "staged", parked: "parked", backed_up: "backed-up"}
     with exclusive_destination_lock(AUTO_LOCK, store.owner):
         witness = _bound_found_native_witness(store, record, attest)
 
@@ -1094,8 +1098,8 @@ def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
             trees = _cold_recovery_trees(
                 active, detail["id"], old_hash, new_hash, phase="activating",
                 restored=False, owner_uid=0)
-            if trees not in (pristine, installed):
-                raise EffectiveKnownRefused("bound_stopped_found_interrupted_tree_requires_recovery")
+            if trees not in (pristine, installed, *interrupted):
+                raise EffectiveKnownRefused("bound_stopped_found_unknown_tree_requires_review")
             kernels = (_empty_kernel(old_work / "release"), _empty_kernel(new_work / "release"))
             if kernels[0] != kernels[1]:
                 raise EffectiveKnownRefused("bound_stopped_found_kernel_changed")
@@ -1118,17 +1122,26 @@ def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
                 "found-config-saved", detail, raw,
                 lambda phase, plan: observe(record) == before,
                 bound_attest=pinned_after)
-        if before[0] == pristine:
+        if before[0] != installed:
             if observe(record) != before:
                 raise EffectiveKnownRefused("bound_stopped_found_install_preimage_changed")
+            if before[0] == pristine:
+                command = (
+                    "/bin/sh", "-c", '. "$1"; . "$2"; atomic_install_tree "$3" "$4" "$5" "$6"',
+                    "zapret-bound-stopped-found", str(SCRIPT / "backend/common.sh"),
+                    str(SCRIPT / "backend/atomic.sh"), str(new_work / "release"),
+                    str(active), str(backup_root), detail["id"])
+            else:
+                command = (
+                    "/bin/sh", "-c", '. "$1"; . "$2"; atomic_resume_tree "$3" "$4" "$5" "$6" "$7" "$8"',
+                    "zapret-bound-stopped-resume", str(SCRIPT / "backend/common.sh"),
+                    str(SCRIPT / "backend/atomic.sh"), str(new_work / "release"),
+                    str(old_work / "release"), str(active), str(backup_root),
+                    detail["id"], interrupted[before[0]])
             try:
                 reply = _run_bound_restore_joined(
-                    ("/bin/sh", "-c", '. "$1"; . "$2"; atomic_install_tree "$3" "$4" "$5" "$6"',
-                     "zapret-bound-stopped-found", str(SCRIPT / "backend/common.sh"),
-                     str(SCRIPT / "backend/atomic.sh"), str(new_work / "release"),
-                     str(active), str(backup_root), detail["id"]),
-                    pass_fds=(9, config_fd), budget=60, capture_output=True)
-            except subprocess.SubprocessError:
+                    command, pass_fds=(9, config_fd), budget=60, capture_output=True)
+            except (OSError, subprocess.SubprocessError):
                 raise EffectiveKnownRefused("bound_stopped_found_install_outcome_uncertain") from None
             if reply.returncode != 0 or reply.stdout != (str(backup) + "\n").encode():
                 raise EffectiveKnownRefused("bound_stopped_found_install_outcome_uncertain")

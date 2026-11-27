@@ -289,6 +289,93 @@ atomic_install_tree()
     printf '%s\n' "${_atomic_install_backup}"
 }
 
+# Resume only a complete, already verified operation-ID atomic rename gap.
+# This is part of the original atomic installer, not a second service executor.
+# Caller owns original FD9/Config/P2 and twice attests BOTH complete sealed
+# generations, the exact stage/park/backup and a fully inert kernel.
+# Never remove an incomplete tree, recreate a stage, or guess a predecessor.
+atomic_resume_tree()
+{
+    [ "$#" -eq 6 ] || return 64
+    _atomic_resume_source="$1"
+    _atomic_resume_old_source="$2"
+    _atomic_resume_destination="$3"
+    _atomic_resume_backup_root="$4"
+    _atomic_resume_token="$5"
+    _atomic_resume_layout="$6"
+    case "$_atomic_resume_token" in
+        ""|*[!a-f0-9]*) return 64 ;;
+    esac
+    [ "${#_atomic_resume_token}" -eq 32 ] || return 64
+    case "$_atomic_resume_layout" in
+        staged|parked|backed-up) ;;
+        *) return 64 ;;
+    esac
+    atomic_validate_path "$_atomic_resume_source" "new source" || return 1
+    atomic_validate_path "$_atomic_resume_old_source" "old source" || return 1
+    atomic_validate_path "$_atomic_resume_destination" "destination" || return 1
+    atomic_validate_path "$_atomic_resume_backup_root" "backup root" || return 1
+    _atomic_resume_parent=$(dirname "$_atomic_resume_destination")
+    _atomic_resume_name=$(basename "$_atomic_resume_destination")
+    _atomic_resume_stage="$_atomic_resume_parent/.$_atomic_resume_name.stage.$_atomic_resume_token"
+    _atomic_resume_park="$_atomic_resume_parent/.$_atomic_resume_name.old.$_atomic_resume_token"
+    _atomic_resume_backup="$_atomic_resume_backup_root/$_atomic_resume_name-$_atomic_resume_token"
+
+    # No pre-existing link can be followed or replaced, and no foreign
+    # directory can be nested by mv(1). Original storage/owner validation
+    # remains the enclosing Python witness.
+    [ -d "$_atomic_resume_parent" ] && [ ! -L "$_atomic_resume_parent" ] ||
+        return 1
+    [ -d "$_atomic_resume_backup_root" ] &&
+        [ ! -L "$_atomic_resume_backup_root" ] || return 1
+    [ -d "$_atomic_resume_stage" ] && [ ! -L "$_atomic_resume_stage" ] ||
+        return 1
+    atomic_verify_tree "$_atomic_resume_source" "$_atomic_resume_stage" ||
+        return 1
+    case "$_atomic_resume_layout" in
+        staged)
+            [ -d "$_atomic_resume_destination" ] &&
+                [ ! -L "$_atomic_resume_destination" ] &&
+                [ ! -e "$_atomic_resume_park" ] &&
+                [ ! -L "$_atomic_resume_park" ] &&
+                [ ! -e "$_atomic_resume_backup" ] &&
+                [ ! -L "$_atomic_resume_backup" ] || return 1
+            atomic_verify_tree "$_atomic_resume_old_source" "$_atomic_resume_destination" ||
+                return 1
+            ;;
+        parked)
+            [ ! -e "$_atomic_resume_destination" ] &&
+                [ ! -L "$_atomic_resume_destination" ] &&
+                [ -d "$_atomic_resume_park" ] &&
+                [ ! -L "$_atomic_resume_park" ] &&
+                [ ! -e "$_atomic_resume_backup" ] &&
+                [ ! -L "$_atomic_resume_backup" ] || return 1
+            atomic_verify_tree "$_atomic_resume_old_source" "$_atomic_resume_park" ||
+                return 1
+            ;;
+        backed-up)
+            [ ! -e "$_atomic_resume_destination" ] &&
+                [ ! -L "$_atomic_resume_destination" ] &&
+                [ ! -e "$_atomic_resume_park" ] &&
+                [ ! -L "$_atomic_resume_park" ] &&
+                [ -d "$_atomic_resume_backup" ] &&
+                [ ! -L "$_atomic_resume_backup" ] || return 1
+            atomic_verify_tree "$_atomic_resume_old_source" "$_atomic_resume_backup" ||
+                return 1
+            ;;
+    esac
+    if [ "$_atomic_resume_layout" = staged ]; then
+        mv "$_atomic_resume_destination" "$_atomic_resume_park" || return 1
+    fi
+    if [ "$_atomic_resume_layout" != backed-up ]; then
+        # An interrupted move leaves the exact old tree in its original
+        # park or backup path, allowing another fully attested recovery.
+        mv "$_atomic_resume_park" "$_atomic_resume_backup" || return 1
+    fi
+    mv "$_atomic_resume_stage" "$_atomic_resume_destination" || return 1
+    printf '%s\n' "$_atomic_resume_backup"
+}
+
 # Restore the previous destination after a post-activation failure.
 atomic_restore_tree()
 {

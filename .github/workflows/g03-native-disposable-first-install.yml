@@ -120,6 +120,7 @@ jobs:
             test "${{ github.event_name == 'workflow_dispatch' && inputs.s10_inode_probe && '1' || '0' }}" = 0
           fi
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_quiescent_preimage.py src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_previous_physical.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/atomic.sh
           sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
           php -l src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php
