@@ -665,7 +665,8 @@ try:
                     semantic.candidate_root_sha256 != committed["manifest"]["root_sha256"]):
                 raise RuntimeError("G03_BOUND_SUCCESSOR_COORDINATOR_OUTCOME_UNPROVEN")
         verify_original_operation_pins(record=committed, parent=WORK, owner_uid=0)
-        if (_full_prior_tree(WORK / op, COMMON_ACTIVE, 0) != (old_tree if pre_save else new_tree) or
+        if (_full_prior_tree(old_work if pre_save else WORK / op, COMMON_ACTIVE, 0) !=
+                (old_tree if pre_save else new_tree) or
                 verify_seal(old_work, owner=0)["sha256"]["release"] != old_tree or
                 _running_native(new_release, owner_uid=0, child_pidfile=CHILD_PID,
                                 monitor_pidfile=MONITOR_PID) != running or
