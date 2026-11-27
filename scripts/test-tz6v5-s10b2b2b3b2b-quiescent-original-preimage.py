@@ -66,6 +66,7 @@ class OriginalQuiescentTests(unittest.TestCase):
     def native_seams(self, stack, *, cold_kernel=False):
         stack.enter_context(patch.object(gate, "_native_preflight", return_value=self.config))
         stack.enter_context(patch.object(gate, "_native_wan", return_value="tun0"))
+        stack.enter_context(patch.object(gate, "_first_learning_candidate_wan", return_value="tun0"))
         stack.enter_context(patch.object(gate, "_attest_saved_wan", return_value=self.saved))
         stack.enter_context(patch.object(gate, "_ipfw_kernel_confirmed_absent",
                                          return_value=cold_kernel))
@@ -1829,7 +1830,7 @@ class OriginalQuiescentTests(unittest.TestCase):
         self.cold()
         with ExitStack() as stack:
             self.native_seams(stack)
-            with patch.object(gate, "_native_wan", side_effect=("tun0", "tun1")):
+            with patch.object(gate, "_first_learning_candidate_wan", side_effect=("tun0", "tun1")):
                 with self.assertRaises(gate.QuiescentPreimageRefused):
                     self.call()
             with patch.object(gate, "_ipfw_kernel_confirmed_absent",
