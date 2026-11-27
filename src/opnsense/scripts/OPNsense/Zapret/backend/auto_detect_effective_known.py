@@ -1294,6 +1294,131 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
         return {"result": record["phase"]}
 
 
+def native_bound_retired_found_save_original_fd9(operation: str) -> int:
+    """Original FD9 borrowed P2a -> original PHP Config -> P1/Config.
+
+    This private source-FIFO handoff has NO public Apply, Stop or activation
+    authority. Before starting PHP, require a genuinely completed old
+    schema2 retirement with exact immutable epoch ACK/archive and drained
+    historical FDs. A partial/UNKNOWN owner leaves WAL/P1/Config untouched.
+    The PHP child rechecks the same old owner and P2a open description
+    before writing, then returns only a nonterminal Config-save receipt.
+    """
+    import pwd
+    import stat
+    import subprocess
+    from auto_detect_owner import attest_learning_stopped_generation
+    from auto_detect_learning_retirement import (
+        retired_learning_stopped, RETIRE_DIR, READY)
+    from auto_detect_epoch_receipts import EpochReceipts, _read
+    from auto_detect_queue import DurableInbox
+    from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
+    from auto_detect_fd import _probe_original_inode
+    from shared_apply_operation import (
+        SharedApplyOperation, committed_manifest, committed_owner)
+    from shared_apply_seal import WORK, verify_seal
+    from neutral_root_stage import verify_original_operation_pins
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from neutral_schema3_quiescent_preimage import (
+        _empty_kernel, _zero_processes, _verify_idle_producer,
+        CHILD_PID, MONITOR_PID, DAEMON_PID)
+    from voice_live_inspect import COMMON_ACTIVE
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not re.fullmatch(r"[a-f0-9]{32}", operation) or
+            not stat.S_ISFIFO(os.fstat(0).st_mode)):
+        raise EffectiveKnownRefused("bound_retired_original_fd9_fifo_required")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    old = committed_owner(record)
+    pin = committed_manifest(record)
+    if (type(record) is not dict or record.get("phase") != "committed" or
+            type(pin) is not dict or pin.get("schema") != 2 or
+            type(old) is not dict or old["id"] == operation or
+            "found" in record or "failure" in record):
+        raise EffectiveKnownRefused("bound_retired_terminal_schema2_required")
+    verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    candidate = WORK / operation
+    sealed = verify_seal(candidate, owner=0)
+    raw = (candidate / "plan.json").read_bytes()
+    if (len(raw) > 4 * 1024 * 1024 or
+            hashlib.sha256(raw).hexdigest() != sealed["sha256"]["plan.json"]):
+        raise EffectiveKnownRefused("bound_retired_candidate_plan_changed")
+    plan = json.loads(raw)
+    if (type(plan) is not dict or plan.get("page") != "strategies" or
+            plan.get("result") != "prepared" or
+            plan.get("dependencies") != old["candidate"] or
+            plan.get("candidate", {}).get("general", {}).get("enabled") != "0" or
+            type(plan.get("found_intent")) is not dict or
+            plan["found_intent"].get("commit_authorized") is not False or
+            plan["found_intent"].get("config_revision") != old["candidate"] or
+            type(plan.get("found_batch")) is not dict):
+        raise EffectiveKnownRefused("bound_retired_found_candidate_required")
+    gid = pwd.getpwnam(ENGINE_USER).pw_gid
+    if gid <= 0:
+        raise EffectiveKnownRefused("bound_retired_original_queue_gid_required")
+    queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+    receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+
+    with queue.exclusive(existing_only=True):
+        def attest():
+            require_lifecycle_lock()
+            if store.read() != record:
+                raise EffectiveKnownRefused("bound_retired_owner_changed")
+            return attest_learning_stopped_generation()
+
+        def inspect(path, device, inode, *, owner, writer_gid):
+            return _probe_original_inode(
+                path, device, inode, owner=owner, writer_gid=writer_gid,
+                attest_owner=lambda: attest().owner == owner)
+
+        def snapshot():
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            proof = attest()
+            if (proof.operation_id != old["id"] or proof.generation != old["id"] or
+                    proof.owner_candidate_sha256 != old["candidate"]):
+                raise EffectiveKnownRefused("bound_retired_historical_owner_changed")
+            ready = (receipts._generation(proof.generation, create=False) /
+                     RETIRE_DIR / READY)
+            ready_bytes = _read(ready, 0)
+            if not retired_learning_stopped(
+                    receipts, queue, proof, WORK / old["id"],
+                    attest=attest, inspect=inspect, repair=False):
+                raise EffectiveKnownRefused("bound_retired_ack_archive_incomplete")
+            _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+            state = (_full_prior_tree(WORK / old["id"], COMMON_ACTIVE, 0),
+                     _empty_kernel(WORK / old["id"] / "release"),
+                     _verify_idle_producer(queue, receipts),
+                     hashlib.sha256(ready_bytes).hexdigest())
+            if _read(ready, 0) != ready_bytes or attest() != proof or store.read() != record:
+                raise EffectiveKnownRefused("bound_retired_epoch_proof_changed")
+            return state
+
+        before = snapshot()
+        if snapshot() != before or verify_seal(candidate, owner=0) != sealed:
+            raise EffectiveKnownRefused("bound_retired_pre_php_proof_changed")
+        # Original parent owns FD9 + P2a first; PHP gets FD3 inherited by
+        # open-description, acquires native Config FD4 only afterwards and
+        # transfers the exact original source FIFO as FD5 to the existing
+        # save/confirm child. No timeout/kill: parent keeps P2a until join.
+        command = (
+            "/usr/local/bin/php",
+            "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php",
+            "found-bound-save", operation, "strategies", "0",
+            "--queue-fd=" + str(queue.locked_fd))
+        result = subprocess.run(
+            command, stdin=sys.stdin.buffer, stdout=subprocess.PIPE,
+            pass_fds=(9, queue.locked_fd), check=False, close_fds=True)
+        if result.returncode not in (0, 64, 69, 70) or len(result.stdout) > 16384:
+            return 70
+        if result.stdout:
+            sys.stdout.buffer.write(result.stdout)
+            sys.stdout.buffer.flush()
+        return result.returncode
+
+
 def native_found_recover_original_fd9(operation: str) -> int:
     """One existing PHP Config recovery, with P2a BEFORE Config when required."""
     import pwd
@@ -1381,6 +1506,14 @@ def _managed_refusal_trace(error: BaseException) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 2 and argv[0] == "bound-retired-save-original":
+        try:
+            return native_bound_retired_found_save_original_fd9(argv[1])
+        except (ValueError, RuntimeError, OSError, UnicodeError, KeyError,
+                TypeError, AttributeError):
+            print("ERROR: original bound retired Found save scope refused",
+                  file=sys.stderr)
+            return 69
     if len(argv) == 2 and argv[0] == "recover-found-original":
         try:
             return native_found_recover_original_fd9(argv[1])

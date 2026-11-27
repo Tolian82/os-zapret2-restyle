@@ -1569,10 +1569,20 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
           "--queue-fd=3"], locked=True, expected_rc=69)
     call([PHP, worker, "found-bound-save", op, "strategies", "0",
           "--queue-fd=bad"], locked=True, expected_rc=64)
+    # The private original P2a parent is not allowed to invent a retired
+    # schema2 epoch from this genuine STOPPED schema1 predecessor. It must
+    # refuse even with a real source pipe, before any Config/P1/WAL write.
+    call(["/bin/sh", "-c",
+          'printf "original-retired-source-probe" | "$1" "$2" bound-retired-save-original "$3"',
+          "g03-schema1-no-retired", str(Path(SERVICE).parent / "python_runtime.sh"),
+          str(Path(SERVICE).parent / "backend/auto_detect_effective_known.py"), op],
+         locked=True, expected_rc=69)
     need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
          "G03_BOUND_STOPPED_SAVE_INVALID_FIFO_MUTATED")
     print("G03_BOUND_STOPPED_SAVE_FIFO=PASS_REFUSED_NONPIPE_NO_WRITES", flush=True)
     print("G03_S10_FOUND_P2A_FAKE=PASS_MISSING_OR_INVALID_QUEUE_FD_NO_WRITES",
+          flush=True)
+    print("G03_S10_RETIRED_PARENT_SCHEMA1=PASS_REAL_FIFO_REJECTED_BEFORE_MUTATION",
           flush=True)
     if uncertain:
         # Use the existing real Config singleton crash adapter. Only the
