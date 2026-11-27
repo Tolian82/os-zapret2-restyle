@@ -493,6 +493,10 @@ def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, succes
         return (None if not WAL.exists() and not WAL.is_symlink()
                 else json.loads(WAL.read_bytes()))
 
+    first_disabled = os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1"
+    need(not first_disabled or (first_commit and cold and not successor and
+         os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1"),
+         "G03_FIRST_DISABLED_SCOPE_REQUIRED")
     previous = journal()
     prior = None if previous is None else previous.get("detail" if successor else "previous")
     expected_status = 1 if stopped or cold else 0
@@ -521,6 +525,8 @@ def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, succes
         request = {"page": "strategies", "fields": {"hostlist": {"mode": "list"}},
                    "sync": {"telegramips_baseline":
                             model.findtext("hostlist/telegramips") or ""}}
+        if first_disabled:
+            request["fields"]["general"] = {"enabled": "0"}
         encoded = base64.urlsafe_b64encode(json.dumps(
             request, separators=(",", ":")).encode()).decode().rstrip("=")
         staged = call([PHP, str(script / "shared_apply_request.php"), "stage",
@@ -721,9 +727,9 @@ try:
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     prior = store.read()
-    if mode not in ("running", "stopped", "cold", "first-commit", "successor", "successor-uncertain", "successor-pre-save"):
+    if mode not in ("running", "stopped", "cold", "first-commit", "first-disabled", "successor", "successor-uncertain", "successor-pre-save"):
         raise RuntimeError("mode")
-    if mode in ("cold", "first-commit"):
+    if mode in ("cold", "first-commit", "first-disabled"):
         if prior is not None:
             raise RuntimeError("G03_PRISTINE_COLD_WAL_ALREADY_PRESENT")
         old_owner = None
@@ -746,7 +752,7 @@ try:
         old_owner = prior["previous"]
     seal = verify_seal(WORK / op, owner=0)
     native = _native_preflight(op, "strategies")
-    if native["enabled"] != "1" or native["result"] != "prepared":
+    if native["enabled"] != ("0" if mode == "first-disabled" else "1") or native["result"] != "prepared":
         raise RuntimeError("candidate")
     detail = {"id": op, "page": "strategies", "base": native["base"],
               "candidate": native["candidate"], "changed_fields": native["fields"]}
@@ -837,7 +843,8 @@ try:
         print(("G03_BOUND_SUCCESSOR_RESTORED=" if pre_save else
                "G03_BOUND_SUCCESSOR_COMMIT=") + committed["manifest"]["root_sha256"])
         raise SystemExit(0)
-    if mode == "first-commit":
+    if mode in ("first-commit", "first-disabled"):
+        disabled = mode == "first-disabled"
         # Test-only observer of the same joined PHP call; never replace its
         # result, repeat the action, or mutate the original journal.
         import neutral_schema3_quiescent_preimage as quiescent
@@ -845,7 +852,8 @@ try:
         original_join = quiescent._run_bound_restore_joined
         def diagnosed_join(command, **kwargs):
             reply = original_join(command, **kwargs)
-            if list(command[-3:]) == ["first-enabled-apply", op, "strategies"]:
+            if list(command[-3:]) == [
+                    "first-disabled-apply" if disabled else "first-enabled-apply", op, "strategies"]:
                 try:
                     observed = store.read()
                 except (OSError, RuntimeError, ValueError):
@@ -859,14 +867,25 @@ try:
             route, committed, source, semantic = native_coordinate_original_prepared_fd9(op, raw)
         finally:
             quiescent._run_bound_restore_joined = original_join
-        if (route != "first-enabled-committed" or store.read() != committed or
-                committed.get("phase") != "committed" or committed.get("detail") != detail or
-                source.mode != "list" or source.requested_enabled is not True or
-                semantic.lifecycle_proposal != "START" or
+        if (route != ("first-disabled-committed" if disabled else "first-enabled-committed") or
+                store.read() != committed or committed.get("phase") != "committed" or
+                committed.get("detail") != detail or source.mode != "list" or
+                source.requested_enabled is not (not disabled) or
+                semantic.lifecycle_proposal != ("SAVE_ONLY" if disabled else "START") or
                 type(semantic.previous_physical) is not QuiescentPreimage or
                 semantic.previous_physical.old_state != "first-install-empty" or
                 semantic.candidate_root_sha256 != committed["manifest"]["root_sha256"]):
             raise RuntimeError("G03_FIRST_BOUND_COORDINATOR_OUTCOME_UNPROVEN")
+        if disabled:
+            from neutral_schema3_quiescent_preimage import (
+                _zero_processes, _empty_kernel, DAEMON_PID)
+            verify_original_operation_pins(record=committed, parent=WORK, owner_uid=0)
+            _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+            if (_full_prior_tree(WORK / op, COMMON_ACTIVE, 0) != seal["sha256"]["release"] or
+                    _empty_kernel(WORK / op / "release") not in (
+                        "native-kernel-absent", "native-managed-kernel-empty") or
+                    "first_running_sha256" in committed or store.read() != committed):
+                raise RuntimeError("G03_FIRST_DISABLED_PHYSICAL_OWNER_UNPROVEN")
         print("G03_BOUND_NATIVE_COMMIT=" + committed["manifest"]["root_sha256"])
         raise SystemExit(0)
     source, bound = native_bind_original_prepared_fd9(op, raw)
@@ -935,7 +954,7 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
     raise SystemExit(69)
 '''
     pinned = call(["/bin/sh", "-c", shell, "g03-bound-native", op,
-                   child, ("successor-pre-save" if fault_pre_save else ("successor-uncertain" if fault_after_save else "successor")) if successor else ("first-commit" if first_commit else (
+                   child, ("successor-pre-save" if fault_pre_save else ("successor-uncertain" if fault_after_save else "successor")) if successor else (("first-disabled" if first_disabled else "first-commit") if first_commit else (
                        "cold" if cold else ("stopped" if stopped else "running")))],
                   locked=True, timeout=300 if first_commit or successor else 180)
     record = json.loads(WAL.read_bytes())
@@ -975,8 +994,27 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
                                  op, "strategies"], locked=True))
         status = subprocess.run([SERVICE, "status"], capture_output=True,
                                 text=True, timeout=30)
-        verify_first_bound_commit(record, op, pinned, root, original, saved, status)
-        print("G03_S10_FIRST_BOUND=PASS_REAL_CONFIG_ENGINE_IPFW_COMMITTED", flush=True)
+        if first_disabled:
+            detail = record["detail"]
+            pin = record["manifest"]
+            need(record["phase"] == "committed" and detail["id"] == op and
+                 detail["base"] != detail["candidate"] and
+                 sorted(detail["changed_fields"]) == ["general.enabled", "hostlist.mode"] and
+                 not any(k in record for k in ("previous", "previous_manifest", "found",
+                                               "first_running_sha256", "failure")) and
+                 pin["schema"] == 1 and pin["generation"] == op and
+                 pin["candidate_sha256"] == detail["candidate"] and
+                 root.is_file() and not root.is_symlink() and
+                 pinned == "G03_BOUND_NATIVE_COMMIT=" + hashlib.sha256(root.read_bytes()).hexdigest() and
+                 pin["root_sha256"] == pinned.split("=", 1)[1] and
+                 saved == {"result": "committed", "snapshot": detail["candidate"], "enabled": "0"} and
+                 status.returncode == 1 and status.stdout.strip() == "zapret is not running" and
+                 snapshot()[1:] == original[1:],
+                 "G03_FIRST_DISABLED_CONFIG_PIN_PROCESS_KERNEL_DRIFT")
+            print("G03_S10_FIRST_DISABLED=PASS_REAL_STOPPED_BOUND_CONFIG_COMMITTED", flush=True)
+        else:
+            verify_first_bound_commit(record, op, pinned, root, original, saved, status)
+            print("G03_S10_FIRST_BOUND=PASS_REAL_CONFIG_ENGINE_IPFW_COMMITTED", flush=True)
         return original[2]
     need(re.fullmatch(r"G03_BOUND_NATIVE_PIN=[a-f0-9]{64}", pinned) is not None and
          record.get("phase") == "prepared" and record.get("previous") == prior and
@@ -1044,7 +1082,12 @@ def pristine_cold_native_main(*, first_commit=False):
              release.read_bytes() == release_bytes,
              "G03_PRISTINE_FIRST_COMMIT_OWNER_DRIFT")
         # Same disposable guest and genuine predecessor; no journal reset.
-        if bound_found:
+        if os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1":
+            need(bound_found and snapshot()[1] == ("missing",) and
+                 subprocess.run([SERVICE, "status"], capture_output=True,
+                                timeout=30).returncode == 1,
+                 "G03_FIRST_DISABLED_STOPPED_BASELINE_LOST")
+        elif bound_found:
             main(bound_found=True)
         else:
             bound_manifest_main(successor=True, fault_after_save=(
