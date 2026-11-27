@@ -1669,6 +1669,15 @@ shared_apply_execute_service()
                     printf '%s\n' preflight-rejected=observer-generation
                     return 0
                 fi
+                # S10 G05: a sealed schema3 release alone is not a bound
+                # original owner. Until the first Auto FD9/Config/epoch
+                # coordinator is connected, the legacy activation MUST NOT
+                # start a real dvtws2 with a schema1/unpinned WAL. This is
+                # deliberately before PREPARED, Config save and IPFW writes.
+                # A qualified first Auto will use the separate original
+                # bound dispatcher, never this unbound fallback.
+                printf '%s\n' preflight-rejected=bound-auto-required
+                return 0
                 ;;
             *) printf '%s\n' preflight-rejected=observer-generation; return 0 ;;
         esac
