@@ -523,7 +523,7 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
             raise PreviousPhysicalRefused("BOUND_FINAL_RETIRED_QUEUE_REQUIRED")
         stopped_found = (
             record["phase"] == "found-config-saved" and pin["schema"] == 1 and
-            record.get("previous_manifest", {}).get("schema") == 1 and
+            record.get("previous_manifest", {}).get("schema") in (1, 2) and
             record.get("found", {}).get("runtime_mode") == "0" and
             not enabled and runtime_mode == "0")
         if (pin["schema"] not in (1, 2) or config_digest != detail["candidate"] or

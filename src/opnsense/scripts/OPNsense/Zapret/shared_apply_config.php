@@ -479,7 +479,8 @@ final class SharedApplyConfigWorker
                     : ($runtimeMode !== null || $whileP2Held !== null || $baseDigest !== null)) ||
             ($queueStream !== null && (!is_resource($queueStream) ||
                 !in_array($mode, ['begin-bound-found-save-locked',
-                    'recover-found-locked', 'confirm-found-save-locked',
+                    'finish-bound-found-locked', 'recover-found-locked',
+                    'confirm-found-save-locked',
                     'finish-ordinary-restore-locked', 'recover-managed-config-locked',
                     'recover-first-config-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
@@ -954,8 +955,9 @@ final class SharedApplyConfigWorker
         $queueSave = ($action === 'found-bound-save' && count($argv) === 6 &&
             preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D',
                 (string)$argv[5], $matches) === 1);
-        $queueOther = (in_array($action, ['found-recover', 'ordinary-restore-finish',
-                'managed-save-recover', 'ordinary-first-recover'], true) &&
+        $queueOther = (in_array($action, ['found-recover', 'found-bound-finish',
+                'ordinary-restore-finish', 'managed-save-recover',
+                'ordinary-first-recover'], true) &&
             count($argv) === 5 &&
             preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D',
                 (string)$argv[4], $matches) === 1);

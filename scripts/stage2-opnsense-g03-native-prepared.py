@@ -1584,6 +1584,13 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
           flush=True)
     print("G03_S10_RETIRED_PARENT_SCHEMA1=PASS_REAL_FIFO_REJECTED_BEFORE_MUTATION",
           flush=True)
+    call([str(Path(SERVICE).parent / "python_runtime.sh"),
+          str(Path(SERVICE).parent / "backend/auto_detect_effective_known.py"),
+          "bound-retired-finish-original", op], locked=True, expected_rc=69)
+    need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_RETIRED_FINISH_SCHEMA1_MUTATED_OWNER")
+    print("G03_S10_RETIRED_FINISH_SCHEMA1=PASS_REFUSED_BEFORE_MUTATION",
+          flush=True)
     if uncertain:
         # Use the existing real Config singleton crash adapter. Only the
         # PHP invocation changes: the source FIFO, native P1 writer and

@@ -1024,7 +1024,8 @@ def classify_native_planned(operation: str, *, config_fd: int | None = None) -> 
 
 
 def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
-                                             config_fd: int) -> dict:
+                                             config_fd: int,
+                                             queue_fd: int | None = None) -> dict:
     """Original disabled two-bound Found promotion; no Config or engine writer.
 
     The original found-config-saved WAL is the durable promotion intent.
@@ -1034,7 +1035,8 @@ def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
     import subprocess
     from auto_detect_destination_commit import (
         _native_found_wal_context, _bound_found_native_witness,
-        _attest_found_after_locked)
+        _attest_found_after_locked, _bound_found_queue_scope,
+        _attest_bound_found_predecessor)
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
     from auto_detect_minute import inspect_inert_release
     from neutral_root_stage import _verify_original_pinned_root
@@ -1042,18 +1044,24 @@ def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
         FinalBoundRuntimeReceipt, attest_bound_candidate_final_under_fd9)
     from neutral_schema3_quiescent_preimage import (
         _cold_recovery_trees, _reject_cold_recovery_residue, _run_bound_restore_joined,
-        _zero_processes, _safe_empty_directory, _empty_kernel, CHILD_PID,
-        MONITOR_PID, DAEMON_PID, PRODUCER_ROOT, COMMON_ACTIVE, SCRIPT)
+        _zero_processes, _safe_empty_directory, _empty_kernel,
+        _verify_idle_producer, _verify_retired_history,
+        CHILD_PID, MONITOR_PID, DAEMON_PID, PRODUCER_ROOT, COMMON_ACTIVE, SCRIPT)
     from shared_apply_seal import WORK, verify_seal, _stat
     from voice_ipfw_adapter import require_lifecycle_lock
+    from auto_detect_epoch_receipts import EpochReceipts, _read
+    from auto_detect_learning_retirement import RETIRE_DIR, READY
 
     store, record, raw, rows, targets, attest = _native_found_wal_context(
         operation, config_fd)
     detail = record["detail"]
     prior = record.get("previous")
+    prior_schema = record.get("previous_manifest", {}).get("schema")
+    retired = prior_schema == 2
     if (record["phase"] not in ("found-config-saving", "found-config-saved") or
             record.get("manifest", {}).get("schema") != 1 or
-            record.get("previous_manifest", {}).get("schema") != 1 or
+            prior_schema not in (1, 2) or
+            (retired != (queue_fd is not None)) or
             type(prior) is not dict or prior["candidate"] != detail["base"] or
             digest != detail["candidate"] or
             record["found"].get("runtime_mode") != "0" or
@@ -1074,8 +1082,31 @@ def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
     backed_up = (None, new_hash, None, old_hash)
     installed = (new_hash, None, None, old_hash)
     interrupted = {staged: "staged", parked: "parked", backed_up: "backed-up"}
-    with exclusive_destination_lock(AUTO_LOCK, store.owner):
+    # An original retired owner requires its P2a inherited BEFORE PHP
+    # acquired native Config. No new queue lock under this Config/P2 scope.
+    with _bound_found_queue_scope(queue_fd) as queue, exclusive_destination_lock(AUTO_LOCK, store.owner):
         witness = _bound_found_native_witness(store, record, attest)
+
+        def retired_history(current):
+            if not retired:
+                return None
+            if queue is None or not queue._held or current.get("previous") != prior:
+                raise EffectiveKnownRefused("bound_stopped_found_original_retirement_required")
+            receipts = EpochReceipts(owner_uid=0, writer_gid=queue.writer_gid)
+            ready = (receipts._generation(prior["id"], create=False) /
+                     RETIRE_DIR / READY)
+            raw_ready = _read(ready, 0)
+            ready_hash = hashlib.sha256(raw_ready).hexdigest()
+            # Historical ACK/archive is independently checkable after the
+            # old physical tree moves to park or backup; unlike live-owner
+            # proof it does not assume old tree is still ACTIVE_DIR.
+            _verify_retired_history(current, queue, receipts, ready_hash)
+            idle = _verify_idle_producer(queue, receipts)
+            if (_read(ready, 0) != raw_ready or
+                    _verify_idle_producer(queue, receipts) != idle or
+                    store.read() != current):
+                raise EffectiveKnownRefused("bound_stopped_found_retirement_changed")
+            return ready_hash, idle
 
         def pinned_after(current):
             return (witness is not None and witness(current) and
@@ -1088,12 +1119,18 @@ def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
                                  ("manifest", detail, new_work)):
                 root = json.loads(_verify_original_pinned_root(
                     detail=d, binding=current[key], parent=WORK, owner_uid=0))
-                if (root["service"]["enabled"] is not False or
+                if key == "previous_manifest" and retired:
+                    if (root["service"]["enabled"] is not True or
+                            root["service"]["target_mode"] != "auto"):
+                        raise EffectiveKnownRefused("bound_stopped_found_old_auto_root_required")
+                elif (root["service"]["enabled"] is not False or
                         root["service"]["target_mode"] not in ("all", "list") or
                         inspect_inert_release(work / "release", owner_uid=0) != "inactive"):
                     raise EffectiveKnownRefused("bound_stopped_found_inert_root_required")
             _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
-            _safe_empty_directory(PRODUCER_ROOT, 0)
+            if not retired:
+                _safe_empty_directory(PRODUCER_ROOT, 0)
+            history = retired_history(current)
             _reject_cold_recovery_residue(active)
             trees = _cold_recovery_trees(
                 active, detail["id"], old_hash, new_hash, phase="activating",
@@ -1105,11 +1142,20 @@ def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
                 raise EffectiveKnownRefused("bound_stopped_found_kernel_changed")
             _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
             store._attest_bound_found_checkpoint(current, pinned_after)
-            return trees, kernels
+            return trees, kernels, history
 
         before = observe(record)
         if observe(record) != before:
             raise EffectiveKnownRefused("bound_stopped_found_preimage_changed")
+        if retired and before[0] == pristine:
+            # Before the very first rename, also require the ORIGINAL old
+            # stopped Auto owner with native birth/epoch/P2b proof, not
+            # merely a matching historical checksum. Later crash recovery
+            # relies on anchored READY/ACK and exact physical park/backup.
+            old_proof = _attest_bound_found_predecessor(record, config_fd, queue)
+            if (len(old_proof) != 4 or old_proof[3] != before[2][0] or
+                    old_proof[0] != old_hash or old_proof[1] != before[1][0]):
+                raise EffectiveKnownRefused("bound_stopped_found_old_retired_owner_changed")
         require_lifecycle_lock()
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
         os.fsync(config_fd)
@@ -1145,7 +1191,7 @@ def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
                 raise EffectiveKnownRefused("bound_stopped_found_install_outcome_uncertain") from None
             if reply.returncode != 0 or reply.stdout != (str(backup) + "\n").encode():
                 raise EffectiveKnownRefused("bound_stopped_found_install_outcome_uncertain")
-        expected = (installed, before[1])
+        expected = (installed, before[1], before[2])
         if observe(record) != expected:
             raise EffectiveKnownRefused("bound_stopped_found_installed_tree_changed")
 
@@ -1180,13 +1226,20 @@ def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
                 return False
             receipt = attest_bound_candidate_final_under_fd9(
                 current, config_fd=config_fd, config_digest=digest,
-                enabled=False, runtime_mode="0")
+                enabled=False, runtime_mode="0",
+                retired_ready_sha256=before[2][0] if retired else None,
+                expected_idle_producer=before[2][1] if retired else None,
+                queue_fd=queue_fd)
             return (type(receipt) is FinalBoundRuntimeReceipt and
                     receipt.generation == detail["id"] and
                     receipt.root_sha256 == current["manifest"]["root_sha256"] and
                     receipt.config_sha256 == digest and
                     receipt.release_sha256 == new_hash and receipt.running is None and
                     receipt.epoch_sha256 is None and receipt.kernel_state == expected[1][0] and
+                    receipt.retired_ready_sha256 == (
+                        before[2][0] if retired else None) and
+                    receipt.idle_producer == (
+                        before[2][1] if retired else None) and
                     receipt.authorization == "NONE" and
                     receipt.physical_transition_allowed is False and
                     observe(current) == expected)
@@ -1419,6 +1472,56 @@ def native_bound_retired_found_save_original_fd9(operation: str) -> int:
         return result.returncode
 
 
+def native_bound_retired_found_finish_original_fd9(operation: str) -> int:
+    """Retired-old bound finalizer: same original FD9 and P2a -> PHP FD4.
+
+    The original saved WAL/Config/P1 is the ONLY promotion intent. Never
+    synthesize old Active from a PID, launch an engine, or guess a missing
+    archive/ACK. PHP and its original physical finisher join before P2a
+    is released, even when no terminal receipt can be accepted.
+    """
+    import pwd
+    import subprocess
+    from auto_detect_queue import DurableInbox
+    from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
+    from shared_apply_operation import SharedApplyOperation
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not re.fullmatch(r"[a-f0-9]{32}", operation)):
+        raise EffectiveKnownRefused("bound_retired_finish_original_fd9_required")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if (type(record) is not dict or
+            record.get("phase") not in ("found-config-saving", "found-config-saved") or
+            record.get("detail", {}).get("id") != operation or
+            record.get("previous_manifest", {}).get("schema") != 2 or
+            record.get("manifest", {}).get("schema") != 1 or
+            "found" not in record):
+        raise EffectiveKnownRefused("bound_retired_finish_original_wal_required")
+    gid = pwd.getpwnam(ENGINE_USER).pw_gid
+    if gid <= 0:
+        raise EffectiveKnownRefused("bound_retired_finish_original_queue_gid_required")
+    queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+    with queue.exclusive(existing_only=True):
+        if store.read() != record:
+            raise EffectiveKnownRefused("bound_retired_finish_owner_changed")
+        result = subprocess.run(
+            ("/usr/local/bin/php",
+             "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php",
+             "found-bound-finish", operation, "strategies",
+             "--queue-fd=" + str(queue.locked_fd)),
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            pass_fds=(9, queue.locked_fd), check=False, close_fds=True)
+        if result.returncode not in (0, 64, 69, 70) or len(result.stdout) > 16384:
+            return 70
+        if result.stdout:
+            sys.stdout.buffer.write(result.stdout)
+            sys.stdout.buffer.flush()
+        return result.returncode
+
+
 def native_found_recover_original_fd9(operation: str) -> int:
     """One existing PHP Config recovery, with P2a BEFORE Config when required."""
     import pwd
@@ -1506,6 +1609,14 @@ def _managed_refusal_trace(error: BaseException) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 2 and argv[0] == "bound-retired-finish-original":
+        try:
+            return native_bound_retired_found_finish_original_fd9(argv[1])
+        except (ValueError, RuntimeError, OSError, UnicodeError, KeyError,
+                TypeError, AttributeError):
+            print("ERROR: original bound retired Found finish scope refused",
+                  file=sys.stderr)
+            return 69
     if len(argv) == 2 and argv[0] == "bound-retired-save-original":
         try:
             return native_bound_retired_found_save_original_fd9(argv[1])
@@ -1704,9 +1815,13 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, UnicodeError):
             print("ERROR: original found-data save scope refused", file=sys.stderr)
             return 69
-    if len(argv) == 3 and argv[0] == "finish-bound-found-locked":
+    finish_queue = (len(argv) == 4 and argv[3] == "--inherited-queue")
+    if argv and argv[0] == "finish-bound-found-locked" and (
+            len(argv) == 3 or finish_queue):
         try:
-            reply = finish_native_bound_stopped_found_locked(argv[1], argv[2], config_fd=4)
+            reply = finish_native_bound_stopped_found_locked(
+                argv[1], argv[2], config_fd=4,
+                queue_fd=3 if finish_queue else None)
             print(json.dumps(reply, separators=(",", ":")))
             return 0
         except (ValueError, RuntimeError, OSError, UnicodeError):
