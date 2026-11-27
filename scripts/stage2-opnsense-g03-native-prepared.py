@@ -1197,8 +1197,8 @@ def bound_stopped_found_presave_main():
 
 
 
-def bound_stopped_found_save_main():
-    """Exercise the original Config singleton and both P2 save scopes."""
+def bound_stopped_found_save_main(*, uncertain=False):
+    """Exercise normal commit, then independent actual Config save interruption."""
     need(os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1" and
          os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1" and
          os.environ.get("GITHUB_ACTIONS") == "true" and
@@ -1215,7 +1215,7 @@ def bound_stopped_found_save_main():
     need(old_model is not None and old_model.findtext("general/enabled") == "0",
          "G03_BOUND_STOPPED_SAVE_ORIGINAL_MODEL_REQUIRED")
     old_restart = old_model.findtext("general/autorestart") or "off"
-    staged = call([PHP, NATIVE, "stage-config"], locked=True)
+    staged = call([PHP, NATIVE, "stage-config-next" if uncertain else "stage-config"], locked=True)
     need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
          snapshot() == original and json.loads(WAL.read_bytes()) == previous,
          "G03_BOUND_STOPPED_SAVE_STAGE_DRIFT")
@@ -1256,17 +1256,29 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
     need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
          "G03_BOUND_STOPPED_SAVE_INVALID_FIFO_MUTATED")
     print("G03_BOUND_STOPPED_SAVE_FIFO=PASS_REFUSED_NONPIPE_NO_WRITES", flush=True)
-    receipt = json.loads(call(["/bin/sh", "-c", command, "g03-original-found-source", op],
-                              locked=True))
+    if uncertain:
+        # Use the existing real Config singleton crash adapter. Only the
+        # PHP invocation changes: the source FIFO, native P1 writer and
+        # save handshake are identical. No synthetic WAL or after-image.
+        needle = '/usr/local/bin/php "$base/shared_apply_config.php" found-bound-save "$1" strategies 0'
+        need(command.count(needle) == 1, "G03_BOUND_CONFIG_CRASH_COMMAND_CHANGED")
+        command = command.replace(needle,
+                                  '/usr/local/bin/php /root/g03-native-prepared.php crash-bound-config-save "$1"')
+        receipt = call(["/bin/sh", "-c", command, "g03-original-found-crash", op],
+                       locked=True, expected_rc=73)
+        need(receipt == "", "G03_BOUND_CONFIG_CRASH_FALSE_RECEIPT")
+    else:
+        receipt = json.loads(call(["/bin/sh", "-c", command, "g03-original-found-source", op],
+                                  locked=True))
     saved = json.loads(WAL.read_bytes())
     pin = saved["manifest"]
     found = saved["found"]
     after = snapshot()
-    need(receipt == {"result": "found-config-saved-nonterminal", "saved": True,
+    need((uncertain or receipt == {"result": "found-config-saved-nonterminal", "saved": True,
                      "applied": False, "snapshot": saved["detail"]["candidate"],
                      "change_count": 1, "requires_review": False,
-                     "commit_authorized": False} and
-         saved["phase"] == "found-config-saved" and
+                     "commit_authorized": False}) and
+         saved["phase"] == ("found-config-saving" if uncertain else "found-config-saved") and
          saved["detail"]["base"] == previous["detail"]["candidate"] and
          saved["detail"]["candidate"] != saved["detail"]["base"] and
          saved["previous"] == previous["detail"] and saved["previous_manifest"] == old and
@@ -1284,8 +1296,15 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
     need(model is not None and model.findtext("general/enabled") == "0" and
          model.findtext("general/autorestart") == ("hourly" if old_restart == "off" else "off"),
          "G03_BOUND_STOPPED_CONFIG_SCALAR_DRIFT")
-    print("G03_S10_BOUND_STOPPED_SAVE=PASS_REAL_CONFIG_SAVE_READBACK_THREE_P1_NONTERMINAL",
-          flush=True)
+    if uncertain:
+        need(subprocess.run([SERVICE, "status"], capture_output=True,
+                            timeout=30).returncode == 2,
+             "G03_BOUND_CONFIG_CRASH_MUST_REMAIN_NONTERMINAL")
+        print("G03_S10_BOUND_STOPPED_CONFIG_UNCERTAIN=PASS_REAL_SAVE_RETURN_BEFORE_ACK",
+              flush=True)
+    else:
+        print("G03_S10_BOUND_STOPPED_SAVE=PASS_REAL_CONFIG_SAVE_READBACK_THREE_P1_NONTERMINAL",
+              flush=True)
     # The old runtime executor must NOT advance a bound saved transaction.
     call([PHP, worker, "found-recover", op, "strategies"], locked=True, expected_rc=69)
     call([PHP, worker, "found-runtime-activating", op, "strategies"],
@@ -1313,7 +1332,14 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
     call([PHP, worker, "found-bound-finish", op, "strategies"], locked=True, expected_rc=70)
     need(snapshot() == after and json.loads(WAL.read_bytes()) == final,
          "G03_BOUND_STOPPED_FINAL_REPLAY_DRIFT")
-    print("G03_S10_BOUND_STOPPED_COMMITTED=PASS_NATIVE_P1_CONFIG_TREE_STOPPED", flush=True)
+    if uncertain:
+        print("G03_S10_BOUND_STOPPED_POSTSAVE=PASS_REAL_UNACKED_CONFIG_RECOVERED_COMMITTED",
+              flush=True)
+    else:
+        print("G03_S10_BOUND_STOPPED_COMMITTED=PASS_NATIVE_P1_CONFIG_TREE_STOPPED", flush=True)
+        # Same native guest, a new real successor with three different
+        # domain changes; the terminal owner above is not fabricated.
+        bound_stopped_found_save_main(uncertain=True)
 
 
 def stopped_native_main():

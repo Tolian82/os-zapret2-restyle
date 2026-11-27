@@ -35,7 +35,7 @@ function image(string $path, bool $canMiss): array {
             'revision'=>hash('sha256',"present\0" . $text), 'content'=>$text];
 }
 
-function stage($config, bool $partial = false, bool $withConfig = false): string {
+function stage($config, bool $partial = false, bool $withConfig = false, bool $next = false): string {
     $current = (new \OPNsense\Zapret\Zapret())->getNodes();
     $xml = @file_get_contents('/conf/config.xml');
     required(is_string($xml), 'G03_COLD_CONFIG_UNREADABLE');
@@ -72,10 +72,13 @@ function stage($config, bool $partial = false, bool $withConfig = false): string
             // Disposable crash fixture: require TWO genuine protected edits.
             $domain = $name === 'youtube'
                 ? 'native-partial-youtube-proof.org' : 'native-partial-user-proof.org';
+            if ($next) {
+                $domain = 'next-' . $domain;
+            }
             $draft = rtrim($draft, "\n") . "\n" . $domain . "\n";
         }
         if ($name === 'auto') {
-            $draft .= "native-cold-prepared-proof.org\n";
+            $draft .= ($next ? "next-native-cold-prepared-proof.org\n" : "native-cold-prepared-proof.org\n");
         }
         $sources[$name] = ['base'=>$view, 'draft'=>$draft];
     }
@@ -473,7 +476,7 @@ final class G03NativeConfigSaveCrash {
     }
 }
 
-function crashAfterActualConfigSave($config, string $id): void {
+function crashAfterActualConfigSave($config, string $id, bool $bound = false): void {
     required(preg_match('/^[a-f0-9]{32}$/D', $id) === 1,
              'G03_CONFIG_BAD_OPERATION');
     $plan = SharedApplyConfigWorker::readPlan($id);
@@ -482,9 +485,17 @@ function crashAfterActualConfigSave($config, string $id): void {
              isset($plan['found_intent'], $plan['found_batch']) &&
              count($plan['found_batch']) === 3,
              'G03_CONFIG_PLAN_NOT_ACTUAL_NATIVE_CHANGE');
+    if ($bound) {
+        $source = @fstat(STDIN);
+        required(getenv('ZAPRET2_G03_FIRST_DISABLED') === '1' &&
+                 getenv('ZAPRET2_G03_BOUND_FOUND') === '1' &&
+                 ($plan['candidate']['general']['enabled'] ?? null) === '0' &&
+                 is_array($source) && ($source['mode'] & 0170000) === 0010000,
+                 'G03_BOUND_CONFIG_CRASH_SCOPE_REQUIRED');
+    }
     $m = new \ReflectionMethod(SharedApplyConfigWorker::class, 'saveFoundNative');
-    $m->invoke(null, $plan, $id, '1', new G03NativeConfigSaveCrash($config),
-               static fn() => new \OPNsense\Zapret\Zapret());
+    $m->invoke(null, $plan, $id, $bound ? '0' : '1', new G03NativeConfigSaveCrash($config),
+               static fn() => new \OPNsense\Zapret\Zapret(), $bound);
     throw new \RuntimeException('G03_CONFIG_NO_ACTUAL_SAVE_CRASH');
 }
 
@@ -493,10 +504,10 @@ try {
              getenv('GITHUB_ACTIONS') === 'true' &&
              getenv('ZAPRET2_G03_COLD_PREPARED') === '1' &&
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
-             in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config',
-                                         'durable','durable-stopped','stopped-presave','attest','bind','crash-partial','crash-config-save','stage-ordinary','bootstrap-known'], true) &&
+             in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config','stage-config-next',
+                                         'durable','durable-stopped','stopped-presave','attest','bind','crash-partial','crash-config-save','crash-bound-config-save','stage-ordinary','bootstrap-known'], true) &&
              count($argv) === (in_array(($argv[1] ?? ''),
-                ['stage','stage-partial','stage-config','stage-ordinary','bootstrap-known'], true) ? 2 : 3),
+                ['stage','stage-partial','stage-config','stage-config-next','stage-ordinary','bootstrap-known'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
     SharedApplyLifecycleLock::assertHeld();
     require_once 'script/load_phalcon.php';
@@ -513,10 +524,10 @@ try {
         $state = AutoDetectConfigSnapshot::bootstrapKnownInitial(
             $config, static fn() => new \OPNsense\Zapret\Zapret(), $digest);
         echo "original-known-bootstrap=" . $state . "\n";
-    } elseif ($argv[1] === 'crash-config-save') {
+    } elseif (in_array($argv[1], ['crash-config-save', 'crash-bound-config-save'], true)) {
         // The original Config lock must be acquired ONCE by the real
         // SharedConfigCommit, via the test-only delegating crash adapter.
-        crashAfterActualConfigSave($config, $argv[2]);
+        crashAfterActualConfigSave($config, $argv[2], $argv[1] === 'crash-bound-config-save');
     } else {
         $config->lock();
         try {
@@ -530,9 +541,15 @@ try {
                          $prepared['plan']['page'] === 'strategies',
                          'G03_BOUND_NATIVE_ORDINARY_PLAN_REQUIRED');
                 echo 'prepared-id=' . SharedApplyRequest::materialize($prepared) . "\n";
-            } elseif (in_array($argv[1], ['stage','stage-partial','stage-config'], true)) {
+            } elseif (in_array($argv[1], ['stage','stage-partial','stage-config','stage-config-next'], true)) {
+                $next = $argv[1] === 'stage-config-next';
+                if ($next) {
+                    required(getenv('ZAPRET2_G03_FIRST_DISABLED') === '1' &&
+                             getenv('ZAPRET2_G03_BOUND_FOUND') === '1',
+                             'G03_BOUND_NEXT_STAGE_SCOPE_REQUIRED');
+                }
                 echo 'prepared-id=' . stage($config,
-                    $argv[1] !== 'stage', $argv[1] === 'stage-config') . "\n";
+                    $argv[1] !== 'stage', $argv[1] === 'stage-config' || $next, $next) . "\n";
             } elseif (in_array($argv[1], ['durable-stopped', 'stopped-presave'], true)) {
                 durable($config, $argv[2], $argv[1]);
                 echo $argv[1] === 'stopped-presave'
