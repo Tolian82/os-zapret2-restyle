@@ -913,6 +913,49 @@ class OriginalManagedFileCAS(unittest.TestCase):
                     self.assertEqual(target.read_bytes(), before)
                     self.assertEqual(seen, [row[2], row[1]] if interrupted else [row[2]])
 
+    def test_original_managed_crash_after_barrier_cleanup_before_installed_wal(self):
+        """The original WAL still owns the after-image even without scratch residue."""
+        from auto_detect_destination_commit import (
+            _write_bound_managed_file_locked, _restore_bound_managed_file_locked)
+        from shared_apply_operation import SharedOperationError
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, before, after = self.fixture()
+            kw = dict(parent=parent, active=active, attest=lambda: True)
+            original_checkpoint = store._checkpoint_managed_write
+            saw_installed_attempt = []
+
+            def interrupt_after_barrier(expected, managed, attest, **kwargs):
+                if isinstance(managed, dict) and "installed" in managed:
+                    current = store.read()
+                    ready = current["managed"]["ready"]
+                    token = ready["temp"][13:-4]
+                    scratch = active.parent / (".s10-managed-barrier-" + token)
+                    self.assertIn("barrier", current["managed"])
+                    self.assertNotIn("installed", current["managed"])
+                    self.assertFalse(scratch.exists())
+                    self.assertEqual(target.read_bytes(), after)
+                    saw_installed_attempt.append(True)
+                    raise OSError("interrupted-after-cleanup-before-installed")
+                return original_checkpoint(expected, managed, attest, **kwargs)
+
+            with patch.object(store, "_checkpoint_managed_write",
+                              side_effect=interrupt_after_barrier):
+                with self.assertRaisesRegex(OSError, "interrupted-after-cleanup-before-installed"):
+                    _write_bound_managed_file_locked(store, prepared, row, **kw)
+            self.assertEqual(saw_installed_attempt, [True])
+            pending = store.read()
+            self.assertEqual(pending["phase"], "managed-writing")
+            self.assertIn("ready", pending["managed"])
+            self.assertIn("barrier", pending["managed"])
+            self.assertNotIn("installed", pending["managed"])
+            self.assertEqual(target.read_bytes(), after)
+            with self.assertRaises(SharedOperationError):
+                store.advance("activated", prepared["detail"])
+            restored = _restore_bound_managed_file_locked(store, pending, **kw)
+            self.assertEqual(restored["phase"], "restored")
+            self.assertEqual(target.read_bytes(), before)
+
     def test_original_managed_cas_crash_after_ready_before_rename(self):
         from auto_detect_destination_commit import (
             _write_bound_managed_file_locked, _restore_bound_managed_file_locked)
