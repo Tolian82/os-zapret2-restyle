@@ -846,9 +846,38 @@ class OriginalManagedFileCAS(unittest.TestCase):
                         store.attest_unbound_config_save(prepared["detail"]["id"], "d" * 64,
                                                         shared_work_parent=parent)
                     if interrupted:
-                        with patch("os.replace", side_effect=replace_file):
-                            with self.assertRaisesRegex(OSError, "interrupted after file rename"):
-                                _restore_bound_managed_file_locked(store, pending, **kw)
+                        # Native UFS-only diagnosis of the original _replace
+                        # double-CAS. Report changed field names, NEVER raw
+                        # inode, timestamp, content, native PID or path.
+                        import auto_detect_destination_commit as writer
+                        real_target = writer._target
+                        snapshots = []
+
+                        def traced_target(item, owner, **kwargs):
+                            data, info = real_target(item, owner, **kwargs)
+                            frame = sys._getframe(1)
+                            while frame is not None and frame.f_code.co_name != "_replace":
+                                frame = frame.f_back
+                            if Path(item) == target and frame is not None:
+                                snapshots.append(_target_identity(info))
+                            return data, info
+
+                        try:
+                            with patch("auto_detect_destination_commit._target",
+                                       side_effect=traced_target), patch(
+                                    "os.replace", side_effect=replace_file):
+                                with self.assertRaisesRegex(OSError, "interrupted after file rename"):
+                                    _restore_bound_managed_file_locked(store, pending, **kw)
+                        except Exception:
+                            if len(snapshots) >= 2:
+                                names = ("device", "inode", "ctime", "mtime", "size",
+                                         "mode", "uid", "gid", "links")
+                                drift = [name for idx, name in enumerate(names)
+                                         if snapshots[0][idx] != snapshots[-1][idx]]
+                                print("S10_NATIVE_RESTORE_CAS_DRIFT=" + json.dumps({
+                                    "fields": drift, "reads": len(snapshots)},
+                                    sort_keys=True), flush=True)
+                            raise
                         pending = store.read()
                         self.assertEqual(target.read_bytes(), before)
                         self.assertIn("restore", pending["managed"])
