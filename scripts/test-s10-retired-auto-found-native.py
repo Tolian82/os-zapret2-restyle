@@ -160,31 +160,12 @@ def native_positive():
          g04.same_gui_multiline(saved["strategy"]["trafficargs"], traffic) and
          g04.same_gui_multiline(saved["hostlist"].get("youtubedomains"), domains),
          "S10_AUTO_HTTPS_FRESH_MODEL_UNQUALIFIED")
-    # Native Auto learning is explicit-only. The seeded two YouTube
-    # profiles are not permission to install a global learner. Add one
-    # truly explicit <HOSTLIST:auto> QUIC profile with the SAME upstream
-    # built-in Lua/payload/filter contract as the seeded QUIC profile.
-    # It is test-only, submitted via the real Strategies HTTPS form.
-    # The original two YouTube profiles remain before this new profile.
-    auto_profile = (
-        "--new\n"
-        "--filter-udp=443\n"
-        "--filter-l7=quic\n"
-        "<HOSTLIST:auto>\n"
-        "--out-range=-d10\n"
-        "--payload=quic_initial\n"
-        "--lua-desync=fake:blob=fake_default_quic:repeats=5"
-    )
-    auto_strategy = traffic.rstrip() + "\n\n" + auto_profile + "\n"
-    need(traffic.count("--new") == 1 and
-         "<HOSTLIST:auto>" not in traffic and
-         auto_strategy.count("<HOSTLIST:auto>") == 1 and
-         auto_strategy.count("--new") == 2,
-         "S10_AUTO_EXPLICIT_STRATEGY_SCOPE_REQUIRED")
-    first_auto = [
-        ("zapret[hostlist][mode]", "auto"),
-        ("zapret[strategy][trafficargs]", auto_strategy),
-    ]
+    # Auto mode builds learning clones only for the exact qualified known
+    # <HOSTLIST:youtube>/<HOSTLIST:user> sources. The global optional
+    # <HOSTLIST:auto> is separate and has no guaranteed initial file:
+    # adding it here would fail the original targets resolver, not test
+    # generation ownership. Preserve exactly the seeded profile bytes.
+    first_auto = [("zapret[hostlist][mode]", "auto")]
     reject = web.api("POST", "/api/zapret/settings/apply",
                      g04.g04_http_form(saved, stale=True) + first_auto)
     need(reject.get("result") == "failed" and
@@ -201,7 +182,7 @@ def native_positive():
         "CONFIG_AUTO": observed.findtext("hostlist/mode") == "auto",
         "CONFIG_ENABLED": observed.findtext("general/enabled") == "1",
         "CONFIG_WAN": observed.findtext("general/waninterface") == "lo0",
-        "CONFIG_STRATEGY": observed.findtext("strategy/trafficargs") == auto_strategy,
+        "CONFIG_STRATEGY": observed.findtext("strategy/trafficargs") == traffic,
         "CONFIG_DOMAINS": observed.findtext("hostlist/youtubedomains") == domains,
     }
     failed_first = [name for name, ok in checks.items() if not ok]
@@ -295,7 +276,34 @@ def native_positive():
             ("ENGINE_NOT_READY", native_status.returncode == 0),
         ) if not ok
     ]
-    need(not failed, "S10_AUTO_REAL_" + "_".join(failed) + "_REQUIRED")
+    if failed:
+        # A non-schema2 first owner may be the result of the existing
+        # *original* immutable bound dispatch, not a reason to fabricate
+        # a second generation. Inspect its source-defined mode and map
+        # presence only; never print any source file or digest.
+        detail = old.get("detail", {}) if isinstance(old, dict) else {}
+        ident = detail.get("id") if isinstance(detail, dict) else None
+        work = Path("/var/db/zapret2/shared-work") / (
+            ident if isinstance(ident, str) and HEX32.fullmatch(ident) else "invalid")
+        root = work / "manifest.json"
+        status = "NO_ROOT"
+        if root.is_file() and not root.is_symlink() and root.stat().st_size <= 8192:
+            doc = json.loads(root.read_bytes())
+            mode = doc.get("service", {}).get("target_mode")
+            if mode in ("auto", "all", "list"):
+                status = "ROOT_" + mode.upper()
+        markers = []
+        for name, suffix in (
+            ("auto-detect-source-map.json", "SOURCEMAP"),
+            ("auto-detect-generation.json", "EPOCHMAP"),
+            ("dvtws.original.args", "ORIGINALARGS")):
+            file = work / "release" / name
+            if file.is_file() and not file.is_symlink():
+                markers.append(suffix)
+        failed = failed[:3]
+        label = "_".join(failed + [status] + markers)
+        need(False, "S10_AUTO_REAL_" + label + "_REQUIRED")
+    need(not failed, "S10_AUTO_REAL_NATIVE_INVARIANT_DRIFT")
     initial_config = CONFIG.read_bytes()
     stopped = subprocess.run([str(SERVICE), "stop"], capture_output=True,
                              timeout=180, check=False)
