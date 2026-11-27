@@ -52,5 +52,7 @@ jobs:
           php -l src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2b2b3b2b-quiescent-original-preimage.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10c2b-original-shared-source-gate.py
+          # Match the existing canonical ci.yml dependency for the P1 validator.
+          python3.13 -m pip install idna
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-shared-apply-operation.py
           sh scripts/test-shared-apply-execute.sh
