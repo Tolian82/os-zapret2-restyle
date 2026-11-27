@@ -575,6 +575,51 @@ class PostDropContract(unittest.TestCase):
             os.close(fd)
         self.assertEqual(self.capture().identities, witness.identities)
 
+    def test_bound_learning_capture_borrows_exact_original_queue(self):
+        name = "learning-" + "a" * 32 + "-3.txt"
+        path = self.root / name
+        path.write_bytes(b"")
+        path.chmod(0o660)
+        def capture(fd=None):
+            return _capture(self.root, root_uid=self.owner, root_gid=self.gid,
+                engine_uid=self.engine, engine_gid=self.gid,
+                learning_names=(name,), queue_fd=fd)
+        queue = DurableInbox(self.root, owner_uid=self.owner, writer_gid=self.gid)
+        baseline = capture()
+        with queue.exclusive(existing_only=True):
+            fd = queue.locked_fd
+            self.assertEqual(capture(fd), baseline)
+            duplicate = os.dup(fd)
+            try:
+                self.assertEqual(capture(duplicate), baseline)
+            finally:
+                os.close(duplicate)
+            foreign = os.open(queue.lock, os.O_RDWR | os.O_NOFOLLOW)
+            try:
+                with self.assertRaises(PostDropRefused):
+                    capture(foreign)
+                # Neither rejected descriptor nor borrowed-child exit releases
+                # the original owner's actual flock.
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(foreign, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            finally:
+                os.close(foreign)
+            with self.assertRaises(PostDropRefused):
+                capture()  # a second acquisition is forbidden
+            path.write_bytes(b"unexpected.example\n")
+            with self.assertRaises(PostDropRefused):
+                capture(fd)
+            self.assertEqual(path.read_bytes(), b"unexpected.example\n")
+            path.write_bytes(b"")
+            self.assertEqual(capture(fd), baseline)
+        unlocked = os.open(queue.lock, os.O_RDWR | os.O_NOFOLLOW)
+        try:
+            with self.assertRaises(PostDropRefused):
+                capture(unlocked)
+        finally:
+            os.close(unlocked)
+        self.assertEqual(capture(), baseline)
+
     def test_pretraffic_does_not_reject_native_append_after_start(self):
         # The original prelaunch witness stays valid after raw/debug append.
         # It is NOT permission to seed an epoch after traffic started.
