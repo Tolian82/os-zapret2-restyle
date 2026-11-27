@@ -1954,7 +1954,7 @@ def native_remove_rollback_pair(root: Path = DEFAULT_ROOT,
 
 
 def native_bound_prepare_gate(operation: str) -> None:
-    """Only a fresh detached ordinary candidate, never a lifecycle permit."""
+    """Only a fresh detached ordinary/Found candidate, never a lifecycle permit."""
     from neutral_root_stage import verify_original_operation_pins
     from shared_apply_render import regular
     from shared_apply_seal import WORK
@@ -2012,11 +2012,28 @@ def native_bound_prepare_gate(operation: str) -> None:
                     selected.append(name)
             mode = selected[0] if len(selected) == 1 else None
         if (type(plan) is not dict or plan.get("result") != "prepared" or
-                plan.get("page") != "strategies" or "found_intent" in plan or
-                "found_batch" in plan or plan.get("dependencies") != record["detail"]["candidate"] or
+                plan.get("page") != "strategies" or
+                plan.get("dependencies") != record["detail"]["candidate"] or
                 type(general) is not dict or general.get("enabled") != "1" or
                 mode not in ("all", "list")):
             raise SharedOperationError("bound prepare detached plan scope refused")
+        if "found_intent" in plan or "found_batch" in plan:
+            intent = plan.get("found_intent")
+            if (type(intent) is not dict or
+                    intent.get("config_revision") != plan["dependencies"] or
+                    intent.get("commit_authorized") is not False or
+                    type(plan.get("changed_fields")) is not list or
+                    type(plan.get("found_batch")) is not dict):
+                raise SharedOperationError("bound prepare detached Found intent refused")
+            # Reuse the original canonical P1 batch validator. Detached
+            # validation grants no physical CAS or Config permission;
+            # the existing builder and FD4/P2 transaction reattest live preimages.
+            from auto_detect_destination_commit import (
+                DestinationRefused, _qualified_shared_found_batch)
+            try:
+                _qualified_shared_found_batch(plan["found_batch"])
+            except (DestinationRefused, OSError, ValueError, TypeError) as exc:
+                raise SharedOperationError("bound prepare detached Found batch refused") from exc
         if store.read() != record:
             raise SharedOperationError("bound prepare owner changed")
         return identities, plan_raw, xml_raw

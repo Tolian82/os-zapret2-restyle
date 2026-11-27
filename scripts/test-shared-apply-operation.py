@@ -848,6 +848,49 @@ class TestJournal(unittest.TestCase):
             pins = stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
             native_bound_prepare_gate(op)
             self.assertEqual(pins.call_count, 2)
+            # A genuine three-source Found plan is still only a detached
+            # build input. Reuse real batch SHA/identity/domain validation.
+            rows = {name: {
+                "before": "", "after": "example.org\n" if name == "auto" else "",
+                "before_status": "present",
+                "before_revision": hashlib.sha256(b"present\0").hexdigest(),
+                "before_device": 1, "before_inode": index + 1,
+                "before_ctime_ns": 1, "before_mtime_ns": 1, "before_size": 0}
+                for index, name in enumerate(("youtube", "user", "auto"))}
+            found = {**plan, "changed_fields": [],
+                     "found_intent": {"config_revision": plan["dependencies"],
+                                      "commit_authorized": False},
+                     "found_batch": rows}
+            for mode in ("list", "all", {"list": {"selected": "1"},
+                                         "auto": {"selected": "0"}}):
+                with self.subTest(found_mode=mode):
+                    valid_found = {**found, "candidate": {
+                        **plan["candidate"], "hostlist": {"mode": mode}}}
+                    plan_file.write_text(json.dumps(valid_found))
+                    native_bound_prepare_gate(op)
+                    self.assertEqual(json.loads(plan_file.read_bytes()), valid_found)
+                    self.assertEqual((store.root / "operation.json").read_bytes(), original)
+                    self.assertEqual(set(candidate.iterdir()), {xml, plan_file})
+                    self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+            for malformed in (
+                    {k: v for k, v in found.items() if k != "found_batch"},
+                    {k: v for k, v in found.items() if k != "found_intent"},
+                    {**found, "found_intent": {**found["found_intent"], "config_revision": "0" * 64}},
+                    {**found, "found_intent": {**found["found_intent"], "commit_authorized": True}},
+                    {**found, "found_intent": {**found["found_intent"], "commit_authorized": 0}},
+                    {**found, "found_batch": {}},
+                    {**found, "found_batch": {**rows, "foreign": {}}},
+                    {**found, "found_batch": {**rows, "auto": {**rows["auto"], "before_revision": "0" * 64}}},
+                    {**found, "found_batch": {**rows, "auto": {**rows["auto"], "before_inode": 1.0}}},
+                    {**found, "changed_fields": None},
+                    {**found, "candidate": {"general": {"enabled": "1"}, "hostlist": {"mode": "auto"}}},
+                    {**found, "candidate": {"general": {"enabled": "0"}, "hostlist": {"mode": "list"}}}):
+                with self.subTest(malformed_found=malformed):
+                    plan_file.write_text(json.dumps(malformed))
+                    with self.assertRaises(SharedOperationError):
+                        native_bound_prepare_gate(op)
+                    self.assertEqual((store.root / "operation.json").read_bytes(), original)
+            plan_file.write_text(json.dumps(plan))
             # A list-only edit preserves the native, unedited OptionField
             # dictionary in the actual PHP plan. Labels are not authority.
             for selected_mode in ("all", "list"):
