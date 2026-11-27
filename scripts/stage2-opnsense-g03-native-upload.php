@@ -59,7 +59,11 @@ try {
          2=>['file','/dev/null','a']],
         $pipes, '/usr/local/opnsense',
         ['GITHUB_ACTIONS'=>'true', 'ZAPRET2_G03_COLD_PREPARED'=>'1',
-         'PATH'=>'/usr/local/bin:/usr/bin:/bin', 'LC_ALL'=>'C']
+         // The original service resolves its assigned kernel WAN using
+         // base ifconfig(8), installed in FreeBSD /sbin. Do not make a
+         // disposable HTTP harness less capable than the real root CLI.
+         'PATH'=>'/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+         'LC_ALL'=>'C']
     );
     if (!is_resource($proc)) {
         throw new \RuntimeException('G03_HTTP_ORIGINAL_SERVICE_UNAVAILABLE');

@@ -111,6 +111,7 @@ jobs:
           python3.13 scripts/stage2-opnsense-g03-native-prepared.py fault-worker-self-test
           php -l scripts/stage2-opnsense-g03-native-prepared.php
           php -l scripts/stage2-opnsense-g03-native-upload.php
+          grep -Fq "'PATH'=>'/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'" scripts/stage2-opnsense-g03-native-upload.php
           python3.13 -c 'import re,pathlib; p=pathlib.Path("scripts/stage2-opnsense-g03-native-prepared.php"); chunks=re.findall(r"<<<\x27PY\x27\n(.*?)\nPY;",p.read_text(),re.S); assert len(chunks)==3; [compile(c,str(p),"exec") for c in chunks]'
           python3.13 -m pip install idna
           python3.13 scripts/test-shared-apply-operation.py TestJournal.test_bound_successor_prepare_is_detached_only
