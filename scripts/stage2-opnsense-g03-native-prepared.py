@@ -435,7 +435,7 @@ from neutral_schema3_saved_wan_preimage import _native_preflight
 from neutral_schema3_quiescent_preimage import QuiescentPreimage
 from neutral_shared_apply_source_gate import (
     native_bind_original_prepared_fd9, native_plan_original_prepared_fd9,
-    native_coordinate_original_prepared_fd9, MAX_PIPE)
+    native_coordinate_original_prepared_fd9, OriginalSourceGateRefused, MAX_PIPE)
 from voice_ipfw_adapter import require_lifecycle_lock
 def first_trace_lines(raw):
     if type(raw) is not bytes or len(raw) > 16384:
@@ -452,12 +452,18 @@ def managed_trace_lines(raw):
         line))[:64]
 
 
-def coordinate_managed_diagnosed(op, raw, store, detail, coordinate):
+def coordinate_managed_diagnosed(op, raw, store, detail, coordinate, private_worker=None):
     # Observe the exact joined call once; never alter its reply or retry it.
     import neutral_schema3_quiescent_preimage as quiescent
     original_join = quiescent._run_bound_restore_joined
 
     def diagnosed_join(command, **kwargs):
+        if list(command[-3:]) == ["managed-apply", op, "strategies"] and private_worker is not None:
+            if list(command[:2]) != [
+                    "/usr/local/bin/php",
+                    "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php"]:
+                raise RuntimeError("G03_MANAGED_FAULT_UNEXPECTED_ORIGINAL_WRITER")
+            command = [command[0], str(private_worker), *command[2:]]
         reply = original_join(command, **kwargs)
         if list(command[-3:]) == ["managed-apply", op, "strategies"]:
             try:
@@ -516,13 +522,13 @@ try:
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     prior = store.read()
-    if mode not in ("running", "stopped", "cold", "first-commit", "successor"):
+    if mode not in ("running", "stopped", "cold", "first-commit", "successor", "successor-uncertain"):
         raise RuntimeError("mode")
     if mode in ("cold", "first-commit"):
         if prior is not None:
             raise RuntimeError("G03_PRISTINE_COLD_WAL_ALREADY_PRESENT")
         old_owner = None
-    elif mode == "successor":
+    elif mode in ("successor", "successor-uncertain"):
         if (not isinstance(prior, dict) or prior["phase"] != "committed" or
                 prior.get("manifest", {}).get("schema") != 1 or
                 "previous" in prior or "previous_manifest" in prior or "found" in prior or
@@ -545,7 +551,7 @@ try:
         raise RuntimeError("candidate")
     detail = {"id": op, "page": "strategies", "base": native["base"],
               "candidate": native["candidate"], "changed_fields": native["fields"]}
-    if mode == "successor":
+    if mode in ("successor", "successor-uncertain"):
         if (detail["base"] != old_owner["candidate"] or detail["base"] == detail["candidate"] or
                 detail["changed_fields"] != ["hostlist.youtubedomains"] or store.read() != prior):
             raise RuntimeError("G03_BOUND_SUCCESSOR_PLAN_CHANGED")
@@ -562,7 +568,7 @@ try:
             raise RuntimeError("G03_BOUND_SUCCESSOR_NOT_SINGLE_FILE_DELTA")
     store.advance("prepared", detail)
     raw = sys.stdin.buffer.read(MAX_PIPE + 1)
-    if mode == "successor":
+    if mode in ("successor", "successor-uncertain"):
         route, committed, source, semantic = coordinate_managed_diagnosed(
             op, raw, store, detail, native_coordinate_original_prepared_fd9)
         if (route != "managed-committed" or store.read() != committed or
