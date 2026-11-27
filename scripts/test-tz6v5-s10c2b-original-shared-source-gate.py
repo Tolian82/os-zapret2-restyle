@@ -828,6 +828,24 @@ class OriginalFd9SourceGate(unittest.TestCase):
             store.return_value._advance_bound_ordinary.assert_not_called()
             nested.assert_not_called()
 
+    def test_cli_entry_uses_canonical_module_for_exact_root_receipt_type(self):
+        import runpy
+        from unittest.mock import patch
+        from neutral_root_stage import attest_prepared_source_root
+
+        def cli():
+            from neutral_shared_apply_source_gate import SourceGateReceipt
+            # The compiler imports that exact class, not a structural lookalike.
+            self.assertIs(SourceGateReceipt, gate.SourceGateReceipt)
+            self.assertEqual(attest_prepared_source_root.__module__, "neutral_root_stage")
+            return 23
+
+        with patch.object(gate, "main", side_effect=cli) as entry:
+            with self.assertRaises(SystemExit) as exited:
+                runpy.run_path(str(Path(gate.__file__)), run_name="__main__")
+            self.assertEqual(exited.exception.code, 23)
+            entry.assert_called_once_with()
+
     def test_first_auto_gui_only_dispatches_exact_first_enabled_owner(self):
         from contextlib import ExitStack
         from unittest.mock import Mock
