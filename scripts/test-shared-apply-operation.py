@@ -1041,6 +1041,36 @@ class TestJournal(unittest.TestCase):
             with self.assertRaises(SharedOperationError):
                 native_bound_stopped_gui_gate()
             store._persist_record.assert_not_called()
+            # Reuse only the real previous pin after a terminal rollback;
+            # even a valid abandoned root cannot become the old owner.
+            from shared_apply_operation import restored_retired_found_owner
+            abandoned = {"id": "2"*32, "page": "strategies",
+                         "base": old["candidate"], "candidate": "e"*64,
+                         "changed_fields": ["general.enabled"]}
+            abandoned_pin = {**record["manifest"], "schema": 1,
+                             "generation": abandoned["id"],
+                             "candidate_sha256": abandoned["candidate"]}
+            restored = {"schema": 1, "phase": "restored", "detail": abandoned,
+                        "previous": old, "previous_manifest": record["manifest"],
+                        "manifest": abandoned_pin}
+            store.read.return_value = restored
+            root.return_value = b'{"service":{"enabled":true,"target_mode":"auto"}}'
+            self.assertTrue(restored_retired_found_owner(restored))
+            self.assertEqual(native_bound_stopped_gui_gate(), 2)
+            self.assertEqual(root.call_args.kwargs["detail"], old)
+            self.assertEqual(root.call_args.kwargs["binding"], record["manifest"])
+            self.assertEqual(attest.call_args.kwargs, {"restored_record": restored})
+            unbound = {k: v for k, v in restored.items() if k != "manifest"}
+            store.read.return_value = unbound
+            self.assertEqual(native_bound_stopped_gui_gate(), 2)
+            for forbidden in (old["id"], abandoned["id"]):
+                with self.assertRaises(SharedOperationError):
+                    native_bound_stopped_gui_gate(forbidden)
+            store.read.return_value = {**restored,
+                "detail": {**abandoned, "base": "f"*64}}
+            with self.assertRaises(SharedOperationError):
+                native_bound_stopped_gui_gate()
+            store._persist_record.assert_not_called()
 
     def test_native_gate_uses_only_trusted_shared_apply_owner(self):
         with tempfile.TemporaryDirectory() as d:

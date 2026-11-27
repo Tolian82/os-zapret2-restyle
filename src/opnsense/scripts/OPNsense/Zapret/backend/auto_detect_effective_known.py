@@ -1428,7 +1428,8 @@ def native_bound_retired_found_save_original_fd9(operation: str) -> int:
     from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
     from auto_detect_fd import _probe_original_inode
     from shared_apply_operation import (
-        SharedApplyOperation, committed_manifest, committed_owner)
+        SharedApplyOperation, committed_manifest, committed_owner,
+        restored_retired_found_owner)
     from shared_apply_seal import WORK, verify_seal
     from neutral_root_stage import verify_original_operation_pins
     from neutral_schema3_previous_physical import _full_prior_tree
@@ -1447,9 +1448,11 @@ def native_bound_retired_found_save_original_fd9(operation: str) -> int:
     record = store.read()
     old = committed_owner(record)
     pin = committed_manifest(record)
-    if (type(record) is not dict or record.get("phase") != "committed" or
+    restored = restored_retired_found_owner(record)
+    if (type(record) is not dict or
+            (record.get("phase") != "committed" and not restored) or
             type(pin) is not dict or pin.get("schema") != 2 or
-            type(old) is not dict or old["id"] == operation or
+            type(old) is not dict or operation in (old["id"], record["detail"]["id"]) or
             "found" in record or "failure" in record):
         raise EffectiveKnownRefused("bound_retired_terminal_schema2_required")
     verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
@@ -1480,7 +1483,8 @@ def native_bound_retired_found_save_original_fd9(operation: str) -> int:
             require_lifecycle_lock()
             if store.read() != record:
                 raise EffectiveKnownRefused("bound_retired_owner_changed")
-            return attest_learning_stopped_generation()
+            return (attest_learning_stopped_generation(restored_record=record)
+                    if restored else attest_learning_stopped_generation())
 
         def inspect(path, device, inode, *, owner, writer_gid):
             return _probe_original_inode(

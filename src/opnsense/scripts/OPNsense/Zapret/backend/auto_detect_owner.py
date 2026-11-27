@@ -887,7 +887,8 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
                          epoch_root: Path, runner, owner_uid: int,
                          allow_transition: bool = False,
                          learning_schema3: bool = False,
-                         pending_found_record: dict | None = None
+                         pending_found_record: dict | None = None,
+                         restored_record: dict | None = None
                          ) -> GenerationProof | LearningGenerationProof:
     """Attest the SAME immutable original owner after its process has exited.
 
@@ -919,6 +920,15 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
                 record["previous"]["candidate"] != record["detail"]["base"]):
             raise GenerationRefused("unqualified_stopped_bound_found_predecessor")
         owner = record["previous"]
+    elif restored_record is not None:
+        # Only explicit stopped Found admission, never generic Stop/worker.
+        from shared_apply_operation import restored_retired_found_owner
+        from neutral_root_stage import verify_original_operation_pins
+        if (allow_transition or not learning_schema3 or record != restored_record or
+                not restored_retired_found_owner(record)):
+            raise GenerationRefused("stopped_restored_retired_owner_refused")
+        verify_original_operation_pins(record=record, parent=work_root, owner_uid=owner_uid)
+        owner = committed_owner(record)
     elif record["phase"] == "committed":
         owner = committed_owner(record)
     elif allow_transition and record["phase"] in ("prepared", "activating"):
@@ -1066,7 +1076,8 @@ def attest_learning_stopped_generation(*,
                                        child_pidfile: Path = CHILD_PID,
                                        monitor_pidfile: Path = MONITOR_PID,
                                        epoch_root: Path = Path("/var/db/zapret2/auto-detect-epochs"),
-                                       runner=subprocess.run) -> LearningGenerationProof:
+                                       runner=subprocess.run,
+                                       restored_record: dict | None = None) -> LearningGenerationProof:
     """STEP 15b3c: optional read-only STOPPED schema3 historical owner.
 
     Existing lifecycle lock, original terminal Apply, sealed source/map,
@@ -1083,7 +1094,7 @@ def attest_learning_stopped_generation(*,
             journal=journal, work_root=work_root, active=active,
             child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
             epoch_root=epoch_root, runner=runner, owner_uid=0,
-            learning_schema3=True)
+            learning_schema3=True, restored_record=restored_record)
         if not isinstance(proof, LearningGenerationProof):
             raise GenerationRefused("stopped_learning_owner_not_schema3")
         return proof

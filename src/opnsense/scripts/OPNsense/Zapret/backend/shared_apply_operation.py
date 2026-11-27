@@ -1953,6 +1953,25 @@ def native_remove_rollback_pair(root: Path = DEFAULT_ROOT,
     return {"state": "trial", "old": owner, "trial": trial["id"]}
 
 
+def restored_retired_found_owner(record: dict | None) -> bool:
+    """Read-only scope for the next stopped Found Apply, not a lifecycle permit.
+
+    The original old root remains authoritative after RESTORED. The aborted
+    candidate, if bound, must still be verified by the caller; never use it
+    as the current root. No admission of other restored runtime classes.
+    """
+    if type(record) is not dict or record.get("phase") != "restored":
+        return False
+    _validate_record(record)
+    prior = committed_owner(record)
+    pin = committed_manifest(record)
+    return (type(prior) is dict and type(pin) is dict and pin["schema"] == 2 and
+            record["detail"]["page"] == "strategies" and
+            prior["candidate"] == record["detail"]["base"] and
+            ("manifest" not in record or record["manifest"]["schema"] == 1) and
+            not any(key in record for key in ("found", "failure")))
+
+
 def native_bound_stopped_gui_gate(operation: str | None = None) -> int:
     """Read-only FD9 admission for a disabled List/All Found successor.
 
@@ -1977,12 +1996,13 @@ def native_bound_stopped_gui_gate(operation: str | None = None) -> int:
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     record = store.read()
-    if (type(record) is not dict or record["phase"] != "committed" or
-            record.get("manifest", {}).get("schema") not in (1, 2) or
-            "found" in record or
-            "failure" in record):
+    restored = restored_retired_found_owner(record)
+    if (type(record) is not dict or
+            (record["phase"] != "committed" and not restored) or
+            (committed_manifest(record) or {}).get("schema") not in (1, 2) or
+            "found" in record or "failure" in record):
         raise SharedOperationError("bound GUI gate inert terminal owner required")
-    detail, pin = record["detail"], record["manifest"]
+    detail, pin = committed_owner(record), committed_manifest(record)
     old_work = WORK / detail["id"]
     retired = pin["schema"] == 2
 
@@ -2007,7 +2027,8 @@ def native_bound_stopped_gui_gate(operation: str | None = None) -> int:
                 require_lifecycle_lock()
                 if store.read() != record:
                     raise SharedOperationError("bound GUI gate retired owner changed")
-                return attest_learning_stopped_generation()
+                return (attest_learning_stopped_generation(restored_record=record)
+                        if restored else attest_learning_stopped_generation())
             def inspect(path, device, inode, *, owner, writer_gid):
                 return _probe_original_inode(path, device, inode, owner=owner,
                     writer_gid=writer_gid, attest_owner=lambda: attest().owner == owner)
@@ -2058,7 +2079,7 @@ def native_bound_stopped_gui_gate(operation: str | None = None) -> int:
 
     previous = observe_old()
     if operation is not None:
-        if operation == detail["id"]:
+        if operation in (detail["id"], record["detail"]["id"]):
             raise SharedOperationError("bound GUI gate cannot reuse generation")
         work = WORK / operation
         # The immutable candidate root is attached only by the existing
@@ -2176,12 +2197,15 @@ def native_bound_prepare_gate(operation: str) -> None:
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     record = store.read()
-    if (type(record) is not dict or record.get("phase") != "committed" or
-            record.get("manifest", {}).get("schema") not in (1, 2) or
+    restored = restored_retired_found_owner(record)
+    if (type(record) is not dict or
+            (record.get("phase") != "committed" and not restored) or
+            (committed_manifest(record) or {}).get("schema") not in (1, 2) or
             "found" in record or "failure" in record or
             operation in (record["detail"]["id"], record.get("previous", {}).get("id"))):
         raise SharedOperationError("bound prepare requires ordinary terminal owner")
-    retired = record["manifest"]["schema"] == 2
+    owner = committed_owner(record)
+    retired = committed_manifest(record)["schema"] == 2
     if retired and native_bound_stopped_gui_gate() != 2:
         raise SharedOperationError("bound prepare retired predecessor refused")
     work = WORK / operation
@@ -2226,7 +2250,7 @@ def native_bound_prepare_gate(operation: str) -> None:
             mode = selected[0] if len(selected) == 1 else None
         if (type(plan) is not dict or plan.get("result") != "prepared" or
                 plan.get("page") != "strategies" or
-                plan.get("dependencies") != record["detail"]["candidate"] or
+                plan.get("dependencies") != owner["candidate"] or
                 type(general) is not dict or general.get("enabled") not in ("0", "1") or
                 mode not in ("all", "list")):
             raise SharedOperationError("bound prepare detached plan scope refused")

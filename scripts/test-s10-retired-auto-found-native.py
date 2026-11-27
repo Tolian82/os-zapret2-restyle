@@ -291,6 +291,9 @@ def native_found_successor(web, voice, old, command):
             "X-CSRFToken": web.csrf_token, "Accept": "application/json",
             "Referer": voice.ORIGIN + "/ui/zapret/general"}, method="POST")
     fault = os.environ.get("ZAPRET2_S10_FOUND_FAULT", "normal")
+    retry = fault == "retry"
+    if retry:
+        fault = "presave"
     need(fault in ("normal", "saved-gap", "presave", "prepared-unbound", "prepared-bound"), "S10_AUTO_FOUND_FAULT_MODE_INVALID")
     paths = {"youtube": Path("/var/db/zapret2/auto-detect-owned/youtube.txt"),
              "user": Path("/var/db/zapret2/auto-detect-owned/user.txt"),
@@ -444,6 +447,25 @@ def native_found_successor(web, voice, old, command):
              "S10_AUTO_FOUND_PRESAVE_INDEPENDENT_PROOF_REFUSED")
         print("S10_AUTO_FOUND_ROLLBACK=PASS_PUBLIC_APPLY_THREE_BEFORE_IMAGES_BASE_CONFIG_ACK_STOPPED",
               flush=True)
+        if retry:
+            # Fresh actual GUI editor read and multipart submission, not
+            # replay of the old request or synthetic RESTORED journal.
+            os.environ["ZAPRET2_S10_FOUND_FAULT"] = "normal"
+            try:
+                native_found_successor(web, voice, old, command)
+            finally:
+                os.environ["ZAPRET2_S10_FOUND_FAULT"] = "retry"
+            terminal = json.loads(WAL.read_bytes())
+            need(terminal["phase"] == "committed" and
+                 terminal["previous"] == old["detail"] and
+                 terminal["previous_manifest"] == old["manifest"] and
+                 terminal["detail"]["id"] not in (old["detail"]["id"], pending["detail"]["id"]) and
+                 (new_root.stat().st_ino, new_root.read_bytes()) == new_pin and
+                 set(work.iterdir()) == work_before | {work / terminal["detail"]["id"]} and
+                 history() == old_history,
+                 "S10_AUTO_FOUND_RETRY_WRONG_OWNER_OR_ABANDONED_ROOT_CHANGED")
+            print("S10_AUTO_FOUND_RETRY=PASS_REAL_HTTPS_NEW_WAL_OLD_OWNER_ABANDONED_ROOT_INTACT",
+                  flush=True)
         return
     if fault == "saved-gap":
         need(SERVICE.read_bytes() == service_bytes and
