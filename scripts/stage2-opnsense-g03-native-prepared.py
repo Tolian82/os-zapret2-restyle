@@ -448,6 +448,17 @@ def managed_fault_worker_self_test():
                 checked = subprocess.run(["php", "-l", str(path)],
                                          capture_output=True, text=True, timeout=15)
                 need(checked.returncode == 0, "G03_MANAGED_FAULT_PRIVATE_PHP_LINT_REFUSED")
+    # A second native Found batch must not alias the Config interval toggle.
+    # Check the actual PHP staging source before booting an expensive VM.
+    fixture = (Path(__file__).resolve().parent / "stage2-opnsense-g03-native-prepared.php").read_text()
+    stage = fixture.split("function stage(", 1)[1].split("\nfunction durable(", 1)[0]
+    need(stage.count("bool $secondBatch = false") == 1 and
+         re.search(r"\$secondBatch\s*=(?!=)", stage.split("): string {", 1)[1]) is None and
+         stage.count("$nextInterval = $saved === 'off' ? 'hourly' : 'off';") == 1 and
+         stage.count("'autorestart'=>$nextInterval") == 1 and
+         stage.count("if ($secondBatch)") == 1 and
+         stage.count('$secondBatch ? "next-native-cold-prepared-proof.org') == 1,
+         "G03_BOUND_FOUND_DISTINCT_BATCH_SELECTOR_DRIFT")
     # The original G03 child is carried as a Python -c string: py_compile of
     # the wrapper alone would NOT detect an invalid native child statement.
     source_text = Path(__file__).read_text(encoding="utf-8")

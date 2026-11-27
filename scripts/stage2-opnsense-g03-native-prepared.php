@@ -35,7 +35,7 @@ function image(string $path, bool $canMiss): array {
             'revision'=>hash('sha256',"present\0" . $text), 'content'=>$text];
 }
 
-function stage($config, bool $partial = false, bool $withConfig = false, bool $next = false): string {
+function stage($config, bool $partial = false, bool $withConfig = false, bool $secondBatch = false): string {
     $current = (new \OPNsense\Zapret\Zapret())->getNodes();
     $xml = @file_get_contents('/conf/config.xml');
     required(is_string($xml), 'G03_COLD_CONFIG_UNREADABLE');
@@ -47,10 +47,10 @@ function stage($config, bool $partial = false, bool $withConfig = false, bool $n
         );
         required(in_array($saved, ['off','hourly','daily','weekly','monthly'], true),
                  'G03_CONFIG_NATIVE_SAVED_INTERVAL_INVALID');
-        $next = $saved === 'off' ? 'hourly' : 'off';
+        $nextInterval = $saved === 'off' ? 'hourly' : 'off';
         $prepared = SharedApplyRequest::prepare([
             'page'=>'strategies',
-            'fields'=>['general'=>['autorestart'=>$next]],
+            'fields'=>['general'=>['autorestart'=>$nextInterval]],
             'sync'=>['telegramips_baseline'=>
                 (string)($current['hostlist']['telegramips'] ?? '')],
         ], $current, $xml);
@@ -72,13 +72,13 @@ function stage($config, bool $partial = false, bool $withConfig = false, bool $n
             // Disposable crash fixture: require TWO genuine protected edits.
             $domain = $name === 'youtube'
                 ? 'native-partial-youtube-proof.org' : 'native-partial-user-proof.org';
-            if ($next) {
+            if ($secondBatch) {
                 $domain = 'next-' . $domain;
             }
             $draft = rtrim($draft, "\n") . "\n" . $domain . "\n";
         }
         if ($name === 'auto') {
-            $draft .= ($next ? "next-native-cold-prepared-proof.org\n" : "native-cold-prepared-proof.org\n");
+            $draft .= ($secondBatch ? "next-native-cold-prepared-proof.org\n" : "native-cold-prepared-proof.org\n");
         }
         $sources[$name] = ['base'=>$view, 'draft'=>$draft];
     }
