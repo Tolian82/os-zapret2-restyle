@@ -187,6 +187,21 @@ def native_positive():
     }
     failed_first = [name for name, ok in checks.items() if not ok]
     if failed_first:
+        # S10 G05 regression: the new sealed-schema3 pre-transaction fence
+        # must NOT be misreported as a partially applied/reviewed owner.
+        # Prove the official clean guest still has its exact Config bytes,
+        # no original WAL, and no started native service. The positive
+        # Auto->Stop->ACK scenario below remains REQUIRED, not silently
+        # converted into success by this safety checkpoint.
+        if result.get("reason") == "native-preflight-bound-auto-required":
+            inactive = subprocess.run([str(SERVICE), "status"],
+                                      capture_output=True, timeout=35)
+            need(result.get("requires_review") is False and
+                 CONFIG.read_bytes() == before and not WAL.exists() and
+                 inactive.returncode == 1,
+                 "S10_AUTO_UNBOUND_FENCE_NOT_INERT")
+            print("S10_AUTO_UNBOUND_FENCE=PASS_NO_CONFIG_WAL_OR_SERVICE_ACTIVATION",
+                  flush=True)
         # The original HTTPS API supplies a bounded *categorical* reason.
         # No message, request fields, native args, Config, user data or raw
         # stderr is exposed in the VM log. This classifier does not change
