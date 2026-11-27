@@ -2225,8 +2225,84 @@ def native_coordinate_original_prepared_fd9(operation: str, raw_pipe: bytes) -> 
     return route, bound, source, semantic
 
 
+def native_first_auto_gui_handoff_fd9(operation: str, raw_pipe: bytes,
+                                      candidate: str) -> None:
+    """Narrow original combined Apply child: first enabled Auto only.
+
+    The shell has durably prepared the ONE original journal. Re-attest
+    the exact source and scope before binding; no generic CLI dispatch,
+    no fallback and no new lock or Config writer.
+    """
+    from shared_apply_operation import SharedApplyOperation, DIGEST
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation) or
+            type(candidate) is not str or not DIGEST.fullmatch(candidate)):
+        raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    if decode_pipe(raw_pipe)["mode"] != b"auto":
+        raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_SCOPE_REQUIRED")
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    if (type(before) is not dict or before.get("phase") != "prepared" or
+            any(key in before for key in ("previous", "previous_manifest", "manifest", "found")) or
+            before["detail"]["id"] != operation or before["detail"]["page"] != "strategies" or
+            before["detail"]["candidate"] != candidate or before["detail"]["base"] == candidate or
+            "general.enabled" not in before["detail"]["changed_fields"]):
+        raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_SCOPE_REQUIRED")
+    source = native_original_bound_effective_fd9(operation, raw_pipe, candidate)
+    if (type(source) is not SourceGateReceipt or source.mode != "auto" or
+            source.requested_enabled is not True or source.generation != operation or
+            store.read() != before):
+        raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_SCOPE_REQUIRED")
+    route, result, actual, semantic = native_coordinate_original_prepared_fd9(operation, raw_pipe)
+    require_lifecycle_lock()
+    if (route != "first-enabled-committed" or actual != source or
+            type(result) is not dict or result.get("phase") != "committed" or
+            result.get("manifest", {}).get("schema") != 2 or
+            result.get("detail") != before["detail"] or
+            any(type(result.get(key)) is not str or not DIGEST.fullmatch(result[key])
+                for key in ("first_running_sha256", "first_pretraffic_sha256")) or
+            store.read() != result):
+        raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_OUTCOME_UNCERTAIN")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+    if "--first-auto-apply" in args:
+        if len(args) != 3 or args[-1] != "--first-auto-apply":
+            return 64
+        try:
+            raw = sys.stdin.buffer.read(MAX_PIPE + 1)
+            native_first_auto_gui_handoff_fd9(args[0], raw, args[1])
+            return 0
+        except (ValueError, RuntimeError, OSError, TypeError, KeyError, IndexError) as error:
+            # The original PREPARED or later WAL remains the authority.
+            # Never expose arbitrary exception text or return a preflight
+            # refusal after recording the original intent.
+            reason = str(error) if type(error) is OriginalSourceGateRefused else ""
+            safe = {
+                "S10_FIRST_AUTO_GUI_NATIVE_REQUIRED",
+                "S10_FIRST_AUTO_GUI_SCOPE_REQUIRED",
+                "S10_FIRST_AUTO_GUI_OUTCOME_UNCERTAIN",
+                "S10_FIRST_ENABLED_APPLY_SCOPE_REQUIRED",
+                "S10_FIRST_ENABLED_APPLY_PREIMAGE_CHANGED",
+                "S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN",
+                "S10_FIRST_LEARNING_SOURCE_CHANGED",
+                "S10_FIRST_LEARNING_QUEUE_OWNER_CHANGED",
+                "S10_BOUND_ENGINE_UNQUALIFIED",
+                "S10_BOUND_ENGINE_CHANGED",
+                "S10_EFFECTIVE_SOURCE_UNQUALIFIED",
+                "S10_ORIGINAL_PREPARED_REQUIRED",
+                "S10_BOUND_PROMOTION_PRECHECK_REFUSED",
+                "S10_PREPARED_DISPATCH_WITNESS_CHANGED",
+                "S10_PREPARED_DISPATCH_BIND_CHANGED",
+            }
+            print("ORIGINAL_SOURCE_GATE_REFUSAL=" +
+                  (reason if reason in safe else "S10_FIRST_AUTO_GUI_REFUSED"),
+                  file=sys.stderr)
+            return 70
     # Legacy original parity requests retain their exact old protocol.
     # Explicit S10 accepts only an exact sealed source, never a free-form
     # version argument or an unsealed/legacy-effective fallback.
