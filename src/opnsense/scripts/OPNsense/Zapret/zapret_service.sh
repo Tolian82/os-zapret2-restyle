@@ -3768,21 +3768,31 @@ service_dispatch()
             # This private action is not part of the normal service lock
             # router; it REQUIRES original inherited FD9 and Config FD4.
             printf '%s\n' S10_FIRST_TRACE=D12 >&2
-            [ "$#" -eq 4 ] || return 64
+            [ "$#" -eq 4 ] || [ "$#" -eq 5 ] || return 64
+            if [ "$#" -eq 5 ]; then
+                [ "$5" = --inherited-queue ] || return 64
+            fi
             case "$2" in ""|*[!a-f0-9]*) return 64 ;; esac
             [ "${#2}" -eq 32 ] || return 64
             case "$3" in ""|*[!a-f0-9]*) return 64 ;; esac
             [ "${#3}" -eq 64 ] || return 64
             [ -x "$PYTHON_RUNTIME" ] || return 69
+            shift
             _first_enabled_guard=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
-                guard-first-enabled-shell "$2" "$3" "$4") || return 70
+                guard-first-enabled-shell "$@") || return 70
             [ "$_first_enabled_guard" = first-enabled-shell=qualified ] || return 70
             printf '%s\n' S10_FIRST_TRACE=D13 >&2
             # FD4 must not enter the long-lived engine/supervisor. The
             # original PHP parent still holds its Config flock, and both
             # original daemon launches already close the original FD9.
-            apply_runtime_activate "/var/db/zapret2/shared-work/$2/release" 1 "$2" \
-                >/dev/null 4<&- || {
+            # After shift: operation, candidate digest, WAN, optional queue.
+            # Both physical variants use the same actuator. No other Start.
+            if [ "$#" -eq 4 ]; then
+                set -- "/var/db/zapret2/shared-work/$1/release" 1 "$1" "$2" "$4"
+            else
+                set -- "/var/db/zapret2/shared-work/$1/release" 1 "$1"
+            fi
+            apply_runtime_activate "$@" >/dev/null 4<&- || {
                     case "$APPLY_ACTIVATION_STEP" in
                         D14|D15|D16|D17|D18|D19|D20)
                             printf '%s\n' "S10_FIRST_TRACE=$APPLY_ACTIVATION_STEP" >&2 ;;
