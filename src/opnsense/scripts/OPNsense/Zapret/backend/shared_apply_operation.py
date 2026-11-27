@@ -2014,10 +2014,16 @@ def native_bound_prepare_gate(operation: str) -> None:
         if (type(plan) is not dict or plan.get("result") != "prepared" or
                 plan.get("page") != "strategies" or
                 plan.get("dependencies") != record["detail"]["candidate"] or
-                type(general) is not dict or general.get("enabled") != "1" or
+                type(general) is not dict or general.get("enabled") not in ("0", "1") or
                 mode not in ("all", "list")):
             raise SharedOperationError("bound prepare detached plan scope refused")
-        if "found_intent" in plan or "found_batch" in plan:
+        found_plan = "found_intent" in plan or "found_batch" in plan
+        # Disabled ordinary candidates still require the later lifecycle
+        # executor. A disabled Found plan is only a detached P1 after-image.
+        # Native STOPPED owner/CAS/Config evidence is required before writes.
+        if general["enabled"] == "0" and not found_plan:
+            raise SharedOperationError("bound prepare detached plan scope refused")
+        if found_plan:
             intent = plan.get("found_intent")
             if (type(intent) is not dict or
                     intent.get("config_revision") != plan["dependencies"] or

@@ -45,7 +45,7 @@ def call(argv, *, locked=False, timeout=180, expected_rc=0):
         allowed = {"stage", "stage-partial", "stage-config", "stage-ordinary", "durable",
                    "crash-partial", "crash-config-save", "shared-apply-prepare",
                    "found-cold", "found-recover", "found-recover-prepared",
-                   "attest", "bind", "bootstrap-known"}
+                   "attest", "bind", "bootstrap-known", "durable-stopped", "stopped-presave"}
         if action not in allowed:
             action = "unknown"
         diagnostics = re.findall(
@@ -1087,6 +1087,7 @@ def pristine_cold_native_main(*, first_commit=False):
                  subprocess.run([SERVICE, "status"], capture_output=True,
                                 timeout=30).returncode == 1,
                  "G03_FIRST_DISABLED_STOPPED_BASELINE_LOST")
+            bound_stopped_found_presave_main()
         elif bound_found:
             main(bound_found=True)
         else:
@@ -1105,6 +1106,94 @@ def pristine_cold_native_main(*, first_commit=False):
          "G03_PRISTINE_COLD_RESTORED_OWNER_DRIFT")
     print("G03_S10_PRISTINE_COLD=PASS_NATIVE_FIRST_INSTALL_START_PROPOSAL_NO_PHYSICAL_ACTION",
           flush=True)
+
+
+
+def bound_stopped_found_presave_main():
+    """Real three-source write on a first disabled immutable owner; abort before Config."""
+    need(os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1" and
+         os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1" and
+         os.environ.get("GITHUB_ACTIONS") == "true" and
+         sys.platform.startswith("freebsd") and os.geteuid() == 0,
+         "G03_BOUND_STOPPED_DISPOSABLE_ONLY")
+    previous = json.loads(WAL.read_bytes())
+    need(previous.get("phase") == "committed" and
+         previous.get("manifest", {}).get("schema") == 1 and
+         "first_running_sha256" not in previous and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 1,
+         "G03_BOUND_STOPPED_OWNER_REQUIRED")
+    original = snapshot()
+    names = ("youtube", "user", "auto")
+    before_bytes = [p.read_bytes() for p in TARGETS]
+    staged = call([PHP, NATIVE, "stage-config"], locked=True)
+    need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_STOPPED_STAGE_DRIFT")
+    op = staged.split("=", 1)[1]
+    work = Path("/var/db/zapret2/shared-work") / op
+    prepared = call([SERVICE, "shared-apply-prepare", op])
+    verify_prepared_build(prepared, op, original, snapshot(), previous,
+                          json.loads(WAL.read_bytes()))
+    raw = (work / "plan.json").read_bytes()
+    plan = json.loads(raw)
+    rows = plan["found_batch"]
+    need(plan["candidate"]["general"]["enabled"] == "0" and
+         plan["changed_fields"] == ["general.autorestart"] and
+         all(rows[n]["before"].encode() == v and rows[n]["before"] != rows[n]["after"]
+             for n, v in zip(names, before_bytes)),
+         "G03_BOUND_STOPPED_PLAN_REQUIRED")
+    print("G03_BOUND_STOPPED_DETACHED=PASS_DISABLED_FOUND_AFTERIMAGE_NO_WRITES", flush=True)
+    need(call([PHP, NATIVE, "durable-stopped", op], locked=True) ==
+         "original-found-prepared-durable", "G03_BOUND_STOPPED_PREPARE_REFUSED")
+    pending = json.loads(WAL.read_bytes())
+    need(pending["phase"] == "prepared" and pending["previous"] == previous["detail"] and
+         pending["previous_manifest"] == previous["manifest"] and
+         pending["detail"]["candidate"] != pending["detail"]["base"] and
+         pending["found"]["runtime_mode"] == "0" and snapshot() == original,
+         "G03_BOUND_STOPPED_PREPARED_DRIFT")
+    need(call([PHP, NATIVE, "stopped-presave", op], locked=True) ==
+         "original-bound-found-before-save-interrupted",
+         "G03_BOUND_STOPPED_REAL_WRITE_REFUSED")
+    crashed = json.loads(WAL.read_bytes())
+    written = snapshot()
+    pin = crashed["manifest"]
+    old = previous["manifest"]
+    found = crashed["found"]
+    need(crashed["phase"] == "found-config-saving" and
+         crashed["detail"] == pending["detail"] and crashed["previous"] == previous["detail"] and
+         crashed["previous_manifest"] == old and pin["generation"] == op and
+         pin["root_sha256"] != old["root_sha256"] and
+         pin["root_sha256"] == hashlib.sha256((work / "manifest.json").read_bytes()).hexdigest() and
+         pin["seal_sha256"] == hashlib.sha256((work / "bundle-seal.json").read_bytes()).hexdigest() and
+         found["plan_sha256"] == hashlib.sha256(raw).hexdigest() and
+         written[:2] == original[:2] and written[3] == original[3] and
+         all(p.read_bytes() == rows[n]["after"].encode() and
+             found["stages"][n]["state"] == "installed" and
+             found["post"][n]["sha256"] == image(p)[-1]
+             for n, p in zip(names, TARGETS)),
+         "G03_BOUND_STOPPED_WRITTEN_OR_PIN_DRIFT")
+    print("G03_S10_BOUND_STOPPED_P1=PASS_THREE_REAL_WRITES_BEFORE_CONFIG_SAVE", flush=True)
+    recovered = json.loads(call([
+        PHP, str(Path(SERVICE).parent / "shared_apply_config.php"),
+        "found-recover", op, "strategies"], locked=True))
+    final = json.loads(WAL.read_bytes())
+    expected = {**crashed, "phase": "restored"}
+    expected.pop("found")
+    restored = snapshot()
+    old_work = work.parent / old["generation"]
+    need(recovered == {"result": "restored"} and final == expected and
+         restored[:2] == original[:2] and restored[3] == original[3] and
+         [p.read_bytes() for p in TARGETS] == before_bytes and
+         all(row[0] == "file" and row[3] == 0 and row[4] == 1 for row in restored[2]) and
+         hashlib.sha256((old_work / "manifest.json").read_bytes()).hexdigest() == old["root_sha256"] and
+         hashlib.sha256((old_work / "bundle-seal.json").read_bytes()).hexdigest() == old["seal_sha256"] and
+         hashlib.sha256((work / "manifest.json").read_bytes()).hexdigest() == pin["root_sha256"] and
+         hashlib.sha256((work / "bundle-seal.json").read_bytes()).hexdigest() == pin["seal_sha256"] and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 1,
+         "G03_BOUND_STOPPED_RESTORE_DRIFT")
+    print("G03_S10_BOUND_STOPPED_PRESAVE=PASS_ORIGINAL_THREE_FILE_RESTORE_NO_CONFIG_SAVE", flush=True)
 
 
 def stopped_native_main():

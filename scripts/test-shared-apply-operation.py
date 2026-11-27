@@ -872,7 +872,20 @@ class TestJournal(unittest.TestCase):
                     self.assertEqual((store.root / "operation.json").read_bytes(), original)
                     self.assertEqual(set(candidate.iterdir()), {xml, plan_file})
                     self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+            disabled = {**found, "candidate": {"general": {"enabled": "0"},
+                                               "hostlist": {"mode": "list"}}}
+            plan_file.write_text(json.dumps(disabled))
+            native_bound_prepare_gate(op)
+            self.assertEqual(json.loads(plan_file.read_bytes()), disabled)
+            self.assertEqual((store.root / "operation.json").read_bytes(), original)
+            self.assertEqual(set(candidate.iterdir()), {xml, plan_file})
+            self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
             for malformed in (
+                    {k: v for k, v in disabled.items() if k not in ("found_batch", "found_intent")},
+                    {k: v for k, v in disabled.items() if k != "found_batch"},
+                    {k: v for k, v in disabled.items() if k != "found_intent"},
+                    {**disabled, "candidate": {"general": {"enabled": 0}, "hostlist": {"mode": "list"}}},
+                    {**disabled, "candidate": {"general": {"enabled": "0"}, "hostlist": {"mode": "auto"}}},
                     {k: v for k, v in found.items() if k != "found_batch"},
                     {k: v for k, v in found.items() if k != "found_intent"},
                     {**found, "found_intent": {**found["found_intent"], "config_revision": "0" * 64}},
@@ -883,8 +896,7 @@ class TestJournal(unittest.TestCase):
                     {**found, "found_batch": {**rows, "auto": {**rows["auto"], "before_revision": "0" * 64}}},
                     {**found, "found_batch": {**rows, "auto": {**rows["auto"], "before_inode": 1.0}}},
                     {**found, "changed_fields": None},
-                    {**found, "candidate": {"general": {"enabled": "1"}, "hostlist": {"mode": "auto"}}},
-                    {**found, "candidate": {"general": {"enabled": "0"}, "hostlist": {"mode": "list"}}}):
+                    {**found, "candidate": {"general": {"enabled": "1"}, "hostlist": {"mode": "auto"}}}):
                 with self.subTest(malformed_found=malformed):
                     plan_file.write_text(json.dumps(malformed))
                     with self.assertRaises(SharedOperationError):

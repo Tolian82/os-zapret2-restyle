@@ -97,8 +97,13 @@ function stage($config, bool $partial = false, bool $withConfig = false): string
 }
 
 function durable($config, string $id, string $action = 'durable'): void {
-    $attest = $action !== 'durable';
+    $attest = !in_array($action, ['durable', 'durable-stopped'], true);
     $bind = $action === 'bind';
+    $stoppedPresave = $action === 'stopped-presave';
+    if ($stoppedPresave || $action === 'durable-stopped') {
+        required(getenv('ZAPRET2_G03_FIRST_DISABLED') === '1',
+                 'G03_BOUND_STOPPED_DISPOSABLE_SCOPE_REQUIRED');
+    }
     required(preg_match('/^[a-f0-9]{32}$/D', $id) === 1,
              'G03_COLD_BAD_OPERATION_ID');
     $planFile = "/var/db/zapret2/shared-work/$id/plan.json";
@@ -126,7 +131,10 @@ function durable($config, string $id, string $action = 'durable'): void {
 import json,sys
 sys.path.insert(0,"/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
 from auto_detect_effective_known import prepare_native_found_intent
-receipt=prepare_native_found_intent(sys.argv[1],4,sys.argv[2],runtime_mode="1")
+stopped = sys.argv[4] == "durable-stopped"
+receipt=prepare_native_found_intent(sys.argv[1],4,sys.argv[2],
+    runtime_mode="0" if stopped else "1",
+    base_digest=sys.argv[3] if stopped else None, stopped_only=stopped)
 print(json.dumps(receipt,sort_keys=True,separators=(",",":")))
 PY;
     if ($attest) {
@@ -170,6 +178,45 @@ if wire.returncode or not wire.stdout or len(wire.stdout) > MAX_PIPE:
 decode_pipe(wire.stdout)
 action = sys.argv[4]
 store = SharedApplyOperation(owner=0)
+if action == "stopped-presave":
+    # Actual original writer; terminate exactly at the durable before-save
+    # handshake. No Config::save and no alternative P1 writer in this probe.
+    import os
+    if (before.get("phase") != "prepared" or
+            before.get("previous_manifest", {}).get("schema") != 1 or
+            before.get("found", {}).get("runtime_mode") != "0"):
+        raise RuntimeError("G03_BOUND_STOPPED_PREPARED_REQUIRED")
+    def interrupted_before_save():
+        pending = store.read()
+        if (pending.get("phase") != "found-config-saving" or
+                pending.get("previous_manifest") != before["previous_manifest"] or
+                pending.get("previous") != before["previous"] or
+                pending.get("detail") != before["detail"] or
+                pending.get("manifest", {}).get("schema") != 1 or
+                set(pending["found"]["post"]) != {"youtube", "user", "auto"} or
+                set(pending["found"]["stages"]) != {"youtube", "user", "auto"} or
+                any(s["state"] != "installed" for s in pending["found"]["stages"].values())):
+            raise RuntimeError("G03_BOUND_STOPPED_BEFORE_SAVE_PHASE_REQUIRED")
+        verify_original_operation_pins(record=pending, parent=WORK, owner_uid=0)
+        os._exit(73)
+    try:
+        shared_apply_bound_found_files_original_fd9(
+            op, 4, raw_pipe=wire.stdout, config_digest=sys.argv[3],
+            before_save=interrupted_before_save)
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError) as exc:
+        # Only fixed identifiers: no raw Config or arbitrary exception text.
+        import re
+        reasons = []
+        seen = set()
+        while exc is not None and id(exc) not in seen and len(reasons) < 6:
+            seen.add(id(exc))
+            label = str(exc)
+            reasons.append(label if re.fullmatch(r"[A-Za-z0-9_]{1,100}", label)
+                           else type(exc).__name__)
+            exc = exc.__cause__ or exc.__context__
+        print("G03_STOPPED_WRITER_REFUSED_" + "_".join(reasons), flush=True)
+        raise SystemExit(69)
+    raise RuntimeError("G03_BOUND_STOPPED_SAVE_HANDSHAKE_MISSING")
 if action == "bind":
     # Observe the actual combined bind, not the standalone attester which
     # deliberately refuses a pinned predecessor. Only the disposable test
@@ -293,7 +340,14 @@ PY;
         $rc = proc_close($proc);
         $proc = null;
         $result = is_string($text) ? json_decode($text, true) : null;
-        if ($attest) {
+        if ($stoppedPresave) {
+            if ($rc !== 73 && is_string($text) &&
+                preg_match('/^G03_STOPPED_WRITER_REFUSED_[A-Za-z0-9_]{1,500}\n?$/D', $text)) {
+                throw new \RuntimeException(trim($text));
+            }
+            required($rc === 73 && $text === '',
+                     'G03_BOUND_STOPPED_NOT_INTERRUPTED_BEFORE_SAVE');
+        } elseif ($attest) {
             required($rc === 0 && is_array($result) &&
                      ($result['result'] ?? null) === ($bind
                          ? 'original-found-prepared-root-bound-only'
@@ -440,7 +494,7 @@ try {
              getenv('ZAPRET2_G03_COLD_PREPARED') === '1' &&
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
              in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config',
-                                         'durable','attest','bind','crash-partial','crash-config-save','stage-ordinary','bootstrap-known'], true) &&
+                                         'durable','durable-stopped','stopped-presave','attest','bind','crash-partial','crash-config-save','stage-ordinary','bootstrap-known'], true) &&
              count($argv) === (in_array(($argv[1] ?? ''),
                 ['stage','stage-partial','stage-config','stage-ordinary','bootstrap-known'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
@@ -479,6 +533,11 @@ try {
             } elseif (in_array($argv[1], ['stage','stage-partial','stage-config'], true)) {
                 echo 'prepared-id=' . stage($config,
                     $argv[1] !== 'stage', $argv[1] === 'stage-config') . "\n";
+            } elseif (in_array($argv[1], ['durable-stopped', 'stopped-presave'], true)) {
+                durable($config, $argv[2], $argv[1]);
+                echo $argv[1] === 'stopped-presave'
+                    ? "original-bound-found-before-save-interrupted\n"
+                    : "original-found-prepared-durable\n";
             } elseif (in_array($argv[1], ['durable', 'attest', 'bind'], true)) {
                 durable($config, $argv[2], $argv[1]);
                 echo ($argv[1] === 'bind'
