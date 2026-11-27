@@ -121,7 +121,7 @@ class OriginalQuiescentTests(unittest.TestCase):
             return tuple(observed)
 
         with ExitStack() as stack:
-            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(sys, "platform", "freebsd15"))
             stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
             stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
             stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
@@ -181,7 +181,7 @@ class OriginalQuiescentTests(unittest.TestCase):
             return result, receipt
 
         with ExitStack() as stack:
-            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(sys, "platform", "freebsd15"))
             stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
             stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
             stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
