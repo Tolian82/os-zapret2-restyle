@@ -1777,6 +1777,28 @@ def _restore_bound_managed_file_locked(store, record: dict, *, parent: Path,
     from managed_inode_barrier import ManagedBarrierRefused, recover as barrier_recover
 
     state, identity = observe()
+    if state == "after" and "installed" not in row:
+        # The original forward rename may have left a UFS deferred ctime
+        # update. Complete the exact installed vnode + directory fsync
+        # BEFORE writing the rollback "restore" WAL checkpoint. Never
+        # rebaseline an installed WAL ctime: that pin does not exist in
+        # this pre-installed interruption window.
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                if list(_target_identity(os.fstat(fd))) != identity:
+                    raise DestinationRefused("original_managed_restore_preimage_changed")
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            _sync(path.parent)
+        except OSError as exc:
+            raise DestinationRefused("original_managed_restore_presync_refused") from exc
+        checked_state, checked_identity = observe()
+        if (checked_state != state or checked_identity[:2] != identity[:2] or
+                checked_identity[3:] != identity[3:]):
+            raise DestinationRefused("original_managed_restore_preimage_changed")
+        state, identity = checked_state, checked_identity
     try:
         barrier_recover(active.parent, path.parent, row["ready"]["temp"], uid,
                         row.get("barrier"))
