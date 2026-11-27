@@ -455,6 +455,12 @@ def managed_fault_worker_self_test():
         "\nfunction originalHttpFoundIntent(", 1)[0]
     http = fixture.split("function originalHttpFoundIntent(", 1)[1].split(
         "\nfunction durable(", 1)[0]
+    handler = (Path(__file__).resolve().parent / "stage2-opnsense-g03-native-upload.php").read_text()
+    need(handler.count("VoiceModelValues::text(") == 1 and
+         handler.count("uploadedMetadata($_FILES)") == 1 and
+         handler.count("SharedApplyEnvelope::encode(") == 1 and
+         "G03_HTTP_SAVED_MODEL_REFUSED" in handler,
+         "G03_HTTP_SELECTED_OPTION_NORMALIZER_DRIFT")
     need(http.count("native-http-") == 1 and
          http.count("SharedApplyFoundIntent::validateJson(") == 1 and
          http.count("$nextInterval = $saved === 'off' ? 'hourly' : 'off';") == 1 and
@@ -1559,15 +1565,17 @@ atomic_install_tree "$2" "$3" "$4" "$5"
         pos = modes.index(gap)
         if pos + 1 < len(modes):
             bound_stopped_found_save_main(gap=modes[pos + 1])
-        else:
-            bound_original_http_upload_main()
     elif uncertain:
         print("G03_S10_BOUND_STOPPED_POSTSAVE=PASS_REAL_UNACKED_CONFIG_RECOVERED_COMMITTED",
               flush=True)
         bound_stopped_found_save_main(gap="staged")
     else:
         print("G03_S10_BOUND_STOPPED_COMMITTED=PASS_NATIVE_P1_CONFIG_TREE_STOPPED", flush=True)
-        # Same native guest and genuine previous COMMITTED generation.
+        # Exercise genuine multipart first, while the original stopped
+        # predecessor is already terminal and P1 files are idle. A failed
+        # HTTP test now stops before the remaining distinct crash scenarios;
+        # a success becomes the next actual COMMITTED predecessor for them.
+        bound_original_http_upload_main()
         bound_stopped_found_save_main(uncertain=True)
 
 

@@ -29,9 +29,14 @@ try {
         throw new \RuntimeException('G03_HTTP_UPLOAD_MISSING');
     }
     $phase = 'model';
+    require_once '/usr/local/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/VoiceModelValues.php';
     require_once 'script/load_phalcon.php';
     $model = (new \OPNsense\Zapret\Zapret())->getNodes();
-    $saved = $model['general']['autorestart'] ?? null;
+    // BaseListField::getNodeData() returns selected options, not a raw
+    // string. Use the SAME native model normalizer as the original FD9
+    // request fixture, never cast an option array to "Array".
+    $saved = \OPNsense\Zapret\Api\VoiceModelValues::text(
+        $model['general']['autorestart'] ?? 'off');
     $baseline = $model['hostlist']['telegramips'] ?? null;
     if (($model['general']['enabled'] ?? null) !== '0' ||
         !is_string($saved) ||
