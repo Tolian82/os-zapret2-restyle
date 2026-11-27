@@ -1953,7 +1953,7 @@ def native_remove_rollback_pair(root: Path = DEFAULT_ROOT,
     return {"state": "trial", "old": owner, "trial": trial["id"]}
 
 
-def native_bound_stopped_gui_gate(operation: str | None = None) -> None:
+def native_bound_stopped_gui_gate(operation: str | None = None) -> int:
     """Read-only FD9 admission for a disabled List/All Found successor.
 
     Stage/execution admission is NOT a physical permit. The original locked
@@ -1978,12 +1978,53 @@ def native_bound_stopped_gui_gate(operation: str | None = None) -> None:
     store = SharedApplyOperation(owner=0)
     record = store.read()
     if (type(record) is not dict or record["phase"] != "committed" or
-            record.get("manifest", {}).get("schema") != 1 or
+            record.get("manifest", {}).get("schema") not in (1, 2) or
             "found" in record or
             "failure" in record):
         raise SharedOperationError("bound GUI gate inert terminal owner required")
     detail, pin = record["detail"], record["manifest"]
     old_work = WORK / detail["id"]
+    retired = pin["schema"] == 2
+
+    def observe_retired():
+        # The same original FD9/P2a lifetime as the private retired save.
+        # No repair, no queue creation, no ACK or physical mutation.
+        import pwd
+        from auto_detect_owner import attest_learning_stopped_generation
+        from auto_detect_learning_retirement import retired_learning_stopped, RETIRE_DIR, READY
+        from auto_detect_epoch_receipts import EpochReceipts, _read
+        from auto_detect_queue import DurableInbox
+        from auto_detect_storage import ROOT, ENGINE_USER
+        from auto_detect_fd import _probe_original_inode
+        from neutral_schema3_quiescent_preimage import _verify_idle_producer
+        gid = pwd.getpwnam(ENGINE_USER).pw_gid
+        if gid <= 0:
+            raise SharedOperationError("bound GUI gate retired queue gid refused")
+        queue = DurableInbox(ROOT, owner_uid=0, writer_gid=gid)
+        receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+        with queue.exclusive(existing_only=True):
+            def attest():
+                require_lifecycle_lock()
+                if store.read() != record:
+                    raise SharedOperationError("bound GUI gate retired owner changed")
+                return attest_learning_stopped_generation()
+            def inspect(path, device, inode, *, owner, writer_gid):
+                return _probe_original_inode(path, device, inode, owner=owner,
+                    writer_gid=writer_gid, attest_owner=lambda: attest().owner == owner)
+            proof = attest()
+            if (proof.operation_id != detail["id"] or proof.generation != detail["id"] or
+                    proof.owner_candidate_sha256 != detail["candidate"]):
+                raise SharedOperationError("bound GUI gate retired historical owner changed")
+            ready = receipts._generation(detail["id"], create=False) / RETIRE_DIR / READY
+            raw = _read(ready, 0)
+            if not retired_learning_stopped(receipts, queue, proof, old_work,
+                    attest=attest, inspect=inspect, repair=False):
+                raise SharedOperationError("bound GUI gate retirement incomplete")
+            idle = _verify_idle_producer(queue, receipts)
+            if (attest() != proof or _read(ready, 0) != raw or
+                    _verify_idle_producer(queue, receipts) != idle or store.read() != record):
+                raise SharedOperationError("bound GUI gate retired proof changed")
+            return proof, hashlib.sha256(raw).hexdigest(), idle
 
     def observe_old():
         require_lifecycle_lock()
@@ -1992,7 +2033,11 @@ def native_bound_stopped_gui_gate(operation: str | None = None) -> None:
         verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
         root = json.loads(_verify_original_pinned_root(
             detail=detail, binding=pin, parent=WORK, owner_uid=0))
-        if (root["service"]["enabled"] is not False or
+        if retired:
+            if (root["service"]["enabled"] is not True or
+                    root["service"]["target_mode"] != "auto"):
+                raise SharedOperationError("bound GUI gate retired Auto root required")
+        elif (root["service"]["enabled"] is not False or
                 root["service"]["target_mode"] not in ("list", "all") or
                 inspect_inert_release(old_work / "release", owner_uid=0) != "inactive"):
             raise SharedOperationError("bound GUI gate old root not inert")
@@ -2002,12 +2047,14 @@ def native_bound_stopped_gui_gate(operation: str | None = None) -> None:
                 current.get("config_digest") != detail["candidate"]):
             raise SharedOperationError("bound GUI gate previous owner not stopped")
         _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
-        _safe_empty_directory(PRODUCER_ROOT, 0)
+        history = observe_retired() if retired else None
+        if not retired:
+            _safe_empty_directory(PRODUCER_ROOT, 0)
         tree = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
         kernel = _empty_kernel(old_work / "release")
         if store.read() != record:
             raise SharedOperationError("bound GUI gate predecessor changed")
-        return tree, kernel
+        return tree, kernel, history
 
     previous = observe_old()
     if operation is not None:
@@ -2054,6 +2101,7 @@ def native_bound_stopped_gui_gate(operation: str | None = None) -> None:
             raise SharedOperationError("bound GUI gate candidate changed")
     if observe_old() != previous:
         raise SharedOperationError("bound GUI gate previous owner changed")
+    return pin["schema"]
 
 
 def native_bound_auto_stop_gate(operation: str) -> None:
@@ -2129,10 +2177,13 @@ def native_bound_prepare_gate(operation: str) -> None:
     store = SharedApplyOperation(owner=0)
     record = store.read()
     if (type(record) is not dict or record.get("phase") != "committed" or
-            record.get("manifest", {}).get("schema") != 1 or
+            record.get("manifest", {}).get("schema") not in (1, 2) or
             "found" in record or "failure" in record or
             operation in (record["detail"]["id"], record.get("previous", {}).get("id"))):
         raise SharedOperationError("bound prepare requires ordinary terminal owner")
+    retired = record["manifest"]["schema"] == 2
+    if retired and native_bound_stopped_gui_gate() != 2:
+        raise SharedOperationError("bound prepare retired predecessor refused")
     work = WORK / operation
 
     def observe():
@@ -2183,6 +2234,8 @@ def native_bound_prepare_gate(operation: str) -> None:
         # Disabled ordinary candidates still require the later lifecycle
         # executor. A disabled Found plan is only a detached P1 after-image.
         # Native STOPPED owner/CAS/Config evidence is required before writes.
+        if retired and (general["enabled"] != "0" or not found_plan):
+            raise SharedOperationError("bound prepare retired successor must be disabled Found")
         if general["enabled"] == "0" and not found_plan:
             raise SharedOperationError("bound prepare detached plan scope refused")
         if found_plan:
@@ -2209,6 +2262,8 @@ def native_bound_prepare_gate(operation: str) -> None:
     first = observe()
     if observe() != first:
         raise SharedOperationError("bound prepare detached source changed")
+    if retired and (native_bound_stopped_gui_gate() != 2 or store.read() != record):
+        raise SharedOperationError("bound prepare retired predecessor changed")
 
 
 def native_lifecycle_gate(action: str | None = None, *,
@@ -2379,7 +2434,8 @@ def main(argv: list[str]) -> int:
         elif bound_gui_stage_request:
             native_bound_stopped_gui_gate()
         elif bound_gui_execute_request:
-            native_bound_stopped_gui_gate(argv[3])
+            schema = native_bound_stopped_gui_gate(argv[3])
+            print("bound-stopped-schema=" + str(schema))
         elif native_gate_request:
             action = argv[2] if len(argv) == 3 else None
             state = native_lifecycle_gate(action)

@@ -1503,7 +1503,11 @@ shared_apply_execute_bound_stopped_found_service()
     [ -n "${_shared_run_encoded:-}" ] || return 69
     _bound_id="$1"
     _bound_work=$(shared_apply_workspace "$_bound_id") || return 69
-    preflight_shared_apply_journal common-bound-stopped-execute "$_bound_id" || return 69
+    _bound_route=$(preflight_shared_apply_journal common-bound-stopped-execute "$_bound_id") || return 69
+    case "$_bound_route" in
+        bound-stopped-schema=1|bound-stopped-schema=2) ;;
+        *) return 69 ;;
+    esac
     shared_apply_bundle_service verify "$_bound_id" || return 69
     _bound_native=$(shared_apply_native_config preflight "$_bound_id" strategies) || return 69
     _bound_mode=$(printf '%s\n' "$_bound_native" |
@@ -1527,7 +1531,16 @@ shared_apply_execute_bound_stopped_found_service()
                 "${TELEGRAM_IPS:-}" "${DISCORD_IPS:-}" "${X_IPS:-}" \
                 "${SIP_IPS:-}" "${CUSTOM_IPS:-}" "${EXCLUDE_DOMAINS:-}" \
                 "${EXCLUDE_IPSET:-}" "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
-        } | shared_apply_native_config found-bound-save "$_bound_id" strategies 0
+        } | {
+            case "$_bound_route" in
+                bound-stopped-schema=1)
+                    shared_apply_native_config found-bound-save "$_bound_id" strategies 0 ;;
+                bound-stopped-schema=2)
+                    "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+                        bound-retired-save-original "$_bound_id" ;;
+                *) return 69 ;;
+            esac
+        }
     ) || return 70
     printf '%s\n' "$_bound_save" | /usr/local/bin/jq -e \
         --arg expected "$_bound_candidate" \
@@ -1537,8 +1550,15 @@ shared_apply_execute_bound_stopped_found_service()
         >/dev/null || return 70
     # Original Config locked readback, both root pins, exact three P1
     # post-images, old/new active tree, no PID/IPFW, then original WAL commit.
-    _bound_terminal=$(shared_apply_native_config found-bound-finish "$_bound_id" strategies) ||
-        return 70
+    case "$_bound_route" in
+        bound-stopped-schema=1)
+            _bound_terminal=$(shared_apply_native_config found-bound-finish "$_bound_id" strategies) ||
+                return 70 ;;
+        bound-stopped-schema=2)
+            _bound_terminal=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+                bound-retired-finish-original "$_bound_id") || return 70 ;;
+        *) return 70 ;;
+    esac
     printf '%s\n' "$_bound_terminal" | /usr/local/bin/jq -e \
         'select(.result=="committed" and .mode=="0")' >/dev/null || return 70
     _bound_saved=$(shared_apply_native_config saved "$_bound_id" strategies) || return 70
