@@ -288,6 +288,7 @@ def main(*, bound_found=False):
         expected = {**bound, "phase": "restored"}
         expected.pop("found")
         need(restored == expected, "G03_BOUND_FOUND_EXACT_RESTORED_WAL_REQUIRED")
+        print("G03_S10_BOUND_FOUND_WRITER=PASS_RUNNING_OWNER_REJECTED_BEFORE_P1", flush=True)
         print("G03_S10_BOUND_FOUND=PASS_REAL_DUAL_ROOT_CAS_FENCE_PREPARED_RESTORE_NO_WRITES",
               flush=True)
     else:

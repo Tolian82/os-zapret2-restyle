@@ -137,11 +137,14 @@ import json, subprocess, sys
 sys.path.insert(0, "/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
 from shared_apply_operation import SharedApplyOperation
 from neutral_shared_apply_source_gate import (
-    native_attest_found_prepared_fd9, native_bind_found_prepared_fd9,
-    native_plan_found_prepared_fd9, decode_pipe, MAX_PIPE)
+    native_attest_found_prepared_fd9, native_plan_found_prepared_fd9,
+    OriginalSourceGateRefused, decode_pipe, MAX_PIPE)
 from auto_detect_destination_commit import (
-    DestinationRefused, shared_apply_found_files_original_fd9)
+    DestinationRefused, shared_apply_found_files_original_fd9,
+    shared_apply_bound_found_files_original_fd9)
 from shared_apply_operation import committed_manifest, SharedOperationError
+from shared_apply_seal import WORK
+from neutral_root_stage import verify_original_operation_pins
 from voice_ipfw_adapter import require_lifecycle_lock
 op = sys.argv[1]
 require_lifecycle_lock()
@@ -168,17 +171,41 @@ decode_pipe(wire.stdout)
 action = sys.argv[4]
 store = SharedApplyOperation(owner=0)
 if action == "bind":
-    witness, staged = native_bind_found_prepared_fd9(
-        op, wire.stdout, 4, config_digest=sys.argv[3])
-    expected = dict(before, manifest={
-        "schema": 2 if (witness.source.mode == "auto" and
-                       witness.source.requested_enabled) else 1,
-        "generation": op, "root_sha256": staged.root_sha256,
-        "seal_sha256": staged.original_seal_sha256,
-        "candidate_sha256": sys.argv[2]})
-    if (store.read() != expected or committed_manifest(expected) is not None or
-            staged.authorization != "NONE" or staged.physical_transition_allowed or
-            staged.promotion_allowed or staged.reattest_under_original_fd9 is not True):
+    # First attest the actual original producer before a root is attached.
+    witness = native_attest_found_prepared_fd9(op, wire.stdout, 4)
+    if store.read() != before:
+        raise RuntimeError("G03_BOUND_FOUND_SOURCE_CHANGED_BEFORE_WRITER")
+    save_invoked = [False]
+    def forbidden_save():
+        save_invoked[0] = True
+        raise RuntimeError("G03_BOUND_FOUND_UNEXPECTED_CONFIG_SAVE")
+    # Call the ACTUAL original bound Found file writer. The genuine previous
+    # owner is RUNNING, so the original P2 semantic must bind the candidate
+    # and refuse at the STOPPED gate, before any P1/Config/engine mutation.
+    try:
+        shared_apply_bound_found_files_original_fd9(
+            op, 4, raw_pipe=wire.stdout, config_digest=sys.argv[3],
+            before_save=forbidden_save)
+    except OriginalSourceGateRefused as exc:
+        if str(exc) != "S10_FOUND_SEMANTIC_REFUSED":
+            raise RuntimeError("G03_BOUND_FOUND_ORIGINAL_WRITER_WRONG_REFUSAL")
+    else:
+        raise RuntimeError("G03_BOUND_FOUND_RUNNING_WRITER_NOT_FENCED")
+    if save_invoked[0]:
+        raise RuntimeError("G03_BOUND_FOUND_WRITER_ENTERED_CONFIG_SAVE")
+    pending = store.read()
+    pin = pending.get("manifest") if type(pending) is dict else None
+    if (type(pin) is not dict or
+            pin.get("schema") != (2 if (witness.source.mode == "auto" and
+                                      witness.source.requested_enabled) else 1) or
+            pin.get("generation") != op or
+            pin.get("candidate_sha256") != sys.argv[2] or
+            pin.get("seal_sha256") != witness.source.original_seal_sha256):
+        raise RuntimeError("G03_BOUND_FOUND_WRITER_DID_NOT_SEAL_CANDIDATE")
+    # Re-read original authenticated pins, not a manufactured Python receipt.
+    verify_original_operation_pins(record=pending, parent=WORK, owner_uid=0)
+    expected = dict(before, manifest=pin)
+    if store.read() != expected or committed_manifest(expected) is not None:
         raise RuntimeError("G03_FOUND_NATIVE_BIND_NOT_PREPARED")
     semantic = native_plan_found_prepared_fd9(witness, 4, config_digest=sys.argv[3])
     old_pin = before.get("previous_manifest")
@@ -190,7 +217,7 @@ if action == "bind":
     if (semantic.previous_state != "ready" or
             semantic.previous_generation != before["previous"]["id"] or
             semantic.previous_root_sha256 != (None if old_pin is None else old_pin["root_sha256"]) or
-            semantic.candidate_root_sha256 != staged.root_sha256 or
+            semantic.candidate_root_sha256 != pin["root_sha256"] or
             semantic.plan_sha256 != witness.plan_sha256 or
             semantic.decision.kind != "RESTART_REQUIRED" or semantic.reload_candidate or
             semantic.authorization != "NONE" or semantic.physical_transition_allowed or
@@ -216,7 +243,7 @@ if action == "bind":
     if store.read() != expected:
         raise RuntimeError("G03_FOUND_NATIVE_FENCE_CHANGED_WAL")
     result = "original-found-prepared-root-bound-only"
-    root_sha = staged.root_sha256
+    root_sha = pin["root_sha256"]
     semantic_kind = semantic.decision.kind
 else:
     witness = native_attest_found_prepared_fd9(op, wire.stdout, 4)
@@ -235,7 +262,8 @@ print(json.dumps({"result":result,
     "source_status":witness.source.status,
     "authorization":witness.authorization,
     "final_reattest":witness.final_original_fd9_reattest_required,
-    "root_sha256":root_sha, "semantic":semantic_kind},
+    "root_sha256":root_sha, "semantic":semantic_kind,
+    "writer_refused_before_p1":action == "bind"},
     sort_keys=True,separators=(",",":")))
 PY;
     }
@@ -262,7 +290,8 @@ PY;
                          : 'original-found-prepared-source-cas-only') &&
                      (!$bind || (preg_match('/^[a-f0-9]{64}$/D',
                          (string)($result['root_sha256'] ?? '')) === 1 &&
-                         ($result['semantic'] ?? null) === 'RESTART_REQUIRED')) &&
+                         ($result['semantic'] ?? null) === 'RESTART_REQUIRED' &&
+                          ($result['writer_refused_before_p1'] ?? null) === true)) &&
                      ($result['generation'] ?? null) === $id &&
                      ($result['base'] ?? null) === $base &&
                      ($result['candidate'] ?? null) === $candidate &&
