@@ -1299,6 +1299,16 @@ def bound_original_http_upload_main():
                 receipt = response.read(256).decode("ascii").strip()
                 need(response.status == 200, "G03_HTTP_ORIGINAL_UNEXPECTED_STATUS")
         except urllib.error.HTTPError as exc:
+            reply = exc.read(200).decode("ascii", errors="replace").strip()
+            known = re.fullmatch(
+                r"G03_HTTP_UPLOAD_REFUSED:"
+                r"(scope|multipart|model|envelope|service-launch|service-result|"
+                r"service-receipt|service-rc64|service-rc69|service-rc70|"
+                r"service-rc75|service-rcother):"
+                r"(runtime|argument|php-error|other)", reply)
+            if known:
+                raise RuntimeError("G03_HTTP_ORIGINAL_" +
+                                   "_".join(known.groups()).upper().replace("-", "_")) from None
             raise RuntimeError("G03_HTTP_ORIGINAL_STATUS_" + str(exc.code)) from None
     finally:
         server.terminate()

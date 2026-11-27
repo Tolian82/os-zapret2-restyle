@@ -8,6 +8,8 @@
  */
 declare(strict_types=1);
 
+// Test-only bounded diagnostics; no Config, upload path or domain echoes.
+$phase = 'scope';
 try {
     if (PHP_SAPI !== 'cli-server' || PHP_OS_FAMILY !== 'BSD' ||
         getenv('GITHUB_ACTIONS') !== 'true' ||
@@ -19,12 +21,14 @@ try {
         (function_exists('posix_geteuid') && posix_geteuid() !== 0)) {
         throw new \RuntimeException('G03_HTTP_SCOPE_REFUSED');
     }
+    $phase = 'multipart';
     require_once '/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_found_intent.php';
     require_once '/usr/local/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SharedApplyEnvelope.php';
     $upload = \OPNsense\Zapret\Native\SharedApplyFoundIntent::uploadedMetadata($_FILES);
     if (!is_array($upload)) {
         throw new \RuntimeException('G03_HTTP_UPLOAD_MISSING');
     }
+    $phase = 'model';
     require_once 'script/load_phalcon.php';
     $model = (new \OPNsense\Zapret\Zapret())->getNodes();
     $saved = $model['general']['autorestart'] ?? null;
@@ -35,12 +39,14 @@ try {
         !is_string($baseline)) {
         throw new \RuntimeException('G03_HTTP_SAVED_MODEL_REFUSED');
     }
+    $phase = 'envelope';
     $next = $saved === 'off' ? 'hourly' : 'off';
     $encoded = \OPNsense\Zapret\Api\SharedApplyEnvelope::encode(
         'strategies', ['general'=>['autorestart'=>$next]],
         ['telegramips_baseline'=>$baseline, 'found_upload'=>$upload]
     );
     $service = '/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh';
+    $phase = 'service-launch';
     $pipes = [];
     $proc = @proc_open(
         [$service, 'shared-apply-run', 'strategies', $encoded],
@@ -54,6 +60,7 @@ try {
         throw new \RuntimeException('G03_HTTP_ORIGINAL_SERVICE_UNAVAILABLE');
     }
     try {
+        $phase = 'service-result';
         $answer = stream_get_contents($pipes[1], 1024);
         fclose($pipes[1]);
         $pipes = [];
@@ -61,6 +68,11 @@ try {
         $proc = null;
         if ($rc !== 0 || !is_string($answer) ||
             preg_match('/^applied-id=[a-f0-9]{32}\n$/D', $answer) !== 1) {
+            $phase = match ($rc) {
+                0 => 'service-receipt', 64 => 'service-rc64',
+                69 => 'service-rc69', 70 => 'service-rc70',
+                75 => 'service-rc75', default => 'service-rcother',
+            };
             throw new \RuntimeException('G03_HTTP_ORIGINAL_SERVICE_REFUSED');
         }
     } finally {
@@ -74,8 +86,13 @@ try {
     echo $answer;
 } catch (\Throwable $e) {
     // No raw upload, native model, Config data, stdout or HOSTLIST in HTTP.
-    error_log('G03_NATIVE_HTTP_UPLOAD_REFUSED:' . get_class($e));
+    $code = match (get_class($e)) {
+        \RuntimeException::class => 'runtime',
+        \InvalidArgumentException::class => 'argument',
+        \Error::class => 'php-error', default => 'other',
+    };
+    error_log("G03_NATIVE_HTTP_UPLOAD_REFUSED:$phase:$code");
     http_response_code(409);
     header('Content-Type: text/plain; charset=US-ASCII');
-    echo "G03_HTTP_UPLOAD_REFUSED\n";
+    echo "G03_HTTP_UPLOAD_REFUSED:$phase:$code\n";
 }
