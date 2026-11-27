@@ -363,6 +363,11 @@ def managed_fault_worker_self_test():
         raise RuntimeError("G03_MANAGED_FAULT_NATIVE_CHILD_SOURCE_MISSING")
     child = source_text.split(marker, 1)[1].split("\n" + "''" + "'", 1)[0]
     compile(child, "<G03-original-FD9-native-child>", "exec")
+    # Regression: after pre-save RESTORED, the active seal must be checked
+    # against the previous committed root, not against the rejected candidate.
+    need(child.count("_full_prior_tree(old_work if pre_save else WORK / op, COMMON_ACTIVE, 0)") == 1 and
+         child.count("(old_tree if pre_save else new_tree)") == 1,
+         "G03_MANAGED_PRESAVE_WRONG_ACTIVE_SEAL_SELECTOR")
     print("G03_S10_MANAGED_FAULT_COPY=PASS_BOTH_PRIVATE_PHP_LINT_NO_INSTALLED_MUTATION")
 
 
