@@ -1814,6 +1814,18 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, KeyError, TypeError):
             print("ERROR: original first disabled handoff refused", file=sys.stderr)
             return 69
+    if argv and argv[0] == "prepare-first-retry-locked":
+        if len(argv) != 4 or argv[3] != "--inherited-queue":
+            return 64
+        try:
+            from auto_detect_aborted_first import prepare_first_retry_locked
+            reply = prepare_first_retry_locked(argv[1], argv[2], config_fd=4, queue_fd=3)
+            print(json.dumps(reply, separators=(",", ":")))
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+            _managed_refusal_trace(error)
+            print("ERROR: original first retry preparation refused", file=sys.stderr)
+            return 69
     if argv and argv[0] == "archive-first-restored-locked":
         if len(argv) != 4 or argv[3] != "--inherited-queue":
             return 64

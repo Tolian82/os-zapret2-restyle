@@ -460,7 +460,7 @@ final class SharedApplyConfigWorker
         $managedStep = ['write-managed-handoff-locked'=>'write',
             'begin-managed-config-save-locked'=>'begin', 'confirm-managed-config-save-locked'=>'confirm',
             'recover-managed-config-locked'=>'recover'][$mode] ?? null;
-        $firstTrace = in_array($mode, ['write-first-enabled-handoff-locked', 'recover-first-config-locked', 'archive-first-restored-locked'], true) || $managedStep !== null;
+        $firstTrace = in_array($mode, ['write-first-enabled-handoff-locked', 'recover-first-config-locked', 'archive-first-restored-locked', 'prepare-first-retry-locked'], true) || $managedStep !== null;
         if ($managedStep !== null) { @fwrite(STDERR, "S10_MANAGED_STEP=$managedStep\n"); }
         if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D01\n"); }
         $boundBegin = $mode === 'begin-bound-found-save-locked';
@@ -470,7 +470,7 @@ final class SharedApplyConfigWorker
         $joined = in_array($mode, ['recover-bound-found-locked', 'finish-bound-found-locked', 'finish-ordinary-restore-locked', 'recover-managed-config-locked',
             'begin-managed-config-save-locked', 'confirm-managed-config-save-locked',
             'write-managed-handoff-locked', 'write-first-disabled-handoff-locked',
-            'write-first-enabled-handoff-locked', 'recover-first-config-locked', 'archive-first-restored-locked'], true);
+            'write-first-enabled-handoff-locked', 'recover-first-config-locked', 'archive-first-restored-locked', 'prepare-first-retry-locked'], true);
         if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
                  !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
@@ -482,7 +482,7 @@ final class SharedApplyConfigWorker
                     'finish-bound-found-locked', 'recover-bound-found-locked', 'recover-found-locked',
                     'confirm-found-save-locked',
                     'finish-ordinary-restore-locked', 'recover-managed-config-locked',
-                    'recover-first-config-locked', 'archive-first-restored-locked', 'write-first-enabled-handoff-locked'], true)))) {
+                    'recover-first-config-locked', 'archive-first-restored-locked', 'prepare-first-retry-locked', 'write-first-enabled-handoff-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
         }
         if ($boundBegin) {
@@ -550,7 +550,7 @@ final class SharedApplyConfigWorker
             try {
                 if ($joined) {
                     [$output, $failed, $code] = self::joinOrdinaryRestoreChild($proc, $pipes,
-                        $mode === 'archive-first-restored-locked' ? 150.0 : 40.0);
+                        in_array($mode, ['archive-first-restored-locked', 'prepare-first-retry-locked'], true) ? 150.0 : 40.0);
                     $proc = null;
                     if ($firstTrace) {
                         if (is_resource($trace)) {
@@ -963,15 +963,19 @@ final class SharedApplyConfigWorker
             count($argv) === 5 &&
             preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D',
                 (string)$argv[4], $matches) === 1);
-        if ($queueSave || $queueOther) {
+        $retry = $action === 'ordinary-first-retry';
+        $queueRetry = $retry && count($argv) === 6 &&
+            preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D', (string)$argv[4], $matches) === 1 &&
+            preg_match('/^[a-f0-9]{32}$/D', (string)$argv[5]) === 1 && $argv[5] !== $argv[2];
+        if ($queueSave || $queueOther || $queueRetry) {
             $queueFd = (int)$matches[1];
         }
-        $expectedCount = $queueSave ? 6 :
+        $expectedCount = ($queueSave || $queueRetry) ? 6 :
             ((in_array($action, ['found-save', 'found-bound-save'], true) ||
                 $queueOther) ? 5 : 4);
-        if (count($argv) !== $expectedCount ||
+        if (($retry && (!$queueRetry || $argv[3] !== 'strategies')) || count($argv) !== $expectedCount ||
             !in_array($action, ['preflight', 'save', 'saved', 'managed-save', 'managed-apply', 'first-disabled-apply', 'first-enabled-apply',
-                'ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover', 'ordinary-first-archive', 'managed-save-recover', ...$foundActions], true) ||
+                'ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover', 'ordinary-first-archive', 'ordinary-first-retry', 'managed-save-recover', ...$foundActions], true) ||
             !in_array($argv[3], $found || in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply'], true)
                 ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
@@ -985,7 +989,10 @@ final class SharedApplyConfigWorker
             SharedApplyLifecycleLock::assertHeld();
             $planRoot = self::ROOT;
             $archive = $action === 'ordinary-first-archive';
-            if ($archive) {
+            if ($retry) {
+                $queueStream = self::openOriginalFoundQueue($queueFd,
+                    '/var/db/zapret2/shared-aborted-first/' . $argv[5] . '/producer-parent/producer/worker.lock');
+            } elseif ($archive) {
                 if ($queueFd === null || !preg_match('/^[a-f0-9]{32}$/D', $argv[2])) {
                     throw new \RuntimeException('Original archive scope required');
                 }
@@ -1001,7 +1008,7 @@ final class SharedApplyConfigWorker
             } elseif ($queueFd !== null) {
                 $queueStream = self::openOriginalFoundQueue($queueFd);
             }
-            if ($archive || $found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover',
+            if ($retry || $archive || $found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover',
                 'save', 'saved', 'managed-save', 'managed-save-recover', 'managed-apply',
                 'first-disabled-apply', 'first-enabled-apply'], true)) {
                 // Core may repair unreadable Config from a backup on load.
@@ -1059,6 +1066,39 @@ final class SharedApplyConfigWorker
                 echo self::postSaveReceipt(self::foundPhaseNative(
                     $action, $argv[2], $config, $factory, $queueStream
                 ));
+                return 0;
+            }
+            if ($retry) {
+                $config->lock();
+                try {
+                    self::requireReadableConfig();
+                    $model = $factory();
+                    $fresh = $model->getNodes();
+                    $image = self::classifyOrdinaryConfigImage($plan, $fresh);
+                    $preview = self::preflight($plan, $fresh, 'strategies', $model);
+                    $sha = null;
+                    if ($image['image'] !== 'base-image' || $image['enabled'] !== '0' ||
+                        $preview['enabled'] !== '1' || $preview['snapshot'] !== $image['candidate'] ||
+                        !in_array('general.enabled', $plan['changed_fields'], true) ||
+                        self::readPlan($argv[2], self::ROOT, 0, $sha) !== $plan || $sha !== $planSha ||
+                        self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
+                        throw new \RuntimeException('Original retry Config image changed');
+                    }
+                    $digest = self::configSaveWitness($plan, $planSha, $image['base'], $image['candidate']);
+                    $reply = self::originalLockedFileEvidence($config, $argv[2],
+                        'prepare-first-retry-locked', hash('sha256', $digest . "\0" . $image['snapshot']),
+                        null, null, $queueStream);
+                    $sha = null;
+                    if ($reply !== ['result'=>'original-first-retry-prepared', 'id'=>$argv[2]] ||
+                        self::readPlan($argv[2], self::ROOT, 0, $sha) !== $plan || $sha !== $planSha ||
+                        self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
+                        throw new \RuntimeException('Original retry PREPARED receipt changed');
+                    }
+                    self::requireReadableConfig();
+                } finally {
+                    $config->unlock();
+                }
+                echo json_encode($reply, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
                 return 0;
             }
             if ($archive) {
@@ -1236,11 +1276,11 @@ final class SharedApplyConfigWorker
             fwrite(STDERR, "ERROR: native shared Config save uncertain; retain recovery evidence\n");
             return 70;
         } catch (\Throwable $error) {
-            if (in_array($action, ['managed-apply', 'managed-save-recover', 'ordinary-first-recover', 'ordinary-first-archive'], true)) {
+            if (in_array($action, ['managed-apply', 'managed-save-recover', 'ordinary-first-recover', 'ordinary-first-archive', 'ordinary-first-retry'], true)) {
                 self::managedPhpRefusalTrace($error);
             }
             if (in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply',
-                    'first-disabled-apply', 'first-enabled-apply', 'ordinary-first-recover', 'ordinary-first-archive', 'found-bound-finish', 'found-bound-recover'], true)) {
+                    'first-disabled-apply', 'first-enabled-apply', 'ordinary-first-recover', 'ordinary-first-archive', 'ordinary-first-retry', 'found-bound-finish', 'found-bound-recover'], true)) {
                 // A joined child may have fsynced its phase before losing the receipt.
                 fwrite(STDERR, "ERROR: original managed Config outcome requires journal review\n");
                 return 70;

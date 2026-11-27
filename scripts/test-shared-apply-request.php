@@ -77,6 +77,23 @@ $input=rtrim(strtr(base64_encode($raw),'+/','-_'),'=');
 $parsed=Request::decode($input);
 must($parsed['page']==='strategies','request parse');
 $out=Request::prepare($parsed,$all,$active);
+$disabled = $all;
+$disabled['general']['enabled'] = '0';
+$retryRequest = ['page'=>'strategies', 'fields'=>['general'=>['enabled'=>'1'],
+    'hostlist'=>['mode'=>'auto']], 'sync'=>['telegramips_baseline'=>'91.108.0.0/16']];
+$retryPlan = Request::prepare($retryRequest, $disabled, $active)['plan'];
+Request::requireFirstRetryPlan($retryRequest, $disabled, $retryPlan);
+rejects(fn()=>Request::requireFirstRetryPlan($retryRequest, $all, $retryPlan), 'already enabled retry accepted');
+$listPlan = $retryPlan;
+$listPlan['candidate']['hostlist']['mode'] = 'list';
+rejects(fn()=>Request::requireFirstRetryPlan($retryRequest, $disabled, $listPlan), 'List retry accepted');
+$unchanged = $retryPlan;
+$unchanged['changed_fields'] = [];
+rejects(fn()=>Request::requireFirstRetryPlan($retryRequest, $disabled, $unchanged), 'unchanged retry accepted');
+$foundRequest = $retryRequest;
+$foundRequest['sync']['found_upload'] = [];
+rejects(fn()=>Request::requireFirstRetryPlan($foundRequest, $disabled, $retryPlan), 'Found retry accepted');
+echo "PASS: first retry plan scope\n";
 
 // TZ6V2-08: genuine Advanced Auto Restart edit uses the SAME scoped
 // Config XML renderer as bottom Apply. Older XML may omit the leaf;

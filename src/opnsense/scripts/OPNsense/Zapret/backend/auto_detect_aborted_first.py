@@ -178,10 +178,12 @@ def _private_dir(path, mode, *, create):
             raise ArchiveRefused('FIRST_ABORT_ARCHIVE_PRIVATE_DIRECTORY_REQUIRED')
 
 
-def _slots(record, *, create=False):
+def _slots(record, *, create=False, successor=None):
     op = record['detail']['id']
     if not restored_first_learning(record) or not OP_ID.fullmatch(op):
         raise ArchiveRefused('FIRST_ABORT_ARCHIVE_OWNER_REQUIRED')
+    if successor is not None and (not isinstance(successor, str) or not OP_ID.fullmatch(successor) or successor == op):
+        raise ArchiveRefused('FIRST_RETRY_NEW_GENERATION_REQUIRED')
     folder = ARCHIVE_ROOT / op
     _stat_dir(ARCHIVE_ROOT.parent, 0)
     for path, mode in ((ARCHIVE_ROOT, 0o700), (folder, 0o700),
@@ -192,7 +194,7 @@ def _slots(record, *, create=False):
     slots = (Slot(WORK / op, folder / 'work' / op),
              Slot(EPOCH_ROOT / op, folder / 'epoch'),
              Slot(PRODUCER_ROOT, folder / 'producer-parent' / 'producer'))
-    for parent, allowed in ((WORK, {op}), (EPOCH_ROOT, {op}),
+    for parent, allowed in ((WORK, {op} if successor is None else {op, successor}), (EPOCH_ROOT, {op}),
             (folder / 'work', {op}), (folder / 'producer-parent', {'producer'})):
         if _present(parent) and set(os.listdir(parent)) - allowed:
             raise ArchiveRefused('FIRST_ABORT_ARCHIVE_FOREIGN_SOURCE')
@@ -332,3 +334,154 @@ def native_archive_first_restored(operation):
                 store.read() != record or _slots(record)[2] != tuple(slot.archived for slot in slots)):
             _relay_first_recovery_trace(reply.stderr)
             raise ArchiveRefused('FIRST_ABORT_ARCHIVE_NATIVE_RECEIPT_REQUIRED')
+
+
+def _first_retry_paths(record, operation=None):
+    """Only completed historical archive plus exactly the fresh detached work."""
+    folder, slots, paths = _slots(record, successor=operation)
+    if (paths != tuple(slot.archived for slot in slots) or
+            _read(folder / 'restored.json', 0) != _canonical(record) or
+            set(os.listdir(WORK)) != (set() if operation is None else {operation})):
+        raise ArchiveRefused('FIRST_RETRY_ARCHIVE_REQUIRED')
+    _cold_files(COMMON_ACTIVE, COMMON_ACTIVE.with_name('runtime-v2-backups'),
+                PRODUCER_ROOT, EPOCH_ROOT, 0)
+    _reject_cold_recovery_residue(COMMON_ACTIVE)
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    verify_original_operation_pins(record=record, parent=paths[0].parent, owner_uid=0)
+    return paths
+
+
+def native_first_retry_gate(operation=None, *, sealed=False):
+    """Read-only detached staging fence. Never authorize legacy lifecycle."""
+    if not sys.platform.startswith('freebsd') or os.geteuid() != 0:
+        raise ArchiveRefused('FIRST_RETRY_NATIVE_REQUIRED')
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if not restored_first_learning(record):
+        raise ArchiveRefused('FIRST_RETRY_RESTORED_REQUIRED')
+    paths = _first_retry_paths(record, operation)
+    if operation is not None:
+        work = WORK / operation
+        _stat_dir(work, 0)
+        if sealed:
+            _first_retry_candidate(record, operation)
+        elif set(os.listdir(work)) != {'candidate.xml', 'plan.json'}:
+            raise ArchiveRefused('FIRST_RETRY_DETACHED_WORK_REQUIRED')
+    if store.read() != record:
+        raise ArchiveRefused('FIRST_RETRY_WAL_CHANGED')
+    return paths
+
+
+def _first_retry_candidate(record, operation):
+    from shared_apply_operation import _validate_detail
+    from shared_apply_render import regular
+    from neutral_root_stage import ROOT_NAME, PENDING_NAME
+    import hashlib
+    work = WORK / operation
+    if any(_present(path / name) for path in (work, work / 'release')
+           for name in (ROOT_NAME, PENDING_NAME)):
+        raise ArchiveRefused('FIRST_RETRY_UNBOUND_WORK_REQUIRED')
+    seal = verify_seal(work, owner=0)
+    workspace, candidate, sources = _learning_release_sources(work / 'release')
+    if workspace != work or not sources:
+        raise ArchiveRefused('FIRST_RETRY_SOURCE_REQUIRED')
+    plan_path = work / 'plan.json'
+    regular(plan_path, 0)
+    raw = plan_path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != seal['sha256']['plan.json']:
+        raise ArchiveRefused('FIRST_RETRY_PLAN_CHANGED')
+    plan = json.loads(raw)
+    fields = plan.get('changed_fields')
+    general = plan.get('candidate', {}).get('general', {})
+    hostlist = plan.get('candidate', {}).get('hostlist', {})
+    mode = hostlist.get('mode')
+    if isinstance(mode, dict):
+        selected = [k for k, v in mode.items() if isinstance(v, dict) and
+                    v.get('selected') in (True, 1, '1')]
+        mode = selected[0] if len(selected) == 1 else None
+    if (plan.get('result') != 'prepared' or plan.get('page') != 'strategies' or
+            plan.get('dependencies') != record['detail']['base'] or
+            candidate == record['detail']['base'] or
+            not isinstance(fields, list) or 'general.enabled' not in fields or
+            general.get('enabled') != '1' or mode != 'auto' or
+            any(key in plan for key in ('found_intent', 'found_batch'))):
+        raise ArchiveRefused('FIRST_RETRY_CANDIDATE_SCOPE_REQUIRED')
+    detail = {'id': operation, 'page': 'strategies', 'base': plan['dependencies'],
+              'candidate': candidate, 'changed_fields': fields}
+    _validate_detail(detail)
+    if verify_seal(work, owner=0) != seal:
+        raise ArchiveRefused('FIRST_RETRY_SEAL_CHANGED')
+    return detail, seal
+
+
+def prepare_first_retry_locked(operation, witness, *, config_fd, queue_fd):
+    """Replace ONLY the current restored WAL, under old P2a and native FD4."""
+    from shared_apply_operation import SCHEMA, committed_owner
+    if (not sys.platform.startswith('freebsd') or os.geteuid() != 0 or
+            not isinstance(operation, str) or not OP_ID.fullmatch(operation) or
+            config_fd != 4 or queue_fd != 3):
+        raise ArchiveRefused('FIRST_RETRY_NATIVE_REQUIRED')
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if not restored_first_learning(record) or committed_owner(record) is not None:
+        raise ArchiveRefused('FIRST_RETRY_RESTORED_REQUIRED')
+
+    def scope():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if store.read() != record:
+            raise ArchiveRefused('FIRST_RETRY_WAL_CHANGED')
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        return True
+
+    def observe(*, drain=False):
+        scope()
+        paths = _first_retry_paths(record, operation)
+        detail, seal = _first_retry_candidate(record, operation)
+        if witness != _config_observation_witness(detail, seal['sha256']['plan.json'], detail['base']):
+            raise ArchiveRefused('FIRST_RETRY_CONFIG_BASE_REQUIRED')
+        kernels = (_empty_kernel(paths[0] / 'release'), _empty_kernel(WORK / operation / 'release'))
+        old = _source_evidence(record, paths, queue_fd, scope, drain=drain)
+        scope()
+        return detail, seal, paths, kernels, old
+
+    first = observe(drain=True)
+    if observe(drain=True) != first:
+        raise ArchiveRefused('FIRST_RETRY_PREIMAGE_CHANGED')
+    # Reuse the sole journal writer; the canceled generation is historical,
+    # not a previous committed owner. No generic restored fence is relaxed.
+    expected = {'schema': SCHEMA, 'phase': 'prepared', 'detail': first[0]}
+    scope()
+    if store._persist_record(expected) != expected or store.read() != expected:
+        raise ArchiveRefused('FIRST_RETRY_PREPARED_READBACK_REQUIRED')
+    return {'result': 'original-first-retry-prepared', 'id': operation}
+
+
+def native_prepare_first_retry(operation, candidate):
+    from shared_apply_operation import SCHEMA
+    paths = native_first_retry_gate(operation, sealed=True)
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    detail, seal = _first_retry_candidate(record, operation)
+    if detail['candidate'] != candidate:
+        raise ArchiveRefused('FIRST_RETRY_CANDIDATE_CHANGED')
+    queue = DurableInbox(paths[2], owner_uid=0, writer_gid=pwd.getpwnam(ENGINE_USER).pw_gid)
+    with queue.exclusive(existing_only=True):
+        if (store.read() != record or native_first_retry_gate(operation, sealed=True) != paths or
+                _first_retry_candidate(record, operation) != (detail, seal)):
+            raise ArchiveRefused('FIRST_RETRY_PREIMAGE_CHANGED')
+        fd = queue.locked_fd
+        reply = _run_bound_restore_joined(['/usr/local/bin/php', str(SCRIPT / 'shared_apply_config.php'),
+            'ordinary-first-retry', operation, 'strategies', '--queue-fd=' + str(fd),
+            record['detail']['id']], pass_fds=(9, fd), capture_output=True, budget=180)
+        expected = {'schema': SCHEMA, 'phase': 'prepared', 'detail': detail}
+        if (reply.returncode != 0 or type(reply.stdout) is not bytes or len(reply.stdout) > 4096 or
+                reply.stdout.count(b'\n') != 1 or not reply.stdout.endswith(b'\n') or
+                json.loads(reply.stdout) != {'result': 'original-first-retry-prepared', 'id': operation} or
+                store.read() != expected):
+            _relay_first_recovery_trace(reply.stderr)
+            raise ArchiveRefused('FIRST_RETRY_NATIVE_RECEIPT_REQUIRED')
+        return expected

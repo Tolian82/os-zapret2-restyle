@@ -1571,18 +1571,25 @@ shared_apply_execute_bound_stopped_found_service()
 
 shared_apply_execute_service()
 {
-    [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && [ "$3" = after-retirement ]; } || return 64
+    [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && { [ "$3" = after-retirement ] || [ "$3" = first-retry ]; }; } || return 64
     case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
     [ "${#1}" -eq 32 ] || return 64
     case "$2" in voice|strategies) ;; *) return 64 ;; esac
     # This is NOT a generalized bound-root activation. The gate admits
     # only one genuine disabled STOPPED Found successor from the same GUI
     # producer; all other traffic still meets the original unbound fence.
-    if preflight_shared_apply_journal common-bound-stopped-execute "$1" >/dev/null 2>&1; then
-        shared_apply_execute_bound_stopped_found_service "$1"
-        return $?
+    if [ "${3:-}" = first-retry ]; then
+        [ "$2" = strategies ] &&
+        [ "${_shared_prepare_receipt:-}" = "prepared-id=$1" ] &&
+        [ "${_shared_run_page:-}" = strategies ] &&
+        preflight_shared_apply_journal common-first-retry-execute "$1" || return 69
+    else
+        if preflight_shared_apply_journal common-bound-stopped-execute "$1" >/dev/null 2>&1; then
+            shared_apply_execute_bound_stopped_found_service "$1"
+            return $?
+        fi
+        preflight_shared_apply_journal common-apply || return 69
     fi
-    preflight_shared_apply_journal common-apply || return 69
     shared_apply_require_tools || return 69
     _shared_apply_id="$1"
     _shared_apply_page="$2"
@@ -1693,7 +1700,7 @@ shared_apply_execute_service()
                 # Only the genuine combined first Strategies Apply can
                 # select the bound Auto executor. Never admit a standalone
                 # execute, a Found/retired/old owner, or legacy schema3 Start.
-                if [ "$#" -eq 2 ] &&
+                if { [ "$#" -eq 2 ] || [ "${3:-}" = first-retry ]; } &&
                    [ "$_shared_found_scope" = ordinary ] &&
                    [ "$_shared_apply_page" = strategies ] &&
                    [ "${_shared_run_page:-}" = strategies ] &&
@@ -1701,7 +1708,7 @@ shared_apply_execute_service()
                    [ "${_shared_prepare_receipt:-}" = "prepared-id=$_shared_apply_id" ] &&
                    [ "${HOSTLIST_MODE:-}" = auto ] &&
                    [ "$_shared_apply_base" != "$_shared_apply_candidate" ] &&
-                   ! shared_apply_has_record_service; then
+                   { ! shared_apply_has_record_service || [ "${3:-}" = first-retry ]; }; then
                     case ",$_shared_apply_fields," in
                         *,general.enabled,*) _shared_first_auto=1 ;;
                     esac
@@ -1721,6 +1728,10 @@ shared_apply_execute_service()
         printf '%s\n' preflight-rejected=observer-generation
         return 0
     fi
+    if [ "${3:-}" = first-retry ] && [ "$_shared_first_auto" != 1 ]; then
+        printf '%s\n' preflight-rejected=bound-auto-required
+        return 0
+    fi
     # Reject an active old/legacy owner, partial monitor, foreign IPFW, or
     # invalid candidate BEFORE any durable phase is recorded. This must be
     # purely read-only. The mutating activation repeats the exact probe.
@@ -1733,7 +1744,7 @@ shared_apply_execute_service()
     # First bound Auto may not retire or signal a predecessor. The original
     # Python quiescent proof repeats the stricter complete cold inventory.
     if [ "$_shared_first_auto" = 1 ] &&
-       { [ "$_apply_engine" != 0 ] || shared_apply_has_record_service; }; then
+       { [ "$_apply_engine" != 0 ] || { [ "${3:-}" != first-retry ] && shared_apply_has_record_service; }; }; then
         printf '%s\n' preflight-rejected=bound-auto-required
         return 0
     fi
@@ -1802,7 +1813,11 @@ shared_apply_execute_service()
         printf '%s\n' preflight-rejected=manifest-unbound
         return 0
     fi
-    if [ "$_shared_found_scope" = found ]; then
+    if [ "${3:-}" = first-retry ]; then
+        # The original source-gate child writes PREPARED only after the
+        # archived P2a -> Config FD4 proof. Never call generic record here.
+        [ "$_shared_first_auto" = 1 ] || return 69
+    elif [ "$_shared_found_scope" = found ]; then
         if ! shared_apply_native_config found-save "$_shared_apply_id" \
             strategies "$_shared_apply_mode" >/dev/null; then
             _found_pending=$(shared_apply_pending_found_service) || return 70
@@ -2350,12 +2365,31 @@ shared_apply_run_service()
             return 0
         fi
     fi
-    preflight_shared_apply_journal common-apply >/dev/null 2>&1 ||
-        preflight_shared_apply_journal common-bound-stopped-stage || return 69
+    _shared_run_retry=
+    if [ "$_shared_run_page" = strategies ] && shared_apply_has_record_service &&
+       [ "$(shared_apply_inspect_service)" = restored ]; then
+        _shared_retry_old=$("$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" first-retry-context) || return 69
+        case "$_shared_retry_old" in
+            none) ;;
+            ""|*[!a-f0-9]*) return 69 ;;
+            *)
+                [ "${#_shared_retry_old}" -eq 32 ] || return 69
+                _shared_retry_receipt=$("$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" archive-first-restored "$_shared_retry_old") || return 70
+                [ "$_shared_retry_receipt" = "first-restored-archived=$_shared_retry_old" ] || return 70
+                _shared_run_retry=first-retry
+                ;;
+        esac
+    fi
+    if [ "$_shared_run_retry" = first-retry ]; then
+        preflight_shared_apply_journal common-first-retry-stage || return 69
+    else
+        preflight_shared_apply_journal common-apply >/dev/null 2>&1 ||
+            preflight_shared_apply_journal common-bound-stopped-stage || return 69
+    fi
     # Do not put the original producer in a command-substitution subshell:
     # its loaded scalars are the same-source input for the final FD9 gate.
     # The build helper returns its bounded receipt separately from stdout.
-    shared_apply_build_service "$_shared_run_encoded" >/dev/null || return $?
+    shared_apply_build_service "$_shared_run_encoded" ${_shared_run_retry:+first-retry} >/dev/null || return $?
     _shared_run_receipt="${_shared_build_receipt:-}"
     case "$_shared_run_receipt" in
         preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal|preflight-rejected=found-intent|preflight-rejected=found-intent-config-changed|preflight-rejected=found-intent-upload-*|preflight-rejected=found-batch|preflight-rejected=found-youtube-line-*|preflight-rejected=found-user-line-*|preflight-rejected=found-auto-line-*)
@@ -2372,7 +2406,7 @@ shared_apply_run_service()
     [ "${#_shared_run_id}" -eq 32 ] || return 69
     # The root PHP worker verifies plan.page against the requested page
     # BEFORE checking the candidate snapshot, and again before Config::save.
-    shared_apply_execute_service "$_shared_run_id" "$_shared_run_page"
+    shared_apply_execute_service "$_shared_run_id" "$_shared_run_page" ${_shared_run_retry:+first-retry}
 }
 # One FD9 operation now stages a submitted native request AND builds its
 # entire detached shared runtime. No kernel, Config save, or engine changes.
@@ -2380,16 +2414,22 @@ shared_apply_build_service()
 {
     _shared_build_receipt=
     _shared_prepare_receipt=
-    [ "$#" -eq 1 ] || return 64
+    [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$2" = first-retry ]; } || return 64
     case "$1" in
         ""|*[!A-Za-z0-9_-]*) return 64 ;;
     esac
     [ "${#1}" -le 65536 ] || return 64
-    preflight_shared_apply_journal common-apply >/dev/null 2>&1 ||
-        preflight_shared_apply_journal common-bound-stopped-stage || return 69
+    if [ "${2:-}" = first-retry ]; then
+        preflight_shared_apply_journal common-first-retry-stage || return 69
+        _shared_stage_action=stage-first-retry
+    else
+        preflight_shared_apply_journal common-apply >/dev/null 2>&1 ||
+            preflight_shared_apply_journal common-bound-stopped-stage || return 69
+        _shared_stage_action=stage
+    fi
     [ -x /usr/local/bin/php ] || return 69
     _shared_stage_result=$(/usr/local/bin/php \
-        "${SCRIPT_DIR}/shared_apply_request.php" stage "$1") || return 69
+        "${SCRIPT_DIR}/shared_apply_request.php" "$_shared_stage_action" "$1") || return 69
     case "$_shared_stage_result" in
         prepared-id=*) _shared_stage_id="${_shared_stage_result#prepared-id=}" ;;
         preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=found-intent|preflight-rejected=found-intent-config-changed|preflight-rejected=found-intent-upload-*|preflight-rejected=found-batch|preflight-rejected=found-youtube-line-*|preflight-rejected=found-user-line-*|preflight-rejected=found-auto-line-*)
@@ -2403,7 +2443,7 @@ shared_apply_build_service()
         *[!a-f0-9]*|"") return 69 ;;
     esac
     [ "${#_shared_stage_id}" -eq 32 ] || return 69
-    shared_apply_prepare_service "$_shared_stage_id" >/dev/null || return $?
+    shared_apply_prepare_service "$_shared_stage_id" ${2:+first-retry} >/dev/null || return $?
     case "${_shared_prepare_receipt:-}" in
         preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal)
             _shared_build_receipt="$_shared_prepare_receipt"
@@ -2466,15 +2506,19 @@ shared_apply_original_source_gate()
 shared_apply_prepare_service()
 {
     _shared_prepare_receipt=
-    [ "$#" -eq 1 ] || return 64
+    [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$2" = first-retry ]; } || return 64
     case "$1" in
         *[!a-f0-9]*|"") return 64 ;;
     esac
     [ "${#1}" -eq 32 ] || return 64
     # A bound terminal owner may only authorize a fresh detached build.
     # The old Apply/Start/Stop/Lab fences and physical route stay closed.
-    preflight_shared_apply_journal common-apply ||
-        preflight_shared_apply_journal common-bound-prepare "$1" || return 69
+    if [ "${2:-}" = first-retry ]; then
+        preflight_shared_apply_journal common-first-retry-prepare "$1" || return 69
+    else
+        preflight_shared_apply_journal common-apply ||
+            preflight_shared_apply_journal common-bound-prepare "$1" || return 69
+    fi
     [ -x "${PYTHON_RUNTIME}" ] || return 69
     _shared_work="/var/db/zapret2/shared-work/$1"
     [ -d "$_shared_work" ] && [ ! -L "$_shared_work" ] || return 69

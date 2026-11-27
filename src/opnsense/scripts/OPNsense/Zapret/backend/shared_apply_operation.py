@@ -2378,6 +2378,11 @@ def main(argv: list[str]) -> int:
     bound_auto_stop_request = (
         len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-auto-stop"] and
         bool(OP_ID.fullmatch(argv[3])))
+    retry_context = argv[1:] == ["first-retry-context"]
+    retry_stage = argv[1:] == ["native-gate", "common-first-retry-stage"]
+    retry_work = (len(argv) == 4 and argv[1] == "native-gate" and
+                  argv[2] in ("common-first-retry-prepare", "common-first-retry-execute") and
+                  bool(OP_ID.fullmatch(argv[3])))
     bound_gui_stage_request = argv[1:] == ["native-gate", "common-bound-stopped-stage"]
     bound_gui_execute_request = (
         len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-stopped-execute"] and
@@ -2428,7 +2433,7 @@ def main(argv: list[str]) -> int:
     cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_auto_stop_request or
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or retry_context or retry_stage or retry_work or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_auto_stop_request or
             bound_gui_stage_request or bound_gui_execute_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
@@ -2477,6 +2482,13 @@ def main(argv: list[str]) -> int:
             native_bound_auto_stop_gate(argv[3])
         elif bound_prepare_request:
             native_bound_prepare_gate(argv[3])
+        elif retry_context:
+            record = SharedApplyOperation(owner=0).read()
+            print(record["detail"]["id"] if restored_first_learning(record) else "none")
+        elif retry_stage or retry_work:
+            from auto_detect_aborted_first import native_first_retry_gate
+            native_first_retry_gate(None if retry_stage else argv[3],
+                sealed=retry_work and argv[2] == "common-first-retry-execute")
         elif bound_gui_stage_request:
             native_bound_stopped_gui_gate()
         elif bound_gui_execute_request:

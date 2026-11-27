@@ -2245,6 +2245,20 @@ def native_first_auto_gui_handoff_fd9(operation: str, raw_pipe: bytes,
         raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_SCOPE_REQUIRED")
     store = SharedApplyOperation(owner=0)
     before = store.read()
+    from shared_apply_operation import restored_first_learning
+    if restored_first_learning(before):
+        source = native_original_bound_effective_fd9(operation, raw_pipe, candidate)
+        if (type(source) is not SourceGateReceipt or source.mode != "auto" or
+                source.requested_enabled is not True or source.generation != operation or
+                store.read() != before):
+            raise OriginalSourceGateRefused("S10_FIRST_RETRY_PREPARE_REFUSED")
+        try:
+            from auto_detect_aborted_first import native_prepare_first_retry
+            before = native_prepare_first_retry(operation, candidate)
+        except (ValueError, RuntimeError, OSError, TypeError, KeyError):
+            raise OriginalSourceGateRefused("S10_FIRST_RETRY_PREPARE_REFUSED") from None
+        if store.read() != before:
+            raise OriginalSourceGateRefused("S10_FIRST_RETRY_PREPARE_REFUSED")
     if (type(before) is not dict or before.get("phase") != "prepared" or
             any(key in before for key in ("previous", "previous_manifest", "manifest", "found")) or
             before["detail"]["id"] != operation or before["detail"]["page"] != "strategies" or
@@ -2283,6 +2297,7 @@ def main(argv: list[str] | None = None) -> int:
             # refusal after recording the original intent.
             reason = str(error) if type(error) is OriginalSourceGateRefused else ""
             safe = {
+                "S10_FIRST_RETRY_PREPARE_REFUSED",
                 "S10_FIRST_AUTO_GUI_NATIVE_REQUIRED",
                 "S10_FIRST_AUTO_GUI_SCOPE_REQUIRED",
                 "S10_FIRST_AUTO_GUI_OUTCOME_UNCERTAIN",

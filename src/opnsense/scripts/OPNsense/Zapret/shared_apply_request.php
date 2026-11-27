@@ -129,6 +129,19 @@ final class SharedApplyRequest
      * A staged candidate is inert until the common Apply actually builds
      * and activates its release under the original FD9.
      */
+    public static function requireFirstRetryPlan(array $request, array $current, array $plan): void
+    {
+        if (($request['page'] ?? null) !== 'strategies' ||
+            array_key_exists('found_upload', $request['sync'] ?? []) ||
+            ($current['general']['enabled'] ?? null) !== '0' ||
+            ($plan['candidate']['general']['enabled'] ?? null) !== '1' ||
+            \OPNsense\Zapret\Api\VoiceModelValues::text($plan['candidate']['hostlist']['mode'] ?? '') !== 'auto' ||
+            !in_array('general.enabled', $plan['changed_fields'] ?? [], true) ||
+            array_key_exists('found_intent', $plan) || array_key_exists('found_batch', $plan)) {
+            throw new \InvalidArgumentException('Unqualified first Auto retry');
+        }
+    }
+
     public static function prepareSavedUnchanged(
         array $current, string $activeXml, ?string &$phase = null
     ): array {
@@ -291,7 +304,7 @@ final class SharedApplyRequest
 
     public static function main(array $argv): int
     {
-        if (!in_array($argv[1] ?? '', ['stage', 'telegram-envelope', 'telegram-saved', 'saved-unchanged'], true) ||
+        if (!in_array($argv[1] ?? '', ['stage', 'stage-first-retry', 'telegram-envelope', 'telegram-saved', 'saved-unchanged'], true) ||
             (in_array($argv[1] ?? '', ['telegram-saved', 'saved-unchanged'], true)
                 ? count($argv) !== 2 : count($argv) !== 3)) {
             fwrite(STDERR, "usage: shared_apply_request.php stage ENCODED_REQUEST | telegram-envelope enable|disable | telegram-saved | saved-unchanged\n");
@@ -333,7 +346,15 @@ final class SharedApplyRequest
                     if (!is_string($activeXml)) {
                         throw new \RuntimeException('Could not read locked native Config');
                     }
+                    if ($argv[1] === 'stage-first-retry' && array_key_exists('found_upload', $request['sync'])) {
+                        $phase = 'candidate-validation';
+                        throw new \InvalidArgumentException('Found upload is not a first retry');
+                    }
                     $prepared = self::prepare($request, $current, $activeXml, $phase);
+                    if ($argv[1] === 'stage-first-retry') {
+                        $phase = 'candidate-validation';
+                        self::requireFirstRetryPlan($request, $current, $prepared['plan']);
+                    }
                     // Read-only three-way preview under this SAME Config lock
                     // and the original inherited FD9 + protected P2 lock.
                     // A preview alone cannot save a source or authorize Apply.
@@ -352,7 +373,7 @@ final class SharedApplyRequest
             echo $response . "\n";
             return 0;
         } catch (\Throwable $error) {
-            if ($argv[1] === 'stage') {
+            if (in_array($argv[1], ['stage', 'stage-first-retry'], true)) {
                 // Stage prepares only an inert detached candidate. No Config save,
                 // IPFW or process switch is possible here. Return a bounded
                 // negative receipt rather than an indistinguishable configd 69.

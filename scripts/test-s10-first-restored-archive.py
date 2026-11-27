@@ -155,4 +155,80 @@ class ArchiveTest(unittest.TestCase):
         with self.assertRaises(ArchiveRefused):
             archive_original_zero_directories(self.slots,uid=self.uid,attest=lambda p:True,scope=self.scope)
 
+
+class RetryPreparedTest(unittest.TestCase):
+    """Real original WAL, fixture native authority only; no actual native IO."""
+    def setUp(self):
+        from shared_apply_operation import SharedApplyOperation, _config_observation_witness
+        import auto_detect_aborted_first as a
+        self.a = a
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.store = SharedApplyOperation(Path(self.temp.name) / 'wal', owner=os.geteuid())
+        self.old_id = 'a' * 32
+        self.new_id = 'b' * 32
+        self.old = dict(schema=1, phase='restored',
+            detail=dict(id=self.old_id, page='strategies', base='c'*64,
+                candidate='d'*64, changed_fields=['general.enabled']),
+            manifest=dict(schema=2,generation=self.old_id,root_sha256='e'*64,
+                seal_sha256='f'*64,candidate_sha256='d'*64),
+            first_running_sha256='1'*64,first_pretraffic_sha256='2'*64)
+        self.store._persist_record(self.old)
+        self.wal = self.store.root / 'operation.json'
+        self.raw = self.wal.read_bytes()
+        self.detail = dict(id=self.new_id,page='strategies',base='c'*64,
+            candidate='3'*64,changed_fields=['general.enabled'])
+        self.seal = {'sha256':{'plan.json':'4'*64}}
+        self.witness = _config_observation_witness(self.detail,'4'*64,'c'*64)
+        self.paths = tuple(Path(self.temp.name)/name for name in ('work','epoch','producer'))
+        self.proof = (b'root',b'seed',((1,2,3),))
+        for name,value in (
+            ('SharedApplyOperation',lambda **kw:self.store),
+            ('require_lifecycle_lock',lambda:None),
+            ('assert_inherited_config_fd',lambda *args,**kw:None),
+            ('_zero_processes',lambda *args:None),
+            ('_first_retry_paths',lambda *args:self.paths),
+            ('_first_retry_candidate',lambda *args:(self.detail,self.seal)),
+            ('_empty_kernel',lambda path:'native-managed-kernel-empty'),
+            ('_source_evidence',lambda *args,**kw:self.proof),
+        ):
+            p=patch.object(a,name,value);p.start();self.addCleanup(p.stop)
+        p=patch.object(a.sys,'platform','freebsd14');p.start();self.addCleanup(p.stop)
+        p=patch.object(a.os,'geteuid',return_value=0);p.start();self.addCleanup(p.stop)
+
+    def prepare(self, **kw):
+        return self.a.prepare_first_retry_locked(self.new_id,
+            kw.get('witness',self.witness),config_fd=kw.get('config_fd',4),
+            queue_fd=kw.get('queue_fd',3))
+
+    def assert_old(self):
+        self.assertEqual(self.wal.read_bytes(),self.raw)
+        self.assertEqual(self.store.read(),self.old)
+
+    def test_new_prepared_no_false_predecessor(self):
+        self.assertEqual(self.prepare(),{'result':'original-first-retry-prepared','id':self.new_id})
+        self.assertEqual(self.store.read(),{'schema':1,'phase':'prepared','detail':self.detail})
+
+    def test_config_and_descriptor_refusal(self):
+        for kw in ({'witness':'0'*64},{'queue_fd':5},{'config_fd':6}):
+            with self.subTest(kw=kw),self.assertRaises(ArchiveRefused): self.prepare(**kw)
+            self.assert_old()
+
+    def test_archive_drift_or_writer_refusal(self):
+        for name in ('_first_retry_paths','_first_retry_candidate','_source_evidence','_empty_kernel'):
+            with self.subTest(name=name),patch.object(self.a,name,side_effect=ArchiveRefused('fixture drift')):
+                with self.assertRaises(ArchiveRefused): self.prepare()
+                self.assert_old()
+
+    def test_proof_changed_between_reads(self):
+        with patch.object(self.a,'_source_evidence',side_effect=[self.proof,(b'other',)]):
+            with self.assertRaisesRegex(ArchiveRefused,'PREIMAGE_CHANGED'): self.prepare()
+        self.assert_old()
+
+    def test_generic_prepared_still_refuses(self):
+        from shared_apply_operation import SharedOperationError
+        with self.assertRaises(SharedOperationError): self.store.advance('prepared',self.detail)
+        self.assert_old()
+
+
 if __name__=='__main__': unittest.main(verbosity=2)

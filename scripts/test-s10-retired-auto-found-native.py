@@ -873,16 +873,45 @@ def native_positive():
             blocked = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180)
             need(blocked.returncode != 0 and archive_readback(), "S10_FIRST_ARCHIVE_LEGACY_FENCE_REQUIRED")
             print("S10_FIRST_ARCHIVE=PASS_ORIGINAL_CONFIG_WAL_ROOT_SEED_PRODUCER_LOCK_INODES_REPLAY", flush=True)
-            return
-        need(rec == {**pending, "phase": "committed"} and
-             (epoch / "epoch.json").is_file() and
-             subprocess.run([str(SERVICE), "status"], capture_output=True, timeout=35).returncode == 0,
-             "S10_FIRST_SAVED_PUBLIC_RECOVERY_REFUSED")
-        print("S10_FIRST_SAVED=PASS_PUBLIC_START_SAME_WAL_CONFIG_ROOT_PRODUCER_RUNNING",
-              flush=True)
-        # Confirm the recovered owner is usable by the original normal Stop
-        # and independent ACK/archive attester below, not only by WAL readback.
-        os.environ["ZAPRET2_S10_FOUND_FAULT"] = "normal"
+            def old_archive_intact():
+                lock = (producer / "worker.lock").stat()
+                ss = new_seed.stat()
+                return ((new_root.stat().st_dev, new_root.stat().st_ino, new_root.read_bytes()) == root_pin and
+                        (ss.st_dev, ss.st_ino) == (old_seed.st_dev, old_seed.st_ino) and
+                        new_seed.read_bytes() == seed_bytes and images() == before_images and
+                        (lock.st_dev, lock.st_ino) == (old_lock.st_dev, old_lock.st_ino) and
+                        json.loads((archive / "restored.json").read_bytes()) == rec)
+            fresh = web.api("GET", "/api/zapret/settings/get").get("zapret")
+            wrong_mode = web.api("POST", "/api/zapret/settings/apply",
+                g04.g04_http_form(fresh) + [("zapret[hostlist][mode]", "list")])
+            need(wrong_mode.get("result") != "saved" and archive_readback(),
+                 "S10_FIRST_RETRY_WRONG_MODE_REFUSAL_REQUIRED")
+            print("S10_FIRST_RETRY_WRONG_MODE=PASS_NO_WAL_CONFIG_OR_ARCHIVE_MUTATION", flush=True)
+            result = web.api("POST", "/api/zapret/settings/apply",
+                             g04.g04_http_form(fresh) + first_auto)
+            print("S10_FIRST_RETRY_HTTP=" + ("SAVED" if result.get("result") == "saved" else "REFUSED"), flush=True)
+            if result.get("result") == "saved":
+                retry_record = json.loads(WAL.read_bytes())
+                retry_id = retry_record["detail"]["id"]
+                retry_seed = epoch.parent / retry_id / "pretraffic.json"
+                retry_lock = (old_producer / "worker.lock").stat()
+                need(retry_record["phase"] == "committed" and retry_record["manifest"]["schema"] == 2 and
+                     retry_id != op and "previous" not in retry_record and "previous_manifest" not in retry_record and
+                     retry_record["detail"]["base"] == rec["detail"]["base"] and
+                     hashlib.sha256(retry_seed.read_bytes()).hexdigest() == retry_record["first_pretraffic_sha256"] and
+                     (retry_lock.st_dev, retry_lock.st_ino) != (old_lock.st_dev, old_lock.st_ino) and
+                     old_archive_intact(), "S10_FIRST_RETRY_NEW_OWNER_REQUIRED")
+                print("S10_FIRST_RETRY=PASS_REAL_HTTPS_NEW_COMMITTED_ARCHIVE_INTACT", flush=True)
+        else:
+            need(rec == {**pending, "phase": "committed"} and
+                 (epoch / "epoch.json").is_file() and
+                 subprocess.run([str(SERVICE), "status"], capture_output=True, timeout=35).returncode == 0,
+                 "S10_FIRST_SAVED_PUBLIC_RECOVERY_REFUSED")
+            print("S10_FIRST_SAVED=PASS_PUBLIC_START_SAME_WAL_CONFIG_ROOT_PRODUCER_RUNNING",
+                  flush=True)
+            # Confirm the recovered owner is usable by the original normal Stop
+            # and independent ACK/archive attester below, not only by WAL readback.
+            os.environ["ZAPRET2_S10_FOUND_FAULT"] = "normal"
     observed = g04.model()
     checks = {
         "HTTP_RESULT": first_fault == "first-saved" or result.get("result") == "saved",
@@ -937,7 +966,7 @@ def native_positive():
                     fixed = {
                         "S10_BOUND_ENGINE_UNQUALIFIED", "S10_BOUND_ENGINE_CHANGED",
                         "S10_EFFECTIVE_SOURCE_UNQUALIFIED", "S10_FIRST_AUTO_GUI_SCOPE_REQUIRED",
-                        "S10_FIRST_AUTO_GUI_OUTCOME_UNCERTAIN", "S10_FIRST_ENABLED_APPLY_SCOPE_REQUIRED",
+                        "S10_FIRST_RETRY_PREPARE_REFUSED", "S10_FIRST_AUTO_GUI_OUTCOME_UNCERTAIN", "S10_FIRST_ENABLED_APPLY_SCOPE_REQUIRED",
                         "S10_FIRST_ENABLED_APPLY_PREIMAGE_CHANGED", "S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN",
                         "S10_FIRST_LEARNING_SOURCE_CHANGED", "S10_FIRST_LEARNING_QUEUE_OWNER_CHANGED",
                         "S10_BOUND_PROMOTION_PRECHECK_REFUSED", "S10_PREPARED_DISPATCH_BIND_CHANGED",
@@ -1110,6 +1139,10 @@ def native_positive():
          "S10_AUTO_REAL_STOP_ACK_HISTORY_NOT_ATTESTED")
     print("S10_AUTO_NATIVE_STOP=PASS_REAL_HTTPS_SCHEMA3_NATIVE_STOP_TERMINAL_ACK",
           flush=True)
+    if first_fault == "first-base":
+        need(old_archive_intact(), "S10_FIRST_RETRY_ARCHIVE_CHANGED_AFTER_STOP")
+        print("S10_FIRST_RETRY=PASS_NEW_OWNER_REAL_STOP_ACK_OLD_ARCHIVE_INTACT", flush=True)
+        return
     if first_fault == "first-saved":
         print("S10_FIRST_SAVED=PASS_RECOVERED_OWNER_REAL_STOP_ACK_ARCHIVE", flush=True)
         return

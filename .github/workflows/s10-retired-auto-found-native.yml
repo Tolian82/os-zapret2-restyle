@@ -47,6 +47,7 @@ jobs:
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_quiescent_preimage.py
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_shared_apply_source_gate.py
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(id -g)" -gt 0
@@ -61,6 +62,8 @@ jobs:
           sh -n scripts/test-shared-apply-boot.sh
           sh scripts/test-shared-apply-boot.sh
           php -l src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php
+          php -l src/opnsense/scripts/OPNsense/Zapret/shared_apply_request.php
+          php scripts/test-shared-apply-request.php
           python3.13 scripts/test-s10-first-enabled-trace.py
           if GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_S10_RETIRED_AUTO_DISPOSABLE=1 \
               ZAPRET2_NATIVE_PROJECT_SHA=${{ github.sha }} \
