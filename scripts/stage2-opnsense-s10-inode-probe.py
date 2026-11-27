@@ -35,10 +35,10 @@ def load_writer():
 def run_probe(base, count, waits, *, wal_base=None, focused=False):
     modes = ("original", "late-pinned", "wal-file-barrier", "wal-dir-barrier",
              "wal-rewrite-barrier", "local-rewrite-barrier", "seeded-local-rewrite",
-             "seeded-local-cleanup", "no-rename-control")
+             "seeded-local-cleanup", "callback-cleanup", "no-rename-control")
     if focused:
         modes = ("original", "wal-rewrite-barrier", "local-rewrite-barrier",
-                 "seeded-local-rewrite", "seeded-local-cleanup", "no-rename-control")
+                 "seeded-local-rewrite", "seeded-local-cleanup", "callback-cleanup", "no-rename-control")
     report = {m: dict(samples=0, ctime_drift=0, other_drift=0, refused=0,
                       first_drift={}, drift_samples={}, early_ctime_drift={}) for m in modes}
     scope = load_writer()
@@ -82,6 +82,8 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
         wal.mkdir()
         local = root / "local-barrier"
         local.mkdir()
+        active = root / "active"
+        active.mkdir()
 
         def checkpoint(data, sample=None, *, directory=wal):
             def step(label):
@@ -104,11 +106,18 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
         for index in range(count):
             for mode in modes:
                 row = report[mode]
-                target = root / f"{mode}-{index}.txt"
+                target = (active if mode == "callback-cleanup" else root) / f"{mode}-{index}.txt"
                 before, after = b"before.example\n", b"after-long.example\n"
                 target.write_bytes(before)
                 early, pinned, anchor = None, None, None
                 sample = None
+
+                def local_cleanup():
+                    checkpoint(after, directory=seeded)
+                    (seeded / "record").unlink()
+                    scope["_sync"](seeded)
+                    seeded.rmdir()
+                    scope["_sync"](local)
 
                 def stage(phase, item, data, info):
                     nonlocal early, pinned, anchor, sample
@@ -122,6 +131,15 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                         anchor = os.open(item, os.O_RDONLY | os.O_NOFOLLOW)
                         if snapshot(item, data, anchor) != early:
                             raise RuntimeError("installed anchor mismatch")
+                        if mode == "callback-cleanup":
+                            # Exercise the existing installed callback with the writer
+                            # still open. Scratch is outside the active tree.
+                            local_cleanup()
+                            pinned = snapshot(item, data, anchor)
+                            note_early(row, early, pinned, "before-final-pin")
+                            sample = (mode, target, after, pinned, {})
+                            checkpoint(data, sample)
+                            observe(sample, "after-installed-wal")
                     else:
                         pinned = early
                         sample = (mode, target, after, pinned, {})
@@ -129,7 +147,7 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                         observe(sample, "after-installed-wal")
 
                 try:
-                    if mode in ("seeded-local-rewrite", "seeded-local-cleanup"):
+                    if mode in ("seeded-local-rewrite", "seeded-local-cleanup", "callback-cleanup"):
                         seeded = local / f"{mode}-{index}"
                         seeded.mkdir()
                         checkpoint(before, directory=seeded)
@@ -148,7 +166,7 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                                           expected_identity=identity(target.lstat()))
                     if early is None:
                         raise RuntimeError("missing installed observation")
-                    if mode != "original":
+                    if mode not in ("original", "callback-cleanup"):
                         if anchor is None:
                             raise RuntimeError("missing anchor")
                         returned = snapshot(target, after, anchor)
@@ -182,6 +200,10 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                         observe(sample, "after-installed-wal")
                         if not same_except_ctime(pinned, identity(os.fstat(anchor))):
                             raise RuntimeError("anchor drift")
+                    if mode == "callback-cleanup":
+                        if (seeded.exists() or anchor is None or pinned is None or
+                                not same_except_ctime(pinned, identity(os.fstat(anchor)))):
+                            raise RuntimeError("callback cleanup or anchor changed")
                     if sample is None:
                         raise RuntimeError("missing sample")
                     observe(sample, "writer-return")
