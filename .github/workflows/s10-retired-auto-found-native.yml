@@ -14,8 +14,8 @@ on:
       scenario:
         description: Native scenario (all repeats the accepted positive and saved-gap paths)
         type: choice
-        options: [retry, prepared, presave, all]
-        default: retry
+        options: [first-config, retry, prepared, presave, all]
+        default: first-config
 
 permissions:
   contents: read
@@ -58,7 +58,7 @@ jobs:
       fail-fast: false
       matrix:
         # Only the new risk on branch pushes; full regression is explicit.
-        fault: ${{ fromJSON(inputs.scenario == 'all' && '["normal","saved-gap","presave","prepared-unbound","prepared-bound","retry"]' || inputs.scenario == 'presave' && '["presave"]' || inputs.scenario == 'prepared' && '["prepared-unbound","prepared-bound"]' || '["retry"]') }}
+        fault: ${{ fromJSON(inputs.scenario == 'all' && '["normal","saved-gap","presave","prepared-unbound","prepared-bound","retry","first-base","first-saved"]' || inputs.scenario == 'presave' && '["presave"]' || inputs.scenario == 'prepared' && '["prepared-unbound","prepared-bound"]' || inputs.scenario == 'retry' && '["retry"]' || '["first-base","first-saved"]') }}
     needs: fast
     runs-on: ubuntu-latest
     timeout-minutes: 85

@@ -606,13 +606,116 @@ def native_positive():
          reject.get("requires_review") is not True and
          CONFIG.read_bytes() == before and not WAL.exists(),
          "S10_AUTO_FRESH_STALE_CAS_MUTATED")
-    result = web.api("POST", "/api/zapret/settings/apply",
-                     g04.g04_http_form(saved) + first_auto)
+    first_fault = os.environ.get("ZAPRET2_S10_FOUND_FAULT", "normal")
+    first_fault = first_fault if first_fault in ("first-base", "first-saved") else None
+    php = SERVICE.with_name("shared_apply_config.php")
+    php_bytes = php.read_bytes()
+    if first_fault == "first-base":
+        # After original real ACTIVATED and both pins, before native Config save.
+        needle = b"""                    return self::originalLockedFileEvidence(
+                        $config, $id, $firstEnabled ? 'write-first-enabled-handoff-locked'
+                            : 'write-first-disabled-handoff-locked', $digest, null, null, $queueStream)
+                        === ['result'=>($firstEnabled ? 'first-enabled-activated'
+                            : 'first-disabled-activated'), 'id'=>$id];"""
+        replacement = needle.replace(b"return self::", b"$activated = self::", 1) + (
+            b"\n                    if ($firstEnabled && $activated) { "
+            b"throw new \\RuntimeException('S10 disposable first base fault'); }\n"
+            b"                    return $activated;")
+        need(php_bytes.count(needle) == 1, "S10_FIRST_FAULT_BASE_BOUNDARY_CHANGED")
+        php.write_bytes(php_bytes.replace(needle, replacement))
+    if first_fault == "first-saved":
+        # Actual native Config::save returned, before the original confirm/epoch.
+        needle = b"                if (($firstDisabled || $firstEnabled) && $mode === 'confirm-managed-config-save-locked') {"
+        need(php_bytes.count(needle) == 1, "S10_FIRST_FAULT_SAVED_BOUNDARY_CHANGED")
+        php.write_bytes(php_bytes.replace(needle, needle +
+            b"\n                    if ($firstEnabled) { "
+            b"throw new \\RuntimeException('S10 disposable first saved fault'); }"))
+    try:
+        result = web.api("POST", "/api/zapret/settings/apply",
+                         g04.g04_http_form(saved) + first_auto)
+    finally:
+        if first_fault:
+            php.write_bytes(php_bytes)
+    if first_fault:
+        import hashlib
+        pending = json.loads(WAL.read_bytes())
+        need(php.read_bytes() == php_bytes and result.get("result") != "saved" and
+             pending["phase"] == "activated" and pending["manifest"]["schema"] == 2 and
+             "previous" not in pending and "first_running_sha256" in pending and
+             "first_pretraffic_sha256" in pending and
+             (CONFIG.read_bytes() == before) == (first_fault == "first-base"),
+             "S10_FIRST_REAL_CONFIG_FAULT_BOUNDARY_REQUIRED")
+        op = pending["detail"]["id"]
+        work = Path("/var/db/zapret2/shared-work")
+        root = work / op / "manifest.json"
+        root_pin = (root.stat().st_dev, root.stat().st_ino, root.read_bytes())
+        epoch = Path("/var/db/zapret2/auto-detect-epochs") / op
+        seed = epoch / "pretraffic.json"
+        seed_bytes = seed.read_bytes()
+        need(hashlib.sha256(seed_bytes).hexdigest() == pending["first_pretraffic_sha256"] and
+             set(path.name for path in epoch.iterdir()) == {"pretraffic.json"},
+             "S10_FIRST_FAULT_SEED_REQUIRED")
+        original_seed = json.loads(seed_bytes)
+        producer = Path("/var/db/zapret2/auto-detect")
+        # Use the existing seed as the physical inventory; never print raw data.
+        def images():
+            output = {}
+            for row in original_seed["files"]:
+                path = producer / row["name"]
+                st = path.stat()
+                data = path.read_bytes()
+                need(not path.is_symlink() and (st.st_dev, st.st_ino, st.st_nlink) ==
+                     (row["device"], row["inode"], row["nlink"]),
+                     "S10_FIRST_FAULT_PRODUCER_IDENTITY_CHANGED")
+                output[row["name"]] = data
+            return output
+        # The actual producer directory is the source-map learning parent,
+        # never a guessed alternate directory.
+        producer = Path(original_seed["learning"][0]["path"]).parent
+        before_images = images()
+        def safe_lengths(data):
+            return ("INBOX_" + str(len(data["inbox.txt"])) + ":DEBUG_" +
+                    str(len(data["debug.log"])) + ":LEARNING_" +
+                    str(sum(len(v) for k, v in data.items() if k not in ("inbox.txt", "debug.log"))))
+        print("S10_FIRST_FAULT=PASS_ACTUAL_ACTIVATED_" + first_fault.upper().replace("-", "_") +
+              ":" + safe_lengths(before_images), flush=True)
+        config_image = CONFIG.read_bytes()
+        work_before = set(work.iterdir())
+        kernel = subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout
+        # The first recovery dispatcher deliberately returns 69 even on a
+        # terminal recovery: it must never fall through to a second Start.
+        recovery = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180)
+        rec = json.loads(WAL.read_bytes())
+        need(CONFIG.read_bytes() == config_image and set(work.iterdir()) == work_before and
+             (root.stat().st_dev, root.stat().st_ino, root.read_bytes()) == root_pin and
+             seed.read_bytes() == seed_bytes,
+             "S10_FIRST_FAULT_RECOVERY_ORIGINAL_EVIDENCE_CHANGED")
+        after_images = images()
+        need(all(after_images[name].startswith(data) for name, data in before_images.items()),
+             "S10_FIRST_FAULT_RECOVERY_PRODUCER_DATA_LOST")
+        if first_fault == "first-base":
+            # Baseline safety regression, NOT a claim of completed rollback.
+            need(recovery.returncode != 0 and rec == pending and
+                 set(path.name for path in epoch.iterdir()) == {"pretraffic.json"} and
+                 subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout == kernel,
+                 "S10_FIRST_BASE_UNEXPECTED_MUTATION")
+            print("S10_FIRST_BASE=OPEN_REFUSED_UNSAVED_CONFIG_NO_DATA_LOSS_" +
+                  safe_lengths(after_images), flush=True)
+            return
+        need(rec == {**pending, "phase": "committed"} and
+             (epoch / "epoch.json").is_file() and
+             subprocess.run([str(SERVICE), "status"], capture_output=True, timeout=35).returncode == 0,
+             "S10_FIRST_SAVED_PUBLIC_RECOVERY_REFUSED")
+        print("S10_FIRST_SAVED=PASS_PUBLIC_START_SAME_WAL_CONFIG_ROOT_PRODUCER_RUNNING",
+              flush=True)
+        # Confirm the recovered owner is usable by the original normal Stop
+        # and independent ACK/archive attester below, not only by WAL readback.
+        os.environ["ZAPRET2_S10_FOUND_FAULT"] = "normal"
     observed = g04.model()
     checks = {
-        "HTTP_RESULT": result.get("result") == "saved",
-        "HTTP_STATUS": result.get("status") == "ok",
-        "HTTP_REVIEW": result.get("requires_review") is not True,
+        "HTTP_RESULT": first_fault == "first-saved" or result.get("result") == "saved",
+        "HTTP_STATUS": first_fault == "first-saved" or result.get("status") == "ok",
+        "HTTP_REVIEW": first_fault == "first-saved" or result.get("requires_review") is not True,
         "CONFIG_AUTO": observed.findtext("hostlist/mode") == "auto",
         "CONFIG_ENABLED": observed.findtext("general/enabled") == "1",
         "CONFIG_WAN": observed.findtext("general/waninterface") == "lo0",
@@ -835,6 +938,9 @@ def native_positive():
          "S10_AUTO_REAL_STOP_ACK_HISTORY_NOT_ATTESTED")
     print("S10_AUTO_NATIVE_STOP=PASS_REAL_HTTPS_SCHEMA3_NATIVE_STOP_TERMINAL_ACK",
           flush=True)
+    if first_fault == "first-saved":
+        print("S10_FIRST_SAVED=PASS_RECOVERED_OWNER_REAL_STOP_ACK_ARCHIVE", flush=True)
+        return
     native_found_successor(web, voice, old, command)
 
 
