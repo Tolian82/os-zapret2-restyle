@@ -569,22 +569,59 @@ try:
     store.advance("prepared", detail)
     raw = sys.stdin.buffer.read(MAX_PIPE + 1)
     if mode in ("successor", "successor-uncertain"):
-        route, committed, source, semantic = coordinate_managed_diagnosed(
-            op, raw, store, detail, native_coordinate_original_prepared_fd9)
-        if (route != "managed-committed" or store.read() != committed or
-                committed.get("phase") != "committed" or committed.get("detail") != detail or
-                committed.get("previous") != old_owner or
-                committed.get("previous_manifest") != prior["manifest"] or
-                source.mode != "list" or source.requested_enabled is not True or
-                semantic.lifecycle_proposal != "RELOAD" or
-                semantic.decision.kind != "RELOAD_SAFE_CANDIDATE" or
-                semantic.decision.changed_active != ("hostlist-youtube.txt",) or
-                semantic.decision.changed_inactive or
-                type(semantic.previous_physical) is not CompletePriorPreimage or
-                semantic.previous_generation != old_owner["id"] or
-                semantic.previous_root_sha256 != prior["manifest"]["root_sha256"] or
-                semantic.candidate_root_sha256 != committed["manifest"]["root_sha256"]):
-            raise RuntimeError("G03_BOUND_SUCCESSOR_COORDINATOR_OUTCOME_UNPROVEN")
+        if mode == "successor-uncertain":
+            import tempfile
+            from runpy import run_path
+            from auto_detect_destination_commit import _attest_bound_managed_installed_locked
+            from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
+            with tempfile.TemporaryDirectory(prefix="g03-s10-managed-save-", dir="/root") as scratch:
+                private = run_path("/root/g03-native-prepared.py")[
+                    "build_managed_uncertain_worker"](
+                    Path(scratch), Path("/usr/local/opnsense/scripts/OPNsense/Zapret"))
+                try:
+                    coordinate_managed_diagnosed(
+                        op, raw, store, detail, native_coordinate_original_prepared_fd9,
+                        private_worker=private)
+                except OriginalSourceGateRefused as exc:
+                    if str(exc) != "S10_MANAGED_HANDOFF_OUTCOME_UNCERTAIN":
+                        raise
+                else:
+                    raise RuntimeError("G03_MANAGED_UNCERTAIN_MUST_REFUSE_ORIGINAL_REPLY")
+            crashed = store.read()
+            managed = crashed.get("managed", {}) if type(crashed) is dict else {}
+            if (type(crashed) is not dict or crashed.get("phase") != "managed-config-saving" or
+                    crashed.get("detail") != detail or crashed.get("previous") != old_owner or
+                    crashed.get("previous_manifest") != prior["manifest"] or
+                    not {"ready", "barrier", "installed", "running_sha256"} <= managed.keys() or
+                    "restore" in managed):
+                raise RuntimeError("G03_MANAGED_UNCERTAIN_REAL_WAL_CHECKPOINT_MISSING")
+            _attest_bound_managed_installed_locked(store, crashed, parent=WORK,
+                                                  active=COMMON_ACTIVE)
+            if (_running_native(new_release, owner_uid=0, child_pidfile=CHILD_PID,
+                                monitor_pidfile=MONITOR_PID) != running):
+                raise RuntimeError("G03_MANAGED_UNCERTAIN_ENGINE_CHANGED_BEFORE_RECOVERY")
+            committed = native_finish_bound_cold_restore(crashed)
+            expected = {**crashed, "phase": "committed"}
+            expected.pop("managed")
+            if committed != expected or store.read() != expected:
+                raise RuntimeError("G03_MANAGED_UNCERTAIN_ORIGINAL_CONFIG_RECOVERY_UNPROVEN")
+        else:
+            route, committed, source, semantic = coordinate_managed_diagnosed(
+                op, raw, store, detail, native_coordinate_original_prepared_fd9)
+            if (route != "managed-committed" or store.read() != committed or
+                    committed.get("phase") != "committed" or committed.get("detail") != detail or
+                    committed.get("previous") != old_owner or
+                    committed.get("previous_manifest") != prior["manifest"] or
+                    source.mode != "list" or source.requested_enabled is not True or
+                    semantic.lifecycle_proposal != "RELOAD" or
+                    semantic.decision.kind != "RELOAD_SAFE_CANDIDATE" or
+                    semantic.decision.changed_active != ("hostlist-youtube.txt",) or
+                    semantic.decision.changed_inactive or
+                    type(semantic.previous_physical) is not CompletePriorPreimage or
+                    semantic.previous_generation != old_owner["id"] or
+                    semantic.previous_root_sha256 != prior["manifest"]["root_sha256"] or
+                    semantic.candidate_root_sha256 != committed["manifest"]["root_sha256"]):
+                raise RuntimeError("G03_BOUND_SUCCESSOR_COORDINATOR_OUTCOME_UNPROVEN")
         verify_original_operation_pins(record=committed, parent=WORK, owner_uid=0)
         if (_full_prior_tree(WORK / op, COMMON_ACTIVE, 0) != new_tree or
                 verify_seal(old_work, owner=0)["sha256"]["release"] != old_tree or
