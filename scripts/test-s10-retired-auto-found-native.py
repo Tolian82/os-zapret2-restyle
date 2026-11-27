@@ -144,19 +144,45 @@ def native_positive():
     g04.setup_upstream()
     need(CONFIG.read_bytes() == before and not WAL.exists(),
          "S10_AUTO_UPSTREAM_SETUP_MUTATED_CONFIG")
-    g04.authenticated_first_apply(traffic, domains)
+    # The GUI must create the *first* native owner as Auto. Changing an
+    # already committed schema1 List owner to Auto would require the still
+    # unaccepted public bound Apply/RUNNING transition, and tests must not
+    # bypass its fence merely to manufacture a running epoch.
     web = voice.GuestHttps()
     voice.login(web)
+    page = web.request("GET", "/ui/zapret")
+    need("frm_GeneralSettings" in page and
+         "/api/zapret/settings/apply" in page,
+         "S10_AUTO_ORIGINAL_HTTPS_PAGE_UNAVAILABLE")
     saved = web.api("GET", "/api/zapret/settings/get").get("zapret")
-    need(type(saved) is dict and type(saved.get("hostlist", {}).get("telegramips")) is str,
-         "S10_AUTO_HTTPS_SAVED_MODEL_UNQUALIFIED")
-    result = web.api("POST", "/api/zapret/settings/apply", [
-        ("zapret[sync][telegramips_baseline]", saved["hostlist"]["telegramips"]),
-        ("zapret[hostlist][mode]", "auto")])
-    need(result.get("result") == "saved" and result.get("status") == "ok" and
-         result.get("requires_review") is not True and
-         g04.model().findtext("hostlist/mode") == "auto",
-         "S10_AUTO_REAL_HTTPS_STRATEGIES_MODE_NOT_COMMITTED")
+    need(type(saved) is dict and type(saved.get("hostlist", {}).get("telegramips")) is str and
+         type(saved.get("strategy", {}).get("trafficargs")) is str and
+         g04.same_gui_multiline(saved["strategy"]["trafficargs"], traffic) and
+         g04.same_gui_multiline(saved["hostlist"].get("youtubedomains"), domains),
+         "S10_AUTO_HTTPS_FRESH_MODEL_UNQUALIFIED")
+    first_auto = [("zapret[hostlist][mode]", "auto")]
+    reject = web.api("POST", "/api/zapret/settings/apply",
+                     g04.g04_http_form(saved, stale=True) + first_auto)
+    need(reject.get("result") == "failed" and
+         reject.get("requires_review") is not True and
+         CONFIG.read_bytes() == before and not WAL.exists(),
+         "S10_AUTO_FRESH_STALE_CAS_MUTATED")
+    result = web.api("POST", "/api/zapret/settings/apply",
+                     g04.g04_http_form(saved) + first_auto)
+    observed = g04.model()
+    checks = {
+        "HTTP_RESULT": result.get("result") == "saved",
+        "HTTP_STATUS": result.get("status") == "ok",
+        "HTTP_REVIEW": result.get("requires_review") is not True,
+        "CONFIG_AUTO": observed.findtext("hostlist/mode") == "auto",
+        "CONFIG_ENABLED": observed.findtext("general/enabled") == "1",
+        "CONFIG_WAN": observed.findtext("general/waninterface") == "lo0",
+        "CONFIG_STRATEGY": observed.findtext("strategy/trafficargs") == traffic,
+        "CONFIG_DOMAINS": observed.findtext("hostlist/youtubedomains") == domains,
+    }
+    failed_first = [name for name, ok in checks.items() if not ok]
+    need(not failed_first,
+         "S10_AUTO_FIRST_HTTPS_" + "_".join(failed_first[:4]) + "_DRIFT")
     old = json.loads(WAL.read_bytes())
     native_status = subprocess.run([str(SERVICE), "status"],
                                    capture_output=True, timeout=35)
