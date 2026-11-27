@@ -1210,6 +1210,121 @@ def bound_stopped_found_presave_main():
 
 
 
+def bound_original_http_upload_main():
+    """Real PHP multipart temporary file -> original service run -> COMMITTED.
+
+    This exercises the actual HTTP upload origin, the production
+    SharedApplyEnvelope, original FD9 staging/build/source snapshot,
+    native P1/Config writer and stopped atomic finisher. No fake PHP
+    $_FILES or fabricated uploaded-file inode is accepted.
+    """
+    import socket
+    import urllib.error
+    import urllib.request
+    need(os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1" and
+         os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1" and
+         os.environ.get("GITHUB_ACTIONS") == "true" and
+         sys.platform.startswith("freebsd") and os.geteuid() == 0,
+         "G03_HTTP_ORIGINAL_DISPOSABLE_ONLY")
+    handler = Path("/root/g03-native-upload.php")
+    upload_tmp = Path("/var/lib/php/tmp")
+    need(handler.is_file() and not handler.is_symlink() and
+         upload_tmp.is_dir() and not upload_tmp.is_symlink(),
+         "G03_HTTP_PHP_SERVER_NOT_QUALIFIED")
+    original = snapshot()
+    previous = json.loads(WAL.read_bytes())
+    need(previous["phase"] == "committed" and
+         previous["manifest"]["schema"] == 1 and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 1,
+         "G03_HTTP_STOPPED_BOUND_PREDECESSOR_REQUIRED")
+    intent_bytes = call([PHP, NATIVE, "http-found-intent"],
+                        locked=True).encode("utf-8")
+    intent = json.loads(intent_bytes)
+    need(intent["schema_version"] == 1 and
+         intent["kind"] == "tz6v2-found-form-intent" and
+         list(intent["sources"]) == ["youtube", "user", "auto"] and
+         all(intent["sources"][name]["base"]["content"].encode("utf-8") ==
+             p.read_bytes() and
+             intent["sources"][name]["draft"] != intent["sources"][name]["base"]["content"]
+             for name, p in zip(("youtube", "user", "auto"), TARGETS)) and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_HTTP_UPLOAD_NOT_ORIGINAL_CANDIDATE")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+    server = subprocess.Popen([
+        PHP, "-d", "upload_tmp_dir=/var/lib/php/tmp",
+        "-d", "file_uploads=1", "-S", "127.0.0.1:" + str(port),
+        "-t", "/root"], cwd="/usr/local/opnsense",
+        env={**os.environ, "GITHUB_ACTIONS":"true",
+             "ZAPRET2_G03_COLD_PREPARED":"1"},
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL)
+    try:
+        ready = False
+        for _ in range(50):
+            if server.poll() is not None:
+                break
+            try:
+                with socket.create_connection(("127.0.0.1", port), 0.15):
+                    ready = True
+                    break
+            except OSError:
+                time.sleep(0.1)
+        need(ready, "G03_HTTP_PHP_SERVER_NOT_LISTENING")
+        boundary = b"G03BOUNDSTOPPED" + hashlib.sha256(intent_bytes).hexdigest()[:16].encode()
+        body = (b"--" + boundary + b"\r\n" +
+                b'Content-Disposition: form-data; name="found_intent"; filename="found-intent.json"\r\n' +
+                b"Content-Type: application/json\r\n\r\n" +
+                intent_bytes + b"\r\n--" + boundary + b"--\r\n")
+        request = urllib.request.Request(
+            "http://127.0.0.1:" + str(port) + "/g03-native-upload.php",
+            data=body,
+            headers={"Content-Type": "multipart/form-data; boundary=" + boundary.decode(),
+                     "Content-Length": str(len(body))},
+            method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                receipt = response.read(256).decode("ascii").strip()
+                need(response.status == 200, "G03_HTTP_ORIGINAL_UNEXPECTED_STATUS")
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError("G03_HTTP_ORIGINAL_STATUS_" + str(exc.code)) from None
+    finally:
+        server.terminate()
+        try:
+            server.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            server.kill()
+            server.wait(timeout=10)
+    need(re.fullmatch(r"applied-id=[a-f0-9]{32}", receipt) is not None,
+         "G03_HTTP_ORIGINAL_SERVICE_RECEIPT_REFUSED")
+    op = receipt.split("=", 1)[1]
+    final = json.loads(WAL.read_bytes())
+    after = snapshot()
+    saved = json.loads(call(
+        [PHP, str(Path(SERVICE).parent / "shared_apply_config.php"),
+         "saved", op, "strategies"], locked=True))
+    need(final["phase"] == "committed" and final["detail"]["id"] == op and
+         final["detail"]["base"] == previous["detail"]["candidate"] and
+         final["manifest"]["generation"] == op and
+         final["manifest"]["schema"] == 1 and
+         final["previous_manifest"] == previous["manifest"] and
+         final["previous"] == previous["detail"] and
+         "found" not in final and
+         saved == {"result":"committed",
+                   "snapshot":final["detail"]["candidate"], "enabled":"0"} and
+         after[0] != original[0] and after[1] == original[1] and
+         after[3] == original[3] and
+         all(p.read_bytes() == intent["sources"][name]["draft"].encode("utf-8")
+             for name, p in zip(("youtube", "user", "auto"), TARGETS)) and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 1,
+         "G03_HTTP_ORIGINAL_COMMITTED_OR_RUNTIME_DRIFT")
+    print("G03_S10_PUBLIC_HTTP_FOUND=PASS_REAL_MULTIPART_ORIGINAL_SERVICE_COMMITTED_STOPPED",
+          flush=True)
+
+
 def bound_stopped_found_save_main(*, uncertain=False, gap=None):
     """Exercise normal, post-save crash and all exact atomic rename gaps."""
     need(gap in (None, "staged", "parked", "backed-up"),
@@ -1424,6 +1539,8 @@ atomic_install_tree "$2" "$3" "$4" "$5"
         pos = modes.index(gap)
         if pos + 1 < len(modes):
             bound_stopped_found_save_main(gap=modes[pos + 1])
+        else:
+            bound_original_http_upload_main()
     elif uncertain:
         print("G03_S10_BOUND_STOPPED_POSTSAVE=PASS_REAL_UNACKED_CONFIG_RECOVERED_COMMITTED",
               flush=True)

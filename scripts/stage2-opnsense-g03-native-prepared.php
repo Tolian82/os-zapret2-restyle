@@ -102,6 +102,56 @@ function stage($config, bool $partial = false, bool $withConfig = false, bool $s
     return SharedApplyRequest::materialize($prepared);
 }
 
+/**
+ * TEST ONLY: create a normal three-source Found JSON to be sent as a REAL
+ * multipart HTTP upload. No temporary PHP upload is fabricated here: the
+ * subsequent loopback HTTP request creates it through PHP's upload engine.
+ */
+function originalHttpFoundIntent($config): string {
+    required(getenv('ZAPRET2_G03_FIRST_DISABLED') === '1' &&
+             getenv('ZAPRET2_G03_BOUND_FOUND') === '1',
+             'G03_HTTP_FOUND_DISPOSABLE_ONLY');
+    $current = (new \OPNsense\Zapret\Zapret())->getNodes();
+    $xml = @file_get_contents('/conf/config.xml');
+    required(is_string($xml) &&
+             ($current['general']['enabled'] ?? null) === '0',
+             'G03_HTTP_FOUND_OLD_CONFIG_REQUIRED');
+    $saved = \OPNsense\Zapret\Api\VoiceModelValues::text(
+        $current['general']['autorestart'] ?? 'off');
+    required(in_array($saved, ['off','hourly','daily','weekly','monthly'], true),
+             'G03_HTTP_FOUND_INTERVAL_INVALID');
+    $nextInterval = $saved === 'off' ? 'hourly' : 'off';
+    $prepared = SharedApplyRequest::prepare([
+        'page'=>'strategies',
+        'fields'=>['general'=>['autorestart'=>$nextInterval]],
+        'sync'=>['telegramips_baseline'=>
+            (string)($current['hostlist']['telegramips'] ?? '')],
+    ], $current, $xml);
+    required(($prepared['plan']['changed_fields'] ?? null) === ['general.autorestart'],
+             'G03_HTTP_FOUND_CONFIG_SCOPE_REQUIRED');
+    $sources = [];
+    foreach ([
+        'youtube'=>'/var/db/zapret2/auto-detect-owned/youtube.txt',
+        'user'=>'/var/db/zapret2/auto-detect-owned/user.txt',
+        'auto'=>'/usr/local/etc/zapret2/ipset/auto-domains.txt',
+    ] as $name=>$path) {
+        $before = image($path, $name === 'auto');
+        $draft = rtrim($before['content'], "\n") . "\n" .
+            'native-http-' . $name . '-proof.org' . "\n";
+        $sources[$name] = ['base'=>$before, 'draft'=>$draft];
+    }
+    $json = json_encode([
+        'schema_version'=>1, 'kind'=>'tz6v2-found-form-intent',
+        'config_revision'=>$prepared['plan']['dependencies'],
+        'sources'=>$sources,
+    ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+    $validated = SharedApplyFoundIntent::validateJson(
+        $json, $prepared['plan']['dependencies']);
+    required($validated['commit_authorized'] === false,
+             'G03_HTTP_FOUND_UPLOAD_UNQUALIFIED');
+    return $json;
+}
+
 function durable($config, string $id, string $action = 'durable'): void {
     $attest = !in_array($action, ['durable', 'durable-stopped'], true);
     $bind = $action === 'bind';
@@ -509,11 +559,11 @@ try {
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
              in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config','stage-config-next',
                                          'stage-config-gap-staged','stage-config-gap-parked',
-                                         'stage-config-gap-backed-up','durable','durable-stopped','stopped-presave','attest','bind','crash-partial','crash-config-save','crash-bound-config-save','stage-ordinary','bootstrap-known'], true) &&
+                                         'stage-config-gap-backed-up','http-found-intent','durable','durable-stopped','stopped-presave','attest','bind','crash-partial','crash-config-save','crash-bound-config-save','stage-ordinary','bootstrap-known'], true) &&
              count($argv) === (in_array(($argv[1] ?? ''),
                 ['stage','stage-partial','stage-config','stage-config-next',
                     'stage-config-gap-staged','stage-config-gap-parked',
-                    'stage-config-gap-backed-up','stage-ordinary','bootstrap-known'], true) ? 2 : 3),
+                    'stage-config-gap-backed-up','stage-ordinary','bootstrap-known','http-found-intent'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
     SharedApplyLifecycleLock::assertHeld();
     require_once 'script/load_phalcon.php';
@@ -537,7 +587,9 @@ try {
     } else {
         $config->lock();
         try {
-            if ($argv[1] === 'stage-ordinary') {
+            if ($argv[1] === 'http-found-intent') {
+                echo originalHttpFoundIntent($config), "\n";
+            } elseif ($argv[1] === 'stage-ordinary') {
                 $current = (new \OPNsense\Zapret\Zapret())->getNodes();
                 $xml = @file_get_contents('/conf/config.xml');
                 required(is_string($xml), 'G03_BOUND_NATIVE_CONFIG_UNREADABLE');

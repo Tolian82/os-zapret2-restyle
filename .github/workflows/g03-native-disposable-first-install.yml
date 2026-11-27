@@ -8,6 +8,7 @@ on:
     paths:
       - scripts/stage2-opnsense-g03-native-prepared.py
       - scripts/stage2-opnsense-g03-native-prepared.php
+      - scripts/stage2-opnsense-g03-native-upload.php
   pull_request:
     paths:
       - src/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh
@@ -19,6 +20,7 @@ on:
       - scripts/stage2-opnsense-g03-five-editor-f5.py
       - scripts/stage2-opnsense-g03-native-prepared.py
       - scripts/stage2-opnsense-g03-native-prepared.php
+      - scripts/stage2-opnsense-g03-native-upload.php
   workflow_dispatch:
     inputs:
       s10_first_commit:
@@ -108,6 +110,7 @@ jobs:
           python3.13 -m py_compile scripts/stage2-opnsense-g03-native-prepared.py
           python3.13 scripts/stage2-opnsense-g03-native-prepared.py fault-worker-self-test
           php -l scripts/stage2-opnsense-g03-native-prepared.php
+          php -l scripts/stage2-opnsense-g03-native-upload.php
           python3.13 -c 'import re,pathlib; p=pathlib.Path("scripts/stage2-opnsense-g03-native-prepared.php"); chunks=re.findall(r"<<<\x27PY\x27\n(.*?)\nPY;",p.read_text(),re.S); assert len(chunks)==3; [compile(c,str(p),"exec") for c in chunks]'
           python3.13 -m pip install idna
           python3.13 scripts/test-shared-apply-operation.py TestJournal.test_bound_successor_prepare_is_detached_only
@@ -207,6 +210,7 @@ jobs:
             # Test-only files outside installed pkg, BEFORE first ordinary Apply.
             install -m 0700 scripts/stage2-opnsense-g03-native-prepared.py /root/g03-native-prepared.py
             install -m 0600 scripts/stage2-opnsense-g03-native-prepared.php /root/g03-native-prepared.php
+            install -m 0600 scripts/stage2-opnsense-g03-native-upload.php /root/g03-native-upload.php
             GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 ZAPRET2_G03_PRISTINE_COLD=1 ZAPRET2_G03_PRISTINE_FIRST_COMMIT="${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.s10_first_commit)) && '1' || '0' }}" ZAPRET2_G03_MANAGED_UNCERTAIN="${{ github.event_name == 'workflow_dispatch' && inputs.s10_managed_uncertain && '1' || '0' }}" ZAPRET2_G03_MANAGED_PRE_SAVE="${{ github.event_name == 'workflow_dispatch' && inputs.s10_managed_pre_save && '1' || '0' }}" ZAPRET2_G03_BOUND_FOUND="${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.s10_bound_found)) && '1' || '0' }}" ZAPRET2_G03_FIRST_DISABLED="${{ github.event_name == 'push' && '1' || '0' }}" /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
             # The explicit two-bound-commit journey ends on this same disposable guest.
             if [ "${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.s10_first_commit)) && '1' || '0' }}" = 1 ]; then
