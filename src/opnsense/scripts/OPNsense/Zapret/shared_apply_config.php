@@ -460,7 +460,7 @@ final class SharedApplyConfigWorker
         $managedStep = ['write-managed-handoff-locked'=>'write',
             'begin-managed-config-save-locked'=>'begin', 'confirm-managed-config-save-locked'=>'confirm',
             'recover-managed-config-locked'=>'recover'][$mode] ?? null;
-        $firstTrace = $mode === 'write-first-enabled-handoff-locked' || $managedStep !== null;
+        $firstTrace = in_array($mode, ['write-first-enabled-handoff-locked', 'recover-first-config-locked'], true) || $managedStep !== null;
         if ($managedStep !== null) { @fwrite(STDERR, "S10_MANAGED_STEP=$managedStep\n"); }
         if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D01\n"); }
         $boundBegin = $mode === 'begin-bound-found-save-locked';
@@ -1189,7 +1189,7 @@ final class SharedApplyConfigWorker
             fwrite(STDERR, "ERROR: native shared Config save uncertain; retain recovery evidence\n");
             return 70;
         } catch (\Throwable $error) {
-            if (in_array($action, ['managed-apply', 'managed-save-recover'], true)) {
+            if (in_array($action, ['managed-apply', 'managed-save-recover', 'ordinary-first-recover'], true)) {
                 self::managedPhpRefusalTrace($error);
             }
             if (in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply',

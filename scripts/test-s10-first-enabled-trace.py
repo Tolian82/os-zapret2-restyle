@@ -27,7 +27,7 @@ def functions(source, names):
 
 
 native = functions((NATIVE / "backend/neutral_schema3_quiescent_preimage.py").read_text(),
-                   ("_first_enabled_checkpoint", "_relay_first_enabled_trace"))
+                   ("_first_enabled_checkpoint", "_relay_first_enabled_trace", "_relay_first_recovery_trace"))
 source = (ROOT / "scripts/stage2-opnsense-g03-native-prepared.py").read_text()
 children = [node.value for node in ast.walk(ast.parse(source))
             if isinstance(node, ast.Constant) and isinstance(node.value, str)
@@ -71,6 +71,21 @@ for raw, wanted in (
     result = subprocess.run(["php", "-r", php_probe, base64.b64encode(raw).decode()],
                             capture_output=True, check=False, timeout=10)
     assert (result.returncode, result.stdout, result.stderr) == (70, b"receipt\n", expected)
+
+# First Config recovery transports only complete existing location markers.
+for raw, expected in (
+    (b"S10_MANAGED_TRACE=M11:1300\nS10_MANAGED_TRACE=P01:1090\n", b"S10_MANAGED_TRACE=M11:1300\nS10_MANAGED_TRACE=P01:1090\n"),
+    (b"private data\nS10_MANAGED_TRACE=M11:1300 private\nS10_MANAGED_TRACE=P01:1090\r\nS10_MANAGED_TRACE=M11:1301", b""),
+    (b"S10_MANAGED_TRACE=M15:1\nS10_MANAGED_TRACE=P04:1\nS10_MANAGED_TRACE=M11:0001\nS10_MANAGED_TRACE=M11:123456\n", b""),
+    (b"S10_MANAGED_TRACE=M11:1\n" * 70, b"S10_MANAGED_TRACE=M11:1\n" * 64),
+    (b"S10_MANAGED_TRACE=M11:1\n" + b"x" * 8193, b""),
+    (None, b""),
+):
+    output = io.StringIO()
+    with contextlib.redirect_stderr(output):
+        native["_relay_first_recovery_trace"](raw)
+    assert output.getvalue().encode() == expected
+print("PASS: bounded first recovery source locations only")
 
 raw = mark+b"D00\n"+mark+b"D03\n"+mark+b"D31\nERROR: original managed Config outcome requires journal review\n"
 assert [line[-3:] for line in fixture["first_trace_lines"](raw)] == [b"D00", b"D03", b"D31"]

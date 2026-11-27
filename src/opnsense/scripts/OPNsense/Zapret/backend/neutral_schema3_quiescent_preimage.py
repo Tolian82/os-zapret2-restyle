@@ -1607,6 +1607,7 @@ def _stop_first_running_base_joined_locked(store, record: dict, *,
         raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOP_UNCERTAIN") from None
     if (reply.returncode != 0 or type(reply.stdout) is not bytes or
             reply.stdout != b"first-running-base-physical=stopped\n"):
+        _relay_first_recovery_trace(reply.stderr)
         raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOP_UNCONFIRMED")
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
@@ -1617,6 +1618,20 @@ def _stop_first_running_base_joined_locked(store, record: dict, *,
             not _first_running_base_stopped_kernel(record, observed[2]) or
             store.read() != record):
         raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_POST_STOP_CHANGED")
+
+def _relay_first_recovery_trace(raw: bytes) -> None:
+    """Relay only existing finite source-location markers from joined children."""
+    import re
+    import sys
+    if type(raw) is not bytes or len(raw) > 8192:
+        return
+    for line in raw.split(b"\n")[:-1][:64]:
+        if re.fullmatch(rb"S10_MANAGED_TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4}", line):
+            try:
+                print(line.decode("ascii"), file=sys.stderr, flush=True)
+            except (OSError, ValueError):
+                return
+
 
 def _first_enabled_checkpoint(stage: str) -> None:
     """Finite non-authorizing diagnostics; never print native data."""
@@ -2452,6 +2467,8 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
         if (reply.returncode != 0 or type(reply.stdout) is not bytes or
                 len(reply.stdout) > 4096 or reply.stdout.count(b"\n") != 1 or
                 not reply.stdout.endswith(b"\n")):
+            if first_save:
+                _relay_first_recovery_trace(reply.stderr)
             raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_RECEIPT_REQUIRED")
         receipt = json.loads(reply.stdout)
         phase = "restored"

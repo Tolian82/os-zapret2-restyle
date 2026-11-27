@@ -1773,7 +1773,8 @@ def main(argv: list[str] | None = None) -> int:
                     queue_fd=3 if len(argv) == 4 else None)
                 print("first-running-base-stopped=qualified")
             return 0
-        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+            _managed_refusal_trace(error)
             print("ERROR: original first running base guard refused", file=sys.stderr)
             return 69
     if argv and argv[0] == "guard-first-enabled-shell":
@@ -1822,7 +1823,8 @@ def main(argv: list[str] | None = None) -> int:
                 queue_fd=3 if len(argv) == 4 else None)
             print(json.dumps(reply, separators=(",", ":")))
             return 0
-        except (ValueError, RuntimeError, OSError, KeyError, TypeError):
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+            _managed_refusal_trace(error)
             print("ERROR: original first Config recovery refused", file=sys.stderr)
             return 69
     if argv and argv[0] in ("finish-ordinary-restore-locked", "recover-managed-config-locked"):

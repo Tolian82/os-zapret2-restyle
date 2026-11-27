@@ -780,9 +780,12 @@ def native_positive():
             print("S10_FIRST_BASE_RECOVERY_RC=" + str(recovery.returncode), flush=True)
             if rec.get("phase") in ("activated", "restored"):
                 print("S10_FIRST_BASE_RECOVERY_PHASE=" + rec["phase"], flush=True)
-            for line in recovery.stderr.splitlines()[:32]:
-                if re.fullmatch(rb"ERROR: shared Apply operation cannot advance: [A-Z0-9_]{1,96}", line):
+            for line in recovery.stderr.split(b"\n")[:-1][:64]:
+                if (re.fullmatch(rb"ERROR: shared Apply operation cannot advance: [A-Z0-9_]{1,96}", line) or
+                        re.fullmatch(rb"S10_MANAGED_TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4}", line)):
                     print(line.decode("ascii"), flush=True)
+            print("S10_FIRST_BASE_AFTER=" + safe_lengths(after_images) +
+                  ":PIDFILES_" + str(sum(path.exists() for path in pidfiles)), flush=True)
             need(recovery.returncode == 69 and rec == {**pending, "phase": "restored"} and
                  all(not data for data in before_images.values()) and after_images == before_images and
                  set(path.name for path in epoch.iterdir()) == {"pretraffic.json"},
