@@ -32,7 +32,8 @@ def load_writer():
 
 
 def run_probe(base, count, waits):
-    modes = ("original", "late-pinned")
+    modes = ("original", "late-pinned", "wal-file-barrier", "wal-dir-barrier",
+             "wal-rewrite-barrier", "no-rename-control")
     report = {m: dict(samples=0, ctime_drift=0, other_drift=0, refused=0,
                       first_drift={}, early_ctime_drift={}) for m in modes}
     scope = load_writer()
@@ -73,14 +74,23 @@ def run_probe(base, count, waits):
         wal = root / "wal"
         wal.mkdir()
 
-        def checkpoint(data):
+        def checkpoint(data, sample=None):
+            def step(label):
+                if sample is not None:
+                    observe(sample, label)
             pending = wal / ".pending"
             with pending.open("wb") as stream:
+                step("wal-open")
                 stream.write(hashlib.sha256(data).hexdigest().encode())
                 stream.flush()
+                step("wal-flush")
                 os.fsync(stream.fileno())
+                step("wal-file-fsync")
+            step("wal-close")
             os.replace(pending, wal / "record")
+            step("wal-rename")
             scope["_sync"](wal)
+            step("wal-dir-fsync")
 
         for index in range(count):
             for mode in modes:
@@ -97,7 +107,7 @@ def run_probe(base, count, waits):
                         checkpoint(data)
                         return
                     early = identity(info)
-                    if mode == "late-pinned":
+                    if mode != "original":
                         # Anchor the exact renamed inode while the original writer
                         # is still open. Do not persist an installed pin yet.
                         anchor = os.open(item, os.O_RDONLY | os.O_NOFOLLOW)
@@ -106,21 +116,45 @@ def run_probe(base, count, waits):
                     else:
                         pinned = early
                         sample = (mode, target, after, pinned, {})
-                        checkpoint(data)
+                        checkpoint(data, sample)
                         observe(sample, "after-installed-wal")
 
                 try:
-                    scope["_replace"](target, before, after, os.geteuid(), stage_fn=stage,
-                                      expected_identity=identity(target.lstat()))
+                    if mode == "no-rename-control":
+                        # Control only: fresh bytes in a file, no active-list rename.
+                        # Never use in-place writes as a production replacement.
+                        with target.open("wb") as stream:
+                            stream.write(after)
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                        scope["_sync"](root)
+                        checkpoint(after)
+                        stage("installed", target, after, target.lstat())
+                    else:
+                        scope["_replace"](target, before, after, os.geteuid(), stage_fn=stage,
+                                          expected_identity=identity(target.lstat()))
                     if early is None:
                         raise RuntimeError("missing installed observation")
-                    if mode == "late-pinned":
+                    if mode != "original":
                         if anchor is None:
                             raise RuntimeError("missing anchor")
+                        returned = snapshot(target, after, anchor)
+                        note_early(row, early, returned, "writer-return")
+                        if mode == "wal-file-barrier":
+                            fd = os.open(wal / "record", os.O_RDONLY | os.O_NOFOLLOW)
+                            try:
+                                os.fsync(fd)
+                            finally:
+                                os.close(fd)
+                        elif mode == "wal-dir-barrier":
+                            scope["_sync"](wal)
+                        elif mode == "wal-rewrite-barrier":
+                            # Synthetic extra WAL cycle, not a new production phase.
+                            checkpoint(after)
                         pinned = snapshot(target, after, anchor)
-                        note_early(row, early, pinned, "writer-return")
+                        note_early(row, returned, pinned, "before-final-pin")
                         sample = (mode, target, after, pinned, {})
-                        checkpoint(after)
+                        checkpoint(after, sample)
                         observe(sample, "after-installed-wal")
                         if not same_except_ctime(pinned, identity(os.fstat(anchor))):
                             raise RuntimeError("anchor drift")
