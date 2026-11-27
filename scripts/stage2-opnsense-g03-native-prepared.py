@@ -256,16 +256,23 @@ def verify_successor_commit(record, previous, op, receipt, root, original,
 
 
 
-def build_managed_uncertain_worker(folder: Path, source: Path, *, native: bool = True) -> Path:
+def build_managed_uncertain_worker(folder: Path, source: Path, *,
+                                   native: bool = True, window: str = "post-save") -> Path:
     """TEST ONLY: private original-PHP copy with one post-Config::save exception."""
     import stat
     fixed = Path("/usr/local/opnsense/scripts/OPNsense/Zapret")
-    if (not folder.is_dir() or folder.is_symlink() or "'" in str(folder) or
+    expected_env = ("ZAPRET2_G03_MANAGED_UNCERTAIN" if window == "post-save"
+                    else "ZAPRET2_G03_MANAGED_PRE_SAVE")
+    opposite_env = ("ZAPRET2_G03_MANAGED_PRE_SAVE" if window == "post-save"
+                    else "ZAPRET2_G03_MANAGED_UNCERTAIN")
+    if (window not in ("post-save", "pre-save") or
+            (native and (os.environ.get(expected_env) != "1" or
+                         os.environ.get(opposite_env) == "1")) or
+            not folder.is_dir() or folder.is_symlink() or "'" in str(folder) or
             "'" in str(source) or
             (native and (source != fixed or not sys.platform.startswith("freebsd") or
                          os.geteuid() != 0 or os.environ.get("GITHUB_ACTIONS") != "true" or
-                         os.environ.get("ZAPRET2_G03_PRISTINE_FIRST_COMMIT") != "1" or
-                         os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") != "1"))):
+                         os.environ.get("ZAPRET2_G03_PRISTINE_FIRST_COMMIT") != "1"))):
         raise RuntimeError("G03_MANAGED_FAULT_DISPOSABLE_SCOPE_REQUIRED")
 
     def read_exact(name):
@@ -295,13 +302,29 @@ def build_managed_uncertain_worker(folder: Path, source: Path, *, native: bool =
         raise RuntimeError("G03_MANAGED_FAULT_SOURCE_ANCHOR_CHANGED")
 
     changed_apply = original_apply.replace(
-        mvc, "'" + str(source.parents[2] / "mvc") + "/").replace(
-        save, save + "\n            throw new \\RuntimeException('G03_TEST_AFTER_REAL_CONFIG_SAVE');")
+        mvc, "'" + str(source.parents[2] / "mvc") + "/")
+    if window == "post-save":
+        changed_apply = changed_apply.replace(
+            save, save + "\n            throw new \\RuntimeException('G03_TEST_AFTER_REAL_CONFIG_SAVE');")
     private_apply = folder / "g03-s10-fault-apply.php"
     private_worker = folder / "g03-s10-fault-worker.php"
     changed_worker = original_worker.replace(
         own_apply, "'" + str(private_apply) + "'").replace(
         own_lock, "'" + str(source / "shared_apply_lock.php") + "'")
+    if window == "pre-save":
+        # The existing ORIGINAL managed writer has already installed the
+        # protected HOSTLIST and pinned managed-writing at this exact seam.
+        # Refuse if the source ordering has changed; this copy never reaches
+        # the Config-saving WAL checkpoint or Config::save().
+        before_config = "                return self::originalLockedFileEvidence($config, $id, $mode, $digest) ==="
+        if (original_worker.count(before_config) != 1 or
+                original_worker.count("'write-managed-handoff-locked', $digest)") != 1):
+            raise RuntimeError("G03_MANAGED_PRESAVE_FAULT_ORDER_ANCHOR_CHANGED")
+        changed_worker = changed_worker.replace(
+            before_config,
+            "                if ($managedApply && $mode === 'begin-managed-config-save-locked') {\n"
+            "                    throw new \\RuntimeException('G03_TEST_AFTER_MANAGED_FILE_BEFORE_CONFIG_SAVE');\n"
+            "                }\n" + before_config)
     for path, data in ((private_apply, changed_apply), (private_worker, changed_worker)):
         with path.open("x", encoding="utf-8") as handle:
             handle.write(data)
@@ -313,30 +336,34 @@ def build_managed_uncertain_worker(folder: Path, source: Path, *, native: bool =
 
 def managed_fault_worker_self_test():
     source = Path(__file__).resolve().parent.parent / "src/opnsense/scripts/OPNsense/Zapret"
-    with tempfile.TemporaryDirectory(prefix="g03-managed-fault-selftest-") as scratch:
-        private = build_managed_uncertain_worker(Path(scratch), source, native=False)
-        worker = private.read_text()
-        apply = (Path(scratch) / "g03-s10-fault-apply.php").read_text()
-        need("G03_TEST_AFTER_REAL_CONFIG_SAVE" in apply and
-             apply.count("G03_TEST_AFTER_REAL_CONFIG_SAVE") == 1 and
-             "G03_TEST_AFTER_REAL_CONFIG_SAVE" not in worker and
-             private.is_file() and not private.is_symlink() and
-             (source / "apply_settings.php").read_text().count(
-                 "G03_TEST_AFTER_REAL_CONFIG_SAVE") == 0,
-             "G03_MANAGED_FAULT_COPY_SELFTEST_REFUSED")
-        for path in (private, Path(scratch) / "g03-s10-fault-apply.php"):
-            checked = subprocess.run(["php", "-l", str(path)],
-                                     capture_output=True, text=True, timeout=15)
-            need(checked.returncode == 0, "G03_MANAGED_FAULT_PRIVATE_PHP_LINT_REFUSED")
+    for window in ("pre-save", "post-save"):
+        with tempfile.TemporaryDirectory(prefix="g03-managed-fault-selftest-") as scratch:
+            private = build_managed_uncertain_worker(Path(scratch), source,
+                                                      native=False, window=window)
+            worker = private.read_text()
+            apply = (Path(scratch) / "g03-s10-fault-apply.php").read_text()
+            post = "G03_TEST_AFTER_REAL_CONFIG_SAVE"
+            pre = "G03_TEST_AFTER_MANAGED_FILE_BEFORE_CONFIG_SAVE"
+            need((apply.count(post) == (window == "post-save") and
+                  worker.count(pre) == (window == "pre-save") and
+                  post not in worker and pre not in apply and
+                  private.is_file() and not private.is_symlink() and
+                  post not in (source / "apply_settings.php").read_text() and
+                  pre not in (source / "shared_apply_config.php").read_text()),
+                 "G03_MANAGED_FAULT_COPY_SELFTEST_REFUSED")
+            for path in (private, Path(scratch) / "g03-s10-fault-apply.php"):
+                checked = subprocess.run(["php", "-l", str(path)],
+                                         capture_output=True, text=True, timeout=15)
+                need(checked.returncode == 0, "G03_MANAGED_FAULT_PRIVATE_PHP_LINT_REFUSED")
     # The original G03 child is carried as a Python -c string: py_compile of
-    # this wrapper alone would NOT detect an invalid native child statement.
+    # the wrapper alone would NOT detect an invalid native child statement.
     source_text = Path(__file__).read_text(encoding="utf-8")
     marker = "    child = r" + "''" + "'"
     if source_text.count(marker) != 1:
         raise RuntimeError("G03_MANAGED_FAULT_NATIVE_CHILD_SOURCE_MISSING")
     child = source_text.split(marker, 1)[1].split("\n" + "''" + "'", 1)[0]
     compile(child, "<G03-original-FD9-native-child>", "exec")
-    print("G03_S10_MANAGED_FAULT_COPY=PASS_PRIVATE_PHP_LINT_NO_INSTALLED_MUTATION")
+    print("G03_S10_MANAGED_FAULT_COPY=PASS_BOTH_PRIVATE_PHP_LINT_NO_INSTALLED_MUTATION")
 
 
 def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, successor=False,
