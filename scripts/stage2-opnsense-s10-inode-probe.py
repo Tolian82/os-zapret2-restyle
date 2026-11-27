@@ -17,19 +17,10 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 
 
-def load_writer(mode):
-    source = (BACKEND / "auto_detect_destination_commit.py").read_text()
-    boundary = "        os.replace(temp, path)\n        _sync(path.parent)\n"
-    if source.count(boundary) != 1:
-        raise RuntimeError("unexpected writer boundary")
-    if mode == "file-after-dir":
-        source = source.replace(boundary, boundary + "        os.fsync(fd)\n")
-    elif mode == "file-dir-file":
-        source = source.replace(boundary, "        os.replace(temp, path)\n        os.fsync(fd)\n        _sync(path.parent)\n        os.fsync(fd)\n")
-    elif mode != "original":
-        raise RuntimeError("unknown experiment")
+def load_writer():
     names = {"_target", "_file_identity", "_target_identity", "_native_list_modification_visible", "_replace"}
-    nodes = [n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name in names]
+    source = ast.parse((BACKEND / "auto_detect_destination_commit.py").read_text())
+    nodes = [n for n in source.body if isinstance(n, ast.FunctionDef) and n.name in names]
     receipts = ast.parse((BACKEND / "auto_detect_epoch_receipts.py").read_text())
     nodes += [n for n in receipts.body if isinstance(n, ast.FunctionDef) and n.name == "_sync"]
     if {n.name for n in nodes} != names | {"_sync"}:
@@ -41,62 +32,121 @@ def load_writer(mode):
 
 
 def run_probe(base, count, waits):
-    modes = ("original", "file-after-dir", "file-dir-file")
-    report = {m: dict(samples=0, ctime_drift=0, other_drift=0, refused=0, first_drift={}) for m in modes}
+    modes = ("original", "late-pinned")
+    report = {m: dict(samples=0, ctime_drift=0, other_drift=0, refused=0,
+                      first_drift={}, early_ctime_drift={}) for m in modes}
+    scope = load_writer()
+    identity = scope["_target_identity"]
     samples = []
+
+    def same_except_ctime(a, b):
+        return a[:2] == b[:2] and a[3:] == b[3:]
+
+    def snapshot(target, data, anchor=None):
+        raw, info = scope["_target"](target, os.geteuid())
+        actual = identity(info)
+        if raw != data or anchor is not None and identity(os.fstat(anchor)) != actual:
+            raise RuntimeError("physical image changed")
+        return actual
+
+    def note_early(row, original, actual, label):
+        if not same_except_ctime(original, actual):
+            raise RuntimeError("non-ctime identity changed")
+        if original[2] != actual[2]:
+            counts = row["early_ctime_drift"]
+            counts[label] = counts.get(label, 0) + 1
+
     def observe(sample, label):
-        mode, target, after, original, scope, observed = sample
+        mode, target, after, pinned, seen = sample
         try:
-            raw, info = scope["_target"](target, os.geteuid())
-            actual = scope["_target_identity"](info)
-            ctime = actual[2] != original[2]
-            other = raw != after or actual[:2] != original[:2] or actual[3:] != original[3:]
+            actual = snapshot(target, after)
+            ctime = actual[2] != pinned[2]
+            other = not same_except_ctime(actual, pinned)
         except (OSError, RuntimeError, ValueError):
             ctime, other = False, True
         for changed, key in ((ctime, "ctime_drift"), (other, "other_drift")):
-            if changed and key not in observed:
-                report[mode][key] += 1
-                timings = report[mode]["first_drift"].setdefault(key, {})
-                timings[label] = timings.get(label, 0) + 1
-                observed.add(key)
+            if changed and key not in seen:
+                seen[key] = label
 
     with tempfile.TemporaryDirectory(prefix="g03-inode-probe-", dir=base) as tmp:
         root = Path(tmp)
         wal = root / "wal"
         wal.mkdir()
-        for mode in modes:
-            scope = load_writer(mode)
-            for index in range(count):
+
+        def checkpoint(data):
+            pending = wal / ".pending"
+            with pending.open("wb") as stream:
+                stream.write(hashlib.sha256(data).hexdigest().encode())
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(pending, wal / "record")
+            scope["_sync"](wal)
+
+        for index in range(count):
+            for mode in modes:
+                row = report[mode]
                 target = root / f"{mode}-{index}.txt"
                 before, after = b"before.example\n", b"after-long.example\n"
                 target.write_bytes(before)
-                pinned = []
+                early, pinned, anchor = None, None, None
+                sample = None
+
                 def stage(phase, item, data, info):
-                    if phase == "installed":
-                        pinned.append(scope["_target_identity"](info))
-                    # Emulate the existing separate durable WAL checkpoint, not its authorization.
-                    pending = wal / ".pending"
-                    with pending.open("wb") as stream:
-                        stream.write(hashlib.sha256(data).hexdigest().encode())
-                        stream.flush()
-                        os.fsync(stream.fileno())
-                    os.replace(pending, wal / "record")
-                    scope["_sync"](wal)
+                    nonlocal early, pinned, anchor, sample
+                    if phase == "ready":
+                        checkpoint(data)
+                        return
+                    early = identity(info)
+                    if mode == "late-pinned":
+                        # Anchor the exact renamed inode while the original writer
+                        # is still open. Do not persist an installed pin yet.
+                        anchor = os.open(item, os.O_RDONLY | os.O_NOFOLLOW)
+                        if snapshot(item, data, anchor) != early:
+                            raise RuntimeError("installed anchor mismatch")
+                    else:
+                        pinned = early
+                        sample = (mode, target, after, pinned, {})
+                        checkpoint(data)
+                        observe(sample, "after-installed-wal")
+
                 try:
                     scope["_replace"](target, before, after, os.geteuid(), stage_fn=stage,
-                                      expected_identity=scope["_target_identity"](target.lstat()))
-                    if len(pinned) != 1:
-                        raise RuntimeError("missing installed pin")
-                    report[mode]["samples"] += 1
-                    sample = (mode, target, after, pinned[0], scope, set())
-                    samples.append(sample)
+                                      expected_identity=identity(target.lstat()))
+                    if early is None:
+                        raise RuntimeError("missing installed observation")
+                    if mode == "late-pinned":
+                        if anchor is None:
+                            raise RuntimeError("missing anchor")
+                        pinned = snapshot(target, after, anchor)
+                        note_early(row, early, pinned, "writer-return")
+                        sample = (mode, target, after, pinned, {})
+                        checkpoint(after)
+                        observe(sample, "after-installed-wal")
+                        if not same_except_ctime(pinned, identity(os.fstat(anchor))):
+                            raise RuntimeError("anchor drift")
+                    if sample is None:
+                        raise RuntimeError("missing sample")
                     observe(sample, "writer-return")
                 except (OSError, RuntimeError, ValueError):
-                    report[mode]["refused"] += 1
+                    row["refused"] += 1
+                    sample = None
+                finally:
+                    if anchor is not None:
+                        os.close(anchor)
+                if sample is not None:
+                    row["samples"] += 1
+                    samples.append(sample)
+                    observe(sample, "anchor-closed")
         for delay, label in waits:
             time.sleep(delay)
             for sample in samples:
                 observe(sample, label)
+        for mode, _, _, _, seen in samples:
+            row = report[mode]
+            for key, label in seen.items():
+                row[key] += 1
+                timings = row["first_drift"].setdefault(key, {})
+                timings[label] = timings.get(label, 0) + 1
     return report
 
 

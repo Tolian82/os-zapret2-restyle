@@ -1,0 +1,56 @@
+name: S10 draft-only native inode experiment
+
+# Temporary diagnostic route. Remove before opening the integrated S10 PR.
+on:
+  push:
+    branches: [draft/tz6v5-s10-integrated]
+    paths:
+      - scripts/stage2-opnsense-s10-inode-probe.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s10-draft-inode-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3.13 -m py_compile scripts/stage2-opnsense-s10-inode-probe.py
+          python3.13 scripts/stage2-opnsense-s10-inode-probe.py --portable
+  native:
+    needs: portable
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Isolated native UFS experiment (not G03 acceptance)
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            GITHUB_ACTIONS=true ZAPRET2_G03_DISPOSABLE_NATIVE=1 /usr/local/bin/python3 scripts/stage2-opnsense-s10-inode-probe.py
