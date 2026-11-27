@@ -9,6 +9,12 @@ on:
       - scripts/test-auto-detect-fd9-launch.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
+      - src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_quiescent_preimage.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/neutral_shared_apply_source_gate.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py
+      - src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php
+      - scripts/test-tz6v5-s10b2b2b3b2b-quiescent-original-preimage.py
+      - scripts/test-tz6v5-s10c2b-original-shared-source-gate.py
   workflow_dispatch:
 permissions:
   contents: read
@@ -37,3 +43,9 @@ jobs:
           sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
           sh -n scripts/test-auto-detect-fd9-launch.sh
           sh scripts/test-auto-detect-fd9-launch.sh
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_quiescent_preimage.py src/opnsense/scripts/OPNsense/Zapret/backend/neutral_shared_apply_source_gate.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          php -l src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2b2b3b2b-quiescent-original-preimage.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10c2b-original-shared-source-gate.py
+          sh scripts/test-shared-apply-execute.sh
