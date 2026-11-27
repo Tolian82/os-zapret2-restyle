@@ -842,37 +842,28 @@ def native_positive():
                 handle.flush()
                 os.fsync(handle.fileno())
             print("S10_FIRST_ARCHIVE_NONZERO=PASS", flush=True)
-            archived = subprocess.run(invoke_archive, capture_output=True, timeout=240)
-            for line in archived.stderr.split(b"\n")[:-1][:64]:
-                if (re.fullmatch(rb"ERROR: shared Apply operation cannot advance: [A-Z0-9_]{1,96}", line) or
-                        re.fullmatch(rb"S10_MANAGED_TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4}", line)):
-                    print(line.decode("ascii"), flush=True)
-            need(archived.returncode == 0 and archived.stdout == ("first-restored-archived=" + op + "\n").encode(),
-                 "S10_FIRST_ARCHIVE_NATIVE_RECEIPT_REQUIRED")
+            # The positive retry must start from the actual unarchived RESTORED
+            # record. Do not call archive-first-restored successfully beforehand:
+            # the original combined HTTPS Apply itself must archive and prepare.
+            need(not archive.exists() and WAL.read_bytes() == wal_image and
+                 CONFIG.read_bytes() == config_image and set(work.iterdir()) == work_before and
+                 (root.stat().st_dev, root.stat().st_ino, root.read_bytes()) == root_pin and
+                 seed.read_bytes() == seed_bytes and images() == before_images and
+                 not any(path.exists() for path in pidfiles) and
+                 subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout == after_kernel,
+                 "S10_FIRST_RETRY_UNARCHIVED_PREIMAGE_REQUIRED")
+            fresh = web.api("GET", "/api/zapret/settings/get").get("zapret")
+            need(not archive.exists() and WAL.read_bytes() == wal_image and
+                 CONFIG.read_bytes() == config_image and images() == before_images,
+                 "S10_FIRST_RETRY_GET_MUTATED_PREIMAGE")
+            print("S10_FIRST_RETRY=PASS_DIRECT_UNARCHIVED_RESTORED_PREIMAGE", flush=True)
+            result = web.api("POST", "/api/zapret/settings/apply",
+                             g04.g04_http_form(fresh) + first_auto)
+            print("S10_FIRST_RETRY_HTTP=" + ("SAVED" if result.get("result") == "saved" else "REFUSED"), flush=True)
             new_root = archive / "work" / op / "manifest.json"
             new_seed = archive / "epoch/pretraffic.json"
             old_producer = producer
             producer = archive / "producer-parent/producer"
-            def archive_readback():
-                lock = (producer / "worker.lock").stat()
-                seed_stat = new_seed.stat()
-                return (not root.exists() and not seed.exists() and not old_producer.exists() and
-                    not any(work.iterdir()) and not any(epoch.parent.iterdir()) and
-                    (new_root.stat().st_dev, new_root.stat().st_ino, new_root.read_bytes()) == root_pin and
-                    (seed_stat.st_dev, seed_stat.st_ino) == (old_seed.st_dev, old_seed.st_ino) and
-                    new_seed.read_bytes() == seed_bytes and images() == before_images and
-                    (lock.st_dev, lock.st_ino) == (old_lock.st_dev, old_lock.st_ino) and
-                    json.loads((archive / "restored.json").read_bytes()) == rec and
-                    WAL.read_bytes() == wal_image and CONFIG.read_bytes() == config_image and
-                    not any(path.exists() for path in pidfiles) and
-                    subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout == after_kernel)
-            need(archive_readback(), "S10_FIRST_ARCHIVE_INODE_READBACK_REQUIRED")
-            replay = subprocess.run(invoke_archive, capture_output=True, timeout=240)
-            need(replay.returncode == 0 and replay.stdout == archived.stdout and archive_readback(),
-                 "S10_FIRST_ARCHIVE_REPLAY_REQUIRED")
-            blocked = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180)
-            need(blocked.returncode != 0 and archive_readback(), "S10_FIRST_ARCHIVE_LEGACY_FENCE_REQUIRED")
-            print("S10_FIRST_ARCHIVE=PASS_ORIGINAL_CONFIG_WAL_ROOT_SEED_PRODUCER_LOCK_INODES_REPLAY", flush=True)
             def old_archive_intact():
                 lock = (producer / "worker.lock").stat()
                 ss = new_seed.stat()
@@ -881,15 +872,6 @@ def native_positive():
                         new_seed.read_bytes() == seed_bytes and images() == before_images and
                         (lock.st_dev, lock.st_ino) == (old_lock.st_dev, old_lock.st_ino) and
                         json.loads((archive / "restored.json").read_bytes()) == rec)
-            fresh = web.api("GET", "/api/zapret/settings/get").get("zapret")
-            wrong_mode = web.api("POST", "/api/zapret/settings/apply",
-                g04.g04_http_form(fresh) + [("zapret[hostlist][mode]", "list")])
-            need(wrong_mode.get("result") != "saved" and archive_readback(),
-                 "S10_FIRST_RETRY_WRONG_MODE_REFUSAL_REQUIRED")
-            print("S10_FIRST_RETRY_WRONG_MODE=PASS_NO_WAL_CONFIG_OR_ARCHIVE_MUTATION", flush=True)
-            result = web.api("POST", "/api/zapret/settings/apply",
-                             g04.g04_http_form(fresh) + first_auto)
-            print("S10_FIRST_RETRY_HTTP=" + ("SAVED" if result.get("result") == "saved" else "REFUSED"), flush=True)
             if result.get("result") == "saved":
                 retry_record = json.loads(WAL.read_bytes())
                 retry_id = retry_record["detail"]["id"]
@@ -900,8 +882,9 @@ def native_positive():
                      retry_record["detail"]["base"] == rec["detail"]["base"] and
                      hashlib.sha256(retry_seed.read_bytes()).hexdigest() == retry_record["first_pretraffic_sha256"] and
                      (retry_lock.st_dev, retry_lock.st_ino) != (old_lock.st_dev, old_lock.st_ino) and
-                     old_archive_intact(), "S10_FIRST_RETRY_NEW_OWNER_REQUIRED")
-                print("S10_FIRST_RETRY=PASS_REAL_HTTPS_NEW_COMMITTED_ARCHIVE_INTACT", flush=True)
+                     not root.exists() and not seed.exists() and old_archive_intact(),
+                     "S10_FIRST_RETRY_NEW_OWNER_REQUIRED")
+                print("S10_FIRST_RETRY=PASS_DIRECT_HTTPS_NEW_COMMITTED_ARCHIVE_INTACT", flush=True)
         else:
             need(rec == {**pending, "phase": "committed"} and
                  (epoch / "epoch.json").is_file() and
