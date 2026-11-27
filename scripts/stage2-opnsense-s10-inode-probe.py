@@ -34,11 +34,13 @@ def load_writer():
 
 def run_probe(base, count, waits, *, wal_base=None, focused=False):
     modes = ("original", "late-pinned", "wal-file-barrier", "wal-dir-barrier",
-             "wal-rewrite-barrier", "local-rewrite-barrier", "no-rename-control")
+             "wal-rewrite-barrier", "local-rewrite-barrier", "seeded-local-rewrite",
+             "seeded-local-cleanup", "no-rename-control")
     if focused:
-        modes = ("original", "wal-rewrite-barrier", "local-rewrite-barrier", "no-rename-control")
+        modes = ("original", "wal-rewrite-barrier", "local-rewrite-barrier",
+                 "seeded-local-rewrite", "seeded-local-cleanup", "no-rename-control")
     report = {m: dict(samples=0, ctime_drift=0, other_drift=0, refused=0,
-                      first_drift={}, early_ctime_drift={}) for m in modes}
+                      first_drift={}, drift_samples={}, early_ctime_drift={}) for m in modes}
     scope = load_writer()
     identity = scope["_target_identity"]
     samples = []
@@ -127,6 +129,10 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                         observe(sample, "after-installed-wal")
 
                 try:
+                    if mode in ("seeded-local-rewrite", "seeded-local-cleanup"):
+                        seeded = local / f"{mode}-{index}"
+                        seeded.mkdir()
+                        checkpoint(before, directory=seeded)
                     if mode == "no-rename-control":
                         # Control only: fresh bytes in a file, no active-list rename.
                         # Never use in-place writes as a production replacement.
@@ -161,6 +167,14 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                         elif mode == "local-rewrite-barrier":
                             # Test-only same-filesystem I/O, not a product journal.
                             checkpoint(after, directory=local)
+                        elif mode in ("seeded-local-rewrite", "seeded-local-cleanup"):
+                            # Each sample starts with an already durable local record.
+                            checkpoint(after, directory=seeded)
+                            if mode == "seeded-local-cleanup":
+                                (seeded / "record").unlink()
+                                scope["_sync"](seeded)
+                                seeded.rmdir()
+                                scope["_sync"](local)
                         pinned = snapshot(target, after, anchor)
                         note_early(row, returned, pinned, "before-final-pin")
                         sample = (mode, target, after, pinned, {})
@@ -185,10 +199,11 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
             time.sleep(delay)
             for sample in samples:
                 observe(sample, label)
-        for mode, _, _, _, seen in samples:
+        for mode, target, _, _, seen in samples:
             row = report[mode]
             for key, label in seen.items():
                 row[key] += 1
+                row["drift_samples"].setdefault(key, []).append(int(target.stem.rsplit("-", 1)[1]))
                 timings = row["first_drift"].setdefault(key, {})
                 timings[label] = timings.get(label, 0) + 1
     return report
