@@ -1050,7 +1050,7 @@ class OriginalFd9SourceGate(unittest.TestCase):
             stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
             store = Mock(read=Mock(return_value=record))
             stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
-            stack.enter_context(patch("shared_apply_seal.verify_seal",
+            stack.enter_context(patch.object(gate, "verify_seal",
                 return_value={"sha256": {"plan.json": plan_sha}}))
             stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"list"}))
             fresh = stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
