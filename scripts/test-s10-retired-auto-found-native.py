@@ -120,6 +120,166 @@ def inspect_original_stopped():
           flush=True)
 
 
+def inspect_original_found():
+    """Independent historical readback AFTER the genuine GUI successor."""
+    import hashlib
+    import pwd
+    from auto_detect_epoch_receipts import EpochReceipts, _read
+    from auto_detect_learning_retirement import RETIRE_DIR, READY
+    from auto_detect_queue import DurableInbox
+    from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from neutral_schema3_quiescent_preimage import (
+        _verify_retired_history, _verify_idle_producer, _zero_processes, _empty_kernel,
+        CHILD_PID, MONITOR_PID, DAEMON_PID)
+    from shared_apply_operation import SharedApplyOperation
+    from shared_apply_seal import WORK
+    from voice_live_inspect import COMMON_ACTIVE, examine_shared
+    from voice_ipfw_adapter import require_lifecycle_lock
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    rec = store.read()
+    need(type(rec) is dict and rec.get("phase") == "committed" and
+         rec.get("manifest", {}).get("schema") == 1 and
+         rec.get("previous_manifest", {}).get("schema") == 2 and
+         "found" not in rec and "failure" not in rec,
+         "S10_AUTO_FOUND_TERMINAL_BINDINGS_REQUIRED")
+    gid = pwd.getpwnam(ENGINE_USER).pw_gid
+    queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+    receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+    with queue.exclusive(existing_only=True):
+        prior, detail = rec["previous"], rec["detail"]
+        ready = receipts._generation(prior["id"], create=False) / RETIRE_DIR / READY
+        raw = _read(ready, 0)
+        def observe():
+            require_lifecycle_lock()
+            verify_original_operation_pins(record=rec, parent=WORK, owner_uid=0)
+            _verify_retired_history(rec, queue, receipts, hashlib.sha256(raw).hexdigest())
+            root = json.loads(_verify_original_pinned_root(detail=detail,
+                binding=rec["manifest"], parent=WORK, owner_uid=0))
+            need(root["service"]["enabled"] is False and
+                 root["service"]["target_mode"] == "list",
+                 "S10_AUTO_FOUND_INERT_LIST_REQUIRED")
+            state = examine_shared(rec)
+            need(state.get("state") == "stopped" and state.get("source") == "native-common"
+                 and state.get("config_digest") == detail["candidate"],
+                 "S10_AUTO_FOUND_NATIVE_STOPPED_REQUIRED")
+            _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+            result = (_full_prior_tree(WORK / detail["id"], COMMON_ACTIVE, 0),
+                      _empty_kernel(WORK / detail["id"] / "release"),
+                      _verify_idle_producer(queue, receipts))
+            need(store.read() == rec and _read(ready, 0) == raw,
+                 "S10_AUTO_FOUND_OWNER_OR_HISTORY_CHANGED")
+            return result
+        first = observe()
+        need(observe() == first, "S10_AUTO_FOUND_TERMINAL_PROOF_RACED")
+    print("S10_AUTO_FOUND_HISTORY=PASS_BOTH_ROOTS_ARCHIVE_ACK_STOPPED", flush=True)
+
+
+def native_found_successor(web, voice, old, command):
+    import hashlib
+    import secrets
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    from pathlib import Path
+
+    work = Path("/var/db/zapret2/shared-work")
+    previous_root = work / old["detail"]["id"] / "manifest.json"
+    old_root = previous_root.read_bytes()
+    old_root_inode = previous_root.stat().st_ino
+    epoch = Path("/var/db/zapret2/auto-detect-epochs") / old["detail"]["id"]
+    def history():
+        result = {}
+        for path in sorted(epoch.rglob("*")):
+            need(not path.is_symlink(), "S10_AUTO_FOUND_EPOCH_LINK")
+            if path.is_file():
+                info = path.stat()
+                result[str(path.relative_to(epoch))] = (info.st_dev, info.st_ino,
+                    hashlib.sha256(path.read_bytes()).hexdigest())
+        need(bool(result), "S10_AUTO_FOUND_EPOCH_EMPTY")
+        return result
+    old_history = history()
+    kernel = subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=False)
+    need(kernel.returncode == 0, "S10_AUTO_FOUND_KERNEL_QUERY_REQUIRED")
+    initial_config = CONFIG.read_bytes()
+    snapshot = web.api("POST", "/api/zapret/settings/hostlistEditorsRead")
+    saved = web.api("GET", "/api/zapret/settings/get").get("zapret")
+    need(snapshot.get("result") == "ok" and type(saved) is dict and
+         isinstance(saved.get("hostlist", {}).get("telegramips"), str),
+         "S10_AUTO_FOUND_GUI_READ_REFUSED")
+    names = {"youtube": "youtube_found", "user": "user_found", "auto": "shared_found"}
+    drafts = {"youtube": "zapret-retired-youtube.org\n",
+              "user": "zapret-retired-user.com\n", "auto": "zapret-retired-auto.net\n"}
+    sources = {}
+    for short, key in names.items():
+        row = snapshot["editors"][key]
+        sources[short] = {"base": {name: row[name] for name in ("status", "revision", "content")},
+                          "draft": drafts[short]}
+    payload = {"schema_version": 1, "kind": "tz6v2-found-form-intent",
+               "config_revision": snapshot["config_revision"], "sources": sources}
+    boundary = "zapret-" + secrets.token_hex(16)
+    parts = []
+    def part(name, value, upload=False):
+        headers = ['Content-Disposition: form-data; name="' + name + '"']
+        if upload:
+            headers[0] += '; filename="found-intent.json"'
+            headers.append("Content-Type: application/json")
+        parts.extend([("--" + boundary).encode(), *(h.encode() for h in headers), b"", value])
+    part("zapret[sync][telegramips_baseline]", saved["hostlist"]["telegramips"].encode())
+    part("zapret[general][enabled]", b"0")
+    part("zapret[hostlist][mode]", b"list")
+    part("found_intent_expected", b"1")
+    part("found_intent", json.dumps(payload, separators=(",", ":")).encode(), upload=True)
+    parts.extend([("--" + boundary + "--").encode(), b""])
+    request = urllib.request.Request(voice.ORIGIN + "/api/zapret/settings/apply",
+        data=b"\r\n".join(parts), headers={
+            "Content-Type": "multipart/form-data; boundary=" + boundary,
+            "X-CSRFToken": web.csrf_token, "Accept": "application/json",
+            "Referer": voice.ORIGIN + "/ui/zapret/general"}, method="POST")
+    with web.client.open(request, timeout=240) as response:
+        reply = json.loads(response.read(2 * 1024 * 1024))
+    rec = json.loads(WAL.read_bytes())
+    if reply.get("result") != "saved" or reply.get("applied") is not True:
+        phase = rec.get("phase")
+        known = {"committed", "prepared", "found-files-writing", "found-files-written",
+                 "found-config-saving", "found-config-saved", "restored", "requires-review"}
+        print("S10_AUTO_FOUND_REFUSAL=" + (phase if phase in known else "OTHER").upper().replace("-", "_") +
+              ":CONFIG_" + ("UNCHANGED" if CONFIG.read_bytes() == initial_config else "CHANGED") +
+              ":REVIEW_" + ("YES" if reply.get("requires_review") is True else "NO"), flush=True)
+        raise Refused("S10_AUTO_FOUND_REAL_HTTPS_REFUSED")
+    need(rec.get("phase") == "committed" and rec.get("previous") == old["detail"] and
+         rec.get("previous_manifest") == old["manifest"] and
+         rec.get("manifest", {}).get("schema") == 1 and
+         rec["detail"]["id"] != old["detail"]["id"] and
+         rec["detail"]["base"] == old["detail"]["candidate"],
+         "S10_AUTO_FOUND_NEW_OWNER_REQUIRED")
+    after = web.api("POST", "/api/zapret/settings/hostlistEditorsRead")
+    paths = {"youtube": Path("/var/db/zapret2/auto-detect-owned/youtube.txt"),
+             "user": Path("/var/db/zapret2/auto-detect-owned/user.txt"),
+             "auto": Path("/usr/local/etc/zapret2/ipset/auto-domains.txt")}
+    need(after.get("result") == "ok" and all(
+        after["editors"][key]["content"] == drafts[short] and
+        paths[short].read_bytes() == drafts[short].encode()
+        for short, key in names.items()), "S10_AUTO_FOUND_THREE_SOURCE_READBACK_FAILED")
+    model = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
+    need(model is not None and model.findtext("general/enabled") == "0" and
+         model.findtext("hostlist/mode") == "list" and CONFIG.read_bytes() != initial_config,
+         "S10_AUTO_FOUND_CONFIG_READBACK_FAILED")
+    need(previous_root.read_bytes() == old_root and previous_root.stat().st_ino == old_root_inode and
+         history() == old_history, "S10_AUTO_FOUND_PREVIOUS_ROOT_OR_ARCHIVE_CHANGED")
+    new_kernel = subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=False)
+    need(new_kernel.returncode == 0 and new_kernel.stdout == kernel.stdout and
+         subprocess.run([str(SERVICE), "status"], capture_output=True,
+                        timeout=35).returncode == 1, "S10_AUTO_FOUND_KERNEL_OR_ENGINE_CHANGED")
+    proof = subprocess.run(["/bin/sh", "-c", command, "s10-original-fd9", PYTHON_RUNTIME,
+        str(Path(__file__).resolve()), "--inspect-found"], capture_output=True, text=True,
+        timeout=180, check=False)
+    need(proof.returncode == 0 and "S10_AUTO_FOUND_HISTORY=PASS_BOTH_ROOTS_ARCHIVE_ACK_STOPPED"
+         in proof.stdout.splitlines(), "S10_AUTO_FOUND_FINAL_INDEPENDENT_PROOF_REFUSED")
+    print("S10_AUTO_NATIVE_FOUND=PASS_REAL_HTTPS_THREE_P1_CONFIG_ROOTS_ACK_STOPPED", flush=True)
+
+
 def native_positive():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1" and
@@ -401,10 +561,17 @@ def native_positive():
          "S10_AUTO_REAL_STOP_ACK_HISTORY_NOT_ATTESTED")
     print("S10_AUTO_NATIVE_STOP=PASS_REAL_HTTPS_SCHEMA3_NATIVE_STOP_TERMINAL_ACK",
           flush=True)
+    native_found_successor(web, voice, old, command)
 
 
 def main():
     try:
+        if sys.argv[1:] == ["--inspect-found"]:
+            need(sys.platform.startswith("freebsd") and os.geteuid() == 0,
+                 "S10_AUTO_NATIVE_INSPECT_SCOPE")
+            sys.path.insert(0, str(BACKEND))
+            inspect_original_found()
+            return 0
         if sys.argv[1:] == ["--inspect-stopped"]:
             need(sys.platform.startswith("freebsd") and os.geteuid() == 0,
                  "S10_AUTO_NATIVE_INSPECT_SCOPE")
