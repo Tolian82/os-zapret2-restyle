@@ -1484,12 +1484,77 @@ shared_apply_unbound_root_preflight_service()
     done
     return 0
 }
+# S10 narrow positive path. The inherited original FD9 shell has just
+# built this exact GUI request and retained its original producer scalars.
+# Only a disabled List/All Found candidate with an attested STOPPED schema1
+# predecessor may reach the existing PHP FD4/P2 P1-and-Config writer.
+shared_apply_execute_bound_stopped_found_service()
+{
+    [ "$#" -eq 1 ] &&
+    [ "${_shared_run_page:-}" = strategies ] &&
+    [ "${_shared_prepare_receipt:-}" = "prepared-id=$1" ] &&
+    [ -n "${_shared_run_encoded:-}" ] || return 69
+    _bound_id="$1"
+    _bound_work=$(shared_apply_workspace "$_bound_id") || return 69
+    preflight_shared_apply_journal common-bound-stopped-execute "$_bound_id" || return 69
+    shared_apply_bundle_service verify "$_bound_id" || return 69
+    _bound_native=$(shared_apply_native_config preflight "$_bound_id" strategies) || return 69
+    _bound_mode=$(printf '%s\n' "$_bound_native" |
+        shared_apply_json_field '.enabled | select(.=="0")') || return 69
+    _bound_candidate=$(printf '%s\n' "$_bound_native" |
+        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+    [ "$_bound_mode" = 0 ] || return 69
+    if [ -f "$_bound_work/release/auto-detect-source-map.json" ]; then
+        shared_apply_original_source_gate "$_bound_id" "$_bound_candidate" --sealed ||
+            return 69
+    else
+        shared_apply_original_source_gate "$_bound_id" --sealed || return 69
+    fi
+    # Pass the SAME producer's original NUL frame; not a second config writer
+    # or a synthetic traffic.input. The native PHP worker requires pipe stdin
+    # and hands the byte-identical frame to its inherited FD5 child.
+    _bound_save=$(
+        {
+            printf 'S10C2B1_ORIGINAL_INPUT_V1\0'
+            printf '%s\0' "${TRAFFIC_ARGS:-}" "${YOUTUBE_DOMAINS:-}" "${USER_DOMAINS:-}" \
+                "${TELEGRAM_IPS:-}" "${DISCORD_IPS:-}" "${X_IPS:-}" \
+                "${SIP_IPS:-}" "${CUSTOM_IPS:-}" "${EXCLUDE_DOMAINS:-}" \
+                "${EXCLUDE_IPSET:-}" "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
+        } | shared_apply_native_config found-bound-save "$_bound_id" strategies 0
+    ) || return 70
+    printf '%s\n' "$_bound_save" | /usr/local/bin/jq -e \
+        --arg expected "$_bound_candidate" \
+        'select(.result=="found-config-saved-nonterminal" and
+            .snapshot==$expected and .applied==false and
+            .commit_authorized==false and .requires_review==false)' \
+        >/dev/null || return 70
+    # Original Config locked readback, both root pins, exact three P1
+    # post-images, old/new active tree, no PID/IPFW, then original WAL commit.
+    _bound_terminal=$(shared_apply_native_config found-bound-finish "$_bound_id" strategies) ||
+        return 70
+    printf '%s\n' "$_bound_terminal" | /usr/local/bin/jq -e \
+        'select(.result=="committed" and .mode=="0")' >/dev/null || return 70
+    _bound_saved=$(shared_apply_native_config saved "$_bound_id" strategies) || return 70
+    printf '%s\n' "$_bound_saved" | /usr/local/bin/jq -e \
+        --arg expected "$_bound_candidate" \
+        'select(.result=="committed" and .enabled=="0" and .snapshot==$expected)' \
+        >/dev/null || return 70
+    printf 'applied-id=%s\n' "$_bound_id"
+}
+
 shared_apply_execute_service()
 {
     [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && [ "$3" = after-retirement ]; } || return 64
     case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
     [ "${#1}" -eq 32 ] || return 64
     case "$2" in voice|strategies) ;; *) return 64 ;; esac
+    # This is NOT a generalized bound-root activation. The gate admits
+    # only one genuine disabled STOPPED Found successor from the same GUI
+    # producer; all other traffic still meets the original unbound fence.
+    if preflight_shared_apply_journal common-bound-stopped-execute "$1" >/dev/null 2>&1; then
+        shared_apply_execute_bound_stopped_found_service "$1"
+        return $?
+    fi
     preflight_shared_apply_journal common-apply || return 69
     shared_apply_require_tools || return 69
     _shared_apply_id="$1"
@@ -2196,12 +2261,21 @@ shared_apply_run_service()
         if [ -n "$_found_pending" ]; then
             # Resolve the interrupted operation first. This click must not
             # dispatch a second candidate after an uncertain earlier Apply.
-            shared_apply_recover_found_service "$_found_pending" >/dev/null || return 70
+            if ! shared_apply_recover_found_service "$_found_pending" >/dev/null 2>&1; then
+                # No old runtime path can upgrade a bound journal. Only the
+                # already proved original stopped finisher can accept its
+                # exact native Config/P1/atomic after-image.
+                _bound_recovered=$(shared_apply_native_config found-bound-finish \
+                    "$_found_pending" strategies) || return 70
+                printf '%s\n' "$_bound_recovered" | /usr/local/bin/jq -e \
+                    'select(.result=="committed" and .mode=="0")' >/dev/null || return 70
+            fi
             printf 'apply-recovered=%s\n' "$_found_pending"
             return 0
         fi
     fi
-    preflight_shared_apply_journal common-apply || return 69
+    preflight_shared_apply_journal common-apply >/dev/null 2>&1 ||
+        preflight_shared_apply_journal common-bound-stopped-stage || return 69
     # Do not put the original producer in a command-substitution subshell:
     # its loaded scalars are the same-source input for the final FD9 gate.
     # The build helper returns its bounded receipt separately from stdout.
@@ -2235,7 +2309,8 @@ shared_apply_build_service()
         ""|*[!A-Za-z0-9_-]*) return 64 ;;
     esac
     [ "${#1}" -le 65536 ] || return 64
-    preflight_shared_apply_journal common-apply || return 69
+    preflight_shared_apply_journal common-apply >/dev/null 2>&1 ||
+        preflight_shared_apply_journal common-bound-stopped-stage || return 69
     [ -x /usr/local/bin/php ] || return 69
     _shared_stage_result=$(/usr/local/bin/php \
         "${SCRIPT_DIR}/shared_apply_request.php" stage "$1") || return 69

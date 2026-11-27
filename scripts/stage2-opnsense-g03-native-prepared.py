@@ -1230,6 +1230,12 @@ def bound_stopped_found_save_main(*, uncertain=False, gap=None):
     need(old_model is not None and old_model.findtext("general/enabled") == "0",
          "G03_BOUND_STOPPED_SAVE_ORIGINAL_MODEL_REQUIRED")
     old_restart = old_model.findtext("general/autorestart") or "off"
+    admission = str(Path(SERVICE).parent / "backend/shared_apply_operation.py")
+    runtime = str(Path(SERVICE).parent / "python_runtime.sh")
+    call([runtime, admission, "native-gate", "common-bound-stopped-stage"],
+         locked=True)
+    need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_GUI_STAGE_GATE_MUTATED_OWNER")
     staged = call([PHP, NATIVE, "stage-config-gap-" + gap if gap else
                    "stage-config-next" if uncertain else "stage-config"], locked=True)
     need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
@@ -1238,6 +1244,10 @@ def bound_stopped_found_save_main(*, uncertain=False, gap=None):
     op = staged.split("=", 1)[1]
     work = Path("/var/db/zapret2/shared-work") / op
     prepared = call([SERVICE, "shared-apply-prepare", op])
+    call([runtime, admission, "native-gate", "common-bound-stopped-execute", op],
+         locked=True)
+    need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_GUI_EXEC_GATE_MUTATED_OWNER")
     verify_prepared_build(prepared, op, original, snapshot(), previous,
                           json.loads(WAL.read_bytes()))
     raw = (work / "plan.json").read_bytes()
@@ -1287,6 +1297,8 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
         receipt = json.loads(call(["/bin/sh", "-c", command, "g03-original-found-source", op],
                                   locked=True))
     saved = json.loads(WAL.read_bytes())
+    call([runtime, admission, "native-gate", "common-bound-stopped-execute", op],
+         locked=True, expected_rc=69)
     pin = saved["manifest"]
     found = saved["found"]
     after = snapshot()

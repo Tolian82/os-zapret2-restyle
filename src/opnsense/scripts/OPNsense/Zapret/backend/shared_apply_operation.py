@@ -1953,6 +1953,109 @@ def native_remove_rollback_pair(root: Path = DEFAULT_ROOT,
     return {"state": "trial", "old": owner, "trial": trial["id"]}
 
 
+def native_bound_stopped_gui_gate(operation: str | None = None) -> None:
+    """Read-only FD9 admission for a disabled List/All Found successor.
+
+    Stage/execution admission is NOT a physical permit. The original locked
+    PHP/Python P1 writer and terminal owner reattest Config, immutable roots,
+    saved files, journal, processes and IPFW before each actual mutation.
+    """
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from neutral_schema3_quiescent_preimage import (
+        _zero_processes, _safe_empty_directory, _empty_kernel,
+        CHILD_PID, MONITOR_PID, DAEMON_PID, PRODUCER_ROOT)
+    from auto_detect_minute import inspect_inert_release
+    from voice_live_inspect import COMMON_ACTIVE, examine_shared
+    from shared_apply_seal import WORK, verify_seal
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            (operation is not None and
+             (type(operation) is not str or not OP_ID.fullmatch(operation)))):
+        raise SharedOperationError("bound GUI gate original native FD9 required")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if (type(record) is not dict or record["phase"] != "committed" or
+            record.get("manifest", {}).get("schema") != 1 or
+            "found" in record or
+            "failure" in record):
+        raise SharedOperationError("bound GUI gate inert terminal owner required")
+    detail, pin = record["detail"], record["manifest"]
+    old_work = WORK / detail["id"]
+
+    def observe_old():
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise SharedOperationError("bound GUI gate journal changed")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=pin, parent=WORK, owner_uid=0))
+        if (root["service"]["enabled"] is not False or
+                root["service"]["target_mode"] not in ("list", "all") or
+                inspect_inert_release(old_work / "release", owner_uid=0) != "inactive"):
+            raise SharedOperationError("bound GUI gate old root not inert")
+        current = examine_shared(record)
+        if (type(current) is not dict or current.get("state") != "stopped" or
+                current.get("source") != "native-common" or
+                current.get("config_digest") != detail["candidate"]):
+            raise SharedOperationError("bound GUI gate previous owner not stopped")
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        _safe_empty_directory(PRODUCER_ROOT, 0)
+        tree = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+        kernel = _empty_kernel(old_work / "release")
+        if store.read() != record:
+            raise SharedOperationError("bound GUI gate predecessor changed")
+        return tree, kernel
+
+    previous = observe_old()
+    if operation is not None:
+        if operation == detail["id"]:
+            raise SharedOperationError("bound GUI gate cannot reuse generation")
+        work = WORK / operation
+        # The immutable candidate root is attached only by the existing
+        # original bound P1 writer AFTER it durably enters PREPARED.
+        # A detached sealed bundle does not yet contain manifest.json.
+        signed = verify_seal(work, owner=0)
+        raw = (work / "plan.json").read_bytes()
+        if hashlib.sha256(raw).hexdigest() != signed["sha256"]["plan.json"]:
+            raise SharedOperationError("bound GUI gate candidate plan changed")
+        plan = json.loads(raw)
+        candidate = plan.get("candidate") if type(plan) is dict else None
+        general = candidate.get("general") if type(candidate) is dict else None
+        hostlist = candidate.get("hostlist") if type(candidate) is dict else None
+        mode = hostlist.get("mode") if type(hostlist) is dict else None
+        if type(mode) is dict:
+            selected = []
+            for name, option in mode.items():
+                flag = option.get("selected") if type(option) is dict else None
+                if (name not in ("all", "list", "auto") or
+                        type(flag) not in (bool, int, str) or
+                        flag not in (0, 1, "0", "1")):
+                    raise SharedOperationError("bound GUI gate invalid target option")
+                if flag in (1, "1"):
+                    selected.append(name)
+            mode = selected[0] if len(selected) == 1 else None
+        if (type(plan) is not dict or plan.get("page") != "strategies" or
+                plan.get("result") != "prepared" or
+                plan.get("dependencies") != detail["candidate"] or
+                type(general) is not dict or general.get("enabled") != "0" or
+                mode not in ("all", "list") or
+                type(plan.get("changed_fields")) is not list or
+                type(plan.get("found_intent")) is not dict or
+                plan["found_intent"].get("commit_authorized") is not False or
+                plan["found_intent"].get("config_revision") != detail["candidate"] or
+                type(plan.get("found_batch")) is not dict):
+            raise SharedOperationError("bound GUI gate candidate not stopped Found")
+        from auto_detect_destination_commit import _qualified_shared_found_batch
+        _qualified_shared_found_batch(plan["found_batch"])
+        if verify_seal(work, owner=0) != signed:
+            raise SharedOperationError("bound GUI gate candidate changed")
+    if observe_old() != previous:
+        raise SharedOperationError("bound GUI gate previous owner changed")
+
+
 def native_bound_prepare_gate(operation: str) -> None:
     """Only a fresh detached ordinary/Found candidate, never a lifecycle permit."""
     from neutral_root_stage import verify_original_operation_pins
@@ -2117,6 +2220,10 @@ def main(argv: list[str]) -> int:
     found_pending = len(argv) == 2 and argv[1] == "found-pending"
     bound_prepare_request = (len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-prepare"] and
                              bool(OP_ID.fullmatch(argv[3])))
+    bound_gui_stage_request = argv[1:] == ["native-gate", "common-bound-stopped-stage"]
+    bound_gui_execute_request = (
+        len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-stopped-execute"] and
+        bool(OP_ID.fullmatch(argv[3])))
     native_gate_request = len(argv) in (2, 3) and argv[1] == "native-gate" and (
         len(argv) == 2 or argv[2] in (
             "common-apply", "common-recover-saved",
@@ -2162,7 +2269,7 @@ def main(argv: list[str]) -> int:
     cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request):
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_gui_stage_request or bound_gui_execute_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -2204,6 +2311,10 @@ def main(argv: list[str]) -> int:
                 print(record["detail"]["id"])
         elif bound_prepare_request:
             native_bound_prepare_gate(argv[3])
+        elif bound_gui_stage_request:
+            native_bound_stopped_gui_gate()
+        elif bound_gui_execute_request:
+            native_bound_stopped_gui_gate(argv[3])
         elif native_gate_request:
             action = argv[2] if len(argv) == 3 else None
             state = native_lifecycle_gate(action)
