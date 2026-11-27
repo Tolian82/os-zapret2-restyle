@@ -2457,4 +2457,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # The original root compiler imports SourceGateReceipt from this
+    # canonical module. Executing its classes as __main__ would create a
+    # distinct Python type and fail the deliberately exact type check.
+    # Run the existing CLI in the canonical module namespace instead.
+    from neutral_shared_apply_source_gate import main as _canonical_main
+    raise SystemExit(_canonical_main())
