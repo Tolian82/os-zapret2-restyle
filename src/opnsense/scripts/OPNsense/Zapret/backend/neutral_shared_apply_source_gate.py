@@ -2299,9 +2299,31 @@ def main(argv: list[str] | None = None) -> int:
                 "S10_PREPARED_DISPATCH_WITNESS_CHANGED",
                 "S10_PREPARED_DISPATCH_BIND_CHANGED",
             }
-            print("ORIGINAL_SOURCE_GATE_REFUSAL=" +
-                  (reason if reason in safe else "S10_FIRST_AUTO_GUI_REFUSED"),
-                  file=sys.stderr)
+            # Narrow finite diagnostics for the actual root-binding path.
+            # All other exceptions remain classified by their fixed type.
+            from neutral_root_stage import RootStageRefused
+            from neutral_schema3_physical_refs import PhysicalSchema3Refused
+            from neutral_root_bound_preflight import BoundRootRefused
+            from neutral_schema3_saved_wan_preimage import SavedWanPreimageRefused
+            from neutral_schema3_quiescent_preimage import QuiescentPreimageRefused
+            fixed = {
+                RootStageRefused: {"ORIGINAL_TYPED_SEALED_SOURCE_REQUIRED",
+                    "ORIGINAL_PREPARED_SOURCE_IDENTITY_MISMATCH",
+                    "ORIGINAL_AUTO_CANDIDATE_IDENTITY_MISMATCH",
+                    "ORIGINAL_PREPARED_SOURCE_ROOT_UNQUALIFIED",
+                    "ORIGINAL_SEALED_REFS_UNQUALIFIED", "STAGED_ROOT_UNQUALIFIED",
+                    "ORIGINAL_STAGE_FILESYSTEM_REFUSED"},
+                PhysicalSchema3Refused: {"ORIGINAL_SCHEMA3_PHYSICAL_UNQUALIFIED"},
+                BoundRootRefused: {"ORIGINAL_BOUND_ROOT_UNQUALIFIED"},
+                SavedWanPreimageRefused: {"ORIGINAL_CONFIG_PREIMAGE_MISMATCH",
+                    "NATIVE_ORIGINAL_PROBE_REFUSED", "NATIVE_ORIGINAL_PROBE_UNAVAILABLE"},
+                QuiescentPreimageRefused: {"ORIGINAL_QUIESCENT_PREIMAGE_REFUSED",
+                    "FIRST_LEARNING_WAN_SOURCE_CHANGED", "FIRST_LEARNING_WAN_RESOLVER_REFUSED"},
+            }
+            if reason not in safe:
+                reason = (str(error) if str(error) in fixed.get(type(error), set())
+                          else _fixed_unclassified_reason(error))
+            print("ORIGINAL_SOURCE_GATE_REFUSAL=" + reason, file=sys.stderr)
             return 70
     # Legacy original parity requests retain their exact old protocol.
     # Explicit S10 accepts only an exact sealed source, never a free-form
