@@ -5,6 +5,7 @@ on:
     branches: [draft/tz6v5-s10-integrated]
     paths:
       - .github/workflows/s10-draft-p2a-handoff.yml
+      - scripts/test-shared-apply-operation.py
       - scripts/test-auto-detect-post-drop.py
       - scripts/test-auto-detect-fd9-launch.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py
@@ -51,4 +52,5 @@ jobs:
           php -l src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10b2b2b3b2b-quiescent-original-preimage.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10c2b-original-shared-source-gate.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-shared-apply-operation.py
           sh scripts/test-shared-apply-execute.sh

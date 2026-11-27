@@ -975,6 +975,73 @@ class TestJournal(unittest.TestCase):
             self.assertEqual(xml.read_bytes(), b"detached XML")
             self.assertEqual(json.loads(plan_file.read_bytes()), plan)
 
+    def test_retired_gui_stage_requires_completed_original_p2a_no_repair(self):
+        import os
+        from types import SimpleNamespace
+        from unittest.mock import Mock, MagicMock
+        from shared_apply_operation import native_bound_stopped_gui_gate
+
+        old = detail()
+        record = {"schema": 1, "phase": "committed", "detail": old,
+                  "manifest": {"schema": 2, "generation": old["id"],
+                      "root_sha256": "c" * 64, "seal_sha256": "d" * 64,
+                      "candidate_sha256": old["candidate"]}}
+        proof = SimpleNamespace(operation_id=old["id"], generation=old["id"],
+                     owner_candidate_sha256=old["candidate"], owner=object())
+        stopped = {"state": "stopped", "source": "native-common",
+                   "config_digest": old["candidate"]}
+        store = Mock(read=Mock(return_value=record))
+        queue = MagicMock()
+        receipts = MagicMock()
+        receipts._generation.return_value = Path("/no-real-epoch")
+        with ExitStack() as stack:
+            def seam(name, **kw):
+                return stack.enter_context(patch(name, **kw))
+            seam("shared_apply_operation.sys.platform", new="freebsd15")
+            seam("shared_apply_operation.os.geteuid", return_value=0)
+            seam("shared_apply_operation.SharedApplyOperation", return_value=store)
+            seam("voice_ipfw_adapter.require_lifecycle_lock")
+            seam("neutral_root_stage.verify_original_operation_pins")
+            root = seam("neutral_root_stage._verify_original_pinned_root",
+                return_value=b'{"service":{"enabled":true,"target_mode":"auto"}}')
+            state = seam("voice_live_inspect.examine_shared", return_value=stopped)
+            seam("neutral_schema3_quiescent_preimage._zero_processes")
+            empty = seam("neutral_schema3_quiescent_preimage._safe_empty_directory")
+            seam("neutral_schema3_previous_physical._full_prior_tree", return_value="tree")
+            seam("neutral_schema3_quiescent_preimage._empty_kernel", return_value="kernel")
+            seam("pwd.getpwnam", return_value=SimpleNamespace(pw_gid=1001))
+            seam("auto_detect_queue.DurableInbox", return_value=queue)
+            seam("auto_detect_epoch_receipts.EpochReceipts", return_value=receipts)
+            seam("auto_detect_epoch_receipts._read", return_value=b"ready")
+            attest = seam("auto_detect_owner.attest_learning_stopped_generation", return_value=proof)
+            retirement = seam("auto_detect_learning_retirement.retired_learning_stopped", return_value=True)
+            seam("neutral_schema3_quiescent_preimage._verify_idle_producer", return_value=("idle",))
+            self.assertEqual(native_bound_stopped_gui_gate(), 2)
+            self.assertEqual(queue.exclusive.call_count, 2)
+            for call in queue.exclusive.call_args_list:
+                self.assertEqual(call.kwargs, {"existing_only": True})
+            for call in retirement.call_args_list:
+                self.assertIs(call.kwargs["repair"], False)
+            empty.assert_not_called()
+            retirement.reset_mock()
+            state.return_value = {**stopped, "state": "ready"}
+            with self.assertRaises(SharedOperationError):
+                native_bound_stopped_gui_gate()
+            retirement.assert_not_called()
+            state.return_value = stopped
+            retirement.return_value = False
+            with self.assertRaises(SharedOperationError):
+                native_bound_stopped_gui_gate()
+            retirement.return_value = True
+            attest.return_value = SimpleNamespace(**{**vars(proof), "generation": "0"*32})
+            with self.assertRaises(SharedOperationError):
+                native_bound_stopped_gui_gate()
+            attest.return_value = proof
+            root.return_value = b'{"service":{"enabled":false,"target_mode":"list"}}'
+            with self.assertRaises(SharedOperationError):
+                native_bound_stopped_gui_gate()
+            store._persist_record.assert_not_called()
+
     def test_native_gate_uses_only_trusted_shared_apply_owner(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)
