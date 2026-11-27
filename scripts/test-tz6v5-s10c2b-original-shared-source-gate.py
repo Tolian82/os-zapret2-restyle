@@ -828,6 +828,61 @@ class OriginalFd9SourceGate(unittest.TestCase):
             store.return_value._advance_bound_ordinary.assert_not_called()
             nested.assert_not_called()
 
+    def test_first_auto_gui_only_dispatches_exact_first_enabled_owner(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        op, base, candidate = "a" * 32, "b" * 64, "c" * 64
+        record = {"phase": "prepared", "detail": {"id": op, "page": "strategies",
+                  "base": base, "candidate": candidate,
+                  "changed_fields": ["general.enabled", "hostlist.mode"]}}
+        source = gate.SourceGateReceipt("auto", "f" * 64, (), generation=op,
+            original_seal_sha256="e" * 64, requested_enabled=True)
+        committed = {**record, "phase": "committed", "manifest": {"schema": 2},
+                     "first_running_sha256": "1" * 64, "first_pretraffic_sha256": "2" * 64}
+        store = Mock(read=Mock(return_value=record))
+        def dispatch(*args):
+            store.read.return_value = committed
+            return "first-enabled-committed", committed, source, None
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            decode = stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"auto"}))
+            fresh = stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
+                return_value=source))
+            run = stack.enter_context(patch.object(gate, "native_coordinate_original_prepared_fd9",
+                side_effect=dispatch))
+            def call(digest=candidate):
+                return gate.native_first_auto_gui_handoff_fd9(op, b"original", digest)
+            for invalid in ({**record, "previous": {}}, {**record, "found": {}},
+                            {**record, "manifest": {}}, {**record, "phase": "committed"},
+                            {**record, "detail": {**record["detail"], "page": "voice"}},
+                            {**record, "detail": {**record["detail"], "changed_fields": ["hostlist.mode"]}}):
+                store.read.return_value = invalid
+                with self.assertRaises(OriginalSourceGateRefused):
+                    call()
+            store.read.return_value = record
+            with self.assertRaises(OriginalSourceGateRefused):
+                call("0" * 64)
+            decode.return_value = {"mode": b"list"}
+            with self.assertRaises(OriginalSourceGateRefused):
+                call()
+            decode.return_value = {"mode": b"auto"}
+            fresh.return_value = replace(source, requested_enabled=False)
+            with self.assertRaises(OriginalSourceGateRefused):
+                call()
+            run.assert_not_called()
+            fresh.return_value = source
+            self.assertIsNone(call())
+            run.assert_called_once_with(op, b"original")
+            store.read.return_value = record
+            run.reset_mock()
+            run.side_effect = RuntimeError("uncertain")
+            with self.assertRaisesRegex(RuntimeError, "uncertain"):
+                call()
+            run.assert_called_once()
+
     def test_original_prepared_first_enabled_has_one_start_and_no_fallback(self):
         from contextlib import ExitStack
         from unittest.mock import Mock
