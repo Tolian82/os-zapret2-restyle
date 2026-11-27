@@ -579,6 +579,8 @@ class SharedApplyOperation:
                     for name in FOUND_NAMES)):
             raise SharedOperationError("unqualified original found candidate")
         before = self.read()
+        if restored_first_learning(before):
+            raise SharedOperationError("restored first learning Found successor not qualified")
         if before is not None and before["phase"] not in TERMINAL:
             raise SharedOperationError("unfinished original common Apply")
         # Preserve the predecessor root in the SAME durable original WAL.
@@ -877,6 +879,8 @@ class SharedApplyOperation:
         _validate_detail(detail)
         before = self.read()
         if phase == "prepared":
+            if restored_first_learning(before):
+                raise SharedOperationError("restored first learning successor not qualified")
             if before is not None and before["phase"] not in TERMINAL:
                 raise SharedOperationError("unfinished common Apply operation")
             if before is not None and before["detail"]["id"] == detail["id"]:
@@ -2290,6 +2294,14 @@ def native_bound_prepare_gate(operation: str) -> None:
         raise SharedOperationError("bound prepare retired predecessor changed")
 
 
+def restored_first_learning(record: dict | None) -> bool:
+    """Recognize only an aborted first bound Auto owner; never a live owner."""
+    return (type(record) is dict and record.get("phase") == "restored" and
+            record.get("manifest", {}).get("schema") == 2 and
+            not ({"previous", "previous_manifest", "found"} & record.keys()) and
+            "first_running_sha256" in record and "first_pretraffic_sha256" in record)
+
+
 def native_lifecycle_gate(action: str | None = None, *,
                           root: Path = DEFAULT_ROOT) -> dict:
     """Read-only FD9 policy from the ONE current shared Apply journal.
@@ -2313,6 +2325,11 @@ def native_lifecycle_gate(action: str | None = None, *,
     if record is None:
         return {"state": "clear", "safe_to_mutate": True}
     phase = record["phase"]
+    if restored_first_learning(record):
+        # Retain the aborted seed/producer and immutable work. A subsequent
+        # first Apply needs a separately qualified admission, not legacy Start.
+        return {"state": "blocked", "reason": "restored-first-learning-preflight-required",
+                "phase": phase, "safe_to_mutate": False}
     # Legacy Apply/Lab must not retire or replace an immutable owner before
     # the new original bound preactivation path is available. A restored
     # candidate's own pin is NOT the active predecessor's pin.
@@ -2592,7 +2609,8 @@ def main(argv: list[str]) -> int:
             if not learning and record["phase"] == "epoch-finalizing":
                 raise SharedOperationError("first inert recovery phase mismatch")
             result = native_finish_bound_cold_restore(record)
-            admitted = ("committed",) if learning else {"activating": ("restored",),
+            admitted = (("restored", "committed") if record["phase"] == "activated" else
+                ("committed",)) if learning else {"activating": ("restored",),
                 "activated": ("restored", "committed"), "config-saved": ("committed",)}[record["phase"]]
             if (result["phase"] not in admitted or result != {**record, "phase": result["phase"]} or
                     store.read() != result):

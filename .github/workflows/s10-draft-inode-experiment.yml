@@ -9,7 +9,6 @@ on:
       - scripts/test-managed-inode-barrier.py
       - scripts/test-tz6v5-s10b1-original-journal-binding.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/managed_inode_barrier.py
-      - src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_destination_commit.py
 
 permissions:

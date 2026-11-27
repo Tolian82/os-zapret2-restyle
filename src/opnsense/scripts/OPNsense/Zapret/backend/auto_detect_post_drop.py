@@ -138,6 +138,106 @@ def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
         raise PostDropRefused("original_pretraffic_queue_or_inode_unavailable") from exc
 
 
+PROVENANCE_FIELDS = ("release_seal_sha256", "original_args_sha256",
+                     "final_args_sha256", "native_map_sha256",
+                     "source_map_sha256", "witness_sha256")
+
+
+def match_zero_cut(record, sources, producer, seed_raw, provenance):
+    """Return exact pretraffic bytes only for the same first ACTIVATED owner.
+
+    `producer` MUST be obtained via the existing auto_detect_post_drop._capture
+    while borrowing the original P2a descriptor. The caller must independently
+    verify original locks, record, root/seal and physical runtime before/after.
+    This comparator never reads a mutable file or invents a running owner.
+    """
+    def refuse():
+        raise ValueError('first_learning_zero_cut_not_exact')
+
+    if (type(record) is not dict or record.get('phase') != 'activated' or
+            record.get('manifest', {}).get('schema') != 2 or
+            any(k in record for k in ('previous', 'previous_manifest', 'found')) or
+            any(type(record.get(k)) is not str or
+                not re.fullmatch(r'[0-9a-f]{64}', record[k])
+                for k in ('first_running_sha256', 'first_pretraffic_sha256')) or
+            type(seed_raw) is not bytes or
+            hashlib.sha256(seed_raw).hexdigest() != record['first_pretraffic_sha256']):
+        refuse()
+    detail = record['detail']
+    generation = detail['id']
+    candidate = detail['candidate']
+    if (not re.fullmatch(r'[0-9a-f]{32}', generation) or
+            not re.fullmatch(r'[0-9a-f]{64}', candidate) or
+            detail['base'] == candidate or
+            type(sources) is not tuple or not 1 <= len(sources) <= 255):
+        refuse()
+    import json
+    seed = json.loads(seed_raw)
+    if (type(provenance) is not dict or set(provenance) != set(PROVENANCE_FIELDS) or
+            any(type(v) is not str or not re.fullmatch(r'[0-9a-f]{64}', v)
+                for v in provenance.values())):
+        refuse()
+    if (type(seed) is not dict or set(seed) != (set(PROVENANCE_FIELDS) |
+            {'schema', 'kind', 'generation', 'owner_candidate_sha256',
+             'files', 'learning', 'ack_authorized'}) or
+            (json.dumps(seed, sort_keys=True, separators=(',', ':')) + '\n').encode() != seed_raw or
+            any(seed[k] != v for k, v in provenance.items()) or
+            type(seed.get('schema')) is not int or
+            seed['schema'] != 3 or seed.get('kind') != 'original-fd9-learning-pretraffic-zero' or
+            seed.get('generation') != generation or
+            seed.get('owner_candidate_sha256') != candidate or
+            seed.get('ack_authorized') is not False):
+        refuse()
+    names = tuple(Path(path).name for _, _, path in sources)
+    if (any(type(number) is not int or not 1 <= number <= 255 or
+            path != str(producer.root / f'learning-{generation}-{number}.txt')
+            for number, _, path in sources) or
+            names != producer.learning_names or
+            len(set(names)) != len(names) or
+            len(producer.identities) != 2 + len(names) or
+            len(set(row[:2] for row in producer.identities)) != len(producer.identities) or
+            any(type(row) is not tuple or len(row) != 3 or
+                any(type(value) is not int for value in row) or
+                row[0] < 0 or row[1] <= 0 or row[2] != 1
+                for row in producer.identities)):
+        refuse()
+    expected_files = [dict(name=name, device=dev, inode=ino, nlink=links)
+                      for name, (dev, ino, links) in
+                      zip(('inbox.txt', 'debug.log', *names), producer.identities)]
+    expected_learning = [dict(native_number=number, hostlist=hostlist, path=path,
+                              device=dev, inode=ino, offset=0,
+                              prefix_sha256=hashlib.sha256(b'').hexdigest())
+                         for (number, hostlist, path), (dev, ino, _) in
+                         zip(sources, producer.identities[2:])]
+    # Strict JSON equality also rules out booleans substituting for integers.
+    def canonical(value):
+        return json.dumps(value, sort_keys=True, separators=(',', ':'))
+    if (canonical(seed.get('files')) != canonical(expected_files) or
+            canonical(seed.get('learning')) != canonical(expected_learning)):
+        refuse()
+    return seed_raw
+
+
+def _zero_cut_provenance(workspace, sources, producer):
+    """Recompute original pretraffic provenance from exact sealed input and inodes."""
+    from auto_detect_epoch_receipts import _canonical
+    from auto_detect_origin_map import ORIGIN_FILE
+    from auto_detect_owner import _secure_bytes, MAX_ARGS, MAX_MAP
+    from shared_apply_seal import verify_seal
+
+    release = workspace / "release"
+    def digest(raw):
+        return hashlib.sha256(raw).hexdigest()
+    return {
+        "release_seal_sha256": digest(_canonical(verify_seal(workspace, owner=0))),
+        "original_args_sha256": digest(_secure_bytes(release / "dvtws.original.args", MAX_ARGS, 0)),
+        "final_args_sha256": digest(_secure_bytes(release / "dvtws.args", MAX_ARGS, 0)),
+        "native_map_sha256": digest(_secure_bytes(release / "auto-detect-generation.json", MAX_MAP, 0)),
+        "source_map_sha256": digest(_secure_bytes(release / ORIGIN_FILE, MAX_MAP, 0)),
+        "witness_sha256": digest(_witness_line_learning(producer, sources).encode()),
+    }
+
+
 def _reattest(witness: OriginalProducer, owner_alive: Callable[[], bool]) -> tuple[str, ...]:
     """Repair only original *open inodes* after real engine credential drop.
 

@@ -1756,7 +1756,7 @@ def main(argv: list[str] | None = None) -> int:
             print("ERROR: original managed locked Config phase refused", file=sys.stderr)
             return 69
     if argv and argv[0] in ("guard-first-running-base-shell", "guard-first-running-base-stopped"):
-        if len(argv) != 3:
+        if len(argv) not in (3, 4) or (len(argv) == 4 and argv[3] != "--inherited-queue"):
             return 64
         try:
             from neutral_schema3_quiescent_preimage import (
@@ -1764,11 +1764,13 @@ def main(argv: list[str] | None = None) -> int:
                 native_guard_first_running_base_stopped_shell_locked)
             if argv[0] == "guard-first-running-base-shell":
                 pid, monitor = native_guard_first_running_base_shell_locked(
-                    argv[1], argv[2], config_fd=4)
+                    argv[1], argv[2], config_fd=4,
+                    queue_fd=3 if len(argv) == 4 else None)
                 print(f"first-running-base-shell=qualified:{pid}:{monitor}")
             else:
                 native_guard_first_running_base_stopped_shell_locked(
-                    argv[1], argv[2], config_fd=4)
+                    argv[1], argv[2], config_fd=4,
+                    queue_fd=3 if len(argv) == 4 else None)
                 print("first-running-base-stopped=qualified")
             return 0
         except (ValueError, RuntimeError, OSError, KeyError, TypeError):

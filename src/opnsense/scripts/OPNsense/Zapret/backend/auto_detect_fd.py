@@ -104,19 +104,34 @@ def _probe_original_inode(segment: Path, device_id: int, inode: int, *,
     predicates; neither can skip the kernel-wide all-PID fstat scan.
     Never call the P2a ACK directly: original Config/v2 checkpoints rule.
     """
+    if (not isinstance(owner, OwnerToken) or type(owner.pid) is not int or
+            owner.pid <= 1 or not isinstance(owner.started, str) or
+            not _START.fullmatch(owner.started) or
+            not isinstance(owner.executable, str) or
+            not owner.executable.startswith("/") or "\x00" in owner.executable or
+            any(c.isspace() for c in owner.executable)):
+        return FDState.UNKNOWN
+    return _probe_attested_original_inode(segment, device_id, inode,
+        runner=runner, platform=platform, writer_gid=writer_gid,
+        attest_owner=attest_owner)
+
+
+def _probe_attested_original_inode(segment: Path, device_id: int, inode: int, *,
+        runner=subprocess.run, platform: str | None = None,
+        writer_gid: int | None = None, attest_owner=None) -> FDState:
+    """Same read-only census; private callers must independently attest ownership.
+
+    First unsaved Auto has no published stopped epoch or recoverable OwnerToken.
+    Only its original FD9/P2a/FD4 zero-cut scope can use this private primitive.
+    Public P2b/ACK routes still require the original token above.
+    """
     if not callable(attest_owner):
         return FDState.UNKNOWN
     if platform is None:
         platform = sys.platform
     if not platform.startswith("freebsd") or os.geteuid() != 0:
         return FDState.UNKNOWN
-    if (not isinstance(owner, OwnerToken) or type(owner.pid) is not int or
-            owner.pid <= 1 or not isinstance(owner.started, str) or
-            not _START.fullmatch(owner.started) or
-            not isinstance(owner.executable, str) or
-            not owner.executable.startswith("/") or "\x00" in owner.executable or
-            any(c.isspace() for c in owner.executable) or
-            type(device_id) is not int or type(inode) is not int or
+    if (type(device_id) is not int or type(inode) is not int or
             device_id < 0 or inode <= 0):
         return FDState.UNKNOWN
     path = Path(segment)

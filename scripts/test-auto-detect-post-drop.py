@@ -52,6 +52,61 @@ class PostDropContract(unittest.TestCase):
                         root_gid=self.gid, engine_uid=self.engine,
                         engine_gid=self.gid)
 
+    def test_first_learning_base_zero_cut_preserves_original_queue(self):
+        import json
+        from auto_detect_post_drop import match_zero_cut, PROVENANCE_FIELDS
+        generation = "a" * 32
+        names = tuple(f"learning-{generation}-{n}.txt" for n in (3, 4))
+        sources = tuple((n, "youtube", str(self.root / name))
+                        for n, name in zip((3, 4), names))
+        paths = tuple(self.root / name for name in ("inbox.txt", "debug.log", *names))
+        for path in paths[2:]:
+            path.touch()
+            path.chmod(0o660)
+        queue = DurableInbox(self.root, owner_uid=self.owner, writer_gid=self.gid)
+        with queue.exclusive():
+            def capture():
+                return _capture(self.root, root_uid=self.owner, root_gid=self.gid,
+                    engine_uid=self.engine, engine_gid=self.gid, learning_names=names,
+                    queue_fd=queue.locked_fd)
+            original = capture()
+            provenance = {key: hashlib.sha256(key.encode()).hexdigest()
+                          for key in PROVENANCE_FIELDS}
+            seed = dict(schema=3, kind="original-fd9-learning-pretraffic-zero",
+                generation=generation, owner_candidate_sha256="b" * 64,
+                ack_authorized=False, **provenance,
+                files=[dict(name=p.name, device=d, inode=i, nlink=l)
+                       for p, (d, i, l) in zip(paths, original.identities)],
+                learning=[dict(native_number=n, hostlist=h, path=p, device=d, inode=i,
+                               offset=0, prefix_sha256=hashlib.sha256(b"").hexdigest())
+                          for (n, h, p), (d, i, _) in zip(sources, original.identities[2:])])
+            raw = (json.dumps(seed, sort_keys=True, separators=(",", ":")) + "\n").encode()
+            record = dict(phase="activated", manifest={"schema": 2},
+                detail={"id": generation, "base": "c" * 64, "candidate": "b" * 64},
+                first_running_sha256="d" * 64,
+                first_pretraffic_sha256=hashlib.sha256(raw).hexdigest())
+            def check():
+                return match_zero_cut(record, sources, capture(), raw, provenance)
+            self.assertEqual(check(), raw)
+            self.assertEqual(check(), raw)
+            for path in paths:
+                with self.subTest(nonempty=path.name):
+                    path.write_bytes(b"fixture\n")
+                    with self.assertRaises(PostDropRefused):
+                        check()
+                    self.assertEqual(path.read_bytes(), b"fixture\n")
+                    path.write_bytes(b"")
+            for key in PROVENANCE_FIELDS:
+                with self.subTest(provenance=key), self.assertRaises(ValueError):
+                    match_zero_cut(record, sources, capture(), raw,
+                                   {**provenance, key: "f" * 64})
+            paths[-1].rename(self.root.parent / "old-original")
+            paths[-1].touch()
+            paths[-1].chmod(0o660)
+            with self.assertRaises(ValueError):
+                check()
+            self.assertTrue((self.root.parent / "old-original").is_file())
+
     def test_learning_inboxes_preserve_prelaunch_and_postdrop_inodes(self):
         names = ("learning-" + "a" * 32 + "-3.txt",
                  "learning-" + "a" * 32 + "-4.txt")

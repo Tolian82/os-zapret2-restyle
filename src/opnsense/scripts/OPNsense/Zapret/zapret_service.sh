@@ -3713,14 +3713,17 @@ pkg_update_finish_service()
 shared_apply_first_running_base_stop_service()
 {
     # Private joined child of the original FD9 + native Config FD4 owner.
-    [ "$#" -eq 2 ] || return 64
+    [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || return 64
+    if [ "$#" -eq 3 ]; then
+        [ "$3" = --inherited-queue ] || return 64
+    fi
     case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
     [ "${#1}" -eq 32 ] || return 64
     case "$2" in ""|*[!a-f0-9]*) return 64 ;; esac
     [ "${#2}" -eq 64 ] || return 64
     [ -x "$PYTHON_RUNTIME" ] || return 69
     _first_stop_guard=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
-        guard-first-running-base-shell "$1" "$2") || return 70
+        guard-first-running-base-shell "$@") || return 70
     case "$_first_stop_guard" in first-running-base-shell=qualified:*:*) ;; *) return 70 ;; esac
     _first_stop_pids=${_first_stop_guard#first-running-base-shell=qualified:}
     case "$_first_stop_pids" in *:*:*) return 70 ;; esac
@@ -3735,13 +3738,13 @@ shared_apply_first_running_base_stop_service()
     [ "$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE")" = "$_first_stop_monitor" ] || return 70
     # Close the original guard-to-signal window: reattest birth/argv/kernel.
     _first_stop_immediate=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
-        guard-first-running-base-shell "$1" "$2") || return 70
+        guard-first-running-base-shell "$@") || return 70
     [ "$_first_stop_immediate" = "$_first_stop_guard" ] || return 70
     # Only the original service Stop helpers send signals, never this Python guard.
     supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" || return 70
     launcher_stop "$CHILD_PIDFILE" 5 || return 70
     _first_stop_after=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
-        guard-first-running-base-stopped "$1" "$2") || return 70
+        guard-first-running-base-stopped "$@") || return 70
     [ "$_first_stop_after" = first-running-base-stopped=qualified ] || return 70
     printf '%s\n' first-running-base-physical=stopped
 }
@@ -3821,8 +3824,9 @@ service_dispatch()
             ;;
         shared-apply-first-running-base-physical)
             # Never acquire a second FD9 or allow unbound public Stop.
-            [ "$#" -eq 3 ] || return 64
-            shared_apply_first_running_base_stop_service "$2" "$3"
+            [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || return 64
+            shift
+            shared_apply_first_running_base_stop_service "$@"
             ;;
         shared-apply-first-enabled-physical)
             # This private action is not part of the normal service lock

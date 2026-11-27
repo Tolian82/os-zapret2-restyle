@@ -45,6 +45,40 @@ def load(filename, name):
     return module
 
 
+def inspect_first_restored():
+    """Original FD9 independent physical readback, never a new lifecycle owner."""
+    import hashlib
+    from neutral_root_stage import verify_original_operation_pins
+    from neutral_schema3_quiescent_preimage import (_zero_processes, _empty_kernel, _present,
+        _reject_cold_recovery_residue, CHILD_PID, MONITOR_PID, DAEMON_PID)
+    from shared_apply_operation import SharedApplyOperation, committed_owner, committed_manifest, native_lifecycle_gate
+    from shared_apply_seal import WORK
+    from voice_live_inspect import COMMON_ACTIVE
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    need(type(record) is dict and record.get("phase") == "restored" and
+         record.get("manifest", {}).get("schema") == 2 and
+         "first_running_sha256" in record and "first_pretraffic_sha256" in record and
+         not ({"previous", "previous_manifest", "found"} & record.keys()) and
+         committed_owner(record) is None and committed_manifest(record) is None,
+         "S10_AUTO_FIRST_RESTORED_OWNER_REQUIRED")
+    op = record["detail"]["id"]
+    release = WORK / op / "release"
+    verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    need(not _present(COMMON_ACTIVE), "S10_AUTO_FIRST_RESTORED_ACTIVE_RESIDUE")
+    _reject_cold_recovery_residue(COMMON_ACTIVE)
+    need(_empty_kernel(release) in ("native-kernel-absent", "native-managed-kernel-empty"),
+         "S10_AUTO_FIRST_RESTORED_KERNEL_RESIDUE")
+    need(not native_lifecycle_gate()["safe_to_mutate"] and
+         not native_lifecycle_gate("common-apply")["safe_to_mutate"] and store.read() == record,
+         "S10_AUTO_FIRST_RESTORED_LEGACY_FENCE_REQUIRED")
+    print("S10_FIRST_BASE_INDEPENDENT=PASS", flush=True)
+
+
 def inspect_original_stopped():
     """Read only; FD9 acquired in the original lockf shell, then P2a."""
     import hashlib
@@ -682,6 +716,48 @@ def native_positive():
         config_image = CONFIG.read_bytes()
         work_before = set(work.iterdir())
         kernel = subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout
+        if first_fault == "first-base":
+            # Disposable guest only: inject one controlled nonzero fixture in each
+            # original producer category and verify refusal before any Stop.
+            # Never truncate anything other than our exact test-only sentinel.
+            need(all(not data for data in before_images.values()),
+                 "S10_AUTO_FIRST_BASE_ZERO_FIXTURE_REQUIRED")
+            pidfiles = tuple(Path(name) for name in ("/var/run/dvtws2.pid",
+                "/var/run/zapret2-supervisor-monitor.pid", "/var/run/zapret2-supervisor-daemon.pid"))
+            def process_pins():
+                rows = []
+                for path in pidfiles:
+                    pid = path.read_text().strip()
+                    result = subprocess.run(["/bin/ps", "-ww", "-p", pid, "-o", "lstart=", "-o", "command="],
+                                            capture_output=True, check=True)
+                    rows.append((path.read_bytes(), path.stat().st_ino, result.stdout))
+                return tuple(rows)
+            live_pins = process_pins()
+            learning = original_seed["learning"][0]["path"]
+            for path in (producer / "inbox.txt", producer / "debug.log", Path(learning)):
+                sentinel = b"s10-disposable-zero-cut-sentinel.invalid\n"
+                with path.open("ab") as handle:
+                    handle.write(sentinel)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                expected = {**before_images, path.name: sentinel}
+                refusal = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180)
+                need(refusal.returncode != 0 and json.loads(WAL.read_bytes()) == pending and
+                     CONFIG.read_bytes() == config_image and set(work.iterdir()) == work_before and
+                     (root.stat().st_dev, root.stat().st_ino, root.read_bytes()) == root_pin and
+                     seed.read_bytes() == seed_bytes and images() == expected and
+                     process_pins() == live_pins and
+                     subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout == kernel,
+                     "S10_AUTO_FIRST_BASE_NONZERO_MUTATED")
+                # Restore the fixture, not production recovery. If any real bytes
+                # appeared, refuse the fixture and keep them; no cleanup on failure.
+                with path.open("r+b") as handle:
+                    need(handle.read() == sentinel, "S10_AUTO_FIRST_BASE_FIXTURE_DRIFT")
+                    handle.truncate(0)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                need(images() == before_images, "S10_AUTO_FIRST_BASE_FIXTURE_RESTORE_FAILED")
+            print("S10_FIRST_BASE_NONZERO=PASS_ALL_THREE_CATEGORIES_NO_STOP_OR_MUTATION", flush=True)
         # The first recovery dispatcher deliberately returns 69 even on a
         # terminal recovery: it must never fall through to a second Start.
         recovery = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180)
@@ -694,13 +770,38 @@ def native_positive():
         need(all(after_images[name].startswith(data) for name, data in before_images.items()),
              "S10_FIRST_FAULT_RECOVERY_PRODUCER_DATA_LOST")
         if first_fault == "first-base":
-            # Baseline safety regression, NOT a claim of completed rollback.
-            need(recovery.returncode != 0 and rec == pending and
-                 set(path.name for path in epoch.iterdir()) == {"pretraffic.json"} and
-                 subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout == kernel,
-                 "S10_FIRST_BASE_UNEXPECTED_MUTATION")
-            print("S10_FIRST_BASE=OPEN_REFUSED_UNSAVED_CONFIG_NO_DATA_LOSS_" +
-                  safe_lengths(after_images), flush=True)
+            need(recovery.returncode == 69 and rec == {**pending, "phase": "restored"} and
+                 all(not data for data in before_images.values()) and after_images == before_images and
+                 set(path.name for path in epoch.iterdir()) == {"pretraffic.json"},
+                 "S10_AUTO_FIRST_BASE_ROLLBACK_REQUIRED")
+            # The original reversible rollback may change ONLY managed rules.
+            def foreign_rules(raw):
+                return [line for line in raw.splitlines()
+                        if not 19000 <= int(line.split()[0]) <= 19099]
+            after_kernel = subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout
+            need(foreign_rules(after_kernel) == foreign_rules(kernel),
+                 "S10_AUTO_FIRST_BASE_FOREIGN_IPFW_CHANGED")
+            command = ('(/usr/bin/lockf -s -t 30 9 || exit 75; exec "$@") 9>' + LOCK)
+            proof = subprocess.run(["/bin/sh", "-c", command, "s10-original-fd9", PYTHON_RUNTIME,
+                str(Path(__file__).resolve()), "--inspect-first-restored"],
+                capture_output=True, text=True, timeout=180, check=False)
+            need(proof.returncode == 0 and "S10_FIRST_BASE_INDEPENDENT=PASS" in proof.stdout.splitlines(),
+                 "S10_AUTO_FIRST_BASE_INDEPENDENT_REFUSED")
+            # A subsequent Start must not use the legacy executor or erase evidence.
+            # This is a temporary fail-closed successor boundary, not a retry PASS.
+            repeat = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180)
+            need(repeat.returncode != 0 and json.loads(WAL.read_bytes()) == rec and
+                 CONFIG.read_bytes() == config_image and set(work.iterdir()) == work_before and
+                 (root.stat().st_dev, root.stat().st_ino, root.read_bytes()) == root_pin and
+                 seed.read_bytes() == seed_bytes and images() == before_images and
+                 subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout == after_kernel,
+                 "S10_AUTO_FIRST_BASE_REPEAT_MUTATED")
+            proof = subprocess.run(["/bin/sh", "-c", command, "s10-original-fd9", PYTHON_RUNTIME,
+                str(Path(__file__).resolve()), "--inspect-first-restored"],
+                capture_output=True, text=True, timeout=180, check=False)
+            need(proof.returncode == 0 and "S10_FIRST_BASE_INDEPENDENT=PASS" in proof.stdout.splitlines(),
+                 "S10_AUTO_FIRST_BASE_REPEAT_INDEPENDENT_REFUSED")
+            print("S10_FIRST_BASE=PASS_ZERO_CUT_SAME_WAL_CONFIG_ROOT_SEED_STOPPED", flush=True)
             return
         need(rec == {**pending, "phase": "committed"} and
              (epoch / "epoch.json").is_file() and
@@ -946,6 +1047,12 @@ def native_positive():
 
 def main():
     try:
+        if sys.argv[1:] == ["--inspect-first-restored"]:
+            need(sys.platform.startswith("freebsd") and os.geteuid() == 0,
+                 "S10_AUTO_NATIVE_INSPECT_SCOPE")
+            sys.path.insert(0, str(BACKEND))
+            inspect_first_restored()
+            return 0
         if sys.argv[1:] == ["--inspect-restored"]:
             need(sys.platform.startswith("freebsd") and os.geteuid() == 0,
                  "S10_AUTO_NATIVE_INSPECT_SCOPE")

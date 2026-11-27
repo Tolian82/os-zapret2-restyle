@@ -1203,7 +1203,7 @@ def _rollback_first_inert_kernel(record: dict, release: Path, *, config_fd: int,
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
     from voice_firewall_transaction import rollback_uncommitted
 
-    live, stage, kernel = first
+    live, stage, kernel = first[:3]
     if (kernel != "native-managed-kernel-staged" or live is None or
             live[0] != "candidate" or stage is not None):
         raise QuiescentPreimageRefused("FIRST_BOUND_STAGED_LAYOUT_REQUIRED")
@@ -1215,7 +1215,7 @@ def _rollback_first_inert_kernel(record: dict, release: Path, *, config_fd: int,
     rollback_uncommitted(
         FreeBSDIPFWAdapter(19000, 19099, allow_mutations=True), empty, desired)
     restored = observe()
-    if (restored[:2] != first[:2] or restored[2] not in
+    if (restored[:2] != first[:2] or restored[3:] != first[3:] or restored[2] not in
             ("native-kernel-absent", "native-managed-kernel-empty")):
         raise QuiescentPreimageRefused("FIRST_BOUND_KERNEL_RESTORE_UNCERTAIN")
     return restored
@@ -1228,10 +1228,114 @@ def _first_enabled_queue_scope(record: dict, queue_fd: int | None, config_fd: in
              queue_fd not in (9, config_fd)))
 
 
+def _first_learning_base_zero_locked(store, record: dict, *, config_fd: int,
+                                     config_digest: str, queue_fd: int,
+                                     stopped: bool) -> tuple:
+    """WAL-pinned zero cut, including every original N inode and pending queue."""
+    import hashlib
+    import json
+    import pwd
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_post_drop import (_capture, _learning_release_sources,
+        _qualified_learning_sources, _original_epoch_queue, match_zero_cut, _zero_cut_provenance)
+    from auto_detect_storage import ENGINE_USER
+    from auto_detect_epoch_receipts import _read
+    from auto_detect_fd import FDState, _probe_attested_original_inode
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+
+    detail = record["detail"]
+    if (record["phase"] != "activated" or record.get("manifest", {}).get("schema") != 2 or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            config_digest != detail["base"] or detail["base"] == detail["candidate"] or
+            not _first_enabled_queue_scope(record, queue_fd, config_fd) or
+            type(stopped) is not bool):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_SCOPE_REQUIRED")
+    work = WORK / detail["id"]
+    release = work / "release"
+    workspace, candidate, sources = _learning_release_sources(release)
+    if workspace != work or candidate != detail["candidate"]:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_SOURCE_CHANGED")
+    _, names = _qualified_learning_sources(sources, PRODUCER_ROOT)
+    queue, receipts = _original_epoch_queue(names)
+    identity = pwd.getpwnam(ENGINE_USER)
+    if queue.root != PRODUCER_ROOT or receipts.root != EPOCH_ROOT:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_ROOT_CHANGED")
+
+    def locked_scope():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if store.read() != record:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_OWNER_CHANGED")
+        if stopped:
+            _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        return True
+
+    def scope():
+        locked_scope()
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=record["manifest"], parent=WORK, owner_uid=0))
+        if (root["service"]["enabled"] is not True or root["service"]["target_mode"] != "auto" or
+                _learning_release_sources(release) != (workspace, candidate, sources)):
+            raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_ROOT_CHANGED")
+        return locked_scope()
+
+    def capture():
+        scope()
+        paths = tuple(PRODUCER_ROOT / name for name in ("inbox.txt", "debug.log", *names))
+        def source_pins():
+            return tuple((st.st_dev, st.st_ino, st.st_nlink, st.st_size,
+                          st.st_mtime_ns, st.st_ctime_ns, st.st_mode, st.st_uid, st.st_gid)
+                         for st in (path.lstat() for path in paths))
+        before = source_pins()
+        with queue.inherited_exclusive(queue_fd):
+            folder = receipts._generation(detail["id"], create=False)
+            if (set(os.listdir(EPOCH_ROOT)) != {detail["id"]} or
+                    set(os.listdir(folder)) != {"pretraffic.json"} or queue.segments()):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_EPOCH_CHANGED")
+            path = folder / "pretraffic.json"
+            a = path.lstat()
+            raw = _read(path, 0)
+            b = path.lstat()
+            def pin(st):
+                return (st.st_dev, st.st_ino, st.st_nlink, st.st_size,
+                        st.st_mtime_ns, st.st_ctime_ns, st.st_uid, st.st_mode)
+            if pin(a) != pin(b) or hashlib.sha256(raw).hexdigest() != record.get("first_pretraffic_sha256"):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_SEED_CHANGED")
+        producer = _capture(PRODUCER_ROOT, root_uid=0, root_gid=0,
+            engine_uid=identity.pw_uid, engine_gid=identity.pw_gid,
+            learning_names=names, queue_fd=queue_fd)
+        match_zero_cut(record, sources, producer, raw,
+            _zero_cut_provenance(workspace, sources, producer))
+        after = source_pins()
+        if (before != after or any(row[3] != 0 for row in after) or
+                tuple(row[:3] for row in after) != producer.identities):
+            raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_SOURCE_CHANGED")
+        scope()
+        return producer, pin(a), raw, after
+
+    first = capture()
+    if stopped:
+        # No ACK, no deletion, no forged historical epoch.  The existing
+        # global P2b inspector runs with the exact original zero-cut scope.
+        # The individual original P2b scan pins the target inode and size/mtime.
+        # Reattest the original locks/WAL and stopped census around each scan;
+        # full zero data, seed and all source metadata are compared across
+        # the entire sweep, rather than rehashing all N files for each of N scans.
+        for name, (dev, ino, _) in zip(("inbox.txt", "debug.log", *names), first[0].identities):
+            if _probe_attested_original_inode(PRODUCER_ROOT / name, dev, ino,
+                    writer_gid=identity.pw_gid, attest_owner=locked_scope) is not FDState.DRAINED:
+                raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_FD_NOT_DRAINED")
+    if capture() != first:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_CHANGED")
+    return first
+
+
 def _first_inert_recovery_layout(record: dict, *, config_fd: int,
                                  config_digest: str, queue_fd: int | None, store,
                                  saved: bool = False, running_base: bool = False,
-                                 first_learning_launch: bool = False) -> tuple:
+                                 first_learning_launch: bool = False,
+                                 first_learning_base: bool = False) -> tuple:
     """Observe first inert recovery or strictly prelaunch first learning layout.
 
     The latter is NOT a recovery authorization: only empty runtime/epoch,
@@ -1243,7 +1347,10 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
 
     detail = record["detail"]
     if (type(saved) is not bool or type(running_base) is not bool or
-            type(first_learning_launch) is not bool or
+            type(first_learning_launch) is not bool or type(first_learning_base) is not bool or
+            (first_learning_base and (saved or first_learning_launch or
+                record["phase"] != "activated" or
+                not _first_enabled_queue_scope(record, queue_fd, config_fd))) or
             (first_learning_launch and (saved or running_base or
                 record["phase"] != "activating" or detail["base"] == detail["candidate"] or
                 not _first_enabled_queue_scope(record, queue_fd, config_fd))) or
@@ -1251,9 +1358,9 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
                               "first_running_sha256" not in record)) or
             record["phase"] not in (("activated", "config-saved") if saved else ("activating", "activated")) or
             "previous" in record or "previous_manifest" in record or "found" in record or
-            record.get("manifest", {}).get("schema") != (2 if first_learning_launch else 1) or
+            record.get("manifest", {}).get("schema") != (2 if first_learning_launch or first_learning_base else 1) or
             config_digest != detail["candidate" if saved else "base"] or
-            (not first_learning_launch and queue_fd is not None) or
+            (not (first_learning_launch or first_learning_base) and queue_fd is not None) or
             ((saved or record["phase"] == "activated") and detail["base"] == detail["candidate"])):
         raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SCOPE_REQUIRED")
     require_lifecycle_lock()
@@ -1265,7 +1372,7 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
     verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
     if (not _original_plan_matches(parent=WORK, generation=detail["id"],
             journal={"detail": detail}, owner_uid=0) or
-            (not first_learning_launch and
+            (not (first_learning_launch or first_learning_base) and
              inspect_inert_release(release, owner_uid=0) != "inactive")):
         raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SOURCE_CHANGED")
     producer = None
@@ -1293,6 +1400,11 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
                 learning_names=names, queue_fd=queue_fd)
 
         producer = capture()
+    if first_learning_base:
+        def zero():
+            return _first_learning_base_zero_locked(store, record, config_fd=config_fd,
+                config_digest=config_digest, queue_fd=queue_fd, stopped=not running_base)
+        producer = zero()
     running = False
     if saved or running_base:
         import json
@@ -1303,7 +1415,7 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
         if (type(enabled) is not bool or enabled != ("first_running_sha256" in record) or
                 (running_base and not enabled)):
             raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_PIN_REQUIRED")
-        if enabled and root["service"]["target_mode"] not in ("all", "list"):
+        if enabled and root["service"]["target_mode"] not in (("auto",) if first_learning_base else ("all", "list")):
             raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_INERT_MODE_REQUIRED")
         running = enabled
     wanted = verify_seal(work, owner=0)["sha256"]["release"]
@@ -1311,9 +1423,10 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
     parent, name = active.parent, active.name
     stage = parent / f".{name}.stage.{detail['id']}"
     _stat(parent, 0, directory=True)
-    for path in (active.with_name("runtime-v2-backups"), EPOCH_ROOT):
-        _safe_empty_directory(path, 0)
-    if not first_learning_launch:
+    _safe_empty_directory(active.with_name("runtime-v2-backups"), 0)
+    if not first_learning_base:
+        _safe_empty_directory(EPOCH_ROOT, 0)
+    if not (first_learning_launch or first_learning_base):
         _safe_empty_directory(PRODUCER_ROOT, 0)
     if (any(item.name != detail["id"] for item in WORK.iterdir()) or
             any(item != stage and item.name.startswith((f".{name}.stage.", f".{name}.old."))
@@ -1364,15 +1477,20 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
             raise QuiescentPreimageRefused("FIRST_LEARNING_LAUNCH_PRODUCER_CHANGED")
         _safe_empty_directory(EPOCH_ROOT, 0)
         return live, staged, kernel, producer
+    if first_learning_base:
+        if zero() != producer:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_CHANGED")
+        return live, staged, kernel, producer
     return live, staged, kernel
 
 
 def _attest_first_running_base_locked(store, record: dict, *, config_fd: int,
-                                      config_digest: str) -> tuple:
+                                      config_digest: str, queue_fd: int | None = None) -> tuple:
     """Read-only base-image proof; never grants permission to signal a PID."""
     def observe():
         return _first_inert_recovery_layout(record, config_fd=config_fd,
-            config_digest=config_digest, queue_fd=None, store=store, running_base=True)
+            config_digest=config_digest, queue_fd=queue_fd, store=store, running_base=True,
+            first_learning_base=queue_fd is not None)
 
     first = observe()
     if observe() != first or store.read() != record:
@@ -1380,7 +1498,7 @@ def _attest_first_running_base_locked(store, record: dict, *, config_fd: int,
     return first
 
 
-def _first_running_base_scope_locked(operation: str, base: str, *, config_fd: int):
+def _first_running_base_scope_locked(operation: str, base: str, *, config_fd: int, queue_fd: int | None = None):
     """One original, pinned ACTIVATED owner and inherited native locks."""
     import sys
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
@@ -1399,7 +1517,8 @@ def _first_running_base_scope_locked(operation: str, base: str, *, config_fd: in
             record["detail"]["id"] != operation or
             record["detail"]["base"] != base or base == record["detail"]["candidate"] or
             "previous" in record or "previous_manifest" in record or "found" in record or
-            record.get("manifest", {}).get("schema") != 1 or
+            not _first_enabled_queue_scope(record, queue_fd, config_fd) or
+            (queue_fd is not None and not DIGEST.fullmatch(str(record.get("first_pretraffic_sha256", "")))) or
             (type(record.get("first_running_sha256")) is not str or
              not DIGEST.fullmatch(record["first_running_sha256"]))):
         raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_OWNER_REQUIRED")
@@ -1407,13 +1526,13 @@ def _first_running_base_scope_locked(operation: str, base: str, *, config_fd: in
 
 
 def native_guard_first_running_base_shell_locked(operation: str, base: str, *,
-                                                 config_fd: int = 4) -> tuple[int, int]:
+                                                 config_fd: int = 4, queue_fd: int | None = None) -> tuple[int, int]:
     """Read-only owner/PID birth and reversible IPFW preflight before Stop."""
     from neutral_schema3_previous_physical import _running_native
 
-    store, record = _first_running_base_scope_locked(operation, base, config_fd=config_fd)
+    store, record = _first_running_base_scope_locked(operation, base, config_fd=config_fd, queue_fd=queue_fd)
     first = _attest_first_running_base_locked(store, record,
-        config_fd=config_fd, config_digest=base)
+        config_fd=config_fd, config_digest=base, queue_fd=queue_fd)
     if (first[0] is None or first[0][0] != "candidate" or first[1] is not None or
             type(first[2]) is not tuple or first[2][0] not in
             ("native-managed-kernel-staged", "native-managed-kernel-final")):
@@ -1439,14 +1558,15 @@ def _first_running_base_stopped_kernel(record: dict, kernel: str) -> bool:
 
 
 def native_guard_first_running_base_stopped_shell_locked(operation: str, base: str, *,
-                                                         config_fd: int = 4) -> None:
+                                                         config_fd: int = 4, queue_fd: int | None = None) -> None:
     """Post-Stop process census and original staged-kernel evidence, no WAL."""
-    store, record = _first_running_base_scope_locked(operation, base, config_fd=config_fd)
+    store, record = _first_running_base_scope_locked(operation, base, config_fd=config_fd, queue_fd=queue_fd)
     _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
 
     def observe():
         return _first_inert_recovery_layout(record, config_fd=config_fd,
-            config_digest=base, queue_fd=None, store=store)
+            config_digest=base, queue_fd=queue_fd, store=store,
+            first_learning_base=queue_fd is not None)
 
     first = observe()
     if (first[0] is None or first[0][0] != "candidate" or first[1] is not None or
@@ -1457,12 +1577,13 @@ def native_guard_first_running_base_stopped_shell_locked(operation: str, base: s
 
 
 def _stop_first_running_base_joined_locked(store, record: dict, *,
-                                           config_fd: int, config_digest: str) -> None:
+                                           config_fd: int, config_digest: str,
+                                           queue_fd: int | None = None) -> None:
     """Join original Stop before any IPFW/tree/WAL rollback under FD9/FD4."""
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
 
     first = _attest_first_running_base_locked(store, record,
-        config_fd=config_fd, config_digest=config_digest)
+        config_fd=config_fd, config_digest=config_digest, queue_fd=queue_fd)
     if (first[0] is None or first[0][0] != "candidate" or first[1] is not None or
             type(first[2]) is not tuple or first[2][0] not in
             ("native-managed-kernel-staged", "native-managed-kernel-final")):
@@ -1472,9 +1593,16 @@ def _stop_first_running_base_joined_locked(store, record: dict, *,
     if store.read() != record:
         raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_JOURNAL_CHANGED")
     try:
-        reply = _run_bound_restore_joined((str(SCRIPT / "zapret_service.sh"),
-            "shared-apply-first-running-base-physical", record["detail"]["id"],
-            config_digest), pass_fds=(9, config_fd), budget=60, capture_output=True)
+        command = (str(SCRIPT / "zapret_service.sh"),
+            "shared-apply-first-running-base-physical", record["detail"]["id"], config_digest)
+        descriptors = (9, config_fd)
+        if queue_fd is not None:
+            if queue_fd != 3:
+                raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_QUEUE_FD_REQUIRED")
+            command += ("--inherited-queue",)
+            descriptors += (queue_fd,)
+        reply = _run_bound_restore_joined(command, pass_fds=descriptors,
+            budget=60, capture_output=True)
     except (OSError, subprocess.SubprocessError):
         raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOP_UNCERTAIN") from None
     if (reply.returncode != 0 or type(reply.stdout) is not bytes or
@@ -1483,8 +1611,9 @@ def _stop_first_running_base_joined_locked(store, record: dict, *,
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
     observed = _first_inert_recovery_layout(record, config_fd=config_fd,
-        config_digest=config_digest, queue_fd=None, store=store)
-    if (observed[:2] != first[:2] or
+        config_digest=config_digest, queue_fd=queue_fd, store=store,
+        first_learning_base=queue_fd is not None)
+    if (observed[:2] != first[:2] or observed[3:] != first[3:] or
             not _first_running_base_stopped_kernel(record, observed[2]) or
             store.read() != record):
         raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_POST_STOP_CHANGED")
@@ -1875,12 +2004,13 @@ def native_write_first_disabled_handoff_locked(operation: str, witness: str, str
 
 def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
                                   config_digest: str, queue_fd: int | None) -> dict:
-    """Restore first inert cold tree with exact base and reversible kernel."""
+    """Restore first cold tree with exact base and reversible kernel."""
     from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
 
     def observe():
         return _first_inert_recovery_layout(record, config_fd=config_fd,
-            config_digest=config_digest, queue_fd=queue_fd, store=store)
+            config_digest=config_digest, queue_fd=queue_fd, store=store,
+            first_learning_base=queue_fd is not None)
 
     first = observe()
     if observe() != first:
@@ -1889,7 +2019,7 @@ def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
         first = _rollback_first_inert_kernel(record,
             WORK / record["detail"]["id"] / "release", config_fd=config_fd,
             first=first, observe=observe)
-    live, staged, kernel = first
+    live, staged, kernel = first[:3]
     target = None
     if staged is not None:
         target = COMMON_ACTIVE.parent / f".{COMMON_ACTIVE.name}.stage.{record['detail']['id']}"
@@ -1920,7 +2050,7 @@ def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
     def exact():
         observed = observe()
         expected_live = None if target == COMMON_ACTIVE else live
-        return observed == (expected_live, None, kernel) and observe() == observed
+        return observed == (expected_live, None, kernel, *first[3:]) and observe() == observed
 
     result = store._advance_bound_ordinary("restored", record, exact)
     if result != {**record, "phase": "restored"} or store.read() != result:
@@ -2144,7 +2274,7 @@ def finish_first_config_recovery_locked(operation: str, witness_sha256: str, *,
         else:
             _finish_first_saved_locked(store, record, config_fd=config_fd, config_digest=candidate)
         return {"result": "original-first-config-committed", "id": operation}
-    if (not learning and record["phase"] == "activated" and
+    if (record["phase"] == "activated" and
             witness_sha256 == _config_observation_witness(detail, plan_sha, base)):
         if "first_running_sha256" in record:
             # A previous interrupted Stop can already be process-free; never
@@ -2153,8 +2283,16 @@ def finish_first_config_recovery_locked(operation: str, witness_sha256: str, *,
             try:
                 _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
             except QuiescentPreimageRefused:
-                _stop_first_running_base_joined_locked(store, record,
-                    config_fd=config_fd, config_digest=base)
+                if learning:
+                    _stop_first_running_base_joined_locked(store, record,
+                        config_fd=config_fd, config_digest=base, queue_fd=queue_fd)
+                else:
+                    _stop_first_running_base_joined_locked(store, record,
+                        config_fd=config_fd, config_digest=base)
+        if learning:
+            _finish_first_pristine_locked(store, record, config_fd=config_fd,
+                config_digest=base, queue_fd=queue_fd)
+            return {"result": "original-bound-cold-restored", "id": operation}
         return finish_bound_cold_restore_locked(operation, base, config_fd=config_fd)
     raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_IMAGE_REFUSED")
 
@@ -2323,7 +2461,7 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
         else:
             restored = "original-managed-config-restored" if recover_save else "original-bound-cold-restored"
             if (receipt != {"result": restored, "id": detail["id"]} or
-                    record["phase"] == "config-saved" or first_learning):
+                    record["phase"] in ("config-saved", "epoch-finalizing")):
                 raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_RECEIPT_REQUIRED")
         result = store.read()
         expected = {**record, "phase": phase}
@@ -2333,7 +2471,7 @@ def native_finish_bound_cold_restore(record: dict) -> dict:
         return result
 
     if first_learning:
-        work, candidate, sources = _learning_release_sources(COMMON_ACTIVE)
+        work, candidate, sources = _learning_release_sources(WORK / detail["id"] / "release")
         if work != WORK / detail["id"] or candidate != detail["candidate"]:
             raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SOURCE_CHANGED")
         _, names = _qualified_learning_sources(sources, PRODUCER_ROOT)

@@ -42,8 +42,20 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile scripts/test-s10-retired-auto-found-native.py
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_fd.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_quiescent_preimage.py
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(id -g)" -gt 0
+          python3.13 -m pip install idna
+          python3.13 scripts/test-auto-detect-post-drop.py
+          python3.13 scripts/test-shared-apply-operation.py
+          python3.13 scripts/test-tz6v5-s10b2b2b3b2b-quiescent-original-preimage.py
+          python3.13 scripts/test-shared-apply-found-files.py
+          if [ ! -x /usr/local/bin/jq ]; then sudo ln -s "$(command -v jq)" /usr/local/bin/jq; fi
+          sh scripts/test-shared-apply-execute.sh
           if GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_S10_RETIRED_AUTO_DISPOSABLE=1 \
               ZAPRET2_NATIVE_PROJECT_SHA=${{ github.sha }} \
               python3.13 scripts/test-s10-retired-auto-found-native.py run > /tmp/s10-retired-offtarget 2>&1; then
