@@ -205,8 +205,49 @@ def native_positive():
         "CONFIG_DOMAINS": observed.findtext("hostlist/youtubedomains") == domains,
     }
     failed_first = [name for name, ok in checks.items() if not ok]
-    need(not failed_first,
-         "S10_AUTO_FIRST_HTTPS_" + "_".join(failed_first[:4]) + "_DRIFT")
+    if failed_first:
+        # The original HTTPS API supplies a bounded *categorical* reason.
+        # No message, request fields, native args, Config, user data or raw
+        # stderr is exposed in the VM log. This classifier does not change
+        # the requirement that ALL physical/Config conditions must pass.
+        reason = result.get("reason")
+        safe = {
+            "native-preflight-root-gate": "NATIVE_ROOT_GATE",
+            "native-preflight-bootstrap": "NATIVE_BOOTSTRAP",
+            "native-preflight-model": "NATIVE_MODEL",
+            "native-preflight-decode": "NATIVE_DECODE",
+            "native-preflight-candidate": "NATIVE_CANDIDATE",
+            "native-preflight-candidate-plan": "NATIVE_CANDIDATE_PLAN",
+            "native-preflight-candidate-validation": "NATIVE_CANDIDATE_VALIDATION",
+            "native-preflight-candidate-xml": "NATIVE_CANDIDATE_XML",
+            "native-preflight-runtime-build": "NATIVE_RUNTIME_BUILD",
+            "native-preflight-render": "NATIVE_RENDER",
+            "native-preflight-seal": "NATIVE_SEAL",
+            "native-preflight-config-preflight": "NATIVE_CONFIG_PREFLIGHT",
+            "strategies-preflight-lifecycle-guard": "GUI_LIFECYCLE_GUARD",
+            "strategies-preflight-model": "GUI_MODEL",
+            "strategies-preflight-source-manifest": "GUI_SOURCE_MANIFEST",
+            "strategies-preflight-normalization": "GUI_NORMALIZATION",
+            "strategies-preflight-candidate-validation": "GUI_CANDIDATE_VALIDATION",
+            "strategies-preflight-candidate-xml": "GUI_CANDIDATE_XML",
+            "strategies-preflight-envelope": "GUI_ENVELOPE",
+        }
+        label = safe.get(reason, "OTHER_OR_NO_REASON") if isinstance(reason, str) else "OTHER_OR_NO_REASON"
+        validation = result.get("validations")
+        keys = {
+            "zapret.strategy.trafficargs": "TRAFFICARGS",
+            "zapret.hostlist.mode": "HOSTLIST_MODE",
+            "zapret.general.enabled": "ENABLED",
+            "zapret.general.waninterface": "WAN",
+        }
+        declared = [keys[key] for key in sorted(validation)
+                    if key in keys] if isinstance(validation, dict) else []
+        if declared:
+            label += "_VALID_" + "_".join(declared[:2])
+        if label == "OTHER_OR_NO_REASON":
+            label += "_REVIEW" if result.get("requires_review") is True else "_NO_REVIEW"
+        need(False, "S10_AUTO_FIRST_HTTPS_REASON_" + label)
+    need(not failed_first, "S10_AUTO_FIRST_HTTPS_INVARIANT_DRIFT")
     old = json.loads(WAL.read_bytes())
     native_status = subprocess.run([str(SERVICE), "status"],
                                    capture_output=True, timeout=35)
