@@ -466,6 +466,27 @@ def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, succes
          snapshot() == original and journal() == previous,
          "G03_BOUND_ORDINARY_STAGE_DRIFT")
     op = staged.split("=", 1)[1]
+    if first_commit and os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1":
+        # Follow the actual shared Apply prerequisite: materialize creates
+        # the protected /var/db/zapret2 parent BEFORE native owned bootstrap.
+        # Initialize before rendering/sealing so candidate evidence includes
+        # the genuine P1 baseline; never fabricate the parent or sources.
+        import stat
+        parent = Path("/var/db/zapret2")
+        info = parent.lstat()
+        need(stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and
+             stat.S_IMODE(info.st_mode) == 0o700,
+             "G03_BOUND_FOUND_ORIGINAL_WORK_PARENT_UNQUALIFIED")
+        print("G03_BOUND_FOUND_BOOTSTRAP=ORIGINAL_STAGE_PARENT_READY", flush=True)
+        boot = call([PHP, NATIVE, "bootstrap-known"], locked=True)
+        seeded = snapshot()
+        need(boot in ("original-known-bootstrap=created", "original-known-bootstrap=existing") and
+             seeded[:2] == original[:2] and seeded[3:] == original[3:] and
+             journal() is None and all(row[0] == "file" for row in seeded[2]) and
+             all(path.read_bytes() == b"" for path in TARGETS),
+             "G03_BOUND_FOUND_ORIGINAL_BOOTSTRAP_REFUSED")
+        original = seeded
+        print("G03_BOUND_FOUND_BOOTSTRAP=PASS_ORIGINAL_P1_EMPTY_BASELINE", flush=True)
     prepared = call([SERVICE, "shared-apply-prepare", op])
     need(not prepared.startswith("preflight-rejected=") and
          snapshot() == original and journal() == previous,
@@ -846,7 +867,7 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
                                 text=True, timeout=30)
         verify_first_bound_commit(record, op, pinned, root, original, saved, status)
         print("G03_S10_FIRST_BOUND=PASS_REAL_CONFIG_ENGINE_IPFW_COMMITTED", flush=True)
-        return
+        return original[2]
     need(re.fullmatch(r"G03_BOUND_NATIVE_PIN=[a-f0-9]{64}", pinned) is not None and
          record.get("phase") == "prepared" and record.get("previous") == prior and
          record.get("manifest", {}).get("root_sha256") ==
@@ -899,22 +920,16 @@ def pristine_cold_native_main(*, first_commit=False):
          os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") != "1" and
          os.environ.get("ZAPRET2_G03_MANAGED_PRE_SAVE") != "1"),
          "G03_BOUND_FOUND_REQUIRES_EXCLUSIVE_FIRST_COMMIT")
-    if bound_found:
-        config_before = image(CONFIG)
-        boot = call([PHP, NATIVE, "bootstrap-known"], locked=True)
-        need(boot in ("original-known-bootstrap=created", "original-known-bootstrap=existing") and
-             image(CONFIG) == config_before and not WAL.exists() and not WAL.is_symlink() and
-             all(image(path)[0] == "file" for path in TARGETS),
-             "G03_BOUND_FOUND_ORIGINAL_BOOTSTRAP_REFUSED")
     original = snapshot()
     engine_sha = hashlib.sha256(engine.read_bytes()).hexdigest()
     release_bytes = release.read_bytes()
-    bound_manifest_main(cold=True, first_commit=first_commit)
+    first_sources = bound_manifest_main(cold=True, first_commit=first_commit)
     final = json.loads(WAL.read_bytes())
     if first_commit:
         need(final.get("phase") == "committed" and
              "previous" not in final and "previous_manifest" not in final and
-             snapshot()[2] == original[2] and
+             snapshot()[2] == first_sources and
+             (bound_found or first_sources == original[2]) and
              hashlib.sha256(engine.read_bytes()).hexdigest() == engine_sha and
              release.read_bytes() == release_bytes,
              "G03_PRISTINE_FIRST_COMMIT_OWNER_DRIFT")
