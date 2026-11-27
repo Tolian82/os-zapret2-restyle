@@ -798,7 +798,8 @@ class OriginalManagedFileCAS(unittest.TestCase):
 
     def test_original_managed_file_cas_and_interrupted_restore(self):
         from auto_detect_destination_commit import (
-            _write_bound_managed_file_locked, _restore_bound_managed_file_locked)
+            _write_bound_managed_file_locked, _restore_bound_managed_file_locked,
+            _target_identity)
 
         with patch("voice_ipfw_adapter.require_lifecycle_lock"):
             for interrupted in (False, True):
@@ -830,6 +831,11 @@ class OriginalManagedFileCAS(unittest.TestCase):
                     self.assertEqual(target.read_bytes(), after)
                     self.assertEqual("installed" in pending["managed"], not interrupted)
                     self.assertIn("barrier", pending["managed"])
+                    if not interrupted:
+                        # Genuine post-WAL full inode proof; reproduces UFS
+                        # deferred ctime drift in the original uncorrected writer.
+                        self.assertEqual(list(_target_identity(target.lstat())),
+                                         pending["managed"]["installed"])
                     token = pending["managed"]["ready"]["temp"][13:-4]
                     self.assertEqual((active.parent / (".s10-managed-barrier-" + token)).exists(), interrupted)
                     self.assertFalse(native_lifecycle_gate("common-recover-activating",

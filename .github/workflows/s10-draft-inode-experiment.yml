@@ -68,7 +68,9 @@ jobs:
             py=/usr/local/bin/python3
             "$py" scripts/s10_inode_barrier_fixture.py -v
             "$py" scripts/test-managed-inode-barrier.py -v
-            "$py" scripts/test-tz6v5-s10b1-original-journal-binding.py -k managed
+            /bin/df -T /usr/local/etc
+            TMPDIR=/usr/local/etc "$py" scripts/test-tz6v5-s10b1-original-journal-binding.py -k managed
+            echo S10_MANAGED_NATIVE_UFS_SOURCE_TESTS=PASS
             "$py" "$probe" --focused --expect-filesystem ufs --expect-wal-filesystem ufs
             # An isolated file-backed pool only; no existing device or pool is touched.
             /sbin/kldstat -q -m zfs || /sbin/kldload zfs
@@ -88,6 +90,8 @@ jobs:
             /sbin/zpool create -o cachefile=none -m "$tmp/mount" "$pool" "$tmp/vdev"
             created=1
             "$py" "$probe" --focused --base "$tmp/mount" --expect-filesystem zfs --expect-wal-filesystem zfs
+            TMPDIR="$tmp/mount" "$py" scripts/test-tz6v5-s10b1-original-journal-binding.py -k managed
+            echo S10_MANAGED_NATIVE_ZFS_SOURCE_TESTS=PASS
             "$py" "$probe" --focused --wal-base "$tmp/mount" --expect-filesystem ufs --expect-wal-filesystem zfs
             "$py" "$probe" --focused --base "$tmp/mount" --wal-base /usr/local/etc --expect-filesystem zfs --expect-wal-filesystem ufs
             /sbin/zpool destroy "$pool"
