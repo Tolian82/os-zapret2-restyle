@@ -237,6 +237,63 @@ def _verify_prior_idle_inode_identity(queue, expected: tuple) -> None:
             raise QuiescentPreimageRefused("BOUND_PRIOR_IDLE_INODE_CHANGED")
 
 
+def _first_learning_candidate_wan(record: dict, *, parent: Path, owner_uid: int,
+                                  config_fd: int | None = None) -> str:
+    """First enabled Auto uses its sealed candidate WAN, not the OFF base.
+
+    The original PHP preflight/FD4 witness attests the logical Config
+    candidate. This only reuses the original physical interface resolver
+    against that exact sealed XML, with no second Config lock or save.
+    """
+    import hashlib
+    from config_projection_opnsense import xml_snapshot
+    from auto_detect_owner import _secure_bytes
+    from shared_apply_seal import verify_seal, FILES, ID
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+
+    if (type(record) is not dict or record.get("phase") not in ("prepared", "activating") or
+            any(key in record for key in ("previous", "previous_manifest", "found")) or
+            record.get("manifest", {}).get("schema") != 2 or
+            not ID.fullmatch(record["detail"]["id"]) or
+            record["detail"]["base"] == record["detail"]["candidate"]):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_WAN_SCOPE_REQUIRED")
+    work = parent / record["detail"]["id"]
+
+    def observe():
+        require_lifecycle_lock()
+        if config_fd is not None:
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        seal = verify_seal(work, owner=owner_uid)
+        raw = _secure_bytes(work / "candidate.xml", FILES["candidate.xml"], owner_uid)
+        if hashlib.sha256(raw).hexdigest() != seal["sha256"]["candidate.xml"]:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_WAN_SOURCE_CHANGED")
+        nodes = xml_snapshot(raw)
+        logical = nodes["general"].get("waninterface", "").strip()
+        if (nodes["general"].get("enabled") != "1" or
+                nodes["hostlist"].get("mode") != "auto" or
+                not logical or not _DEVICE.fullmatch(logical) or len(logical) > 32 or
+                logical in _WAN_STATE_MARKERS):
+            raise QuiescentPreimageRefused("FIRST_LEARNING_WAN_CANDIDATE_REQUIRED")
+        return seal, logical
+
+    first = observe()
+    reply = subprocess.run(("/bin/sh", "-c",
+        '. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/common.sh; '
+        '. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/config.sh; '
+        'config_resolve_interface "$1"', "s10-first-candidate-wan", first[1]),
+        stdin=subprocess.DEVNULL, capture_output=True, timeout=12, check=False,
+        close_fds=True, pass_fds=(),
+        env={"LC_ALL": "C", "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"})
+    if (reply.returncode != 0 or type(reply.stdout) is not bytes or
+            not 0 < len(reply.stdout) <= 65 or not reply.stdout.endswith(b"\n")):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_WAN_RESOLVER_REFUSED")
+    device = reply.stdout[:-1].decode("ascii")
+    if (not _DEVICE.fullmatch(device) or device in _WAN_STATE_MARKERS or
+            observe() != first):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_WAN_SOURCE_CHANGED")
+    return device
+
+
 def _attest_quiescent(*, generation: str, native: NativeParity,
                       effective: EffectiveSnapshot, enabled: bool,
                       parent: Path, journal_root: Path, owner_uid: int,
@@ -273,7 +330,8 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                     raise QuiescentPreimageRefused("QUIESCENT_OLD_WORK_RESIDUE")
                 config = _qualified_config(
                     _native_preflight(generation, detail["page"]), detail, enabled)
-                wan = _native_wan() if enabled else None
+                wan = (_first_learning_candidate_wan(before, parent=parent, owner_uid=owner_uid)
+                       if schema3 else _native_wan() if enabled else None)
                 old_hash = None
                 old_state, retirement = "first-install-empty", "no-prior-data"
             else:
@@ -1494,7 +1552,8 @@ def native_guard_first_enabled_shell_locked(operation: str, candidate: str,
         _first_enabled_checkpoint("D29")
         if (result[0] is not None or result[1] is not None or
                 result[2] not in ("native-kernel-absent", "native-managed-kernel-empty") or
-                _native_wan_locked(config_fd) != wan):
+                (_first_learning_candidate_wan(record, parent=WORK, owner_uid=0,
+                    config_fd=config_fd) if learning else _native_wan_locked(config_fd)) != wan):
             raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_PREIMAGE_CHANGED")
         _first_enabled_checkpoint("D30")
         return result
@@ -1548,7 +1607,8 @@ def native_install_first_enabled_bound_locked(record: dict, *, preimage: Quiesce
         _first_enabled_checkpoint("D08")
         if (root["service"]["enabled"] is not True or
                 root["service"]["target_mode"] not in (("auto",) if learning else ("all", "list")) or
-                _native_wan_locked(config_fd) != wan):
+                (_first_learning_candidate_wan(record, parent=WORK, owner_uid=0,
+                    config_fd=config_fd) if learning else _native_wan_locked(config_fd)) != wan):
             raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_MODE_CHANGED")
         _first_enabled_checkpoint("D09")
         layout = _first_inert_recovery_layout(record, config_fd=config_fd,
