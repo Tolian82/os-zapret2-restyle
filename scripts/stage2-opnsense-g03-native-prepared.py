@@ -566,17 +566,38 @@ def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, succes
              "G03_BOUND_FOUND_ORIGINAL_BOOTSTRAP_REFUSED")
         original = seeded
         print("G03_BOUND_FOUND_BOOTSTRAP=PASS_ORIGINAL_P1_EMPTY_BASELINE", flush=True)
-        # A bounded TEST-ONLY idle observation: previous native run saw ctime
-        # drift on all three just-created P1 inodes. Distinguish drift without
-        # running the builder from drift during the builder. Never refresh
-        # the qualified baseline, ignore ctime, fsync/rewrite, or touch traffic.
-        time.sleep(2)
-        idle = snapshot()
-        if idle != original or journal() is not None:
-            print("G03_P1_IDLE_METADATA=DRIFT_BEFORE_BUILD", flush=True)
-            verify_prepared_build("", op, original, idle, None, journal())
-            raise RuntimeError("G03_P1_IDLE_METADATA_UNQUALIFIED")
-        print("G03_P1_IDLE_METADATA=STABLE_BEFORE_BUILD", flush=True)
+        # The first native bootstrap just created three P1 inodes. FreeBSD
+        # can expose their final ctime after the bootstrap subprocess returns.
+        # Establish the FIRST immutable test preimage only when the three
+        # exact created files have become quiescent. Never ignore ctime in
+        # later Build/FD9/Config/P2 or WAL CAS comparisons.
+        prev = original
+        stable = 0
+        ctime_settled = False
+        for _ in range(12):
+            time.sleep(0.75)
+            now = snapshot()
+            need(journal() is None and
+                 now[:2] == prev[:2] and now[3:] == prev[3:] and
+                 len(now[2]) == len(prev[2]) == 3,
+                 "G03_P1_BOOTSTRAP_IDLE_OWNER_OR_WAL_DRIFT")
+            for prior_row, current_row in zip(prev[2], now[2]):
+                need(len(prior_row) == len(current_row) == 10 and
+                     prior_row[0] == current_row[0] == "file" and
+                     prior_row[:8] == current_row[:8] and
+                     prior_row[9:] == current_row[9:] and
+                     current_row[8] >= prior_row[8],
+                     "G03_P1_BOOTSTRAP_IDLE_NON_CTIME_SOURCE_DRIFT")
+            stable = stable + 1 if now == prev else 0
+            prev = now
+            if stable >= 2:
+                ctime_settled = True
+                break
+        need(ctime_settled, "G03_P1_BOOTSTRAP_CTIME_QUIESCENCE_TIMEOUT")
+        # All further comparisons use this fully qualified exact native P1
+        # preimage, never the transient syscall-return bootstrap stat.
+        original = prev
+        print("G03_P1_BOOTSTRAP=PASS_STABLE_NATIVE_CTIME_AND_FULL_CAS", flush=True)
     prepared = call([SERVICE, "shared-apply-prepare", op])
     verify_prepared_build(prepared, op, original, snapshot(), previous, journal())
     # The test uses the actual native rendered template / original loader
