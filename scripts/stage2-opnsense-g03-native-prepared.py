@@ -118,6 +118,63 @@ def snapshot():
                                      capture_output=True, timeout=10),
                   ]))
 
+
+def verify_prepared_build(receipt, op, before, after, old_wal, new_wal):
+    """Test-only diagnostics: separate producer refusal from live drift.
+
+    Never print Config/list content, command stderr or arbitrary stage text.
+    The installed producer and its existing stage-status file stay unchanged.
+    """
+    refusals = [line for line in receipt.splitlines()
+                if re.fullmatch(r"preflight-rejected=[a-z-]{1,40}", line)]
+    drift = [name for name, old, new in zip(
+        ("config", "pid", "sources", "ipfw"), before, after) if old != new]
+    if old_wal != new_wal:
+        drift.append("wal")
+    if not refusals and not receipt.startswith("preflight-rejected=") and not drift:
+        return
+    allowed = {"render", "runtime-build", "seal"}
+    reason = (refusals[-1].split("=", 1)[1] if len(refusals) == 1 else "unknown")
+    reason = reason if reason in allowed else "unknown"
+    print("G03_BUILD_DIAGNOSTIC=receipt:" + reason +
+          ";drift:" + (",".join(drift) or "none"), flush=True)
+    if "sources" in drift:
+        for name, old, new in zip(("youtube", "user", "auto"), before[2], after[2]):
+            if old == new:
+                continue
+            fields = ("kind", "device", "inode", "uid", "links", "mode",
+                      "size", "mtime", "ctime", "bytes")
+            changed = ([field for field, x, y in zip(fields, old, new) if x != y]
+                       if len(old) == len(new) == len(fields) else ["shape"])
+            print("G03_BUILD_SOURCE_DRIFT=" + name + ":" + ",".join(changed),
+                  flush=True)
+    try:
+        stage = Path("/var/run/zapret2-execution.status")
+        if stage.is_file() and not stage.is_symlink() and stage.stat().st_size <= 4096:
+            fields = stage.read_text(encoding="utf-8").strip().split("|", 5)
+            if len(fields) == 6:
+                index, total, name, state, _, message = fields
+                if (index in tuple(str(n) for n in range(1, 9)) and total == "8" and
+                        re.fullmatch(r"[a-z][a-z-]{0,30}", name) and
+                        state in ("running", "ok", "failed", "stopped")):
+                    # Only fixed machine-readable codes, never free-form text.
+                    code = (message if re.fullmatch(r"[A-Z][A-Z0-9_]{1,63}", message)
+                            else "redacted")
+                    print(f"G03_BUILD_STAGE={index}/{total}:{name}:{state}:{code}",
+                          flush=True)
+    except (OSError, UnicodeError):
+        print("G03_BUILD_STAGE=unavailable", flush=True)
+    work = Path("/var/db/zapret2/shared-work") / op
+    for name, path in (("template", work / "templates/usr/local/etc/zapret2/zapret.conf"),
+                       ("release", work / "release"),
+                       ("seal", work / "bundle-seal.json")):
+        print(f"G03_BUILD_ARTIFACT={name}:"
+              + ("present" if path.exists() and not path.is_symlink() else "absent"),
+              flush=True)
+    raise RuntimeError("G03_ORIGINAL_SEAL_BUILD_DIAGNOSED_REFUSAL")
+
+
+
 def main(*, bound_found=False):
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_G03_COLD_PREPARED") == "1" and
@@ -152,9 +209,8 @@ def main(*, bound_found=False):
          "G03_COLD_STAGE_CHANGED_ORIGINAL_OWNER")
     op = staged.split("=",1)[1]
     prepared = call([SERVICE, "shared-apply-prepare", op])
-    need(not prepared.startswith("preflight-rejected=") and
-         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
-         "G03_COLD_BUILD_TOUCHED_OR_REFUSED_OWNER")
+    verify_prepared_build(prepared, op, original, snapshot(),
+                          previous, json.loads(WAL.read_bytes()))
     call([PHP, NATIVE, "durable", op], locked=True)
     pending = json.loads(WAL.read_bytes())
     need(pending.get("phase") == "prepared" and
@@ -488,9 +544,7 @@ def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, succes
         original = seeded
         print("G03_BOUND_FOUND_BOOTSTRAP=PASS_ORIGINAL_P1_EMPTY_BASELINE", flush=True)
     prepared = call([SERVICE, "shared-apply-prepare", op])
-    need(not prepared.startswith("preflight-rejected=") and
-         snapshot() == original and journal() == previous,
-         "G03_BOUND_ORIGINAL_SEAL_BUILD_REFUSED")
+    verify_prepared_build(prepared, op, original, snapshot(), previous, journal())
     # The test uses the actual native rendered template / original loader
     # and exact NUL wire under the existing original FreeBSD FD9. The
     # installed backend, PHP Config, setup marker, Git/ELF, root and WAL
