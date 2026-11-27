@@ -852,6 +852,21 @@ class OriginalManagedFileCAS(unittest.TestCase):
                         import auto_detect_destination_commit as writer
                         real_target = writer._target
                         snapshots = []
+                        phase_snapshots = []
+                        original_checkpoint = store._checkpoint_managed_write
+
+                        def traced_checkpoint(*arguments, **options):
+                            restore_write = (len(arguments) >= 2 and
+                                             isinstance(arguments[1], dict) and
+                                             "restore" in arguments[1])
+                            if restore_write:
+                                phase_snapshots.append(("before-restore-WAL",
+                                                        _target_identity(target.lstat())))
+                            result = original_checkpoint(*arguments, **options)
+                            if restore_write:
+                                phase_snapshots.append(("after-restore-WAL",
+                                                        _target_identity(target.lstat())))
+                            return result
 
                         def traced_target(item, owner, **kwargs):
                             data, info = real_target(item, owner, **kwargs)
@@ -864,7 +879,9 @@ class OriginalManagedFileCAS(unittest.TestCase):
 
                         try:
                             with patch("auto_detect_destination_commit._target",
-                                       side_effect=traced_target), patch(
+                                       side_effect=traced_target), patch.object(
+                                    store, "_checkpoint_managed_write",
+                                    side_effect=traced_checkpoint), patch(
                                     "os.replace", side_effect=replace_file):
                                 with self.assertRaisesRegex(OSError, "interrupted after file rename"):
                                     _restore_bound_managed_file_locked(store, pending, **kw)
@@ -874,8 +891,16 @@ class OriginalManagedFileCAS(unittest.TestCase):
                                          "mode", "uid", "gid", "links")
                                 drift = [name for idx, name in enumerate(names)
                                          if snapshots[0][idx] != snapshots[-1][idx]]
+                                baseline = snapshots[0]
+                                timeline = [
+                                    {"point": label, "fields": [
+                                        name for idx, name in enumerate(names)
+                                        if baseline[idx] != value[idx]]}
+                                    for label, value in phase_snapshots
+                                ]
                                 print("S10_NATIVE_RESTORE_CAS_DRIFT=" + json.dumps({
-                                    "fields": drift, "reads": len(snapshots)},
+                                    "fields": drift, "reads": len(snapshots),
+                                    "timeline": timeline},
                                     sort_keys=True), flush=True)
                             raise
                         pending = store.read()
