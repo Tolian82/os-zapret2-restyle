@@ -1967,7 +1967,7 @@ def native_begin_quiescent_bound_promotion_fd9(
 def native_run_first_enabled_apply_fd9(operation: str, raw_pipe: bytes, *,
                                        source: SourceGateReceipt,
                                        semantic: OriginalSemanticReceipt) -> dict:
-    """Private first All/List Start with the original FD9/PHP Config owner."""
+    """Private first enabled Start with the original FD9/P2a/PHP Config owner."""
     from dataclasses import asdict
     from neutral_schema3_quiescent_preimage import (
         QuiescentPreimage, _run_bound_restore_joined)
@@ -1980,11 +1980,12 @@ def native_run_first_enabled_apply_fd9(operation: str, raw_pipe: bytes, *,
     if (type(before) is not dict or before.get("phase") != "prepared" or
             before["detail"]["id"] != operation or "previous" in before or
             "previous_manifest" in before or "found" in before or
-            before.get("manifest", {}).get("schema") != 1 or
+            before.get("manifest", {}).get("schema") not in (1, 2) or
             before["detail"]["base"] == before["detail"]["candidate"] or
             not before["detail"]["changed_fields"] or
             type(source) is not SourceGateReceipt or source.generation != operation or
-            source.mode not in ("all", "list") or source.requested_enabled is not True or
+            source.mode not in ("all", "list", "auto") or source.requested_enabled is not True or
+            before["manifest"]["schema"] != (2 if source.mode == "auto" else 1) or
             source.original_seal_sha256 != before["manifest"]["seal_sha256"] or
             type(semantic) is not OriginalSemanticReceipt or
             type(semantic.previous_physical) is not QuiescentPreimage or
@@ -2007,22 +2008,60 @@ def native_run_first_enabled_apply_fd9(operation: str, raw_pipe: bytes, *,
         raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_WIRE_TOO_LARGE")
     command = ["/usr/local/bin/php", str(Path(__file__).parent.parent / "shared_apply_config.php"),
                "first-enabled-apply", operation, before["detail"]["page"]]
-    reply = _run_bound_restore_joined(command, pass_fds=(9,), budget=120,
-                                      capture_output=True, input_data=wire)
+    learning = before["manifest"]["schema"] == 2
+    if learning:
+        from auto_detect_post_drop import (_learning_release_sources, _qualified_learning_sources,
+            native_prepare_learning_producer, _original_epoch_queue, _capture,
+            _learning_pretraffic_owner)
+        from auto_detect_storage import ROOT, ENGINE_USER
+        from neutral_schema3_quiescent_preimage import _safe_empty_directory, EPOCH_ROOT
+        import pwd
+        from shared_apply_seal import WORK
+        from neutral_root_stage import verify_original_operation_pins
+        work = WORK / operation
+        release = work / "release"
+        workspace, candidate, sources = _learning_release_sources(release)
+        if (workspace != work or candidate != before["detail"]["candidate"] or
+                store.read() != activating):
+            raise OriginalSourceGateRefused("S10_FIRST_LEARNING_SOURCE_CHANGED")
+        verify_original_operation_pins(record=activating, parent=WORK, owner_uid=0)
+        _safe_empty_directory(ROOT, 0)
+        _safe_empty_directory(EPOCH_ROOT, 0)
+        # Durable ACTIVATING precedes producer creation; no Config lock yet.
+        native_prepare_learning_producer(release)
+        _, names = _qualified_learning_sources(sources, ROOT)
+        queue, _ = _original_epoch_queue(names)
+        identity = pwd.getpwnam(ENGINE_USER)
+        # The first lock may need creation. Keep the one real OFD held
+        # continuously across the joined PHP/physical/confirmation children.
+        with queue.exclusive():
+            fd = queue.locked_fd
+            if (_learning_pretraffic_owner(work, candidate, fd) != activating or
+                    _learning_release_sources(release) != (workspace, candidate, sources)):
+                raise OriginalSourceGateRefused("S10_FIRST_LEARNING_QUEUE_OWNER_CHANGED")
+            _capture(ROOT, root_uid=0, root_gid=0, engine_uid=identity.pw_uid,
+                     engine_gid=identity.pw_gid, learning_names=names, queue_fd=fd)
+            _safe_empty_directory(EPOCH_ROOT, 0)
+            reply = _run_bound_restore_joined(command + [f"--queue-fd={fd}"],
+                pass_fds=(9, fd), budget=120, capture_output=True, input_data=wire)
+    else:
+        reply = _run_bound_restore_joined(command, pass_fds=(9,), budget=120,
+                                          capture_output=True, input_data=wire)
     receipt = {"result": "saved", "saved": True, "applied": False,
                "snapshot": before["detail"]["candidate"],
                "change_count": len(before["detail"]["changed_fields"])}
     require_lifecycle_lock()
     committed = {**activating, "phase": "committed"}
     saved = store.read()
+    pins = {"first_running_sha256", "first_pretraffic_sha256"} if learning else {"first_running_sha256"}
     if (reply.returncode != 0 or type(reply.stdout) is not bytes or
             not 0 < len(reply.stdout) <= 4096 or reply.stdout.count(b"\n") != 1 or
             not reply.stdout.endswith(b"\n") or
             _managed_handoff_json(json.loads(reply.stdout)) != _managed_handoff_json(receipt) or
             type(saved) is not dict or
-            {k: v for k, v in saved.items() if k != "first_running_sha256"} != committed or
-            type(saved.get("first_running_sha256")) is not str or
-            not DIGEST.fullmatch(saved["first_running_sha256"])):
+            {k: v for k, v in saved.items() if k not in pins} != committed or
+            any(type(saved.get(pin)) is not str or not DIGEST.fullmatch(saved[pin])
+                for pin in pins)):
         raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN")
     return saved
 
@@ -2149,17 +2188,20 @@ def native_coordinate_original_prepared_fd9(operation: str, raw_pipe: bytes) -> 
     if (type(semantic.previous_physical) is QuiescentPreimage and
             semantic.previous_physical.old_state == "first-install-empty" and
             semantic.lifecycle_proposal == "START" and source.requested_enabled is True and
-            inputs["mode"] in (b"all", b"list") and bound["manifest"]["schema"] == 1 and
+            inputs["mode"] in (b"all", b"list", b"auto") and
+            bound["manifest"]["schema"] == (2 if inputs["mode"] == b"auto" else 1) and
             "previous" not in bound and "previous_manifest" not in bound and
             bound["detail"]["base"] != bound["detail"]["candidate"] and
             bound["detail"]["changed_fields"]):
         result = native_run_first_enabled_apply_fd9(operation, raw_pipe,
                                                     source=source, semantic=semantic)
         expected = {**bound, "phase": "committed"}
+        pins = ({"first_running_sha256", "first_pretraffic_sha256"}
+                if inputs["mode"] == b"auto" else {"first_running_sha256"})
         if (type(result) is not dict or
-                {k: v for k, v in result.items() if k != "first_running_sha256"} != expected or
-                type(result.get("first_running_sha256")) is not str or
-                not re.fullmatch(r"[a-f0-9]{64}", result["first_running_sha256"]) or
+                {k: v for k, v in result.items() if k not in pins} != expected or
+                any(type(result.get(pin)) is not str or
+                    not re.fullmatch(r"[a-f0-9]{64}", result[pin]) for pin in pins) or
                 store.read() != result):
             raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN")
         return "first-enabled-committed", result, source, semantic
