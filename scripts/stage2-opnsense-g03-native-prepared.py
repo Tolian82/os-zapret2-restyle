@@ -557,13 +557,13 @@ try:
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     prior = store.read()
-    if mode not in ("running", "stopped", "cold", "first-commit", "successor", "successor-uncertain"):
+    if mode not in ("running", "stopped", "cold", "first-commit", "successor", "successor-uncertain", "successor-pre-save"):
         raise RuntimeError("mode")
     if mode in ("cold", "first-commit"):
         if prior is not None:
             raise RuntimeError("G03_PRISTINE_COLD_WAL_ALREADY_PRESENT")
         old_owner = None
-    elif mode in ("successor", "successor-uncertain"):
+    elif mode in ("successor", "successor-uncertain", "successor-pre-save"):
         if (not isinstance(prior, dict) or prior["phase"] != "committed" or
                 prior.get("manifest", {}).get("schema") != 1 or
                 "previous" in prior or "previous_manifest" in prior or "found" in prior or
@@ -586,7 +586,7 @@ try:
         raise RuntimeError("candidate")
     detail = {"id": op, "page": "strategies", "base": native["base"],
               "candidate": native["candidate"], "changed_fields": native["fields"]}
-    if mode in ("successor", "successor-uncertain"):
+    if mode in ("successor", "successor-uncertain", "successor-pre-save"):
         if (detail["base"] != old_owner["candidate"] or detail["base"] == detail["candidate"] or
                 detail["changed_fields"] != ["hostlist.youtubedomains"] or store.read() != prior):
             raise RuntimeError("G03_BOUND_SUCCESSOR_PLAN_CHANGED")
@@ -603,16 +603,18 @@ try:
             raise RuntimeError("G03_BOUND_SUCCESSOR_NOT_SINGLE_FILE_DELTA")
     store.advance("prepared", detail)
     raw = sys.stdin.buffer.read(MAX_PIPE + 1)
-    if mode in ("successor", "successor-uncertain"):
-        if mode == "successor-uncertain":
-            import tempfile
+    if mode in ("successor", "successor-uncertain", "successor-pre-save"):
+        fault = mode in ("successor-uncertain", "successor-pre-save")
+        pre_save = mode == "successor-pre-save"
+        if fault:
             from runpy import run_path
             from auto_detect_destination_commit import _attest_bound_managed_installed_locked
             from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
-            with tempfile.TemporaryDirectory(prefix="g03-s10-managed-save-", dir="/root") as scratch:
+            with tempfile.TemporaryDirectory(prefix="g03-s10-managed-fault-", dir="/root") as scratch:
                 private = run_path("/root/g03-native-prepared.py")[
                     "build_managed_uncertain_worker"](
-                    Path(scratch), Path("/usr/local/opnsense/scripts/OPNsense/Zapret"))
+                    Path(scratch), Path("/usr/local/opnsense/scripts/OPNsense/Zapret"),
+                    window="pre-save" if pre_save else "post-save")
                 try:
                     coordinate_managed_diagnosed(
                         op, raw, store, detail, native_coordinate_original_prepared_fd9,
@@ -621,25 +623,27 @@ try:
                     if str(exc) != "S10_MANAGED_HANDOFF_OUTCOME_UNCERTAIN":
                         raise
                 else:
-                    raise RuntimeError("G03_MANAGED_UNCERTAIN_MUST_REFUSE_ORIGINAL_REPLY")
+                    raise RuntimeError("G03_MANAGED_FAULT_MUST_REFUSE_ORIGINAL_REPLY")
             crashed = store.read()
             managed = crashed.get("managed", {}) if type(crashed) is dict else {}
-            if (type(crashed) is not dict or crashed.get("phase") != "managed-config-saving" or
+            expected_phase = "managed-writing" if pre_save else "managed-config-saving"
+            if (type(crashed) is not dict or crashed.get("phase") != expected_phase or
                     crashed.get("detail") != detail or crashed.get("previous") != old_owner or
                     crashed.get("previous_manifest") != prior["manifest"] or
                     not {"ready", "barrier", "installed", "running_sha256"} <= managed.keys() or
                     "restore" in managed):
-                raise RuntimeError("G03_MANAGED_UNCERTAIN_REAL_WAL_CHECKPOINT_MISSING")
+                raise RuntimeError("G03_MANAGED_FAULT_REAL_WAL_CHECKPOINT_MISSING")
             _attest_bound_managed_installed_locked(store, crashed, parent=WORK,
                                                   active=COMMON_ACTIVE)
             if (_running_native(new_release, owner_uid=0, child_pidfile=CHILD_PID,
                                 monitor_pidfile=MONITOR_PID) != running):
-                raise RuntimeError("G03_MANAGED_UNCERTAIN_ENGINE_CHANGED_BEFORE_RECOVERY")
-            committed = native_finish_bound_cold_restore(crashed)
-            expected = {**crashed, "phase": "committed"}
+                raise RuntimeError("G03_MANAGED_FAULT_ENGINE_CHANGED_BEFORE_RECOVERY")
+            result = native_finish_bound_cold_restore(crashed)
+            expected = {**crashed, "phase": "restored" if pre_save else "committed"}
             expected.pop("managed")
-            if committed != expected or store.read() != expected:
-                raise RuntimeError("G03_MANAGED_UNCERTAIN_ORIGINAL_CONFIG_RECOVERY_UNPROVEN")
+            if result != expected or store.read() != expected:
+                raise RuntimeError("G03_MANAGED_FAULT_ORIGINAL_CONFIG_RECOVERY_UNPROVEN")
+            committed = result
         else:
             route, committed, source, semantic = coordinate_managed_diagnosed(
                 op, raw, store, detail, native_coordinate_original_prepared_fd9)
@@ -658,13 +662,14 @@ try:
                     semantic.candidate_root_sha256 != committed["manifest"]["root_sha256"]):
                 raise RuntimeError("G03_BOUND_SUCCESSOR_COORDINATOR_OUTCOME_UNPROVEN")
         verify_original_operation_pins(record=committed, parent=WORK, owner_uid=0)
-        if (_full_prior_tree(WORK / op, COMMON_ACTIVE, 0) != new_tree or
+        if (_full_prior_tree(WORK / op, COMMON_ACTIVE, 0) != (old_tree if pre_save else new_tree) or
                 verify_seal(old_work, owner=0)["sha256"]["release"] != old_tree or
                 _running_native(new_release, owner_uid=0, child_pidfile=CHILD_PID,
                                 monitor_pidfile=MONITOR_PID) != running or
                 store.read() != committed):
             raise RuntimeError("G03_BOUND_SUCCESSOR_PHYSICAL_OWNER_CHANGED")
-        print("G03_BOUND_SUCCESSOR_COMMIT=" + committed["manifest"]["root_sha256"])
+        print(("G03_BOUND_SUCCESSOR_RESTORED=" if pre_save else
+               "G03_BOUND_SUCCESSOR_COMMIT=") + committed["manifest"]["root_sha256"])
         raise SystemExit(0)
     if mode == "first-commit":
         # Test-only observer of the same joined PHP call; never replace its
