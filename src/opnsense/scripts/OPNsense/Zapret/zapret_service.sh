@@ -2101,6 +2101,15 @@ shared_apply_recover_found_service()
             printf 'apply-restored=%s\n' "$_shared_apply_id"
             return 0
             ;;
+        committed)
+            # The original bound locked finisher has already checked the
+            # exact Config/P1/root/physical evidence. Never invoke legacy.
+            printf '%s\n' "$_found_recovery" | /usr/local/bin/jq -e \
+                'select(.mode=="0")' >/dev/null || return 70
+            [ "$(shared_apply_inspect_service)" = "committed $1 strategies" ] || return 70
+            printf 'applied-id=%s\n' "$1"
+            return 0
+            ;;
         found-config-saved) ;;
         *) return 70 ;;
     esac
@@ -2333,15 +2342,10 @@ shared_apply_run_service()
         if [ -n "$_found_pending" ]; then
             # Resolve the interrupted operation first. This click must not
             # dispatch a second candidate after an uncertain earlier Apply.
-            if ! shared_apply_recover_found_service "$_found_pending" >/dev/null 2>&1; then
-                # No old runtime path can upgrade a bound journal. Only the
-                # already proved original stopped finisher can accept its
-                # exact native Config/P1/atomic after-image.
-                _bound_recovered=$(shared_apply_native_config found-bound-finish \
-                    "$_found_pending" strategies) || return 70
-                printf '%s\n' "$_bound_recovered" | /usr/local/bin/jq -e \
-                    'select(.result=="committed" and .mode=="0")' >/dev/null || return 70
-            fi
+            # One original FD9 recovery dispatcher chooses the branch under
+            # native Config lock and inherited P2a when required. Failure
+            # is not permission to invoke another physical route.
+            shared_apply_recover_found_service "$_found_pending" >/dev/null || return 70
             printf 'apply-recovered=%s\n' "$_found_pending"
             return 0
         fi

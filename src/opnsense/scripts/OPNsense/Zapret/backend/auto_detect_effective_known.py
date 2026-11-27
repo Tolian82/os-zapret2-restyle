@@ -1347,6 +1347,36 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
         return {"result": record["phase"]}
 
 
+def recover_native_bound_found_locked(operation: str, digest: str, *,
+                                       config_fd: int, queue_fd: int | None = None) -> dict:
+    """One original locked Config image chooses forward or rollback.
+
+    A saved/partially installed bound successor never reaches the legacy
+    actuator. There is no fallback on a failed physical proof.
+    """
+    from auto_detect_destination_commit import _native_found_wal_context
+    from shared_apply_operation import FOUND_ROLLBACK_FROM, FOUND_RESTORING
+    store, record, _, _, _, attest = _native_found_wal_context(operation, config_fd)
+    detail, phase = record["detail"], record["phase"]
+    retired = record.get("previous_manifest", {}).get("schema") == 2
+    if (record.get("manifest", {}).get("schema") != 1 or
+            record.get("previous_manifest", {}).get("schema") not in (1, 2) or
+            record["found"].get("runtime_mode") != "0" or
+            retired != (queue_fd is not None) or
+            not attest() or store.read() != record):
+        raise EffectiveKnownRefused("bound_found_recovery_scope_refused")
+    if (phase in ("found-config-saving", "found-config-saved") and
+            digest == detail["candidate"] and
+            (phase == "found-config-saved" or detail["base"] != digest)):
+        return finish_native_bound_stopped_found_locked(
+            operation, digest, config_fd=config_fd, queue_fd=queue_fd)
+    if (phase in FOUND_ROLLBACK_FROM | {FOUND_RESTORING} and
+            digest == detail["base"]):
+        return advance_native_found_locked("recover-found-locked", operation,
+            digest, config_fd=config_fd, queue_fd=queue_fd)
+    raise EffectiveKnownRefused("bound_found_recovery_image_refused")
+
+
 def native_bound_retired_found_save_original_fd9(operation: str) -> int:
     """Original FD9 borrowed P2a -> original PHP Config -> P1/Config.
 
@@ -1540,9 +1570,18 @@ def native_found_recover_original_fd9(operation: str) -> int:
     if (type(record) is not dict or "found" not in record or
             record["detail"]["id"] != operation or record["detail"]["page"] != "strategies"):
         raise EffectiveKnownRefused("native_found_recovery_owner_required")
+    bound = record.get("manifest", {}).get("schema") == 1 and (
+        record.get("previous_manifest", {}).get("schema") in (1, 2))
+    # PREPARED uses the existing pristine verifier only for the inert
+    # predecessor. Retired PREPARED needs a separate qualified no-write proof;
+    # never use the old recovery observer as a substitute for its epoch proof.
+    retired = record.get("previous_manifest", {}).get("schema") == 2
+    if retired and (not bound or record["phase"] == "prepared"):
+        raise EffectiveKnownRefused("bound_retired_found_prepared_recovery_refused")
     command = ["/usr/local/bin/php",
                "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php",
-               "found-recover", operation, "strategies"]
+               "found-bound-recover" if bound and record["phase"] != "prepared" else "found-recover",
+               operation, "strategies"]
 
     def invoke(fd=None):
         require_lifecycle_lock()
@@ -1554,8 +1593,9 @@ def native_found_recover_original_fd9(operation: str) -> int:
                                 check=False, close_fds=True)
         return result.returncode if result.returncode in (0, 64, 69, 70) else 70
 
-    if ("manifest" in record and record.get("previous_manifest", {}).get("schema") == 2 and
-            record["phase"] in FOUND_ROLLBACK_FROM | {FOUND_RESTORING}):
+    if retired:
+        if record["phase"] not in FOUND_ROLLBACK_FROM | {FOUND_RESTORING, "found-config-saved"}:
+            raise EffectiveKnownRefused("bound_retired_found_recovery_phase_refused")
         gid = pwd.getpwnam(ENGINE_USER).pw_gid
         if gid <= 0:
             raise EffectiveKnownRefused("native_found_recovery_queue_gid_unqualified")
@@ -1818,6 +1858,17 @@ def main(argv: list[str] | None = None) -> int:
             print("ERROR: original found-data save scope refused", file=sys.stderr)
             return 69
     finish_queue = (len(argv) == 4 and argv[3] == "--inherited-queue")
+    if argv and argv[0] == "recover-bound-found-locked" and (
+            len(argv) == 3 or (len(argv) == 4 and argv[3] == "--inherited-queue")):
+        try:
+            reply = recover_native_bound_found_locked(
+                argv[1], argv[2], config_fd=4,
+                queue_fd=3 if len(argv) == 4 else None)
+            print(json.dumps(reply, separators=(",", ":")))
+            return 0
+        except (ValueError, RuntimeError, OSError, UnicodeError, KeyError, TypeError):
+            print("ERROR: original bound Found recovery refused", file=sys.stderr)
+            return 69
     if argv and argv[0] == "finish-bound-found-locked" and (
             len(argv) == 3 or finish_queue):
         try:

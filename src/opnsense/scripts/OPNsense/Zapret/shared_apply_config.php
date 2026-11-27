@@ -467,7 +467,7 @@ final class SharedApplyConfigWorker
         $begin = $mode === 'begin-found-save-locked' || $boundBegin;
         $managedWrite = in_array($mode, ['write-managed-handoff-locked',
             'write-first-disabled-handoff-locked', 'write-first-enabled-handoff-locked'], true);
-        $joined = in_array($mode, ['finish-bound-found-locked', 'finish-ordinary-restore-locked', 'recover-managed-config-locked',
+        $joined = in_array($mode, ['recover-bound-found-locked', 'finish-bound-found-locked', 'finish-ordinary-restore-locked', 'recover-managed-config-locked',
             'begin-managed-config-save-locked', 'confirm-managed-config-save-locked',
             'write-managed-handoff-locked', 'write-first-disabled-handoff-locked',
             'write-first-enabled-handoff-locked', 'recover-first-config-locked'], true);
@@ -479,7 +479,7 @@ final class SharedApplyConfigWorker
                     : ($runtimeMode !== null || $whileP2Held !== null || $baseDigest !== null)) ||
             ($queueStream !== null && (!is_resource($queueStream) ||
                 !in_array($mode, ['begin-bound-found-save-locked',
-                    'finish-bound-found-locked', 'recover-found-locked',
+                    'finish-bound-found-locked', 'recover-bound-found-locked', 'recover-found-locked',
                     'confirm-found-save-locked',
                     'finish-ordinary-restore-locked', 'recover-managed-config-locked',
                     'recover-first-config-locked', 'write-first-enabled-handoff-locked'], true)))) {
@@ -717,7 +717,8 @@ final class SharedApplyConfigWorker
             $digest = VoiceSettingsSnapshot::digest($factory()->getNodes());
             return self::originalLockedFileEvidence(
                 $config, $id, $action === 'found-recover' ? 'recover-found-locked' :
-                    ($action === 'found-bound-finish' ? 'finish-bound-found-locked' : $action),
+                    ($action === 'found-bound-finish' ? 'finish-bound-found-locked' :
+                        ($action === 'found-bound-recover' ? 'recover-bound-found-locked' : $action)),
                 $digest, null, null, $queueStream
             );
         } finally {
@@ -947,7 +948,7 @@ final class SharedApplyConfigWorker
             }
         }
         $action = $argv[1] ?? '';
-        $foundActions = ['found-cold', 'found-recover-prepared', 'found-save', 'found-bound-save', 'found-bound-finish', 'found-recover',
+        $foundActions = ['found-cold', 'found-recover-prepared', 'found-save', 'found-bound-save', 'found-bound-finish', 'found-bound-recover', 'found-recover',
             'found-runtime-activating', 'found-runtime-activated', 'found-runtime-config-saved',
             'found-runtime-epoch-finalizing', 'found-runtime-committed'];
         $found = in_array($action, $foundActions, true);
@@ -955,7 +956,7 @@ final class SharedApplyConfigWorker
         $queueSave = ($action === 'found-bound-save' && count($argv) === 6 &&
             preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D',
                 (string)$argv[5], $matches) === 1);
-        $queueOther = (in_array($action, ['found-recover', 'found-bound-finish',
+        $queueOther = (in_array($action, ['found-recover', 'found-bound-finish', 'found-bound-recover',
                 'ordinary-restore-finish', 'managed-save-recover',
                 'ordinary-first-recover', 'first-enabled-apply'], true) &&
             count($argv) === 5 &&
@@ -1192,7 +1193,7 @@ final class SharedApplyConfigWorker
                 self::managedPhpRefusalTrace($error);
             }
             if (in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply',
-                    'first-disabled-apply', 'first-enabled-apply', 'ordinary-first-recover', 'found-bound-finish'], true)) {
+                    'first-disabled-apply', 'first-enabled-apply', 'ordinary-first-recover', 'found-bound-finish', 'found-bound-recover'], true)) {
                 // A joined child may have fsynced its phase before losing the receipt.
                 fwrite(STDERR, "ERROR: original managed Config outcome requires journal review\n");
                 return 70;
