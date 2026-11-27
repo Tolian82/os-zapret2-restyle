@@ -10,6 +10,12 @@ on:
       - src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
       - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
   workflow_dispatch:
+    inputs:
+      scenario:
+        description: Native scenario (all repeats the accepted positive and saved-gap paths)
+        type: choice
+        options: [presave, all]
+        default: presave
 
 permissions:
   contents: read
@@ -51,7 +57,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        fault: [normal, saved-gap]
+        # Only the new risk on branch pushes; full regression is explicit.
+        fault: ${{ fromJSON(inputs.scenario == 'all' && '["normal","saved-gap","presave"]' || '["presave"]') }}
     needs: fast
     runs-on: ubuntu-latest
     timeout-minutes: 85

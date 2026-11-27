@@ -177,6 +177,59 @@ def inspect_original_found():
     print("S10_AUTO_FOUND_HISTORY=PASS_BOTH_ROOTS_ARCHIVE_ACK_STOPPED", flush=True)
 
 
+def inspect_original_restored():
+    """Independent proof of the actual old terminal owner after rollback."""
+    import hashlib
+    import pwd
+    from auto_detect_epoch_receipts import EpochReceipts, _read
+    from auto_detect_learning_retirement import RETIRE_DIR, READY
+    from auto_detect_queue import DurableInbox
+    from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
+    from neutral_root_stage import verify_original_operation_pins
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from neutral_schema3_quiescent_preimage import (
+        _verify_retired_history, _verify_idle_producer, _zero_processes, _empty_kernel,
+        CHILD_PID, MONITOR_PID, DAEMON_PID)
+    from shared_apply_operation import SharedApplyOperation, committed_owner, committed_manifest
+    from shared_apply_seal import WORK
+    from voice_live_inspect import COMMON_ACTIVE, examine_shared
+    from voice_ipfw_adapter import require_lifecycle_lock
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    rec = store.read()
+    need(type(rec) is dict and rec.get("phase") == "restored" and
+         rec.get("manifest", {}).get("schema") == 1 and
+         committed_manifest(rec) == rec.get("previous_manifest") and
+         rec["previous_manifest"]["schema"] == 2 and
+         committed_owner(rec) == rec["previous"] and "found" not in rec,
+         "S10_AUTO_FOUND_RESTORED_OWNER_REQUIRED")
+    gid = pwd.getpwnam(ENGINE_USER).pw_gid
+    queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+    receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+    with queue.exclusive(existing_only=True):
+        prior = rec["previous"]
+        ready = receipts._generation(prior["id"], create=False) / RETIRE_DIR / READY
+        raw = _read(ready, 0)
+        def observe():
+            require_lifecycle_lock()
+            verify_original_operation_pins(record=rec, parent=WORK, owner_uid=0)
+            _verify_retired_history(rec, queue, receipts, hashlib.sha256(raw).hexdigest())
+            state = examine_shared(rec)
+            need(state.get("state") == "stopped" and state.get("source") == "native-common" and
+                 state.get("config_digest") == prior["candidate"],
+                 "S10_AUTO_FOUND_RESTORED_STOPPED_REQUIRED")
+            _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+            result = (_full_prior_tree(WORK / prior["id"], COMMON_ACTIVE, 0),
+                      _empty_kernel(WORK / prior["id"] / "release"),
+                      _verify_idle_producer(queue, receipts))
+            need(store.read() == rec and _read(ready, 0) == raw,
+                 "S10_AUTO_FOUND_RESTORED_HISTORY_CHANGED")
+            return result
+        first = observe()
+        need(observe() == first, "S10_AUTO_FOUND_RESTORED_PROOF_RACED")
+    print("S10_AUTO_FOUND_RESTORED_HISTORY=PASS", flush=True)
+
+
 def native_found_successor(web, voice, old, command):
     import hashlib
     import secrets
@@ -238,8 +291,23 @@ def native_found_successor(web, voice, old, command):
             "X-CSRFToken": web.csrf_token, "Accept": "application/json",
             "Referer": voice.ORIGIN + "/ui/zapret/general"}, method="POST")
     fault = os.environ.get("ZAPRET2_S10_FOUND_FAULT", "normal")
-    need(fault in ("normal", "saved-gap"), "S10_AUTO_FOUND_FAULT_MODE_INVALID")
+    need(fault in ("normal", "saved-gap", "presave"), "S10_AUTO_FOUND_FAULT_MODE_INVALID")
+    paths = {"youtube": Path("/var/db/zapret2/auto-detect-owned/youtube.txt"),
+             "user": Path("/var/db/zapret2/auto-detect-owned/user.txt"),
+             "auto": Path("/usr/local/etc/zapret2/ipset/auto-domains.txt")}
+    before_files = {name: path.read_bytes() if path.exists() else None
+                    for name, path in paths.items()}
     service_bytes = SERVICE.read_bytes()
+    php = SERVICE.with_name("shared_apply_config.php")
+    php_bytes = php.read_bytes()
+    if fault == "presave":
+        # Actual P1 writer and durable READY handshake run unchanged.
+        # Interrupt ONLY the original PHP callback before Config::save.
+        # On this disposable VM the exact script is restored before recovery.
+        needle = b"                                $status = $saveScope();"
+        need(php_bytes.count(needle) == 1, "S10_AUTO_FOUND_PRESAVE_BOUNDARY_CHANGED")
+        php.write_bytes(php_bytes.replace(needle,
+            b"                                throw new \\RuntimeException('S10 disposable presave fault');\n" + needle))
     if fault == "saved-gap":
         # Disposable VM ONLY. Interrupt the original real saved boundary,
         # not a fabricated Config, WAL, receipt or P1 file.
@@ -252,7 +320,65 @@ def native_found_successor(web, voice, old, command):
     finally:
         if fault == "saved-gap":
             SERVICE.write_bytes(service_bytes)
+        if fault == "presave":
+            php.write_bytes(php_bytes)
     rec = json.loads(WAL.read_bytes())
+    if fault == "presave":
+        import base64
+        need(php.read_bytes() == php_bytes and reply.get("result") != "saved" and
+             rec.get("phase") == "found-config-saving" and
+             rec.get("previous") == old["detail"] and rec.get("previous_manifest") == old["manifest"] and
+             rec.get("manifest", {}).get("schema") == 1 and
+             rec["detail"]["base"] != rec["detail"]["candidate"] and
+             CONFIG.read_bytes() == initial_config and
+             all(paths[name].read_bytes() == drafts[name].encode() and
+                 rec["found"]["stages"][name]["state"] == "installed"
+                 for name in names),
+             "S10_AUTO_FOUND_PRESAVE_REAL_P1_REQUIRED")
+        pending = rec
+        work_before = set(work.iterdir())
+        new_root = work / pending["detail"]["id"] / "manifest.json"
+        new_pin = (new_root.stat().st_ino, new_root.read_bytes())
+        print("S10_AUTO_FOUND_PRESAVE=PASS_REAL_P1_WRITTEN_CONFIG_BASE", flush=True)
+        # Exercise the existing native Apply dispatcher, with a valid
+        # Strategies envelope. It must reconcile only the pending operation
+        # BEFORE staging this next request. No synthetic journal or restore.
+        envelope = {"page": "strategies", "fields": {"general": {"enabled": "0"}},
+                    "sync": {"telegramips_baseline": saved["hostlist"]["telegramips"]}}
+        encoded = base64.urlsafe_b64encode(json.dumps(envelope, separators=(",", ":")).encode()).decode().rstrip("=")
+        recovery = subprocess.run([str(SERVICE), "shared-apply-run", "strategies", encoded],
+                                  capture_output=True, text=True, timeout=180, check=False)
+        rec = json.loads(WAL.read_bytes())
+        if recovery.returncode != 0 or rec.get("phase") != "restored":
+            print("S10_AUTO_FOUND_PRESAVE_PHASE=" + rec.get("phase", "unknown")
+                  if rec.get("phase") in ("found-config-saving", "found-restoring", "restored") else
+                  "S10_AUTO_FOUND_PRESAVE_PHASE=other", flush=True)
+        need(recovery.returncode == 0 and
+             recovery.stdout.strip() == "apply-recovered=" + pending["detail"]["id"] and
+             rec == {k: v for k, v in {**pending, "phase": "restored"}.items() if k != "found"} and
+             CONFIG.read_bytes() == initial_config and set(work.iterdir()) == work_before and
+             (new_root.stat().st_ino, new_root.read_bytes()) == new_pin,
+             "S10_AUTO_FOUND_PRESAVE_PUBLIC_ROLLBACK_REFUSED")
+        after = web.api("POST", "/api/zapret/settings/hostlistEditorsRead")
+        need(after.get("result") == "ok" and all(
+            after["editors"][key]["content"] == snapshot["editors"][key]["content"] and
+            (paths[name].read_bytes() if paths[name].exists() else None) == before_files[name]
+            for name, key in names.items()), "S10_AUTO_FOUND_PRESAVE_THREE_BEFORE_IMAGES_REQUIRED")
+        current_kernel = subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=False)
+        need(previous_root.read_bytes() == old_root and previous_root.stat().st_ino == old_root_inode and
+             history() == old_history and current_kernel.returncode == 0 and
+             current_kernel.stdout == kernel.stdout and
+             subprocess.run([str(SERVICE), "status"], capture_output=True,
+                            timeout=35).returncode == 1,
+             "S10_AUTO_FOUND_PRESAVE_OLD_OWNER_CHANGED")
+        proof = subprocess.run(["/bin/sh", "-c", command, "s10-original-fd9", PYTHON_RUNTIME,
+            str(Path(__file__).resolve()), "--inspect-restored"], capture_output=True, text=True,
+            timeout=180, check=False)
+        need(proof.returncode == 0 and "S10_AUTO_FOUND_RESTORED_HISTORY=PASS" in proof.stdout.splitlines(),
+             "S10_AUTO_FOUND_PRESAVE_INDEPENDENT_PROOF_REFUSED")
+        print("S10_AUTO_FOUND_ROLLBACK=PASS_PUBLIC_APPLY_THREE_BEFORE_IMAGES_BASE_CONFIG_ACK_STOPPED",
+              flush=True)
+        return
     if fault == "saved-gap":
         need(SERVICE.read_bytes() == service_bytes and
              reply.get("result") != "saved" and rec.get("phase") == "found-config-saved" and
@@ -626,6 +752,12 @@ def native_positive():
 
 def main():
     try:
+        if sys.argv[1:] == ["--inspect-restored"]:
+            need(sys.platform.startswith("freebsd") and os.geteuid() == 0,
+                 "S10_AUTO_NATIVE_INSPECT_SCOPE")
+            sys.path.insert(0, str(BACKEND))
+            inspect_original_restored()
+            return 0
         if sys.argv[1:] == ["--inspect-found"]:
             need(sys.platform.startswith("freebsd") and os.geteuid() == 0,
                  "S10_AUTO_NATIVE_INSPECT_SCOPE")
