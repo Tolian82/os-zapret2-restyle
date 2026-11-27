@@ -246,6 +246,41 @@ def native_positive():
             label += "_VALID_" + "_".join(declared[:2])
         if label == "OTHER_OR_NO_REASON":
             label += "_REVIEW" if result.get("requires_review") is True else "_NO_REVIEW"
+        if label == "NATIVE_RUNTIME_BUILD":
+            # Existing original orchestrator status, not the untrusted
+            # stage-error/log text or request bytes. Whitelist *only*
+            # source-defined phase and status tokens, no freeform fields.
+            status = Path("/var/run/zapret2-execution.status")
+            if status.is_file() and not status.is_symlink():
+                stat = status.stat()
+                if stat.st_uid == 0 and 0 <= stat.st_size <= 512:
+                    fields = status.read_text(errors="replace").strip().split("|", 5)
+                    stages = {
+                        "config": "CONFIG", "parser": "PARSER",
+                        "targets": "TARGETS", "blobs": "BLOBS",
+                        "ports": "PORTS", "generator": "GENERATOR",
+                        "validator": "VALIDATOR", "source-gate": "SOURCE_GATE",
+                        "release-modes": "RELEASE_MODES",
+                    }
+                    if (len(fields) == 6 and fields[0].isdigit() and
+                            fields[1].isdigit() and fields[2] in stages and
+                            fields[3] in ("running", "ok", "failed")):
+                        label += "_STAGE_" + stages[fields[2]] + "_" + fields[3].upper()
+                        # Still only fixed, code-defined error words, never
+                        # Config, selector, domains or path fragments.
+                        patterns = {
+                            "MISSING": ("does not exist", "not found", "missing"),
+                            "EMPTY": ("empty", "no content"),
+                            "INVALID": ("invalid", "unsupported", "unknown"),
+                            "FILE": ("file", "readable", "regular"),
+                            "MAP": ("source map", "source-map"),
+                            "AUTO": ("auto", "hostlist-auto"),
+                        }
+                        reason = fields[5].lower()
+                        tags = [k for k, words in patterns.items()
+                                if any(v in reason for v in words)]
+                        if tags:
+                            label += "_CODE_" + "_".join(tags[:2])
         need(False, "S10_AUTO_FIRST_HTTPS_REASON_" + label)
     need(not failed_first, "S10_AUTO_FIRST_HTTPS_INVARIANT_DRIFT")
     old = json.loads(WAL.read_bytes())
