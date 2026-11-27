@@ -158,11 +158,18 @@ def native_positive():
          g04.model().findtext("hostlist/mode") == "auto",
          "S10_AUTO_REAL_HTTPS_STRATEGIES_MODE_NOT_COMMITTED")
     old = json.loads(WAL.read_bytes())
-    need(old.get("phase") == "committed" and
-         old.get("manifest", {}).get("schema") == 2 and
-         subprocess.run([str(SERVICE), "status"], capture_output=True,
-                        timeout=35).returncode == 0,
-         "S10_AUTO_REAL_SCHEMA2_RUNNING_REQUIRED")
+    native_status = subprocess.run([str(SERVICE), "status"],
+                                   capture_output=True, timeout=35)
+    # Safe fixed-word failure labels; never print model, journal, PID,
+    # kernel, native argv, uploaded domains or HTTP details.
+    failed = [
+        name for name, ok in (
+            ("WAL_NONCOMMITTED", old.get("phase") == "committed"),
+            ("WAL_NOSCHEMA2", old.get("manifest", {}).get("schema") == 2),
+            ("ENGINE_NOT_READY", native_status.returncode == 0),
+        ) if not ok
+    ]
+    need(not failed, "S10_AUTO_REAL_" + "_".join(failed) + "_REQUIRED")
     initial_config = CONFIG.read_bytes()
     stopped = subprocess.run([str(SERVICE), "stop"], capture_output=True,
                              timeout=180, check=False)
