@@ -237,10 +237,70 @@ def native_found_successor(web, voice, old, command):
             "Content-Type": "multipart/form-data; boundary=" + boundary,
             "X-CSRFToken": web.csrf_token, "Accept": "application/json",
             "Referer": voice.ORIGIN + "/ui/zapret/general"}, method="POST")
-    with web.client.open(request, timeout=240) as response:
-        reply = json.loads(response.read(2 * 1024 * 1024))
+    fault = os.environ.get("ZAPRET2_S10_FOUND_FAULT", "normal")
+    need(fault in ("normal", "saved-gap"), "S10_AUTO_FOUND_FAULT_MODE_INVALID")
+    service_bytes = SERVICE.read_bytes()
+    if fault == "saved-gap":
+        # Disposable VM ONLY. Interrupt the original real saved boundary,
+        # not a fabricated Config, WAL, receipt or P1 file.
+        needle = b'    case "$_bound_route" in\n        bound-stopped-schema=1)\n            _bound_terminal='
+        need(service_bytes.count(needle) == 1, "S10_AUTO_FOUND_FAULT_BOUNDARY_CHANGED")
+        SERVICE.write_bytes(service_bytes.replace(needle, b"    return 70\n" + needle))
+    try:
+        with web.client.open(request, timeout=240) as response:
+            reply = json.loads(response.read(2 * 1024 * 1024))
+    finally:
+        if fault == "saved-gap":
+            SERVICE.write_bytes(service_bytes)
     rec = json.loads(WAL.read_bytes())
-    if reply.get("result") != "saved" or reply.get("applied") is not True:
+    if fault == "saved-gap":
+        need(SERVICE.read_bytes() == service_bytes and
+             reply.get("result") != "saved" and rec.get("phase") == "found-config-saved" and
+             rec.get("previous") == old["detail"] and rec.get("previous_manifest") == old["manifest"] and
+             rec.get("manifest", {}).get("schema") == 1 and CONFIG.read_bytes() != initial_config,
+             "S10_AUTO_FOUND_FAULT_SAVED_BOUNDARY_REQUIRED")
+        pending = rec
+        saved_bytes = CONFIG.read_bytes()
+        work_before = set(work.iterdir())
+        # Original atomic installer; disposable shadow of mv interrupts
+        # precisely after the old active tree was parked.
+        active = Path("/usr/local/etc/zapret2/runtime-v2")
+        backups = active.with_name("runtime-v2-backups")
+        source = r"""
+set -eu
+. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/common.sh
+. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/atomic.sh
+count=0
+mv() {
+    count=$((count+1))
+    /bin/mv "$@" || return $?
+    if [ "$count" -eq 1 ]; then exit 73; fi
+}
+atomic_install_tree "$1" "$2" "$3" "$4"
+"""
+        op = pending["detail"]["id"]
+        gap = subprocess.run(["/bin/sh", "-c", command, "s10-gap-fd9", "/bin/sh", "-c",
+            source, "s10-gap", str(work / op / "release"), str(active), str(backups), op],
+            capture_output=True, timeout=120, check=False)
+        need(gap.returncode == 73 and not active.exists() and
+             (active.parent / ("." + active.name + ".stage." + op)).is_dir() and
+             (active.parent / ("." + active.name + ".old." + op)).is_dir() and
+             json.loads(WAL.read_bytes()) == pending and CONFIG.read_bytes() == saved_bytes,
+             "S10_AUTO_FOUND_FAULT_ATOMIC_PARK_REQUIRED")
+        print("S10_AUTO_FOUND_FAULT=PASS_REAL_CONFIG_SAVED_AND_OLD_TREE_PARKED", flush=True)
+        recovery = subprocess.run([str(SERVICE), "start"], capture_output=True,
+                                  timeout=180, check=False)
+        rec = json.loads(WAL.read_bytes())
+        if recovery.returncode != 0 or rec.get("phase") != "committed":
+            label = rec.get("phase")
+            print("S10_AUTO_FOUND_RECOVERY_PHASE=" + (label if label in (
+                "found-config-saved", "committed", "found-restoring", "restored") else "other"), flush=True)
+        need(recovery.returncode == 0 and rec == {k: v for k, v in
+             {**pending, "phase": "committed"}.items() if k != "found"} and
+             CONFIG.read_bytes() == saved_bytes and set(work.iterdir()) == work_before,
+             "S10_AUTO_FOUND_PUBLIC_RECOVERY_REFUSED")
+        print("S10_AUTO_FOUND_RECOVERY=PASS_PUBLIC_START_SAME_WAL_NO_CONFIG_RESAVE", flush=True)
+    if fault == "normal" and (reply.get("result") != "saved" or reply.get("applied") is not True):
         phase = rec.get("phase")
         known = {"committed", "prepared", "found-files-writing", "found-files-written",
                  "found-config-saving", "found-config-saved", "restored", "requires-review"}

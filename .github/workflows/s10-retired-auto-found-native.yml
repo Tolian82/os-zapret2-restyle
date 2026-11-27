@@ -47,7 +47,11 @@ jobs:
           grep -q S10_AUTO_DISPOSABLE_CLEAN_GUEST_ONLY /tmp/s10-retired-offtarget
 
   native:
-    name: Real installed HTTPS Auto schema3 and original operator Stop/ACK
+    name: Real installed HTTPS Auto/Stop/ACK/Found (${{ matrix.fault }})
+    strategy:
+      fail-fast: false
+      matrix:
+        fault: [normal, saved-gap]
     needs: fast
     runs-on: ubuntu-latest
     timeout-minutes: 85
@@ -74,6 +78,7 @@ jobs:
             export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
             export ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1
             export ZAPRET2_S10_RETIRED_AUTO_DISPOSABLE=1
+            export ZAPRET2_S10_FOUND_FAULT="${{ matrix.fault }}"
             export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.sha }}"
             export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.sha }}"
             /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py

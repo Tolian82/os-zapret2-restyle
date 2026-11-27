@@ -5,6 +5,7 @@ on:
     branches: [draft/tz6v5-s10-integrated]
     paths:
       - .github/workflows/s10-draft-p2a-handoff.yml
+      - scripts/test-shared-apply-found-files.py
       - scripts/test-shared-apply-operation.py
       - scripts/test-auto-detect-post-drop.py
       - scripts/test-auto-detect-fd9-launch.sh
@@ -55,4 +56,5 @@ jobs:
           # Match the existing canonical ci.yml dependency for the P1 validator.
           python3.13 -m pip install idna
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-shared-apply-operation.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-shared-apply-found-files.py
           sh scripts/test-shared-apply-execute.sh
