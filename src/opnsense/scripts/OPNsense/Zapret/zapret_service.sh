@@ -1643,6 +1643,7 @@ shared_apply_execute_service()
             *) _shared_apply_mode=0 ;;
         esac
     fi
+    _shared_first_auto=0
     # Re-read the original source-to-native profile mapping after seal.
     # Each schema has a DIFFERENT independently authenticated verifier.
     # Schema3 can never be accepted by the old schema2 observer verifier.
@@ -1669,15 +1670,26 @@ shared_apply_execute_service()
                     printf '%s\n' preflight-rejected=observer-generation
                     return 0
                 fi
-                # S10 G05: a sealed schema3 release alone is not a bound
-                # original owner. Until the first Auto FD9/Config/epoch
-                # coordinator is connected, the legacy activation MUST NOT
-                # start a real dvtws2 with a schema1/unpinned WAL. This is
-                # deliberately before PREPARED, Config save and IPFW writes.
-                # A qualified first Auto will use the separate original
-                # bound dispatcher, never this unbound fallback.
-                printf '%s\n' preflight-rejected=bound-auto-required
-                return 0
+                # Only the genuine combined first Strategies Apply can
+                # select the bound Auto executor. Never admit a standalone
+                # execute, a Found/retired/old owner, or legacy schema3 Start.
+                if [ "$#" -eq 2 ] &&
+                   [ "$_shared_found_scope" = ordinary ] &&
+                   [ "$_shared_apply_page" = strategies ] &&
+                   [ "${_shared_run_page:-}" = strategies ] &&
+                   [ -n "${_shared_run_encoded:-}" ] &&
+                   [ "${_shared_prepare_receipt:-}" = "prepared-id=$_shared_apply_id" ] &&
+                   [ "${HOSTLIST_MODE:-}" = auto ] &&
+                   [ "$_shared_apply_base" != "$_shared_apply_candidate" ] &&
+                   ! shared_apply_has_record_service; then
+                    case ",$_shared_apply_fields," in
+                        *,general.enabled,*) _shared_first_auto=1 ;;
+                    esac
+                fi
+                if [ "$_shared_first_auto" != 1 ]; then
+                    printf '%s\n' preflight-rejected=bound-auto-required
+                    return 0
+                fi
                 ;;
             *) printf '%s\n' preflight-rejected=observer-generation; return 0 ;;
         esac
@@ -1696,6 +1708,13 @@ shared_apply_execute_service()
     # when no kernel or Config change has even been attempted.
     if ! apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode"; then
         printf '%s\n' preflight-rejected=runtime-preflight
+        return 0
+    fi
+    # First bound Auto may not retire or signal a predecessor. The original
+    # Python quiescent proof repeats the stricter complete cold inventory.
+    if [ "$_shared_first_auto" = 1 ] &&
+       { [ "$_apply_engine" != 0 ] || shared_apply_has_record_service; }; then
+        printf '%s\n' preflight-rejected=bound-auto-required
         return 0
     fi
     # A previously RUNNING original observer must finish its old PID-bound
@@ -1776,6 +1795,20 @@ shared_apply_execute_service()
     else
         shared_apply_record_service prepared "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
+    fi
+    if [ "$_shared_first_auto" = 1 ]; then
+        # The existing original scalar frame is the ONLY source. From the
+        # durable PREPARED onward a failure is uncertain: do not retry,
+        # report a preflight rejection, or fall into the legacy actuator.
+        if ! shared_apply_original_source_gate "$_shared_apply_id" \
+            "$_shared_apply_candidate" --first-auto-apply; then
+            common_error "shared Apply: first bound Auto requires review: $_shared_original_gate_reason"
+            return 70
+        fi
+        _shared_first_owner=$(shared_apply_inspect_service) || return 70
+        [ "$_shared_first_owner" = "committed $_shared_apply_id $_shared_apply_page" ] || return 70
+        printf 'applied-id=%s\n' "$_shared_apply_id"
+        return 0
     fi
     shared_apply_activate_and_commit_service
 }
