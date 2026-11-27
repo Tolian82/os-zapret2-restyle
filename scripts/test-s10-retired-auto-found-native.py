@@ -187,6 +187,33 @@ def native_positive():
     }
     failed_first = [name for name, ok in checks.items() if not ok]
     if failed_first:
+        # Print only bounded ownership facts from the real guest. A GUI
+        # requires-review response is NOT sufficient to locate a failed
+        # first apply; no raw journal, Config, argv or log data is printed.
+        phase = "ABSENT"
+        schema = "NONE"
+        pins = "NONE"
+        if WAL.is_file() and not WAL.is_symlink() and 0 < WAL.stat().st_size <= 8192:
+            try:
+                state = json.loads(WAL.read_bytes())
+                if type(state) is dict:
+                    phase = {name: name.upper().replace("-", "_") for name in (
+                        "prepared", "activating", "activated", "config-saved",
+                        "epoch-finalizing", "committed", "restored", "requires-review",
+                        "restore-failed")}.get(state.get("phase"), "OTHER")
+                    pin = state.get("manifest")
+                    if type(pin) is dict and pin.get("schema") in (1, 2):
+                        schema = str(pin["schema"])
+                    have = ["RUNNING" if key == "first_running_sha256" else "PRETRAFFIC"
+                            for key in ("first_running_sha256", "first_pretraffic_sha256")
+                            if isinstance(state.get(key), str) and
+                            re.fullmatch(r"[a-f0-9]{64}", state[key])]
+                    pins = "_".join(have) or "NONE"
+            except (ValueError, TypeError, OSError):
+                phase = "UNREADABLE"
+        print("S10_AUTO_FIRST_FAILURE_WAL=" + phase + ":SCHEMA_" + schema +
+              ":PINS_" + pins + ":CONFIG_" +
+              ("UNCHANGED" if CONFIG.read_bytes() == before else "CHANGED"), flush=True)
         # S10 G05 regression: the new sealed-schema3 pre-transaction fence
         # must NOT be misreported as a partially applied/reviewed owner.
         # Prove the official clean guest still has its exact Config bytes,
