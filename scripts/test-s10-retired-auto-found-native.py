@@ -45,6 +45,115 @@ def load(filename, name):
     return module
 
 
+def first_base_recovery_diagnosed():
+    """Disposable-only observation of the actual joined recovery; no retry."""
+    import tempfile
+
+    module = BACKEND / "neutral_schema3_quiescent_preimage.py"
+    original = module.read_bytes()
+    with tempfile.TemporaryDirectory(prefix="s10-first-recovery-", dir="/root") as folder:
+        trace = Path(folder) / "locations"
+        trace.touch(mode=0o600)
+        # Write only finite boundary names, numeric outcome and source locations.
+        # Direct private fixture trace survives nested stdout/stderr filtering.
+        # Wrappers always propagate the original result or original exception.
+        addition = r'''
+_S10_TEST_TRACE = __TRACE_PATH__
+def _s10_test_emit(message):
+    try:
+        with open(_S10_TEST_TRACE, "a", encoding="ascii") as output:
+            output.write("S10_RECOVERY_DIAG=" + message + "\n")
+    except OSError:
+        pass
+
+def _s10_test_exception(label, error):
+    modules = {
+        "neutral_schema3_quiescent_preimage": "M11",
+        "neutral_schema3_previous_physical": "M02",
+        "auto_detect_original_lock_handoff": "M05",
+        "voice_ipfw_adapter": "M06",
+        "voice_firewall_transaction": "M07",
+        "neutral_root_stage": "M09",
+        "shared_apply_seal": "M10",
+        "shared_apply_operation": "M04",
+        "auto_detect_fd": "FD",
+        "auto_detect_post_drop": "CUT",
+    }
+    seen = set()
+    count = 0
+    while error is not None and id(error) not in seen and len(seen) < 8:
+        seen.add(id(error))
+        tb = error.__traceback__
+        while tb is not None and count < 32:
+            code = modules.get(tb.tb_frame.f_globals.get("__name__"))
+            if code is not None and 0 < tb.tb_lineno <= 99999:
+                _s10_test_emit(label + ":" + code + ":" + str(tb.tb_lineno))
+                count += 1
+            tb = tb.tb_next
+        error = error.__cause__ or error.__context__
+
+_s10_test_original_join = _run_bound_restore_joined
+def _run_bound_restore_joined(command, **kwargs):
+    if "ordinary-first-recover" in command:
+        label = "PHP"
+    elif "shared-apply-first-running-base-physical" in command:
+        label = "STOP"
+    elif "zapret-first-cold" in command:
+        label = "TREE"
+    else:
+        label = "OTHER"
+    try:
+        reply = _s10_test_original_join(command, **kwargs)
+    except BaseException as error:
+        _s10_test_exception(label, error)
+        raise
+    if label != "OTHER":
+        import re
+        out, err = reply.stdout, reply.stderr
+        _s10_test_emit(label + ":RC_" + str(reply.returncode) +
+            ":OUT_" + str(len(out) if isinstance(out, bytes) else 0) +
+            ":ERR_" + str(len(err) if isinstance(err, bytes) else 0))
+        if isinstance(err, bytes):
+            for line in err[:8192].split(b"\n")[:-1][:64]:
+                if re.fullmatch(rb"S10_FIRST_TRACE=D(?:0[1-9]|[12][0-9]|3[0-4])", line) or re.fullmatch(
+                        rb"S10_MANAGED_TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4}", line):
+                    _s10_test_emit(label + ":" + line.decode("ascii"))
+    return reply
+
+def _s10_test_wrap(original, label):
+    def wrapped(*args, **kwargs):
+        try:
+            return original(*args, **kwargs)
+        except BaseException as error:
+            _s10_test_exception(label, error)
+            raise
+    return wrapped
+
+finish_first_config_recovery_locked = _s10_test_wrap(
+    finish_first_config_recovery_locked, "CONFIG")
+native_guard_first_running_base_stopped_shell_locked = _s10_test_wrap(
+    native_guard_first_running_base_stopped_shell_locked, "STOPPED")
+'''
+        need(addition.count("__TRACE_PATH__") == 1, "S10_RECOVERY_DIAG_PATH_REQUIRED")
+        instrumented = original + b"\n" + addition.replace("__TRACE_PATH__", repr(str(trace))).encode("ascii")
+        compile(instrumented, str(module), "exec")
+        try:
+            module.write_bytes(instrumented)
+            reply = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180)
+        finally:
+            module.write_bytes(original)
+        need(module.read_bytes() == original, "S10_RECOVERY_DIAG_SOURCE_RESTORE_REQUIRED")
+        # A complete original result is still required by the existing test.
+        # Do not print arbitrary content from a fixture-owned trace.
+        with trace.open("rb") as handle:
+            raw = handle.read(16385)
+        need(len(raw) <= 16384, "S10_RECOVERY_DIAG_LIMIT")
+        for line in raw.split(b"\n")[:-1][:128]:
+            if re.fullmatch(rb"S10_RECOVERY_DIAG=(?:PHP|STOP|TREE|OTHER|CONFIG|STOPPED):(?:RC_-?[0-9]{1,3}:OUT_[0-9]{1,9}:ERR_[0-9]{1,9}|(?:M(?:0[1-9]|1[0-4])|FD|CUT):[1-9][0-9]{0,4}|S10_FIRST_TRACE=D(?:0[1-9]|[12][0-9]|3[0-4])|S10_MANAGED_TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4})", line):
+                print(line.decode("ascii"), flush=True)
+        return reply
+
+
 def inspect_first_restored():
     """Original FD9 independent physical readback, never a new lifecycle owner."""
     import hashlib
@@ -767,7 +876,8 @@ def native_positive():
             print("S10_FIRST_BASE_NONZERO=PASS_ALL_THREE_CATEGORIES_NO_STOP_OR_MUTATION", flush=True)
         # The first recovery dispatcher deliberately returns 69 even on a
         # terminal recovery: it must never fall through to a second Start.
-        recovery = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180)
+        recovery = (first_base_recovery_diagnosed() if first_fault == "first-base" else
+                    subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180))
         rec = json.loads(WAL.read_bytes())
         need(CONFIG.read_bytes() == config_image and set(work.iterdir()) == work_before and
              (root.stat().st_dev, root.stat().st_ino, root.read_bytes()) == root_pin and
