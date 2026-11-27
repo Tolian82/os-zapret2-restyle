@@ -9,6 +9,7 @@ import re
 import subprocess
 import tempfile
 import sys
+import time
 import xml.etree.ElementTree as ET
 
 NATIVE = "/root/g03-native-prepared.php"
@@ -148,6 +149,9 @@ def verify_prepared_build(receipt, op, before, after, old_wal, new_wal):
                        if len(old) == len(new) == len(fields) else ["shape"])
             print("G03_BUILD_SOURCE_DRIFT=" + name + ":" + ",".join(changed),
                   flush=True)
+            if len(old) == len(new) == len(fields) and "ctime" in changed:
+                print(f"G03_BUILD_SOURCE_CTIME_DELTA_NS={name}:{new[8] - old[8]}",
+                      flush=True)
     try:
         stage = Path("/var/run/zapret2-execution.status")
         if stage.is_file() and not stage.is_symlink() and stage.stat().st_size <= 4096:
@@ -562,6 +566,17 @@ def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, succes
              "G03_BOUND_FOUND_ORIGINAL_BOOTSTRAP_REFUSED")
         original = seeded
         print("G03_BOUND_FOUND_BOOTSTRAP=PASS_ORIGINAL_P1_EMPTY_BASELINE", flush=True)
+        # A bounded TEST-ONLY idle observation: previous native run saw ctime
+        # drift on all three just-created P1 inodes. Distinguish drift without
+        # running the builder from drift during the builder. Never refresh
+        # the qualified baseline, ignore ctime, fsync/rewrite, or touch traffic.
+        time.sleep(2)
+        idle = snapshot()
+        if idle != original or journal() is not None:
+            print("G03_P1_IDLE_METADATA=DRIFT_BEFORE_BUILD", flush=True)
+            verify_prepared_build("", op, original, idle, None, journal())
+            raise RuntimeError("G03_P1_IDLE_METADATA_UNQUALIFIED")
+        print("G03_P1_IDLE_METADATA=STABLE_BEFORE_BUILD", flush=True)
     prepared = call([SERVICE, "shared-apply-prepare", op])
     verify_prepared_build(prepared, op, original, snapshot(), previous, journal())
     # The test uses the actual native rendered template / original loader
