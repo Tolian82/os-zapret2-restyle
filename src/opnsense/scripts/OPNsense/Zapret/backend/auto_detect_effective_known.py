@@ -1702,23 +1702,25 @@ def main(argv: list[str] | None = None) -> int:
             print("ERROR: original first running base guard refused", file=sys.stderr)
             return 69
     if argv and argv[0] == "guard-first-enabled-shell":
-        if len(argv) != 4:
+        if len(argv) not in (4, 5) or (len(argv) == 5 and argv[4] != "--inherited-queue"):
             return 64
         try:
             from neutral_schema3_quiescent_preimage import native_guard_first_enabled_shell_locked
-            native_guard_first_enabled_shell_locked(argv[1], argv[2], argv[3], config_fd=4)
+            native_guard_first_enabled_shell_locked(argv[1], argv[2], argv[3], config_fd=4,
+                queue_fd=3 if len(argv) == 5 else None)
             print("first-enabled-shell=qualified")
             return 0
         except (ValueError, RuntimeError, OSError, KeyError, TypeError):
             print("ERROR: original first enabled shell guard refused", file=sys.stderr)
             return 69
     if argv and argv[0] == "write-first-enabled-handoff-locked":
-        if len(argv) != 3:
+        if len(argv) not in (3, 4) or (len(argv) == 4 and argv[3] != "--inherited-queue"):
             return 64
         try:
             from neutral_schema3_quiescent_preimage import native_write_first_enabled_handoff_locked
             reply = native_write_first_enabled_handoff_locked(
-                argv[1], argv[2], sys.stdin.buffer, config_fd=4)
+                argv[1], argv[2], sys.stdin.buffer, config_fd=4,
+                queue_fd=3 if len(argv) == 4 else None)
             print(json.dumps(reply, separators=(",", ":")))
             return 0
         except (ValueError, RuntimeError, OSError, KeyError, TypeError):
