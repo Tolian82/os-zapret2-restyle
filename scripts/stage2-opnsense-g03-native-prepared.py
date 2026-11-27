@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 import sys
 import xml.etree.ElementTree as ET
 
@@ -254,12 +255,90 @@ def verify_successor_commit(record, previous, op, receipt, root, original,
          "G03_BOUND_SUCCESSOR_NATIVE_READBACK_UNPROVEN")
 
 
-def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, successor=False):
+
+def build_managed_uncertain_worker(folder: Path, source: Path, *, native: bool = True) -> Path:
+    """TEST ONLY: private original-PHP copy with one post-Config::save exception."""
+    import stat
+    fixed = Path("/usr/local/opnsense/scripts/OPNsense/Zapret")
+    if (not folder.is_dir() or folder.is_symlink() or "'" in str(folder) or
+            "'" in str(source) or
+            (native and (source != fixed or not sys.platform.startswith("freebsd") or
+                         os.geteuid() != 0 or os.environ.get("GITHUB_ACTIONS") != "true" or
+                         os.environ.get("ZAPRET2_G03_PRISTINE_FIRST_COMMIT") != "1" or
+                         os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") != "1"))):
+        raise RuntimeError("G03_MANAGED_FAULT_DISPOSABLE_SCOPE_REQUIRED")
+
+    def read_exact(name):
+        path = source / name
+        before = path.lstat()
+        if (not stat.S_ISREG(before.st_mode) or path.is_symlink() or
+                (native and (before.st_uid != 0 or before.st_nlink != 1 or
+                             before.st_mode & 0o022))):
+            raise RuntimeError("G03_MANAGED_FAULT_ORIGINAL_SOURCE_UNTRUSTED")
+        data = path.read_bytes()
+        after = path.lstat()
+        identity = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns,
+                               st.st_ctime_ns, st.st_mode, st.st_uid, st.st_nlink)
+        if identity(before) != identity(after):
+            raise RuntimeError("G03_MANAGED_FAULT_ORIGINAL_SOURCE_DRIFT")
+        return data.decode("utf-8")
+
+    original_apply = read_exact("apply_settings.php")
+    original_worker = read_exact("shared_apply_config.php")
+    save = "self::saveNativeModel($config, $page);"
+    mvc = "__DIR__ . '/../../../mvc/"
+    own_apply = "__DIR__ . '/apply_settings.php'"
+    own_lock = "__DIR__ . '/shared_apply_lock.php'"
+    if (original_apply.count(save) != 1 or original_apply.count(mvc) != 3 or
+            original_worker.count(own_apply) != 1 or
+            original_worker.count(own_lock) != 1):
+        raise RuntimeError("G03_MANAGED_FAULT_SOURCE_ANCHOR_CHANGED")
+
+    changed_apply = original_apply.replace(
+        mvc, "'" + str(source.parents[2] / "mvc") + "/").replace(
+        save, save + "\n            throw new \\RuntimeException('G03_TEST_AFTER_REAL_CONFIG_SAVE');")
+    private_apply = folder / "g03-s10-fault-apply.php"
+    private_worker = folder / "g03-s10-fault-worker.php"
+    changed_worker = original_worker.replace(
+        own_apply, "'" + str(private_apply) + "'").replace(
+        own_lock, "'" + str(source / "shared_apply_lock.php") + "'")
+    for path, data in ((private_apply, changed_apply), (private_worker, changed_worker)):
+        with path.open("x", encoding="utf-8") as handle:
+            handle.write(data)
+        path.chmod(0o600)
+        if path.read_text(encoding="utf-8") != data:
+            raise RuntimeError("G03_MANAGED_FAULT_PRIVATE_COPY_DRIFT")
+    return private_worker
+
+
+def managed_fault_worker_self_test():
+    source = Path(__file__).resolve().parent.parent / "src/opnsense/scripts/OPNsense/Zapret"
+    with tempfile.TemporaryDirectory(prefix="g03-managed-fault-selftest-") as scratch:
+        private = build_managed_uncertain_worker(Path(scratch), source, native=False)
+        worker = private.read_text()
+        apply = (Path(scratch) / "g03-s10-fault-apply.php").read_text()
+        need("G03_TEST_AFTER_REAL_CONFIG_SAVE" in apply and
+             apply.count("G03_TEST_AFTER_REAL_CONFIG_SAVE") == 1 and
+             "G03_TEST_AFTER_REAL_CONFIG_SAVE" not in worker and
+             private.is_file() and not private.is_symlink() and
+             (source / "apply_settings.php").read_text().count(
+                 "G03_TEST_AFTER_REAL_CONFIG_SAVE") == 0,
+             "G03_MANAGED_FAULT_COPY_SELFTEST_REFUSED")
+        for path in (private, Path(scratch) / "g03-s10-fault-apply.php"):
+            checked = subprocess.run(["php", "-l", str(path)],
+                                     capture_output=True, text=True, timeout=15)
+            need(checked.returncode == 0, "G03_MANAGED_FAULT_PRIVATE_PHP_LINT_REFUSED")
+    print("G03_S10_MANAGED_FAULT_COPY=PASS_PRIVATE_PHP_LINT_NO_INSTALLED_MUTATION")
+
+
+def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, successor=False,
+                        fault_after_save=False):
     """Existing PREPARED proofs, plus the disposable first/successor commits.
 
     The STOPPED branch follows an explicit service stop on the guest.
     Only the opt-in two-generation journey calls the original coordinator.
     """
+    need(not fault_after_save or successor, "G03_MANAGED_FAULT_REQUIRES_SUCCESSOR")
     script = Path(SERVICE).parent
     backend = script / "backend"
     def journal():
@@ -893,6 +972,8 @@ if __name__ == "__main__":
             config_save_uncertain_main()
         elif sys.argv[1:] == ["pristine-cold"]:
             pristine_cold_native_main()
+        elif sys.argv[1:] == ["fault-worker-self-test"]:
+            managed_fault_worker_self_test()
         elif sys.argv[1:] == ["pristine-first-commit"]:
             pristine_cold_native_main(first_commit=True)
         elif sys.argv[1:] == ["stopped"]:
