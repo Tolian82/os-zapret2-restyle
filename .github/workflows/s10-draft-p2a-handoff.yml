@@ -1,0 +1,39 @@
+name: S10 draft first Auto P2a handoff
+# Temporary focused source gate. Remove before integrated S10 PR.
+on:
+  push:
+    branches: [draft/tz6v5-s10-integrated]
+    paths:
+      - .github/workflows/s10-draft-p2a-handoff.yml
+      - scripts/test-auto-detect-post-drop.py
+      - scripts/test-auto-detect-fd9-launch.sh
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: s10-draft-p2a-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Exact-head real flock and existing launcher contracts
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(id -g)" -gt 0
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py scripts/test-auto-detect-post-drop.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-post-drop.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
+          sh -n scripts/test-auto-detect-fd9-launch.sh
+          sh scripts/test-auto-detect-fd9-launch.sh
