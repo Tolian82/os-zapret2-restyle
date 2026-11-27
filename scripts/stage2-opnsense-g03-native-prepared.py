@@ -1294,6 +1294,26 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
          "G03_BOUND_STOPPED_SAVED_RUNTIME_FENCE_DRIFT")
     print("G03_S10_BOUND_STOPPED_SAVED_FENCE=PASS_NO_LEGACY_RUNTIME_PROMOTION",
           flush=True)
+    terminal = json.loads(call([PHP, worker, "found-bound-finish", op, "strategies"],
+                               locked=True))
+    final = json.loads(WAL.read_bytes())
+    expected = {**saved, "phase": "committed"}
+    expected.pop("found")
+    native_saved = json.loads(call([PHP, worker, "saved", op, "strategies"], locked=True))
+    native_status = subprocess.run([SERVICE, "status"], capture_output=True,
+                                   text=True, timeout=30)
+    need(terminal == {"result": "committed", "mode": "0"} and final == expected and
+         native_saved == {"result": "committed", "snapshot": saved["detail"]["candidate"],
+                          "enabled": "0"} and
+         native_status.returncode == 1 and native_status.stdout.strip() == "zapret is not running" and
+         snapshot() == after and
+         hashlib.sha256((work / "manifest.json").read_bytes()).hexdigest() == pin["root_sha256"] and
+         hashlib.sha256((work / "bundle-seal.json").read_bytes()).hexdigest() == pin["seal_sha256"],
+         "G03_BOUND_STOPPED_FINAL_COMMIT_DRIFT")
+    call([PHP, worker, "found-bound-finish", op, "strategies"], locked=True, expected_rc=70)
+    need(snapshot() == after and json.loads(WAL.read_bytes()) == final,
+         "G03_BOUND_STOPPED_FINAL_REPLAY_DRIFT")
+    print("G03_S10_BOUND_STOPPED_COMMITTED=PASS_NATIVE_P1_CONFIG_TREE_STOPPED", flush=True)
 
 
 def stopped_native_main():

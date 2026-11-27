@@ -1023,6 +1023,169 @@ def classify_native_planned(operation: str, *, config_fd: int | None = None) -> 
     return {**evidence, "journal_phase": record["phase"]}
 
 
+def finish_native_bound_stopped_found_locked(operation: str, digest: str, *,
+                                             config_fd: int) -> dict:
+    """Original disabled two-bound Found promotion; no Config or engine writer.
+
+    The original found-config-saved WAL is the durable promotion intent.
+    Preserve all three P1 post-image pins until terminal readback. Unknown
+    or interrupted partial trees stay nonterminal; never repair them here.
+    """
+    import subprocess
+    from auto_detect_destination_commit import (
+        _native_found_wal_context, _bound_found_native_witness,
+        _attest_found_after_locked)
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_minute import inspect_inert_release
+    from neutral_root_stage import _verify_original_pinned_root
+    from neutral_schema3_previous_physical import (
+        FinalBoundRuntimeReceipt, attest_bound_candidate_final_under_fd9)
+    from neutral_schema3_quiescent_preimage import (
+        _cold_recovery_trees, _reject_cold_recovery_residue, _run_bound_restore_joined,
+        _zero_processes, _safe_empty_directory, _empty_kernel, CHILD_PID,
+        MONITOR_PID, DAEMON_PID, PRODUCER_ROOT, COMMON_ACTIVE, SCRIPT)
+    from shared_apply_seal import WORK, verify_seal, _stat
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    store, record, raw, rows, targets, attest = _native_found_wal_context(
+        operation, config_fd)
+    detail = record["detail"]
+    prior = record.get("previous")
+    if (record["phase"] not in ("found-config-saving", "found-config-saved") or
+            record.get("manifest", {}).get("schema") != 1 or
+            record.get("previous_manifest", {}).get("schema") != 1 or
+            type(prior) is not dict or prior["candidate"] != detail["base"] or
+            digest != detail["candidate"] or
+            record["found"].get("runtime_mode") != "0" or
+            (record["phase"] == "found-config-saving" and
+             detail["base"] == detail["candidate"])):
+        raise EffectiveKnownRefused("bound_stopped_found_finish_scope_refused")
+    active = COMMON_ACTIVE
+    old_work, new_work = WORK / prior["id"], WORK / detail["id"]
+    backup_root = active.with_name("runtime-v2-backups")
+    backup = backup_root / (active.name + "-" + detail["id"])
+    old_hash = verify_seal(old_work, owner=0)["sha256"]["release"]
+    new_hash = verify_seal(new_work, owner=0)["sha256"]["release"]
+    if old_hash == new_hash:
+        raise EffectiveKnownRefused("bound_stopped_found_ambiguous_tree")
+    pristine = (old_hash, None, None, None)
+    installed = (new_hash, None, None, old_hash)
+    with exclusive_destination_lock(AUTO_LOCK, store.owner):
+        witness = _bound_found_native_witness(store, record, attest)
+
+        def pinned_after(current):
+            return (witness is not None and witness(current) and
+                    read_owned(OWNED_ROOT, owner_uid=store.owner) is not None and
+                    _attest_found_after_locked(rows, targets, current, uid=store.owner))
+
+        def observe(current):
+            store._attest_bound_found_checkpoint(current, pinned_after)
+            for key, d, work in (("previous_manifest", prior, old_work),
+                                 ("manifest", detail, new_work)):
+                root = json.loads(_verify_original_pinned_root(
+                    detail=d, binding=current[key], parent=WORK, owner_uid=0))
+                if (root["service"]["enabled"] is not False or
+                        root["service"]["target_mode"] not in ("all", "list") or
+                        inspect_inert_release(work / "release", owner_uid=0) != "inactive"):
+                    raise EffectiveKnownRefused("bound_stopped_found_inert_root_required")
+            _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+            _safe_empty_directory(PRODUCER_ROOT, 0)
+            _reject_cold_recovery_residue(active)
+            trees = _cold_recovery_trees(
+                active, detail["id"], old_hash, new_hash, phase="activating",
+                restored=False, owner_uid=0)
+            if trees not in (pristine, installed):
+                raise EffectiveKnownRefused("bound_stopped_found_interrupted_tree_requires_recovery")
+            kernels = (_empty_kernel(old_work / "release"), _empty_kernel(new_work / "release"))
+            if kernels[0] != kernels[1]:
+                raise EffectiveKnownRefused("bound_stopped_found_kernel_changed")
+            _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+            store._attest_bound_found_checkpoint(current, pinned_after)
+            return trees, kernels
+
+        before = observe(record)
+        if observe(record) != before:
+            raise EffectiveKnownRefused("bound_stopped_found_preimage_changed")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        os.fsync(config_fd)
+        if record["phase"] == "found-config-saving":
+            # A distinct locked Config after-image and exact original P1
+            # post-images qualify recovery, not a claim save returned.
+            if before[0] != pristine:
+                raise EffectiveKnownRefused("bound_stopped_found_unsaved_tree_changed")
+            record = store.advance_found_config(
+                "found-config-saved", detail, raw,
+                lambda phase, plan: observe(record) == before,
+                bound_attest=pinned_after)
+        if before[0] == pristine:
+            if observe(record) != before:
+                raise EffectiveKnownRefused("bound_stopped_found_install_preimage_changed")
+            try:
+                reply = _run_bound_restore_joined(
+                    ("/bin/sh", "-c", '. "$1"; . "$2"; atomic_install_tree "$3" "$4" "$5" "$6"',
+                     "zapret-bound-stopped-found", str(SCRIPT / "backend/common.sh"),
+                     str(SCRIPT / "backend/atomic.sh"), str(new_work / "release"),
+                     str(active), str(backup_root), detail["id"]),
+                    pass_fds=(9, config_fd), budget=60, capture_output=True)
+            except subprocess.SubprocessError:
+                raise EffectiveKnownRefused("bound_stopped_found_install_outcome_uncertain") from None
+            if reply.returncode != 0 or reply.stdout != (str(backup) + "\n").encode():
+                raise EffectiveKnownRefused("bound_stopped_found_install_outcome_uncertain")
+        expected = (installed, before[1])
+        if observe(record) != expected:
+            raise EffectiveKnownRefused("bound_stopped_found_installed_tree_changed")
+
+        # The original atomic shell copies the candidate. Sync the actual
+        # installed and parked trees and their parent directories before
+        # the original terminal WAL, then requalify every source and pin.
+        def sync_path(path, directory=False):
+            info = _stat(path, 0, directory=directory)
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW |
+                         (os.O_DIRECTORY if directory else 0))
+            try:
+                opened = os.fstat(fd)
+                if (info.st_dev, info.st_ino) != (opened.st_dev, opened.st_ino):
+                    raise EffectiveKnownRefused("bound_stopped_found_sync_inode_changed")
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+
+        for tree in (active, backup):
+            for root, dirs, names in os.walk(tree, topdown=False, followlinks=False):
+                directory = Path(root)
+                for name in names:
+                    sync_path(directory / name)
+                for name in dirs:
+                    _stat(directory / name, 0, directory=True)
+                sync_path(directory, directory=True)
+        sync_path(backup_root, directory=True)
+        sync_path(active.parent, directory=True)
+
+        def terminal_witness(current):
+            if observe(current) != expected:
+                return False
+            receipt = attest_bound_candidate_final_under_fd9(
+                current, config_fd=config_fd, config_digest=digest,
+                enabled=False, runtime_mode="0")
+            return (type(receipt) is FinalBoundRuntimeReceipt and
+                    receipt.generation == detail["id"] and
+                    receipt.root_sha256 == current["manifest"]["root_sha256"] and
+                    receipt.config_sha256 == digest and
+                    receipt.release_sha256 == new_hash and receipt.running is None and
+                    receipt.epoch_sha256 is None and receipt.kernel_state == expected[1][0] and
+                    receipt.authorization == "NONE" and
+                    receipt.physical_transition_allowed is False and
+                    observe(current) == expected)
+
+        result = {**record, "phase": "committed"}
+        result.pop("found")
+        result = store._persist_found_checkpoint(record, result, terminal_witness)
+        if store.read() != result:
+            raise EffectiveKnownRefused("bound_stopped_found_terminal_readback_changed")
+        return {"result": "committed", "mode": "0"}
+
+
 def advance_native_found_locked(action: str, operation: str, digest: str,
                                 *, config_fd: int, queue_fd: int | None = None) -> dict:
     from auto_detect_destination_commit import (
@@ -1385,6 +1548,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         except (ValueError, RuntimeError, OSError, UnicodeError):
             print("ERROR: original found-data save scope refused", file=sys.stderr)
+            return 69
+    if len(argv) == 3 and argv[0] == "finish-bound-found-locked":
+        try:
+            reply = finish_native_bound_stopped_found_locked(argv[1], argv[2], config_fd=4)
+            print(json.dumps(reply, separators=(",", ":")))
+            return 0
+        except (ValueError, RuntimeError, OSError, UnicodeError):
+            print("ERROR: original bound stopped Found finish refused", file=sys.stderr)
             return 69
     inherited_queue = (len(argv) == 4 and argv[3] == "--inherited-queue" and
                        argv[0] in ("recover-found-locked", "confirm-found-save-locked"))

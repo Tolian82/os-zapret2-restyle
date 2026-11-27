@@ -521,8 +521,14 @@ def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
                                   queue_fd in (9, config_fd))) or
                 (not needs_queue and queue_fd is not None)):
             raise PreviousPhysicalRefused("BOUND_FINAL_RETIRED_QUEUE_REQUIRED")
+        stopped_found = (
+            record["phase"] == "found-config-saved" and pin["schema"] == 1 and
+            record.get("previous_manifest", {}).get("schema") == 1 and
+            record.get("found", {}).get("runtime_mode") == "0" and
+            not enabled and runtime_mode == "0")
         if (pin["schema"] not in (1, 2) or config_digest != detail["candidate"] or
-                record["phase"] != ("epoch-finalizing" if learning else "config-saved") or
+                (not stopped_found and
+                 record["phase"] != ("epoch-finalizing" if learning else "config-saved")) or
                 (learning and runtime_mode != "1") or
                 ("found" in record and record["found"].get("runtime_mode") != runtime_mode) or
                 ("found" not in record and enabled != (runtime_mode == "1"))):
