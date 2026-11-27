@@ -328,6 +328,14 @@ def managed_fault_worker_self_test():
             checked = subprocess.run(["php", "-l", str(path)],
                                      capture_output=True, text=True, timeout=15)
             need(checked.returncode == 0, "G03_MANAGED_FAULT_PRIVATE_PHP_LINT_REFUSED")
+    # The original G03 child is carried as a Python -c string: py_compile of
+    # this wrapper alone would NOT detect an invalid native child statement.
+    source_text = Path(__file__).read_text(encoding="utf-8")
+    marker = "    child = r" + "''" + "'"
+    if source_text.count(marker) != 1:
+        raise RuntimeError("G03_MANAGED_FAULT_NATIVE_CHILD_SOURCE_MISSING")
+    child = source_text.split(marker, 1)[1].split("\\n" + "''" + "'", 1)[0]
+    compile(child, "<G03-original-FD9-native-child>", "exec")
     print("G03_S10_MANAGED_FAULT_COPY=PASS_PRIVATE_PHP_LINT_NO_INSTALLED_MUTATION")
 
 
