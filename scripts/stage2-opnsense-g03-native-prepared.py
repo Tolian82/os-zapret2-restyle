@@ -1317,8 +1317,26 @@ def bound_original_http_upload_main():
                 r"service-rc75|service-rcother|service-preflight-[a-z0-9-]{1,64}):"
                 r"(runtime|argument|php-error|other)", reply)
             if known:
-                raise RuntimeError("G03_HTTP_ORIGINAL_" +
-                                   "_".join(known.groups()).upper().replace("-", "_")) from None
+                symbol = "G03_HTTP_ORIGINAL_" + "_".join(known.groups()).upper().replace("-", "_")
+                if symbol == "G03_HTTP_ORIGINAL_SERVICE_PREFLIGHT_RUNTIME_BUILD_RUNTIME":
+                    # Read ONLY the single original orchestrator stage/status,
+                    # never its potentially private Config/log message.
+                    stage_path = Path("/var/run/zapret2-execution.status")
+                    if stage_path.is_file() and not stage_path.is_symlink() and (
+                            stage_path.stat().st_size <= 512):
+                        stage_fields = stage_path.read_text(errors="replace").strip().split("|", 5)
+                        if (len(stage_fields) == 6 and
+                                stage_fields[0].isdigit() and stage_fields[1].isdigit() and
+                                stage_fields[2] in
+                                ("config", "parser", "targets", "blobs", "ports",
+                                 "generator", "validator", "source-gate", "release-modes") and
+                                stage_fields[3] in ("failed", "ok", "running")):
+                            symbol += "_" + stage_fields[2].upper().replace("-", "_")
+                            symbol += "_" + stage_fields[3].upper()
+                            if stage_fields[2] == "source-gate" and re.fullmatch(
+                                    r"[A-Z0-9_]{1,64}", stage_fields[5]):
+                                symbol += "_" + stage_fields[5]
+                raise RuntimeError(symbol) from None
             raise RuntimeError("G03_HTTP_ORIGINAL_STATUS_" + str(exc.code)) from None
     finally:
         server.terminate()
