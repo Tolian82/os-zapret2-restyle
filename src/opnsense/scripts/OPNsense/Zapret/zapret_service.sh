@@ -1802,6 +1802,9 @@ shared_apply_execute_service()
         # report a preflight rejection, or fall into the legacy actuator.
         if ! shared_apply_original_source_gate "$_shared_apply_id" \
             "$_shared_apply_candidate" --first-auto-apply; then
+            # Existing execution-status channel, not a second WAL. Only
+            # the fixed original source-gate refusal token is retained.
+            orchestrator_fail_stage "$STAGE_FILE" 8 8 source-gate "$_shared_original_gate_reason" || :
             common_error "shared Apply: first bound Auto requires review: $_shared_original_gate_reason"
             return 70
         fi
