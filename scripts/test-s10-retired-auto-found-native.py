@@ -160,7 +160,31 @@ def native_positive():
          g04.same_gui_multiline(saved["strategy"]["trafficargs"], traffic) and
          g04.same_gui_multiline(saved["hostlist"].get("youtubedomains"), domains),
          "S10_AUTO_HTTPS_FRESH_MODEL_UNQUALIFIED")
-    first_auto = [("zapret[hostlist][mode]", "auto")]
+    # Native Auto learning is explicit-only. The seeded two YouTube
+    # profiles are not permission to install a global learner. Add one
+    # truly explicit <HOSTLIST:auto> QUIC profile with the SAME upstream
+    # built-in Lua/payload/filter contract as the seeded QUIC profile.
+    # It is test-only, submitted via the real Strategies HTTPS form.
+    # The original two YouTube profiles remain before this new profile.
+    auto_profile = (
+        "--new\n"
+        "--filter-udp=443\n"
+        "--filter-l7=quic\n"
+        "<HOSTLIST:auto>\n"
+        "--out-range=-d10\n"
+        "--payload=quic_initial\n"
+        "--lua-desync=fake:blob=fake_default_quic:repeats=5"
+    )
+    auto_strategy = traffic.rstrip() + "\n\n" + auto_profile + "\n"
+    need(traffic.count("--new") == 1 and
+         "<HOSTLIST:auto>" not in traffic and
+         auto_strategy.count("<HOSTLIST:auto>") == 1 and
+         auto_strategy.count("--new") == 2,
+         "S10_AUTO_EXPLICIT_STRATEGY_SCOPE_REQUIRED")
+    first_auto = [
+        ("zapret[hostlist][mode]", "auto"),
+        ("zapret[strategy][trafficargs]", auto_strategy),
+    ]
     reject = web.api("POST", "/api/zapret/settings/apply",
                      g04.g04_http_form(saved, stale=True) + first_auto)
     need(reject.get("result") == "failed" and
@@ -177,7 +201,7 @@ def native_positive():
         "CONFIG_AUTO": observed.findtext("hostlist/mode") == "auto",
         "CONFIG_ENABLED": observed.findtext("general/enabled") == "1",
         "CONFIG_WAN": observed.findtext("general/waninterface") == "lo0",
-        "CONFIG_STRATEGY": observed.findtext("strategy/trafficargs") == traffic,
+        "CONFIG_STRATEGY": observed.findtext("strategy/trafficargs") == auto_strategy,
         "CONFIG_DOMAINS": observed.findtext("hostlist/youtubedomains") == domains,
     }
     failed_first = [name for name, ok in checks.items() if not ok]
