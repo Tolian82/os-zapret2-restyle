@@ -1087,7 +1087,7 @@ def pristine_cold_native_main(*, first_commit=False):
                  subprocess.run([SERVICE, "status"], capture_output=True,
                                 timeout=30).returncode == 1,
                  "G03_FIRST_DISABLED_STOPPED_BASELINE_LOST")
-            bound_stopped_found_presave_main()
+            bound_stopped_found_save_main()
         elif bound_found:
             main(bound_found=True)
         else:
@@ -1194,6 +1194,106 @@ def bound_stopped_found_presave_main():
                         timeout=30).returncode == 1,
          "G03_BOUND_STOPPED_RESTORE_DRIFT")
     print("G03_S10_BOUND_STOPPED_PRESAVE=PASS_ORIGINAL_THREE_FILE_RESTORE_NO_CONFIG_SAVE", flush=True)
+
+
+
+def bound_stopped_found_save_main():
+    """Exercise the original Config singleton and both P2 save scopes."""
+    need(os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1" and
+         os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1" and
+         os.environ.get("GITHUB_ACTIONS") == "true" and
+         sys.platform.startswith("freebsd") and os.geteuid() == 0,
+         "G03_BOUND_STOPPED_SAVE_DISPOSABLE_ONLY")
+    previous = json.loads(WAL.read_bytes())
+    old = previous["manifest"]
+    need(previous["phase"] == "committed" and old["schema"] == 1 and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 1,
+         "G03_BOUND_STOPPED_SAVE_PREDECESSOR_REQUIRED")
+    original = snapshot()
+    old_model = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
+    need(old_model is not None and old_model.findtext("general/enabled") == "0",
+         "G03_BOUND_STOPPED_SAVE_ORIGINAL_MODEL_REQUIRED")
+    old_restart = old_model.findtext("general/autorestart") or "off"
+    staged = call([PHP, NATIVE, "stage-config"], locked=True)
+    need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_STOPPED_SAVE_STAGE_DRIFT")
+    op = staged.split("=", 1)[1]
+    work = Path("/var/db/zapret2/shared-work") / op
+    prepared = call([SERVICE, "shared-apply-prepare", op])
+    verify_prepared_build(prepared, op, original, snapshot(), previous,
+                          json.loads(WAL.read_bytes()))
+    raw = (work / "plan.json").read_bytes()
+    plan = json.loads(raw)
+    rows = plan["found_batch"]
+    names = ("youtube", "user", "auto")
+    need(plan["candidate"]["general"]["enabled"] == "0" and
+         plan["changed_fields"] == ["general.autorestart"] and
+         all(p.read_bytes() == rows[n]["before"].encode() and
+             rows[n]["before"] != rows[n]["after"] for n, p in zip(names, TARGETS)),
+         "G03_BOUND_STOPPED_SAVE_PLAN_REQUIRED")
+    # Retain the original source frame on stdin of the native PHP owner.
+    # PHP passes that same FIFO to Python as FD5, separate from save EOF.
+    command = r'''
+set -eu
+base=/usr/local/opnsense/scripts/OPNsense/Zapret
+work="/var/db/zapret2/shared-work/$1"
+. "$base/backend/config.sh"
+config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
+{
+    printf 'S10C2B1_ORIGINAL_INPUT_V1\0'
+    printf '%s\0' "${TRAFFIC_ARGS:-}" "${YOUTUBE_DOMAINS:-}" "${USER_DOMAINS:-}" \
+      "${TELEGRAM_IPS:-}" "${DISCORD_IPS:-}" "${X_IPS:-}" \
+      "${SIP_IPS:-}" "${CUSTOM_IPS:-}" "${EXCLUDE_DOMAINS:-}" \
+      "${EXCLUDE_IPSET:-}" "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
+} | /usr/local/bin/php "$base/shared_apply_config.php" found-bound-save "$1" strategies 0
+'''
+    worker = str(Path(SERVICE).parent / "shared_apply_config.php")
+    call(["/bin/sh", "-c", 'exec "$@" </dev/null', "g03-no-source",
+          PHP, worker, "found-bound-save", op, "strategies", "0"],
+         locked=True, expected_rc=69)
+    need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_STOPPED_SAVE_INVALID_FIFO_MUTATED")
+    print("G03_BOUND_STOPPED_SAVE_FIFO=PASS_REFUSED_NONPIPE_NO_WRITES", flush=True)
+    receipt = json.loads(call(["/bin/sh", "-c", command, "g03-original-found-source", op],
+                              locked=True))
+    saved = json.loads(WAL.read_bytes())
+    pin = saved["manifest"]
+    found = saved["found"]
+    after = snapshot()
+    need(receipt == {"result": "found-config-saved-nonterminal", "saved": True,
+                     "applied": False, "snapshot": saved["detail"]["candidate"],
+                     "change_count": 1, "requires_review": False,
+                     "commit_authorized": False} and
+         saved["phase"] == "found-config-saved" and
+         saved["detail"]["base"] == previous["detail"]["candidate"] and
+         saved["detail"]["candidate"] != saved["detail"]["base"] and
+         saved["previous"] == previous["detail"] and saved["previous_manifest"] == old and
+         pin["generation"] == op and pin["schema"] == 1 and
+         pin["root_sha256"] == hashlib.sha256((work / "manifest.json").read_bytes()).hexdigest() and
+         pin["seal_sha256"] == hashlib.sha256((work / "bundle-seal.json").read_bytes()).hexdigest() and
+         found["plan_sha256"] == hashlib.sha256(raw).hexdigest() and found["runtime_mode"] == "0" and
+         after[0] != original[0] and after[1] == original[1] and after[3] == original[3] and
+         all(p.read_bytes() == rows[n]["after"].encode() and
+             found["stages"][n]["state"] == "installed" and
+             found["post"][n]["sha256"] == image(p)[-1]
+             for n, p in zip(names, TARGETS)),
+         "G03_BOUND_STOPPED_CONFIG_SAVE_OR_READBACK_DRIFT")
+    model = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
+    need(model is not None and model.findtext("general/enabled") == "0" and
+         model.findtext("general/autorestart") == ("hourly" if old_restart == "off" else "off"),
+         "G03_BOUND_STOPPED_CONFIG_SCALAR_DRIFT")
+    print("G03_S10_BOUND_STOPPED_SAVE=PASS_REAL_CONFIG_SAVE_READBACK_THREE_P1_NONTERMINAL",
+          flush=True)
+    # The old runtime executor must NOT advance a bound saved transaction.
+    call([PHP, worker, "found-recover", op, "strategies"], locked=True, expected_rc=69)
+    call([PHP, worker, "found-runtime-activating", op, "strategies"],
+         locked=True, expected_rc=69)
+    need(snapshot() == after and json.loads(WAL.read_bytes()) == saved,
+         "G03_BOUND_STOPPED_SAVED_RUNTIME_FENCE_DRIFT")
+    print("G03_S10_BOUND_STOPPED_SAVED_FENCE=PASS_NO_LEGACY_RUNTIME_PROMOTION",
+          flush=True)
 
 
 def stopped_native_main():

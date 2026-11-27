@@ -1346,8 +1346,10 @@ def main(argv: list[str] | None = None) -> int:
                 _managed_refusal_trace(error)
             print("ERROR: original ordinary locked cold restore refused", file=sys.stderr)
             return 69
-    if argv and argv[0] == "begin-found-save-locked":
+    if argv and argv[0] in ("begin-found-save-locked", "begin-bound-found-save-locked"):
+        bound = argv[0] == "begin-bound-found-save-locked"
         if (len(argv) != 5 or argv[3] not in ("0", "1") or
+                (bound and argv[3] != "0") or
                 not re.fullmatch(r"[a-f0-9]{64}", argv[4])):
             return 64
         try:
@@ -1360,9 +1362,26 @@ def main(argv: list[str] | None = None) -> int:
                 print("ready", flush=True)
                 sys.stdin.buffer.read(1)
 
-            prepare_native_found_intent(
-                argv[1], 4, argv[2], runtime_mode=argv[3], base_digest=argv[4])
-            shared_apply_found_files_original_fd9(argv[1], 4, before_save=wait_for_save)
+            if bound:
+                # This first transport is intentionally limited to schema1
+                # STOPPED. Authenticate native descriptors before mutation.
+                from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+                from shared_apply_operation import SharedApplyOperation, committed_manifest
+                from voice_ipfw_adapter import require_lifecycle_lock
+                if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+                    raise EffectiveKnownRefused("bound_found_native_owner_required")
+                require_lifecycle_lock()
+                assert_inherited_config_fd(4, CONFIG_PATH, owner_uid=None)
+                pin = committed_manifest(SharedApplyOperation(owner=0).read())
+                if type(pin) is not dict or pin.get("schema") != 1:
+                    raise EffectiveKnownRefused("bound_found_schema1_required")
+                begin_native_bound_found_save_locked(
+                    argv[1], 4, argv[2], runtime_mode=argv[3], base_digest=argv[4],
+                    source_fd=5, before_save=wait_for_save)
+            else:
+                prepare_native_found_intent(
+                    argv[1], 4, argv[2], runtime_mode=argv[3], base_digest=argv[4])
+                shared_apply_found_files_original_fd9(argv[1], 4, before_save=wait_for_save)
             return 0
         except (ValueError, RuntimeError, OSError, UnicodeError):
             print("ERROR: original found-data save scope refused", file=sys.stderr)

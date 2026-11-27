@@ -463,7 +463,8 @@ final class SharedApplyConfigWorker
         $firstTrace = $mode === 'write-first-enabled-handoff-locked' || $managedStep !== null;
         if ($managedStep !== null) { @fwrite(STDERR, "S10_MANAGED_STEP=$managedStep\n"); }
         if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D01\n"); }
-        $begin = $mode === 'begin-found-save-locked';
+        $boundBegin = $mode === 'begin-bound-found-save-locked';
+        $begin = $mode === 'begin-found-save-locked' || $boundBegin;
         $managedWrite = in_array($mode, ['write-managed-handoff-locked',
             'write-first-disabled-handoff-locked', 'write-first-enabled-handoff-locked'], true);
         $joined = in_array($mode, ['finish-ordinary-restore-locked', 'recover-managed-config-locked',
@@ -481,6 +482,13 @@ final class SharedApplyConfigWorker
                     'finish-ordinary-restore-locked', 'recover-managed-config-locked',
                     'recover-first-config-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
+        }
+        if ($boundBegin) {
+            $source = @fstat(STDIN);
+            if ($runtimeMode !== '0' || !is_array($source) ||
+                ($source['mode'] & 0170000) !== 0010000) {
+                throw new \RuntimeException('Original bound Found FIFO required');
+            }
         }
         SharedApplyLifecycleLock::assertHeld();
         $reflection = new \ReflectionObject($config);
@@ -520,6 +528,10 @@ final class SharedApplyConfigWorker
             $descriptors = [0 => $managedWrite ? STDIN : ($begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r']),
                 1 => ['pipe', 'w'], 2 => is_resource($trace) ? $trace : ['file', '/dev/null', 'a'],
                 4 => $handle, 9 => $fd9];
+            if ($boundBegin) {
+                // Keep source FIFO separate from the existing ready/save stdin.
+                $descriptors[5] = STDIN;
+            }
             if ($queueStream !== null) {
                 $descriptors[3] = $queueStream;
                 $command[] = '--inherited-queue';
@@ -634,7 +646,8 @@ final class SharedApplyConfigWorker
     }
 
     private static function saveFoundNative(
-        array $plan, string $id, string $mode, object $config, callable $factory
+        array $plan, string $id, string $mode, object $config, callable $factory,
+        bool $bound = false
     ): array {
         $scopes = 0;
         $candidate = VoiceSettingsSnapshot::digest($plan['candidate']);
@@ -642,7 +655,7 @@ final class SharedApplyConfigWorker
             return SharedConfigCommit::persistFoundUnderOriginalOwner(
                 $plan, 'strategies', $config, $factory,
                 static function (callable $saveScope, string $observedDigest) use (
-                    &$scopes, $config, $mode, $id, $candidate, $plan
+                    &$scopes, $config, $mode, $id, $candidate, $plan, $bound
                 ): string {
                     if (++$scopes === 1) {
                         if (!hash_equals($plan['dependencies'], $observedDigest)) {
@@ -650,7 +663,8 @@ final class SharedApplyConfigWorker
                         }
                         $status = null;
                         $ready = self::originalLockedFileEvidence(
-                            $config, $id, 'begin-found-save-locked', $candidate, $mode,
+                            $config, $id, $bound ? 'begin-bound-found-save-locked' :
+                                'begin-found-save-locked', $candidate, $mode,
                             static function () use ($saveScope, &$status): void {
                                 $status = $saveScope();
                             }, null, $observedDigest
@@ -925,7 +939,7 @@ final class SharedApplyConfigWorker
             }
         }
         $action = $argv[1] ?? '';
-        $foundActions = ['found-cold', 'found-recover-prepared', 'found-save', 'found-recover',
+        $foundActions = ['found-cold', 'found-recover-prepared', 'found-save', 'found-bound-save', 'found-recover',
             'found-runtime-activating', 'found-runtime-activated', 'found-runtime-config-saved',
             'found-runtime-epoch-finalizing', 'found-runtime-committed'];
         $found = in_array($action, $foundActions, true);
@@ -936,7 +950,7 @@ final class SharedApplyConfigWorker
             preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D', $argv[4], $matches) === 1) {
             $queueFd = (int)$matches[1];
         }
-        if (count($argv) !== ($action === 'found-save' || $queueFd !== null ? 5 : 4) ||
+        if (count($argv) !== (in_array($action, ['found-save', 'found-bound-save'], true) || $queueFd !== null ? 5 : 4) ||
             !in_array($action, ['preflight', 'save', 'saved', 'managed-save', 'managed-apply', 'first-disabled-apply', 'first-enabled-apply',
                 'ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover', 'managed-save-recover', ...$foundActions], true) ||
             !in_array($argv[3], $found || in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply'], true)
@@ -968,14 +982,28 @@ final class SharedApplyConfigWorker
             }
             $config = \OPNsense\Core\Config::getInstance();
             $factory = static fn() => new \OPNsense\Zapret\Zapret();
-            if ($action === 'found-save') {
+            if (in_array($action, ['found-save', 'found-bound-save'], true)) {
+                $bound = $action === 'found-bound-save';
+                if ($bound) {
+                    // Internal FD9-only checkpoint, not configd/GUI or
+                    // a terminal promotion. Learning queue is not yet wired.
+                    $source = @fstat(STDIN);
+                    if ($argv[4] !== '0' ||
+                        ($plan['candidate']['general']['enabled'] ?? null) !== '0' ||
+                        !is_array($source) || ($source['mode'] & 0170000) !== 0010000) {
+                        throw new \RuntimeException('Original stopped bound Found scope refused');
+                    }
+                }
                 if (!in_array($argv[4], ['0', '1'], true) ||
                     ($argv[4] === '1' &&
                      (string)($plan['candidate']['general']['enabled'] ?? '') !== '1')) {
                     throw new \InvalidArgumentException('Invalid planned found runtime mode');
                 }
-                $result = self::saveFoundNative($plan, $argv[2], $argv[4], $config, $factory);
-                echo self::postSaveReceipt($result);
+                $result = self::saveFoundNative($plan, $argv[2], $argv[4], $config, $factory, $bound);
+                $receipt = self::postSaveReceipt($result);
+                if (fwrite(STDOUT, $receipt) !== strlen($receipt)) {
+                    throw new SharedConfigSaveUncertain('Original Found save receipt unavailable');
+                }
                 return 0;
             }
             if ($argv[1] === 'found-cold') {
