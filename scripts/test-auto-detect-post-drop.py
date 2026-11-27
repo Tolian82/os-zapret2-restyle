@@ -620,6 +620,46 @@ class PostDropContract(unittest.TestCase):
             os.close(unlocked)
         self.assertEqual(capture(), baseline)
 
+    def test_first_bound_learning_owner_scope_requires_original_queue(self):
+        from auto_detect_post_drop import _learning_pretraffic_owner
+        from shared_apply_seal import WORK
+        generation, candidate = "a" * 32, "b" * 64
+        record = {"phase": "activating", "detail": {"id": generation,
+                    "candidate": candidate}, "manifest": {"schema": 2}}
+        workspace = WORK / generation
+        # Only native identity and the original root/WAL reads are isolated.
+        # Real OFD acceptance/refusal is exercised by the preceding test.
+        with (patch("auto_detect_post_drop.sys.platform", "freebsd"),
+              patch("auto_detect_post_drop.os.geteuid", return_value=0),
+              patch("voice_ipfw_adapter.require_lifecycle_lock"),
+              patch("shared_apply_operation.SharedApplyOperation") as factory,
+              patch("neutral_root_stage.verify_original_operation_pins") as verify):
+            store = factory.return_value
+            store.read.return_value = record
+            self.assertEqual(_learning_pretraffic_owner(workspace, candidate, 3), record)
+            verify.assert_called_once_with(record=record, parent=WORK, owner_uid=0)
+            for fd in (None, 4, 9, -1, True):
+                with self.subTest(fd=fd), self.assertRaises(PostDropRefused):
+                    _learning_pretraffic_owner(workspace, candidate, fd)
+            with self.assertRaises(PostDropRefused):
+                _learning_pretraffic_owner(workspace, "c" * 64, 3)
+            with self.assertRaises(PostDropRefused):
+                _learning_pretraffic_owner(WORK / ("c" * 32), candidate, 3)
+            for wrong in ({**record, "phase": "prepared"},
+                          {**record, "previous": {}},
+                          {**record, "found": {}},
+                          {**record, "manifest": {"schema": 1}}):
+                store.read.return_value = wrong
+                with self.assertRaises(PostDropRefused):
+                    _learning_pretraffic_owner(workspace, candidate, 3)
+            store.read.return_value = None
+            self.assertIsNone(_learning_pretraffic_owner(workspace, candidate, None))
+            with self.assertRaises(PostDropRefused):
+                _learning_pretraffic_owner(workspace, candidate, 3)
+            store.read.side_effect = [record, {**record, "phase": "activated"}]
+            with self.assertRaises(PostDropRefused):
+                _learning_pretraffic_owner(workspace, candidate, 3)
+
     def test_pretraffic_does_not_reject_native_append_after_start(self):
         # The original prelaunch witness stays valid after raw/debug append.
         # It is NOT permission to seed an epoch after traffic started.
