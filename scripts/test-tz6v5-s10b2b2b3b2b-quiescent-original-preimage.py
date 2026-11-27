@@ -89,6 +89,53 @@ class OriginalQuiescentTests(unittest.TestCase):
             os.chown(lock, 0, 0)
         lock.chmod(0o600)
 
+    def test_first_learning_wan_uses_sealed_candidate_before_config_save(self):
+        import hashlib
+        import subprocess
+
+        op = "a" * 32
+        record = {"phase": "prepared", "detail": {"id": op,
+                    "base": "b" * 64, "candidate": "c" * 64},
+                  "manifest": {"schema": 2}}
+        raw = (b"<opnsense><OPNsense><Zapret><general><enabled>1</enabled>"
+               b"<waninterface>opt7</waninterface></general><hostlist><mode>auto</mode>"
+               b"</hostlist></Zapret></OPNsense></opnsense>")
+        seal = {"sha256": {"candidate.xml": hashlib.sha256(raw).hexdigest()}}
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            lock = stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            seal_read = stack.enter_context(patch("shared_apply_seal.verify_seal", return_value=seal))
+            content = stack.enter_context(patch("auto_detect_owner._secure_bytes", return_value=raw))
+            run = stack.enter_context(patch.object(gate.subprocess, "run",
+                return_value=subprocess.CompletedProcess([], 0, b"tun7\n", b"")))
+            def call(fd=None, owner=record):
+                return gate._first_learning_candidate_wan(owner, parent=self.root,
+                    owner_uid=os.geteuid(), config_fd=fd)
+            self.assertEqual(call(), "tun7")
+            lock.assert_not_called()
+            self.assertEqual(run.call_args.args[0][-1], "opt7")
+            self.assertEqual(run.call_args.kwargs["pass_fds"], ())
+            self.assertEqual(content.call_args.args[0], self.root / op / "candidate.xml")
+            self.assertEqual(call(4, {**record, "phase": "activating"}), "tun7")
+            self.assertEqual(lock.call_count, 2)
+            run.reset_mock()
+            for invalid in ({**record, "previous": {}}, {**record, "found": {}},
+                            {**record, "manifest": {"schema": 1}}):
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    call(owner=invalid)
+            content.return_value = raw.replace(b"opt7", b"opt8")
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                call()
+            run.assert_not_called()
+            content.return_value = raw
+            seal_read.side_effect = [seal, {"sha256": {"candidate.xml": "0" * 64}}]
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                call()
+            seal_read.side_effect = None
+            run.return_value = subprocess.CompletedProcess([], 0, b"wan-invalid\n", b"")
+            with self.assertRaises(gate.QuiescentPreimageRefused):
+                call()
+
     def test_first_learning_handoff_requires_inherited_queue_and_both_pins(self):
         import io
         import json
