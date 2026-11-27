@@ -451,7 +451,17 @@ def managed_fault_worker_self_test():
     # A second native Found batch must not alias the Config interval toggle.
     # Check the actual PHP staging source before booting an expensive VM.
     fixture = (Path(__file__).resolve().parent / "stage2-opnsense-g03-native-prepared.php").read_text()
-    stage = fixture.split("function stage(", 1)[1].split("\nfunction durable(", 1)[0]
+    stage = fixture.split("function stage(", 1)[1].split(
+        "\nfunction originalHttpFoundIntent(", 1)[0]
+    http = fixture.split("function originalHttpFoundIntent(", 1)[1].split(
+        "\nfunction durable(", 1)[0]
+    need(http.count("native-http-") == 1 and
+         http.count("SharedApplyFoundIntent::validateJson(") == 1 and
+         http.count("$nextInterval = $saved === 'off' ? 'hourly' : 'off';") == 1 and
+         http.count("'autorestart'=>$nextInterval") == 1 and
+         http.count("'youtube'") >= 1 and http.count("'user'") >= 1 and
+         http.count("'auto'") >= 1,
+         "G03_HTTP_ORIGINAL_FOUND_INTENT_DRIFT")
     need(stage.count("bool $secondBatch = false") == 1 and
          stage.count("string $gapMode = ''") == 1 and
          re.search(r"\$secondBatch\s*=(?!=)", stage.split("): string {", 1)[1]) is None and
