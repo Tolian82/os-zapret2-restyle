@@ -476,7 +476,11 @@ apply_runtime_activate()
     APPLY_ACTIVATION_STEP=D14
     APPLY_EARLY_ENGINE_FAILURE=
     APPLY_IPFW_ATTACH_FAILURE=
-    [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || return 64
+    [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || [ "$#" -eq 5 ] || return 64
+    if [ "$#" -eq 5 ]; then
+        [ "$5" = --inherited-queue ] && [ "$2" = 1 ] || return 64
+        ( : <&3 ) 2>/dev/null || return 69
+    fi
     # The optional third argument is already recorded in the durable shared
     # Apply journal before this invocation. Keep normal boot/legacy callers
     # on their original 2-argument API and original PID layout.
@@ -484,11 +488,16 @@ apply_runtime_activate()
         case "$3" in ""|*[!a-f0-9]*) return 64 ;; esac
         [ "${#3}" -eq 32 ] || return 64
     fi
-    if [ "$#" -eq 4 ]; then
+    if [ "$#" -ge 4 ]; then
         case "$4" in ""|*[!a-f0-9]*) return 64 ;; esac
         [ "${#4}" -eq 64 ] || return 64
     fi
     apply_runtime_preflight "$1" "$2" || return $?
+    if [ "$#" -eq 5 ]; then
+        [ "$APPLY_OLD_RUNNING" = 0 ] && [ "$APPLY_NEW_RUNNING" = 1 ] &&
+            /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto=' "$APPLY_CANDIDATE/dvtws.args" ||
+            return 69
+    fi
     APPLY_ACTIVATION_STEP=D15
     if [ "$#" -ge 3 ]; then
         APPLY_BACKUP=$(atomic_install_tree "$APPLY_CANDIDATE" "$ACTIVE_DIR" "$BACKUP_ROOT" "$3") || {
@@ -540,15 +549,23 @@ apply_runtime_activate()
         if /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto=' \
             "$ACTIVE_DIR/dvtws.args"; then
             # Never synthesize a candidate digest from argv or an old owner.
-            [ "$#" -eq 4 ] || {
+            [ "$#" -eq 4 ] || [ "$#" -eq 5 ] || {
                 apply_runtime_abort "original observer candidate unavailable"
                 return $?
             }
-            apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
-                "$CHILD_PIDFILE" "$DVTWS_LOG" 5 "$3" "$4" || {
-                apply_runtime_abort_after_launcher_failure "replacement observer failed"
-                return $?
-            }
+            if [ "$#" -eq 5 ]; then
+                apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
+                    "$CHILD_PIDFILE" "$DVTWS_LOG" 5 "$3" "$4" "$5" || {
+                    apply_runtime_abort_after_launcher_failure "replacement observer failed"
+                    return $?
+                }
+            else
+                apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
+                    "$CHILD_PIDFILE" "$DVTWS_LOG" 5 "$3" "$4" || {
+                    apply_runtime_abort_after_launcher_failure "replacement observer failed"
+                    return $?
+                }
+            fi
         else
             apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
                 "$CHILD_PIDFILE" "$DVTWS_LOG" 5 || {
@@ -600,12 +617,21 @@ apply_runtime_activate()
     fi
     APPLY_ACTIVATION_STEP=D19
     if [ "$APPLY_NEW_RUNNING" = 1 ]; then
-        supervisor_start "$SUPERVISOR_LOOP" "$SUPERVISOR_DAEMON_PIDFILE" \
-            "$SUPERVISOR_MONITOR_PIDFILE" "$CHILD_PIDFILE" \
-            "$SERVICE_SCRIPT" "$DVTWS_BIN" "$SUPERVISOR_LOG" || {
-            apply_runtime_abort "replacement supervisor failed"
-            return $?
-        }
+        if [ "$#" -eq 5 ]; then
+            supervisor_start "$SUPERVISOR_LOOP" "$SUPERVISOR_DAEMON_PIDFILE" \
+                "$SUPERVISOR_MONITOR_PIDFILE" "$CHILD_PIDFILE" \
+                "$SERVICE_SCRIPT" "$DVTWS_BIN" "$SUPERVISOR_LOG" 3<&- || {
+                apply_runtime_abort "replacement supervisor failed"
+                return $?
+            }
+        else
+            supervisor_start "$SUPERVISOR_LOOP" "$SUPERVISOR_DAEMON_PIDFILE" \
+                "$SUPERVISOR_MONITOR_PIDFILE" "$CHILD_PIDFILE" \
+                "$SERVICE_SCRIPT" "$DVTWS_BIN" "$SUPERVISOR_LOG" || {
+                apply_runtime_abort "replacement supervisor failed"
+                return $?
+            }
+        fi
     fi
     APPLY_PHASE=activated
     APPLY_ACTIVATION_STEP=D20
