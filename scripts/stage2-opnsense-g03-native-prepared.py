@@ -334,7 +334,7 @@ def managed_fault_worker_self_test():
     marker = "    child = r" + "''" + "'"
     if source_text.count(marker) != 1:
         raise RuntimeError("G03_MANAGED_FAULT_NATIVE_CHILD_SOURCE_MISSING")
-    child = source_text.split(marker, 1)[1].split("\\n" + "''" + "'", 1)[0]
+    child = source_text.split(marker, 1)[1].split("\n" + "''" + "'", 1)[0]
     compile(child, "<G03-original-FD9-native-child>", "exec")
     print("G03_S10_MANAGED_FAULT_COPY=PASS_PRIVATE_PHP_LINT_NO_INSTALLED_MUTATION")
 
