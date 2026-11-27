@@ -818,6 +818,61 @@ def native_positive():
             need(proof.returncode == 0 and "S10_FIRST_BASE_INDEPENDENT=PASS" in proof.stdout.splitlines(),
                  "S10_AUTO_FIRST_BASE_REPEAT_INDEPENDENT_REFUSED")
             print("S10_FIRST_BASE=PASS_ZERO_CUT_SAME_WAL_CONFIG_ROOT_SEED_STOPPED", flush=True)
+            archive = Path("/var/db/zapret2/shared-aborted-first") / op
+            old_lock = (producer / "worker.lock").stat()
+            old_seed = seed.stat()
+            wal_image = WAL.read_bytes()
+            invoke_archive = ["/bin/sh", "-c", command, "s10-original-fd9", PYTHON_RUNTIME,
+                str(SERVICE.parent / "backend/shared_apply_operation.py"), "archive-first-restored", op]
+            # A late nonzero byte must refuse before any historical move.
+            debug = producer / "debug.log"
+            sentinel = b"s10-disposable-archive-sentinel.invalid\n"
+            with debug.open("ab") as handle:
+                handle.write(sentinel)
+                handle.flush()
+                os.fsync(handle.fileno())
+            refused = subprocess.run(invoke_archive, capture_output=True, timeout=240)
+            need(refused.returncode != 0 and not archive.exists() and WAL.read_bytes() == wal_image and
+                 root.read_bytes() == root_pin[2] and seed.read_bytes() == seed_bytes and
+                 images() == {**before_images, "debug.log": sentinel} and CONFIG.read_bytes() == config_image,
+                 "S10_FIRST_ARCHIVE_NONZERO_REFUSAL_REQUIRED")
+            with debug.open("r+b") as handle:
+                need(handle.read() == sentinel, "S10_FIRST_ARCHIVE_SENTINEL_CHANGED")
+                handle.truncate(0)
+                handle.flush()
+                os.fsync(handle.fileno())
+            print("S10_FIRST_ARCHIVE_NONZERO=PASS", flush=True)
+            archived = subprocess.run(invoke_archive, capture_output=True, timeout=240)
+            for line in archived.stderr.split(b"\n")[:-1][:64]:
+                if (re.fullmatch(rb"ERROR: shared Apply operation cannot advance: [A-Z0-9_]{1,96}", line) or
+                        re.fullmatch(rb"S10_MANAGED_TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4}", line)):
+                    print(line.decode("ascii"), flush=True)
+            need(archived.returncode == 0 and archived.stdout == ("first-restored-archived=" + op + "\n").encode(),
+                 "S10_FIRST_ARCHIVE_NATIVE_RECEIPT_REQUIRED")
+            new_root = archive / "work" / op / "manifest.json"
+            new_seed = archive / "epoch/pretraffic.json"
+            old_producer = producer
+            producer = archive / "producer-parent/producer"
+            def archive_readback():
+                lock = (producer / "worker.lock").stat()
+                seed_stat = new_seed.stat()
+                return (not root.exists() and not seed.exists() and not old_producer.exists() and
+                    not any(work.iterdir()) and not any(epoch.parent.iterdir()) and
+                    (new_root.stat().st_dev, new_root.stat().st_ino, new_root.read_bytes()) == root_pin and
+                    (seed_stat.st_dev, seed_stat.st_ino) == (old_seed.st_dev, old_seed.st_ino) and
+                    new_seed.read_bytes() == seed_bytes and images() == before_images and
+                    (lock.st_dev, lock.st_ino) == (old_lock.st_dev, old_lock.st_ino) and
+                    json.loads((archive / "restored.json").read_bytes()) == rec and
+                    WAL.read_bytes() == wal_image and CONFIG.read_bytes() == config_image and
+                    not any(path.exists() for path in pidfiles) and
+                    subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout == after_kernel)
+            need(archive_readback(), "S10_FIRST_ARCHIVE_INODE_READBACK_REQUIRED")
+            replay = subprocess.run(invoke_archive, capture_output=True, timeout=240)
+            need(replay.returncode == 0 and replay.stdout == archived.stdout and archive_readback(),
+                 "S10_FIRST_ARCHIVE_REPLAY_REQUIRED")
+            blocked = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=180)
+            need(blocked.returncode != 0 and archive_readback(), "S10_FIRST_ARCHIVE_LEGACY_FENCE_REQUIRED")
+            print("S10_FIRST_ARCHIVE=PASS_ORIGINAL_CONFIG_WAL_ROOT_SEED_PRODUCER_LOCK_INODES_REPLAY", flush=True)
             return
         need(rec == {**pending, "phase": "committed"} and
              (epoch / "epoch.json").is_file() and

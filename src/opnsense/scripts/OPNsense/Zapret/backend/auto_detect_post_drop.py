@@ -143,8 +143,8 @@ PROVENANCE_FIELDS = ("release_seal_sha256", "original_args_sha256",
                      "source_map_sha256", "witness_sha256")
 
 
-def match_zero_cut(record, sources, producer, seed_raw, provenance):
-    """Return exact pretraffic bytes only for the same first ACTIVATED owner.
+def match_zero_cut(record, sources, producer, seed_raw, provenance, *, historical=False):
+    """Return exact pretraffic bytes for ACTIVATED or explicitly historical RESTORED.
 
     `producer` MUST be obtained via the existing auto_detect_post_drop._capture
     while borrowing the original P2a descriptor. The caller must independently
@@ -154,7 +154,8 @@ def match_zero_cut(record, sources, producer, seed_raw, provenance):
     def refuse():
         raise ValueError('first_learning_zero_cut_not_exact')
 
-    if (type(record) is not dict or record.get('phase') != 'activated' or
+    if (type(historical) is not bool or type(record) is not dict or
+            record.get('phase') != ('restored' if historical else 'activated') or
             record.get('manifest', {}).get('schema') != 2 or
             any(k in record for k in ('previous', 'previous_manifest', 'found')) or
             any(type(record.get(k)) is not str or
@@ -461,7 +462,7 @@ def native_finish_original_epoch(generation: str, *, reviewed: bool = False) -> 
 # The writer and minute/ACK paths remain deliberately schema2-only until
 # multi-inbox P2 proves managed-before-native transfer and retirement.
 def _learning_release_sources(
-    release: Path,
+    release: Path, *, work_parent: Path | None = None,
 ) -> tuple[Path, str, tuple[tuple[int, str, str], ...]]:
     """Attest the exact sealed original candidate and optional active copy.
 
@@ -494,9 +495,9 @@ def _learning_release_sources(
             not isinstance(candidate, str) or
             not re.fullmatch(r"[0-9a-f]{64}", candidate)):
         raise PostDropRefused("learning_unqualified_operation")
-    workspace = WORK / generation
+    workspace = (WORK if work_parent is None else work_parent) / generation
     sealed = workspace / "release"
-    if release not in (sealed, COMMON_ACTIVE):
+    if release not in ((sealed, COMMON_ACTIVE) if work_parent is None else (sealed,)):
         raise PostDropRefused("learning_release_outside_original_owner")
     verify_seal(workspace, owner=uid)
     expected = verify_learning_promotion(workspace, candidate)

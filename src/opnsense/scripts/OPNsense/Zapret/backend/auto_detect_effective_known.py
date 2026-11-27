@@ -1814,6 +1814,18 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, RuntimeError, OSError, KeyError, TypeError):
             print("ERROR: original first disabled handoff refused", file=sys.stderr)
             return 69
+    if argv and argv[0] == "archive-first-restored-locked":
+        if len(argv) != 4 or argv[3] != "--inherited-queue":
+            return 64
+        try:
+            from auto_detect_aborted_first import archive_first_restored_locked
+            reply = archive_first_restored_locked(argv[1], argv[2], config_fd=4, queue_fd=3)
+            print(json.dumps(reply, separators=(",", ":")))
+            return 0
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+            _managed_refusal_trace(error)
+            print("ERROR: original first restored archival refused", file=sys.stderr)
+            return 69
     if argv and argv[0] == "recover-first-config-locked":
         if len(argv) not in (3, 4) or (len(argv) == 4 and argv[3] != "--inherited-queue"):
             return 64

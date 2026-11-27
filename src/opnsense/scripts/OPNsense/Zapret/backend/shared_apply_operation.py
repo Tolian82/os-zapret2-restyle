@@ -2412,6 +2412,7 @@ def main(argv: list[str]) -> int:
                      bool(OP_ID.fullmatch(argv[2])))
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
+    archive_first = len(argv) == 3 and argv[1] == "archive-first-restored" and bool(OP_ID.fullmatch(argv[2]))
     first_pristine = len(argv) == 3 and argv[1] in (
         "recover-first-activating", "recover-first-activated", "recover-first-config-saved",
         "recover-first-epoch-finalizing") and bool(OP_ID.fullmatch(argv[2]))
@@ -2427,7 +2428,7 @@ def main(argv: list[str]) -> int:
     cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_auto_stop_request or
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_auto_stop_request or
             bound_gui_stage_request or bound_gui_execute_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
@@ -2468,6 +2469,10 @@ def main(argv: list[str]) -> int:
             record = SharedApplyOperation().read()
             if record is not None and "found" in record:
                 print(record["detail"]["id"])
+        elif archive_first:
+            from auto_detect_aborted_first import native_archive_first_restored
+            native_archive_first_restored(argv[2])
+            print("first-restored-archived=" + argv[2])
         elif bound_auto_stop_request:
             native_bound_auto_stop_gate(argv[3])
         elif bound_prepare_request:
