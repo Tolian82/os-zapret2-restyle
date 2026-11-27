@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import s10_inode_barrier_fixture as scratch
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
@@ -35,10 +36,10 @@ def load_writer():
 def run_probe(base, count, waits, *, wal_base=None, focused=False):
     modes = ("original", "late-pinned", "wal-file-barrier", "wal-dir-barrier",
              "wal-rewrite-barrier", "local-rewrite-barrier", "seeded-local-rewrite",
-             "seeded-local-cleanup", "callback-cleanup", "no-rename-control")
+             "seeded-local-cleanup", "callback-cleanup", "wal-token-scratch", "no-rename-control")
     if focused:
         modes = ("original", "wal-rewrite-barrier", "local-rewrite-barrier",
-                 "seeded-local-rewrite", "seeded-local-cleanup", "callback-cleanup", "no-rename-control")
+                 "seeded-local-rewrite", "seeded-local-cleanup", "callback-cleanup", "wal-token-scratch", "no-rename-control")
     report = {m: dict(samples=0, ctime_drift=0, other_drift=0, refused=0,
                       first_drift={}, drift_samples={}, early_ctime_drift={}) for m in modes}
     scope = load_writer()
@@ -106,11 +107,12 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
         for index in range(count):
             for mode in modes:
                 row = report[mode]
-                target = (active if mode == "callback-cleanup" else root) / f"{mode}-{index}.txt"
+                target = (active if mode in ("callback-cleanup", "wal-token-scratch") else root) / f"{mode}-{index}.txt"
                 before, after = b"before.example\n", b"after-long.example\n"
                 target.write_bytes(before)
                 early, pinned, anchor = None, None, None
                 sample = None
+                ready_temp, scratch_pin = None, None
 
                 def local_cleanup():
                     checkpoint(after, directory=seeded)
@@ -120,9 +122,12 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                     scope["_sync"](local)
 
                 def stage(phase, item, data, info):
-                    nonlocal early, pinned, anchor, sample
+                    nonlocal early, pinned, anchor, sample, ready_temp, scratch_pin
                     if phase == "ready":
                         checkpoint(data)
+                        if mode == "wal-token-scratch":
+                            ready_temp = item.name
+                            scratch_pin = scratch.seed(root, item.parent, ready_temp, os.geteuid())
                         return
                     early = identity(info)
                     if mode != "original":
@@ -131,10 +136,17 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                         anchor = os.open(item, os.O_RDONLY | os.O_NOFOLLOW)
                         if snapshot(item, data, anchor) != early:
                             raise RuntimeError("installed anchor mismatch")
-                        if mode == "callback-cleanup":
+                        if mode in ("callback-cleanup", "wal-token-scratch"):
                             # Exercise the existing installed callback with the writer
                             # still open. Scratch is outside the active tree.
-                            local_cleanup()
+                            if mode == "callback-cleanup":
+                                local_cleanup()
+                            else:
+                                if ready_temp is None or scratch_pin is None:
+                                    raise RuntimeError("missing scratch seed")
+                                scratch.finish(root, item.parent, ready_temp, os.geteuid(), scratch_pin)
+                                if (root / scratch.scratch_name(ready_temp)).exists():
+                                    raise RuntimeError("scratch residue")
                             pinned = snapshot(item, data, anchor)
                             note_early(row, early, pinned, "before-final-pin")
                             sample = (mode, target, after, pinned, {})
@@ -166,7 +178,7 @@ def run_probe(base, count, waits, *, wal_base=None, focused=False):
                                           expected_identity=identity(target.lstat()))
                     if early is None:
                         raise RuntimeError("missing installed observation")
-                    if mode not in ("original", "callback-cleanup"):
+                    if mode not in ("original", "callback-cleanup", "wal-token-scratch"):
                         if anchor is None:
                             raise RuntimeError("missing anchor")
                         returned = snapshot(target, after, anchor)

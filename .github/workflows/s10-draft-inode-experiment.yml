@@ -29,7 +29,8 @@ jobs:
       - run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          python3.13 -m py_compile scripts/stage2-opnsense-s10-inode-probe.py
+          python3.13 -m py_compile scripts/stage2-opnsense-s10-inode-probe.py scripts/s10_inode_barrier_fixture.py
+          python3.13 scripts/s10_inode_barrier_fixture.py -v
           python3.13 scripts/stage2-opnsense-s10-inode-probe.py --portable
   native:
     needs: portable
@@ -56,6 +57,7 @@ jobs:
             export GITHUB_ACTIONS=true ZAPRET2_G03_DISPOSABLE_NATIVE=1
             probe=scripts/stage2-opnsense-s10-inode-probe.py
             py=/usr/local/bin/python3
+            "$py" scripts/s10_inode_barrier_fixture.py -v
             "$py" "$probe" --focused --expect-filesystem ufs --expect-wal-filesystem ufs
             # An isolated file-backed pool only; no existing device or pool is touched.
             /sbin/kldstat -q -m zfs || /sbin/kldload zfs
