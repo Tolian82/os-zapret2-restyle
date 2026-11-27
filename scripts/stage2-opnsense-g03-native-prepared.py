@@ -1389,7 +1389,35 @@ def bound_original_http_upload_main():
                                             matched.append("ERRNO13")
                                         if "traceback" in raw:
                                             matched.append("PYTHON_EXCEPTION")
+                                        # Never echo any untrusted token; the
+                                        # selected words are a *fixed* source
+                                        # vocabulary, not user filenames,
+                                        # hostnames, paths or profile args.
+                                        safe = {
+                                            "error", "blob", "file", "fake", "does", "not",
+                                            "exist", "missing", "required", "invalid",
+                                            "name", "directory", "cannot", "create",
+                                            "write", "read", "permission", "denied",
+                                            "refusing", "unsafe", "unexpected",
+                                            "voice", "source", "managed", "ipset",
+                                            "manifest", "xml", "stage", "staging",
+                                            "candidate", "configuration", "config",
+                                            "interface", "wan", "profile", "runtime",
+                                            "command", "args", "argument", "failed",
+                                            "resolve", "resolution", "shorthand",
+                                            "empty", "already", "exists", "no",
+                                            "such", "or", "invalid", "target",
+                                            "prepared", "must", "be", "regular",
+                                            "mismatch", "output", "input",
+                                            "compilation", "enabled", "upstream",
+                                            "stopped", "bound", "mode", "errno",
+                                            "traceback", "typeerror",
+                                        }
+                                        tokens = [v for v in re.findall(r"[a-z]+", raw)
+                                                  if v in safe][:14]
                                         symbol += "_LOG_" + ("_".join(matched[:4]) if matched else "UNCLASSIFIED")
+                                        symbol += "_WORDS_" + ("_".join(tokens).upper() if tokens else "NONE")
+                                        symbol += "_BYTES_" + str(min(len(raw), 99999))
                 raise RuntimeError(symbol) from None
             raise RuntimeError("G03_HTTP_ORIGINAL_STATUS_" + str(exc.code)) from None
     finally:
