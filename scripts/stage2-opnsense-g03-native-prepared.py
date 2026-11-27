@@ -729,7 +729,7 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
     raise SystemExit(69)
 '''
     pinned = call(["/bin/sh", "-c", shell, "g03-bound-native", op,
-                   child, "successor" if successor else ("first-commit" if first_commit else (
+                   child, ("successor-uncertain" if fault_after_save else "successor") if successor else ("first-commit" if first_commit else (
                        "cold" if cold else ("stopped" if stopped else "running")))],
                   locked=True, timeout=300 if first_commit or successor else 180)
     record = json.loads(WAL.read_bytes())
@@ -742,7 +742,9 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
         saved_list = ET.fromstring(CONFIG.read_bytes()).findtext("./OPNsense/Zapret/hostlist/youtubedomains") or ""
         verify_successor_commit(record, previous, op, pinned, root, original,
                                 snapshot(), saved, status, saved_list, expected_list)
-        print("G03_S10_SUCCESSOR=PASS_REAL_TWO_BOUND_COMMITS_WITHOUT_RESTART", flush=True)
+        print(("G03_S10_MANAGED_UNCERTAIN=PASS_REAL_POST_SAVE_WAL_RECOVERY_NO_RESTART"
+               if fault_after_save else "G03_S10_SUCCESSOR=PASS_REAL_TWO_BOUND_COMMITS_WITHOUT_RESTART"),
+              flush=True)
         return
     if first_commit:
         saved = json.loads(call([PHP, str(script / "shared_apply_config.php"), "saved",
@@ -812,7 +814,8 @@ def pristine_cold_native_main(*, first_commit=False):
              release.read_bytes() == release_bytes,
              "G03_PRISTINE_FIRST_COMMIT_OWNER_DRIFT")
         # Same disposable guest and genuine predecessor; no journal reset.
-        bound_manifest_main(successor=True)
+        bound_manifest_main(successor=True, fault_after_save=(
+            os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") == "1"))
         need(hashlib.sha256(engine.read_bytes()).hexdigest() == engine_sha and
              release.read_bytes() == release_bytes,
              "G03_BOUND_SUCCESSOR_ENGINE_PROVENANCE_DRIFT")
