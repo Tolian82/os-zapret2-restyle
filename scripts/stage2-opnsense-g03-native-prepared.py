@@ -373,9 +373,8 @@ def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, succes
     The STOPPED branch follows an explicit service stop on the guest.
     Only the opt-in two-generation journey calls the original coordinator.
     """
-    need((not (fault_after_save and fault_pre_save) and
-          not (fault_after_save or fault_pre_save) or successor) and
-         not (fault_after_save and fault_pre_save),
+    need(not (fault_after_save and fault_pre_save) and
+         (not (fault_after_save or fault_pre_save) or successor),
          "G03_MANAGED_FAULT_REQUIRES_EXCLUSIVE_SUCCESSOR")
     script = Path(SERVICE).parent
     backend = script / "backend"
