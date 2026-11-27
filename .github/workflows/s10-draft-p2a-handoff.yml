@@ -38,6 +38,9 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(id -g)" -gt 0
+          # Native shell paths intentionally use the absolute installed jq.
+          if [ ! -x /usr/local/bin/jq ]; then sudo ln -s "$(command -v jq)" /usr/local/bin/jq; fi
+          /usr/local/bin/jq --version
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py scripts/test-auto-detect-post-drop.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-post-drop.py
           sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
