@@ -19,6 +19,11 @@ on:
         type: boolean
         default: false
         required: false
+      s10_bound_found:
+        description: "S10: genuine bound Found PREPARED dual-root CAS/fence/recovery (requires first commit)"
+        type: boolean
+        default: false
+        required: false
       s10_managed_pre_save:
         description: "S10: real interrupted managed HOSTLIST before Config save, recover original previous owner"
         type: boolean
@@ -95,10 +100,15 @@ jobs:
           python3.13 -m py_compile scripts/stage2-opnsense-g03-first-install.py
           python3.13 -m py_compile scripts/stage2-opnsense-g03-native-prepared.py
           python3.13 scripts/stage2-opnsense-g03-native-prepared.py fault-worker-self-test
+          php -l scripts/stage2-opnsense-g03-native-prepared.php
+          python3.13 -c 'import re,pathlib; p=pathlib.Path("scripts/stage2-opnsense-g03-native-prepared.php"); chunks=re.findall(r"<<<\x27PY\x27\n(.*?)\nPY;",p.read_text(),re.S); assert len(chunks)==3; [compile(c,str(p),"exec") for c in chunks]'
+          python3.13 -m pip install idna
+          python3.13 scripts/test-shared-apply-operation.py TestJournal.test_bound_successor_prepare_is_detached_only
           pre_save="${{ github.event_name == 'workflow_dispatch' && inputs.s10_managed_pre_save && '1' || '0' }}"
           post_save="${{ github.event_name == 'workflow_dispatch' && inputs.s10_managed_uncertain && '1' || '0' }}"
-          if [ "$pre_save" = 1 ] || [ "$post_save" = 1 ]; then
-            test "$pre_save:$post_save" != 1:1
+          bound_found="${{ github.event_name == 'workflow_dispatch' && inputs.s10_bound_found && '1' || '0' }}"
+          if [ "$((pre_save + post_save + bound_found))" -gt 0 ]; then
+            test "$((pre_save + post_save + bound_found))" -eq 1
             test "${{ github.event_name == 'workflow_dispatch' && inputs.s10_first_commit && '1' || '0' }}" = 1
             test "${{ github.event_name == 'workflow_dispatch' && inputs.s10_inode_probe && '1' || '0' }}" = 0
           fi
@@ -189,7 +199,7 @@ jobs:
             # Test-only files outside installed pkg, BEFORE first ordinary Apply.
             install -m 0700 scripts/stage2-opnsense-g03-native-prepared.py /root/g03-native-prepared.py
             install -m 0600 scripts/stage2-opnsense-g03-native-prepared.php /root/g03-native-prepared.php
-            GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 ZAPRET2_G03_PRISTINE_COLD=1 ZAPRET2_G03_PRISTINE_FIRST_COMMIT="${{ github.event_name == 'workflow_dispatch' && inputs.s10_first_commit && '1' || '0' }}" ZAPRET2_G03_MANAGED_UNCERTAIN="${{ github.event_name == 'workflow_dispatch' && inputs.s10_managed_uncertain && '1' || '0' }}" ZAPRET2_G03_MANAGED_PRE_SAVE="${{ github.event_name == 'workflow_dispatch' && inputs.s10_managed_pre_save && '1' || '0' }}" /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
+            GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 ZAPRET2_G03_PRISTINE_COLD=1 ZAPRET2_G03_PRISTINE_FIRST_COMMIT="${{ github.event_name == 'workflow_dispatch' && inputs.s10_first_commit && '1' || '0' }}" ZAPRET2_G03_MANAGED_UNCERTAIN="${{ github.event_name == 'workflow_dispatch' && inputs.s10_managed_uncertain && '1' || '0' }}" ZAPRET2_G03_MANAGED_PRE_SAVE="${{ github.event_name == 'workflow_dispatch' && inputs.s10_managed_pre_save && '1' || '0' }}" ZAPRET2_G03_BOUND_FOUND="${{ github.event_name == 'workflow_dispatch' && inputs.s10_bound_found && '1' || '0' }}" /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
             # The explicit two-bound-commit journey ends on this same disposable guest.
             if [ "${{ github.event_name == 'workflow_dispatch' && inputs.s10_first_commit && '1' || '0' }}" = 1 ]; then
               exit 0

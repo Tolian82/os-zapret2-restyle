@@ -44,7 +44,7 @@ def call(argv, *, locked=False, timeout=180, expected_rc=0):
         allowed = {"stage", "stage-partial", "stage-config", "stage-ordinary", "durable",
                    "crash-partial", "crash-config-save", "shared-apply-prepare",
                    "found-cold", "found-recover", "found-recover-prepared",
-                   "attest", "bind"}
+                   "attest", "bind", "bootstrap-known"}
         if action not in allowed:
             action = "unknown"
         diagnostics = re.findall(
@@ -118,7 +118,7 @@ def snapshot():
                                      capture_output=True, timeout=10),
                   ]))
 
-def main():
+def main(*, bound_found=False):
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_G03_COLD_PREPARED") == "1" and
          sys.platform.startswith("freebsd") and os.geteuid() == 0 and
@@ -129,8 +129,24 @@ def main():
          previous.get("detail", {}).get("page") == "strategies" and
          subprocess.run([SERVICE, "status"], timeout=30).returncode == 0,
          "G03_COLD_PREVIOUS_RUNNING_OWNER_UNPROVEN")
+    old_pin = previous.get("manifest")
+    need((isinstance(old_pin, dict) and old_pin.get("schema") == 1)
+         if bound_found else old_pin is None,
+         "G03_FOUND_PREDECESSOR_PIN_SCOPE")
+    old_work = Path("/var/db/zapret2/shared-work") / previous["detail"]["id"]
+    def old_pins_intact():
+        if not bound_found:
+            return True
+        for name, key in (("manifest.json", "root_sha256"),
+                          ("bundle-seal.json", "seal_sha256")):
+            path = old_work / name
+            if (not path.is_file() or path.is_symlink() or
+                    hashlib.sha256(path.read_bytes()).hexdigest() != old_pin[key]):
+                return False
+        return True
     original = snapshot()
-    staged = call([PHP, NATIVE, "stage"], locked=True)
+    need(old_pins_intact(), "G03_FOUND_OLD_PIN_DRIFT")
+    staged = call([PHP, NATIVE, "stage-partial" if bound_found else "stage"], locked=True)
     need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
          snapshot() == original and json.loads(WAL.read_bytes()) == previous,
          "G03_COLD_STAGE_CHANGED_ORIGINAL_OWNER")
@@ -144,22 +160,22 @@ def main():
     need(pending.get("phase") == "prepared" and
          pending.get("detail", {}).get("id") == op and
          pending.get("previous") == previous["detail"] and
-         "found" in pending and snapshot() == original,
+         pending.get("previous_manifest") == old_pin and
+         "found" in pending and snapshot() == original and old_pins_intact(),
          "G03_COLD_PREPARED_NOT_DURABLE_OR_LIVE_OWNER_DRIFT")
-    # Same original FD9 and genuine PHP Config FD4. Read-only P2/CAS.
-    attested = call([PHP, NATIVE, "attest", op], locked=True)
-    need(attested == "original-found-prepared-source-cas-attested" and
-         json.loads(WAL.read_bytes()) == pending and snapshot() == original,
-         "G03_S10_FOUND_PREPARED_SOURCE_CAS_DRIFT")
-    print("G03_S10_FOUND_SOURCE_CAS=PASS_REAL_ORIGINAL_FD4_FD9_P2_SEAL_NO_WRITES",
-          flush=True)
-    # Real candidate sibling + single original WAL bind, in the actual
-    # inherited native Config FD4/FD9/P2 route. The old running owner is
-    # legacy (unbound); do not forge a committed old immutable manifest.
+    # The standalone source attestation deliberately refuses a previous
+    # immutable pin. Bound candidates use the original combined bind/CAS.
+    if not bound_found:
+        attested = call([PHP, NATIVE, "attest", op], locked=True)
+        need(attested == "original-found-prepared-source-cas-attested" and
+             json.loads(WAL.read_bytes()) == pending and snapshot() == original,
+             "G03_S10_FOUND_PREPARED_SOURCE_CAS_DRIFT")
+        print("G03_S10_FOUND_SOURCE_CAS=PASS_REAL_ORIGINAL_FD4_FD9_P2_SEAL_NO_WRITES",
+              flush=True)
     work = Path("/var/db/zapret2/shared-work") / op
     root = work / "manifest.json"
     seal = (work / "bundle-seal.json").read_bytes()
-    need("manifest" not in pending and "previous_manifest" not in pending
+    need("manifest" not in pending and pending.get("previous_manifest") == old_pin
          and not root.exists() and not root.is_symlink(),
          "G03_FOUND_BIND_INITIAL_PREIMAGE_REQUIRED")
     result = call([PHP, NATIVE, "bind", op], locked=True)
@@ -173,12 +189,15 @@ def main():
          pin.get("root_sha256") == hashlib.sha256(root.read_bytes()).hexdigest() and
          pin.get("seal_sha256") == hashlib.sha256(seal).hexdigest() and
          (work / "bundle-seal.json").read_bytes() == seal and
-         snapshot() == original,
+         snapshot() == original and old_pins_intact() and
+         (not bound_found or (pin["generation"] != old_pin["generation"] and
+                              pin["root_sha256"] != old_pin["root_sha256"])),
          "G03_FOUND_NATIVE_BOUND_OR_PHYSICAL_DRIFT")
-    print("G03_S10_FOUND_BIND=PASS_REAL_FD4_FD9_P2_LEGACY_PREDECESSOR_NO_WRITES",
-          flush=True)
-    print("G03_S10_FOUND_SEMANTIC=PASS_REAL_LEGACY_RESTART_REQUIRED_NO_ACTION",
-          flush=True)
+    if not bound_found:
+        print("G03_S10_FOUND_BIND=PASS_REAL_FD4_FD9_P2_LEGACY_PREDECESSOR_NO_WRITES",
+              flush=True)
+        print("G03_S10_FOUND_SEMANTIC=PASS_REAL_LEGACY_RESTART_REQUIRED_NO_ACTION",
+              flush=True)
     # Separate native PHP owner invocation after the binding child has
     # exited: recovery must rediscover the immutable candidate from disk.
     receipt = json.loads(call([
@@ -193,16 +212,23 @@ def main():
          } and restored.get("phase") == "restored" and
          restored.get("previous") == previous["detail"] and
          restored.get("manifest") == pin and
-         "previous_manifest" not in restored and
+         restored.get("previous_manifest") == old_pin and old_pins_intact() and
          pin["root_sha256"] == hashlib.sha256(root.read_bytes()).hexdigest() and
          (work / "bundle-seal.json").read_bytes() == seal and
          "found" not in restored and snapshot() == original and
          subprocess.run([SERVICE, "status"], timeout=30).returncode == 0,
          "G03_COLD_RESTORED_PREVIOUS_OWNER_UNPROVEN")
-    print("G03_COLD_PREPARED=PASS_ORIGINAL_FD9_CONFIG_FD4_P2_NO_WRITES",
-          flush=True)
-    print("G03_S10_FOUND_BIND_RECOVER=PASS_REAL_NATIVE_PREPARED_NO_PHYSICAL_TRANSITION",
-          flush=True)
+    if bound_found:
+        expected = {**bound, "phase": "restored"}
+        expected.pop("found")
+        need(restored == expected, "G03_BOUND_FOUND_EXACT_RESTORED_WAL_REQUIRED")
+        print("G03_S10_BOUND_FOUND=PASS_REAL_DUAL_ROOT_CAS_FENCE_PREPARED_RESTORE_NO_WRITES",
+              flush=True)
+    else:
+        print("G03_COLD_PREPARED=PASS_ORIGINAL_FD9_CONFIG_FD4_P2_NO_WRITES",
+              flush=True)
+        print("G03_S10_FOUND_BIND_RECOVER=PASS_REAL_NATIVE_PREPARED_NO_PHYSICAL_TRANSITION",
+              flush=True)
 
 
 def verify_first_bound_commit(record, op, receipt, root, original, saved, status):
@@ -868,6 +894,18 @@ def pristine_cold_native_main(*, first_commit=False):
          not work.is_symlink() and
          (not work.exists() or (work.is_dir() and not any(work.iterdir()))),
          "G03_PRISTINE_COLD_DISPOSABLE_BASELINE_REQUIRED")
+    bound_found = os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1"
+    need(not bound_found or (first_commit and
+         os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") != "1" and
+         os.environ.get("ZAPRET2_G03_MANAGED_PRE_SAVE") != "1"),
+         "G03_BOUND_FOUND_REQUIRES_EXCLUSIVE_FIRST_COMMIT")
+    if bound_found:
+        config_before = image(CONFIG)
+        boot = call([PHP, NATIVE, "bootstrap-known"], locked=True)
+        need(boot in ("original-known-bootstrap=created", "original-known-bootstrap=existing") and
+             image(CONFIG) == config_before and not WAL.exists() and not WAL.is_symlink() and
+             all(image(path)[0] == "file" for path in TARGETS),
+             "G03_BOUND_FOUND_ORIGINAL_BOOTSTRAP_REFUSED")
     original = snapshot()
     engine_sha = hashlib.sha256(engine.read_bytes()).hexdigest()
     release_bytes = release.read_bytes()
@@ -881,9 +919,12 @@ def pristine_cold_native_main(*, first_commit=False):
              release.read_bytes() == release_bytes,
              "G03_PRISTINE_FIRST_COMMIT_OWNER_DRIFT")
         # Same disposable guest and genuine predecessor; no journal reset.
-        bound_manifest_main(successor=True, fault_after_save=(
-            os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") == "1"),
-            fault_pre_save=(os.environ.get("ZAPRET2_G03_MANAGED_PRE_SAVE") == "1"))
+        if bound_found:
+            main(bound_found=True)
+        else:
+            bound_manifest_main(successor=True, fault_after_save=(
+                os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") == "1"),
+                fault_pre_save=(os.environ.get("ZAPRET2_G03_MANAGED_PRE_SAVE") == "1"))
         need(hashlib.sha256(engine.read_bytes()).hexdigest() == engine_sha and
              release.read_bytes() == release_bytes,
              "G03_BOUND_SUCCESSOR_ENGINE_PROVENANCE_DRIFT")

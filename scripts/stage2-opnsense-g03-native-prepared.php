@@ -7,6 +7,7 @@ namespace OPNsense\Zapret\Native;
 
 require_once '/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_request.php';
 require_once '/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php';
+require_once '/usr/local/opnsense/scripts/OPNsense/Zapret/auto_detect_config_snapshot.php';
 
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 
@@ -180,9 +181,15 @@ if action == "bind":
             staged.promotion_allowed or staged.reattest_under_original_fd9 is not True):
         raise RuntimeError("G03_FOUND_NATIVE_BIND_NOT_PREPARED")
     semantic = native_plan_found_prepared_fd9(witness, 4, config_digest=sys.argv[3])
+    old_pin = before.get("previous_manifest")
+    if old_pin is not None:
+        if (old_pin["schema"] != 1 or witness.source.mode != "list" or
+                semantic.previous_running_epoch_sha256 is not None or
+                semantic.decision.changed_active != ("hostlist-youtube.txt",)):
+            raise RuntimeError("G03_BOUND_FOUND_EXPECTED_MULTI_SOURCE_SEMANTIC_REFUSED")
     if (semantic.previous_state != "ready" or
             semantic.previous_generation != before["previous"]["id"] or
-            semantic.previous_root_sha256 is not None or
+            semantic.previous_root_sha256 != (None if old_pin is None else old_pin["root_sha256"]) or
             semantic.candidate_root_sha256 != staged.root_sha256 or
             semantic.plan_sha256 != witness.plan_sha256 or
             semantic.decision.kind != "RESTART_REQUIRED" or semantic.reload_candidate or
@@ -394,14 +401,26 @@ try {
              getenv('ZAPRET2_G03_COLD_PREPARED') === '1' &&
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
              in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config',
-                                         'durable','attest','bind','crash-partial','crash-config-save','stage-ordinary'], true) &&
+                                         'durable','attest','bind','crash-partial','crash-config-save','stage-ordinary','bootstrap-known'], true) &&
              count($argv) === (in_array(($argv[1] ?? ''),
-                ['stage','stage-partial','stage-config','stage-ordinary'], true) ? 2 : 3),
+                ['stage','stage-partial','stage-config','stage-ordinary','bootstrap-known'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
     SharedApplyLifecycleLock::assertHeld();
     require_once 'script/load_phalcon.php';
     $config = \OPNsense\Core\Config::getInstance();
-    if ($argv[1] === 'crash-config-save') {
+    if ($argv[1] === 'bootstrap-known') {
+        required(getenv('ZAPRET2_G03_BOUND_FOUND') === '1' &&
+                 getenv('ZAPRET2_G03_PRISTINE_FIRST_COMMIT') === '1' &&
+                 !file_exists('/var/db/zapret2/shared-apply/operation.json') &&
+                 !is_link('/var/db/zapret2/shared-apply/operation.json'),
+                 'G03_BOUND_FOUND_BOOTSTRAP_PRISTINE_ONLY');
+        // The original helper takes and revalidates the native Config lock.
+        // Do not nest it inside the existing fixture's Config::lock branch.
+        $digest = VoiceSettingsSnapshot::digest((new \OPNsense\Zapret\Zapret())->getNodes());
+        $state = AutoDetectConfigSnapshot::bootstrapKnownInitial(
+            $config, static fn() => new \OPNsense\Zapret\Zapret(), $digest);
+        echo "original-known-bootstrap=" . $state . "\n";
+    } elseif ($argv[1] === 'crash-config-save') {
         // The original Config lock must be acquired ONCE by the real
         // SharedConfigCommit, via the test-only delegating crash adapter.
         crashAfterActualConfigSave($config, $argv[2]);
