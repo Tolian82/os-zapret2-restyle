@@ -367,13 +367,16 @@ def managed_fault_worker_self_test():
 
 
 def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, successor=False,
-                        fault_after_save=False):
+                        fault_after_save=False, fault_pre_save=False):
     """Existing PREPARED proofs, plus the disposable first/successor commits.
 
     The STOPPED branch follows an explicit service stop on the guest.
     Only the opt-in two-generation journey calls the original coordinator.
     """
-    need(not fault_after_save or successor, "G03_MANAGED_FAULT_REQUIRES_SUCCESSOR")
+    need((not (fault_after_save and fault_pre_save) and
+          not (fault_after_save or fault_pre_save) or successor) and
+         not (fault_after_save and fault_pre_save),
+         "G03_MANAGED_FAULT_REQUIRES_EXCLUSIVE_SUCCESSOR")
     script = Path(SERVICE).parent
     backend = script / "backend"
     def journal():
@@ -607,6 +610,7 @@ try:
         fault = mode in ("successor-uncertain", "successor-pre-save")
         pre_save = mode == "successor-pre-save"
         if fault:
+            import tempfile
             from runpy import run_path
             from auto_detect_destination_commit import _attest_bound_managed_installed_locked
             from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
@@ -769,12 +773,30 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
     raise SystemExit(69)
 '''
     pinned = call(["/bin/sh", "-c", shell, "g03-bound-native", op,
-                   child, ("successor-uncertain" if fault_after_save else "successor") if successor else ("first-commit" if first_commit else (
+                   child, ("successor-pre-save" if fault_pre_save else ("successor-uncertain" if fault_after_save else "successor")) if successor else ("first-commit" if first_commit else (
                        "cold" if cold else ("stopped" if stopped else "running")))],
                   locked=True, timeout=300 if first_commit or successor else 180)
     record = json.loads(WAL.read_bytes())
     root = Path("/var/db/zapret2/shared-work") / op / "manifest.json"
     if successor:
+        if fault_pre_save:
+            restored = record
+            status = subprocess.run([SERVICE, "status"], capture_output=True,
+                                    text=True, timeout=30)
+            need(restored.get("phase") == "restored" and
+                 restored.get("previous") == previous["detail"] and
+                 restored.get("previous_manifest") == previous["manifest"] and
+                 restored.get("detail", {}).get("id") == op and
+                 "managed" not in restored and "found" not in restored and
+                 root.is_file() and not root.is_symlink() and
+                 pinned == "G03_BOUND_SUCCESSOR_RESTORED=" + hashlib.sha256(root.read_bytes()).hexdigest() and
+                 restored.get("manifest", {}).get("root_sha256") == pinned.split("=", 1)[1] and
+                 snapshot() == original and
+                 status.returncode == 0 and status.stdout.strip() == "zapret is running",
+                 "G03_S10_MANAGED_PRESAVE_RESTORE_OWNER_CONFIG_PROCESS_IPFW_DRIFT")
+            print("G03_S10_MANAGED_PRESAVE=PASS_REAL_INSTALLED_FILE_ROLLBACK_BEFORE_CONFIG_SAVE_NO_RESTART",
+                  flush=True)
+            return
         saved = json.loads(call([PHP, str(script / "shared_apply_config.php"), "saved",
                                  op, "strategies"], locked=True))
         status = subprocess.run([SERVICE, "status"], capture_output=True,
@@ -855,7 +877,8 @@ def pristine_cold_native_main(*, first_commit=False):
              "G03_PRISTINE_FIRST_COMMIT_OWNER_DRIFT")
         # Same disposable guest and genuine predecessor; no journal reset.
         bound_manifest_main(successor=True, fault_after_save=(
-            os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") == "1"))
+            os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") == "1"),
+            fault_pre_save=(os.environ.get("ZAPRET2_G03_MANAGED_PRE_SAVE") == "1"))
         need(hashlib.sha256(engine.read_bytes()).hexdigest() == engine_sha and
              release.read_bytes() == release_bytes,
              "G03_BOUND_SUCCESSOR_ENGINE_PROVENANCE_DRIFT")
