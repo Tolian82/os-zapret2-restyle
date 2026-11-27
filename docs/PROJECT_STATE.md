@@ -1,3 +1,15 @@
+## 27 November 2026 — v0.6.5.x current S10 state
+
+Accepted main `0.6.5_241` (`f4d059292b0729b9fed9563401476a87e60aad5e`); unmerged working candidate `0.6.5_242` on `draft/tz6v5-s10-integrated` (exact qualified `75712458417b50c117ad8bb6e94b52aebf4ca08b`). **S10 OPEN, S11 BLOCKED.** Only disposable OPNsense installs; no published test pkg, owner-router action, integrated PR or main merge. [Current next action](START_HERE.md) · [Approved S10](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) · [Evidence issue #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319).
+
+**Accepted and distinct:** native first/successor COMMITTED [#45960403608](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45960403608); actual post-save Config uncertainty→COMMITTED [#45966358074](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45966358074); pre-save managed failure→RESTORED [#45973301023](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45973301023); installed G01 dry-run/purge [#45961872460](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45961872460); separate UFS/ZFS **source** recovery [#45953633549](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45953633549); current exact-head real installed **dual-root bound Found PREPARED→RESTORED without physical mutation** [#45983011678](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45983011678), all jobs SUCCESS. Each outcome is bound to its actual tested SHA; earlier results are reused only where installed production behavior and relevant dependencies are unchanged.
+
+**Still not accepted:** physical original bound Found STOPPED P1 file and Config save, relevant ACK/learning epoch retirement and corresponding real recovery; remaining S10c2 producer/manifest/WAN-only/prestart-Lab reconciliation; temporary draft-trigger/inode diagnostic removal; integrated exact-head PR and postmerge main verification. Running physical Found runtime transitions remain fenced and belong to later approved lifecycle steps. Use the existing FD9, native Config/FD4, P2/P2a and original WAL; no second writer or arbitrary process/IPFW action.
+
+**26 November state below is the previous checkpoint, not current acceptance.**
+
+---
+
 ## 26 November 2026 — current S10 integration boundary
 
 Accepted main `v0.6.5_241` / `f4d059292b0729b9fed9563401476a87e60aad5e`: [PR #1362](https://github.com/Tolian82/os-zapret2-restyle/pull/1362), [main CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45789370798), release classifier successful. The owner-approved six-book planning/test method is in force. **Working candidate (incomplete, not accepted):** `VERSION=0.6.5`, `PLUGIN_REVISION=242`, `v0.6.5_242`; disposable CI-only `os-zapret2-restyle-0.6.5_242.pkg` built in G03, NOT published or owner-installed. This is a saved internal checkpoint of the one S10 R3 scope, not a new accepted stage or standalone PR.

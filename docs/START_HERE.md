@@ -1,3 +1,21 @@
+## 27 November 2026 — S10 exact current handoff
+
+[PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [DEVELOPMENT_PLANNING](DEVELOPMENT_PLANNING.md) · [TESTING_RULES](TESTING_RULES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
+
+**Accepted main:** `0.6.5_241` at `f4d059292b0729b9fed9563401476a87e60aad5e`. **Exact tested candidate** on `draft/tz6v5-s10-integrated`: `0.6.5_242` at `75712458417b50c117ad8bb6e94b52aebf4ca08b`. **S10 OPEN; S11 BLOCKED; no integrated PR, public pkg, main merge or owner-router operation.** Approved requirements: [S10 A/B/GO](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) and [#1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319).
+
+**Accepted installed evidence (distinct exact heads):** real first and linked successor COMMITTED without restart [G03 #45960403608](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45960403608); post-real-Config-save uncertain outcome closed to COMMITTED [G03 #45966358074](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45966358074); pre-save managed HOSTLIST crash RESTORED [G03 #45973301023](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45973301023); installed G01 dry-run/real purge [#45961872460](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45961872460). UFS/ZFS source recovery [#45953633549](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45953633549) is a separate source-level result, not installed acceptance. Production code for these previously accepted behaviors was unchanged in later G03 fixture-only commits.
+
+**Just accepted at this candidate HEAD:** unattended push-triggered [G03 #45983011678](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45983011678), three jobs SUCCESS, disposable OPNsense 26.7 / FreeBSD 15.1. Original P1 bootstrap and bounded test-only first-inode ctime quiescence established one exact starting preimage (all later native CAS still include ctime); genuine first COMMITTED then **bound Found PREPARED → original RESTORED with both immutable roots and NO physical Found/Config/IPFW/PID mutation or engine restart**. Required native markers `G03_P1_BOOTSTRAP=PASS_STABLE_NATIVE_CTIME_AND_FULL_CAS`, `G03_S10_FIRST_BOUND=PASS_REAL_CONFIG_ENGINE_IPFW_COMMITTED` and `G03_S10_BOUND_FOUND=PASS_REAL_DUAL_ROOT_CAS_FENCE_PREPARED_RESTORE_NO_WRITES`. Opt-in Chromium/F5 and legacy unbound tests were skipped: not counted as PASS.
+
+**Exact next task:** qualify the remaining original-FD9 **bound Found STOPPED** three-file CAS + single native Config Save and required recovery; for schema2 learning predecessor also prove P2a/ACK/epoch retirement before mutation. Private `begin_native_bound_found_save_locked` / `shared_apply_bound_found_files_original_fd9` exist but are NOT a qualified public save path; `shared_apply_config.php found-save` still uses the legacy unbound route. Keep running/unqualified predecessors fail-closed; do not remove the bound runtime witness fence or introduce a new writer/FD9/WAL/lock. This is the same S10 R3 block, NOT early implementation of S11–S14 physical executor. Also reconcile S10c2 producer/manifest and WAN-only/prestart Lab evidence; then remove temporary draft G03 push route + `.github/workflows/s10-draft-inode-experiment.yml`, run exact-head PR CI, verify merged main and only then close #1319.
+
+**Temporary test automation:** draft `push` to the existing G03 fixture Python/PHP files starts the focused Found native journey and cancels superseded draft jobs. Docs/YAML-only edits do not spawn a VM. Remove before integrated PR. This chat can wait for a CI result during an active response; it does not run development while inactive.
+
+**The following 26 November checkpoint is retained as earlier history. Its old PENDING statements are not current status.**
+
+---
+
 ## 26 November 2026 — S10 integrated working candidate
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [DEVELOPMENT_PLANNING](DEVELOPMENT_PLANNING.md) · [TESTING_RULES](TESTING_RULES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
