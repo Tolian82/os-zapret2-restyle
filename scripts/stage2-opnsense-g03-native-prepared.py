@@ -158,8 +158,14 @@ def verify_prepared_build(receipt, op, before, after, old_wal, new_wal):
                         re.fullmatch(r"[a-z][a-z-]{0,30}", name) and
                         state in ("running", "ok", "failed", "stopped")):
                     # Only fixed machine-readable codes, never free-form text.
+                    fixed_codes = {
+                        "protected effective HOSTLIST composition unavailable": "P1_COMPOSITION_REFUSED",
+                        "managed Target validation failed": "MANAGED_TARGET_VALIDATION_FAILED",
+                        "configuration loading failed": "CONFIG_LOAD_FAILED",
+                        "native Voice ON requires the completed transactional runtime": "NATIVE_VOICE_PREFLIGHT_REFUSED",
+                    }
                     code = (message if re.fullmatch(r"[A-Z][A-Z0-9_]{1,63}", message)
-                            else "redacted")
+                            else fixed_codes.get(message, "redacted"))
                     print(f"G03_BUILD_STAGE={index}/{total}:{name}:{state}:{code}",
                           flush=True)
     except (OSError, UnicodeError):
@@ -450,6 +456,19 @@ def managed_fault_worker_self_test():
     need(child.count("_full_prior_tree(old_work if pre_save else WORK / op, COMMON_ACTIVE, 0)") == 1 and
          child.count("(old_tree if pre_save else new_tree)") == 1,
          "G03_MANAGED_PRESAVE_WRONG_ACTIVE_SEAL_SELECTOR")
+    # Diagnostic helper must remain a pure success check on identical
+    # snapshots and must refuse a producer rejection even after other stdout.
+    synthetic = (("config",), ("pid",), (("missing",),) * 3, ("ipfw",))
+    verify_prepared_build("prepared-id=" + "1" * 32, "1" * 32,
+                          synthetic, synthetic, None, None)
+    try:
+        verify_prepared_build("builder-message\npreflight-rejected=runtime-build",
+                              "1" * 32, synthetic, synthetic, None, None)
+    except RuntimeError as exc:
+        need(str(exc) == "G03_ORIGINAL_SEAL_BUILD_DIAGNOSED_REFUSAL",
+             "G03_BUILD_DIAGNOSTIC_WRONG_REFUSAL")
+    else:
+        raise RuntimeError("G03_BUILD_DIAGNOSTIC_MISSED_REFUSAL")
     print("G03_S10_MANAGED_FAULT_COPY=PASS_BOTH_PRIVATE_PHP_LINT_NO_INSTALLED_MUTATION")
 
 
