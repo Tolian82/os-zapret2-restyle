@@ -214,6 +214,38 @@ def native_positive():
         print("S10_AUTO_FIRST_FAILURE_WAL=" + phase + ":SCHEMA_" + schema +
               ":PINS_" + pins + ":CONFIG_" +
               ("UNCHANGED" if CONFIG.read_bytes() == before else "CHANGED"), flush=True)
+        # Existing execution-status channel contains a single bounded
+        # source-owned gate code, not another journal or raw stderr.
+        status = Path("/var/run/zapret2-execution.status")
+        if status.is_file() and not status.is_symlink():
+            info = status.stat()
+            if info.st_uid == 0 and 0 < info.st_size <= 512:
+                fields = status.read_text(errors="replace").strip().split("|", 5)
+                if (len(fields) == 6 and fields[0].isdigit() and fields[1].isdigit()
+                        and fields[2] == "source-gate" and fields[3] == "failed"):
+                    # Codes must have been normalized by the production gate.
+                    # Still restrict what can enter this disposable CI log.
+                    fixed = {
+                        "S10_BOUND_ENGINE_UNQUALIFIED", "S10_BOUND_ENGINE_CHANGED",
+                        "S10_EFFECTIVE_SOURCE_UNQUALIFIED", "S10_FIRST_AUTO_GUI_SCOPE_REQUIRED",
+                        "S10_FIRST_AUTO_GUI_OUTCOME_UNCERTAIN", "S10_FIRST_ENABLED_APPLY_SCOPE_REQUIRED",
+                        "S10_FIRST_ENABLED_APPLY_PREIMAGE_CHANGED", "S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN",
+                        "S10_FIRST_LEARNING_SOURCE_CHANGED", "S10_FIRST_LEARNING_QUEUE_OWNER_CHANGED",
+                        "S10_BOUND_PROMOTION_PRECHECK_REFUSED", "S10_PREPARED_DISPATCH_BIND_CHANGED",
+                        "S10_PREPARED_DISPATCH_WITNESS_CHANGED", "S10_ORIGINAL_PREPARED_REQUIRED",
+                        "ORIGINAL_TYPED_SEALED_SOURCE_REQUIRED", "ORIGINAL_PREPARED_SOURCE_IDENTITY_MISMATCH",
+                        "ORIGINAL_AUTO_CANDIDATE_IDENTITY_MISMATCH", "ORIGINAL_PREPARED_SOURCE_ROOT_UNQUALIFIED",
+                        "ORIGINAL_SCHEMA3_PHYSICAL_UNQUALIFIED", "ORIGINAL_SEALED_REFS_UNQUALIFIED",
+                        "ORIGINAL_STAGE_FILESYSTEM_REFUSED", "STAGED_ROOT_UNQUALIFIED",
+                        "ORIGINAL_BOUND_ROOT_UNQUALIFIED", "ORIGINAL_CONFIG_PREIMAGE_MISMATCH",
+                        "NATIVE_ORIGINAL_PROBE_REFUSED", "NATIVE_ORIGINAL_PROBE_UNAVAILABLE",
+                        "ORIGINAL_QUIESCENT_PREIMAGE_REFUSED", "FIRST_LEARNING_WAN_SOURCE_CHANGED",
+                        "FIRST_LEARNING_WAN_RESOLVER_REFUSED", "ORIGINAL_EFFECTIVE_REFUSAL",
+                        "ORIGINAL_VALUE_REFUSAL", "ORIGINAL_TYPE_REFUSAL", "ORIGINAL_SHARED_OPERATION_REFUSAL",
+                        "ORIGINAL_BUNDLE_REFUSAL", "UNCLASSIFIED_PARITY_REFUSAL",
+                    }
+                    print("S10_AUTO_FIRST_GATE_REFUSAL=" +
+                          (fields[5] if fields[5] in fixed else "OTHER_FIXED_CODE"), flush=True)
         # S10 G05 regression: the new sealed-schema3 pre-transaction fence
         # must NOT be misreported as a partially applied/reviewed owner.
         # Prove the official clean guest still has its exact Config bytes,
