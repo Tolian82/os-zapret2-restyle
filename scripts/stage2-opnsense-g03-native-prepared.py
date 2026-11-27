@@ -1336,6 +1336,60 @@ def bound_original_http_upload_main():
                             if stage_fields[2] == "source-gate" and re.fullmatch(
                                     r"[A-Z0-9_]{1,64}", stage_fields[5]):
                                 symbol += "_" + stage_fields[5]
+                            if stage_fields[2] == "blobs":
+                                # Test-only bounded branch provenance. Match
+                                # ONLY fixed source-defined error classes.
+                                # Never print arbitrary stage message, path,
+                                # IP, domain, native args or uploaded text.
+                                reason = stage_fields[5].lower()
+                                classes = (
+                                    ("BLOB_DIRECTORY_MISSING", "blob directory does not exist"),
+                                    ("BLOB_DECLARATION", "blob declaration"),
+                                    ("BLOB_NAME", "invalid blob name"),
+                                    ("BLOB_FILE_MISSING", "required file"),
+                                    ("BLOB_WRITE", "cannot write blob"),
+                                    ("NATIVE_VOICE", "native voice"),
+                                    ("VOICE_STAGE_COLLISION", "refusing to overwrite common candidate artifacts"),
+                                    ("VOICE_SOURCE_MISMATCH", "managed ipset changed"),
+                                    ("VOICE_WAN_MISMATCH", "wan does not match"),
+                                    ("VOICE_INTERFACE", "interface"),
+                                    ("VOICE_MISSING_FILE", "no such file or directory"),
+                                    ("VOICE_PERMISSION", "permission denied"),
+                                    ("VOICE_XML", "xml"),
+                                    ("VOICE_PROFILE", "profile"),
+                                    ("VOICE_SYNTAX", "syntax"),
+                                    ("VOICE_ARGUMENTS", "usage:"),
+                                )
+                                matched = [label for label, needle in classes if needle in reason]
+                                symbol += "_" + (matched[0] if matched else "UNCLASSIFIED")
+                                root = Path("/var/db/zapret2/shared-work")
+                                candidates = []
+                                if root.is_dir() and not root.is_symlink():
+                                    for work in root.iterdir():
+                                        if not re.fullmatch(r"[a-f0-9]{32}", work.name):
+                                            continue
+                                        if not work.is_dir() or work.is_symlink():
+                                            continue
+                                        file = work / "stage-error.log"
+                                        if not file.is_file() or file.is_symlink():
+                                            continue
+                                        info = file.stat()
+                                        if (info.st_uid != 0 or info.st_nlink != 1 or
+                                                not 0 <= info.st_size <= 16384):
+                                            continue
+                                        candidates.append((info.st_mtime_ns, file))
+                                if candidates:
+                                    file = max(candidates)[1]
+                                    raw = file.read_text(errors="replace").lower()
+                                    if len(raw) <= 16384:
+                                        matched = [label for label, needle in classes if needle in raw]
+                                        if "errno 2" in raw:
+                                            matched.append("ERRNO2")
+                                        if "errno 13" in raw:
+                                            matched.append("ERRNO13")
+                                        if "traceback" in raw:
+                                            matched.append("PYTHON_EXCEPTION")
+                                        symbol += "_LOG_" + ("_".join(matched[:4]) if matched else "UNCLASSIFIED")
                 raise RuntimeError(symbol) from None
             raise RuntimeError("G03_HTTP_ORIGINAL_STATUS_" + str(exc.code)) from None
     finally:
