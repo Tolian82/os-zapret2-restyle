@@ -482,7 +482,7 @@ final class SharedApplyConfigWorker
                     'finish-bound-found-locked', 'recover-found-locked',
                     'confirm-found-save-locked',
                     'finish-ordinary-restore-locked', 'recover-managed-config-locked',
-                    'recover-first-config-locked'], true)))) {
+                    'recover-first-config-locked', 'write-first-enabled-handoff-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
         }
         if ($boundBegin) {
@@ -957,7 +957,7 @@ final class SharedApplyConfigWorker
                 (string)$argv[5], $matches) === 1);
         $queueOther = (in_array($action, ['found-recover', 'found-bound-finish',
                 'ordinary-restore-finish', 'managed-save-recover',
-                'ordinary-first-recover'], true) &&
+                'ordinary-first-recover', 'first-enabled-apply'], true) &&
             count($argv) === 5 &&
             preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D',
                 (string)$argv[4], $matches) === 1);
@@ -1133,7 +1133,7 @@ final class SharedApplyConfigWorker
             $firstDisabled = $action === 'first-disabled-apply';
             $firstEnabled = $action === 'first-enabled-apply';
             $attest = static function (string $mode, string $base, string $candidate, string $phase)
-                use ($config, $id, $plan, $planSha, $managedApply, $firstDisabled, $firstEnabled): bool {
+                use ($config, $id, $plan, $planSha, $managedApply, $firstDisabled, $firstEnabled, $queueStream): bool {
                 // Hash the same parsed plan bytes and native Model snapshots on both sides of FD4.
                 if ($mode === 'confirm-managed-config-save-locked') {
                     self::requireReadableConfig();
@@ -1142,7 +1142,7 @@ final class SharedApplyConfigWorker
                 if (($firstDisabled || $firstEnabled) && $mode === 'begin-managed-config-save-locked') {
                     return self::originalLockedFileEvidence(
                         $config, $id, $firstEnabled ? 'write-first-enabled-handoff-locked'
-                            : 'write-first-disabled-handoff-locked', $digest)
+                            : 'write-first-disabled-handoff-locked', $digest, null, null, $queueStream)
                         === ['result'=>($firstEnabled ? 'first-enabled-activated'
                             : 'first-disabled-activated'), 'id'=>$id];
                 }
@@ -1150,7 +1150,7 @@ final class SharedApplyConfigWorker
                     self::requireReadableConfig();
                     return self::originalLockedFileEvidence(
                         $config, $id, 'recover-first-config-locked',
-                        hash('sha256', $digest . "\0" . $candidate))
+                        hash('sha256', $digest . "\0" . $candidate), null, null, $queueStream)
                         === ['result'=>'original-first-config-committed', 'id'=>$id];
                 }
                 if ($managedApply && $mode === 'begin-managed-config-save-locked' &&
