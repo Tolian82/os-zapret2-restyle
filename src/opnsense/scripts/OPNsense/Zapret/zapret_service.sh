@@ -1116,7 +1116,14 @@ shared_apply_stop_service()
     case "$_shared_stop_id" in ""|*[!a-f0-9]*) return 69 ;; esac
     [ "${#_shared_stop_id}" -eq 32 ] || return 69
     case "$_shared_stop_page" in voice|strategies) ;; *) return 69 ;; esac
-    preflight_shared_apply_journal common-apply || return 69
+    # The public original explicit Stop cannot be fenced by common-apply
+    # merely because its genuine active Auto owner has immutable schema2.
+    # This read-only positive gate never replaces original Stop; all native
+    # process/IPFW/epoch checks below remain mandatory and in the same FD9.
+    preflight_shared_apply_journal common-apply >/dev/null 2>&1 ||
+        { [ "$#" -eq 1 ] &&
+          preflight_shared_apply_journal common-bound-auto-stop "$_shared_stop_id"; } ||
+        return 69
     shared_apply_require_tools || return 69
     shared_apply_bundle_service verify "$_shared_stop_id" || return 69
     _shared_stop_saved=$(shared_apply_native_config saved \

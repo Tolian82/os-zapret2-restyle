@@ -1591,6 +1591,14 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
          "G03_RETIRED_FINISH_SCHEMA1_MUTATED_OWNER")
     print("G03_S10_RETIRED_FINISH_SCHEMA1=PASS_REFUSED_BEFORE_MUTATION",
           flush=True)
+    call([str(Path(SERVICE).parent / "python_runtime.sh"),
+          str(Path(SERVICE).parent / "backend/shared_apply_operation.py"),
+          "native-gate", "common-bound-auto-stop", previous["detail"]["id"]],
+         locked=True, expected_rc=69)
+    need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_AUTO_STOP_SCHEMA1_MUTATED_OWNER")
+    print("G03_S10_AUTO_STOP_SCHEMA1=PASS_ORIGINAL_STOP_GATE_NO_WRITES",
+          flush=True)
     if uncertain:
         # Use the existing real Config singleton crash adapter. Only the
         # PHP invocation changes: the source FIFO, native P1 writer and

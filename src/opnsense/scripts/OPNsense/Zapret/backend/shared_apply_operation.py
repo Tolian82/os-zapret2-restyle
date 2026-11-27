@@ -2056,6 +2056,65 @@ def native_bound_stopped_gui_gate(operation: str | None = None) -> None:
         raise SharedOperationError("bound GUI gate previous owner changed")
 
 
+def native_bound_auto_stop_gate(operation: str) -> None:
+    """Only the existing FD9 explicit Stop may retire a genuine schema2 owner.
+
+    This is read-only admission, not a second Stop, ACK writer, or command.
+    The original Stop immediately rechecks native Config, full active tree,
+    exact running or stopped PID/birth, owned IPFW and epoch before altering
+    any process. Do not admit a pending Found/Config or inert schema1 owner.
+    """
+    from auto_detect_owner import (
+        attest_learning_running_generation, attest_learning_stopped_generation)
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from shared_apply_seal import WORK
+    from voice_live_inspect import COMMON_ACTIVE, examine_shared
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation)):
+        raise SharedOperationError("original schema2 FD9 Stop required")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "committed" or
+            "found" in record or "failure" in record or
+            type(record.get("manifest")) is not dict or
+            record["manifest"].get("schema") != 2 or
+            record.get("detail", {}).get("id") != operation):
+        raise SharedOperationError("original schema2 committed Stop owner required")
+    detail, pin = record["detail"], record["manifest"]
+    old_work = WORK / operation
+
+    def observe():
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise SharedOperationError("original schema2 Stop journal changed")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=pin, parent=WORK, owner_uid=0))
+        if (root["service"]["enabled"] is not True or
+                root["service"]["target_mode"] != "auto"):
+            raise SharedOperationError("original schema2 Auto root required")
+        physical = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+        state = examine_shared(record)
+        if (type(state) is not dict or state.get("source") != "native-common" or
+                state.get("state") not in ("ready", "stopped") or
+                state.get("config_digest") != detail["candidate"]):
+            raise SharedOperationError("original schema2 Stop runtime not verified")
+        proof = (attest_learning_running_generation() if state["state"] == "ready"
+                 else attest_learning_stopped_generation())
+        if (proof.operation_id != operation or proof.generation != operation or
+                proof.owner_candidate_sha256 != detail["candidate"] or
+                store.read() != record):
+            raise SharedOperationError("original schema2 Stop owner changed")
+        return physical, state["state"], proof
+    first = observe()
+    if observe() != first:
+        raise SharedOperationError("original schema2 Stop owner raced")
+
+
 def native_bound_prepare_gate(operation: str) -> None:
     """Only a fresh detached ordinary/Found candidate, never a lifecycle permit."""
     from neutral_root_stage import verify_original_operation_pins
@@ -2220,6 +2279,9 @@ def main(argv: list[str]) -> int:
     found_pending = len(argv) == 2 and argv[1] == "found-pending"
     bound_prepare_request = (len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-prepare"] and
                              bool(OP_ID.fullmatch(argv[3])))
+    bound_auto_stop_request = (
+        len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-auto-stop"] and
+        bool(OP_ID.fullmatch(argv[3])))
     bound_gui_stage_request = argv[1:] == ["native-gate", "common-bound-stopped-stage"]
     bound_gui_execute_request = (
         len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-stopped-execute"] and
@@ -2269,7 +2331,8 @@ def main(argv: list[str]) -> int:
     cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_gui_stage_request or bound_gui_execute_request):
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_auto_stop_request or
+            bound_gui_stage_request or bound_gui_execute_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -2309,6 +2372,8 @@ def main(argv: list[str]) -> int:
             record = SharedApplyOperation().read()
             if record is not None and "found" in record:
                 print(record["detail"]["id"])
+        elif bound_auto_stop_request:
+            native_bound_auto_stop_gate(argv[3])
         elif bound_prepare_request:
             native_bound_prepare_gate(argv[3])
         elif bound_gui_stage_request:
