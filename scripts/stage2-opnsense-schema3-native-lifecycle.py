@@ -469,6 +469,11 @@ def execute(*, crash: bool = False) -> dict:
     # without invoking its later ordinary GUI Apply or modifying Config.
     config_before_upstream = CONFIG.read_bytes()
     g04_runtime = module("stage2-opnsense-g04-native-runtime.py")
+    # Same verified public tag used by the existing protected fixture;
+    # actual installed G03 still clones, checks the tag and builds dvtws2.
+    cache = module("stage5-native-protected-update.py")
+    cache.seed_qualified_stable_tag_for_disposable_guest(
+        module("stage2-opnsense-g03-first-install.py"), schema3_canary=True)
     try:
         engine_sha = g04_runtime.setup_upstream()
     except Exception as exc:
@@ -573,6 +578,63 @@ def execute(*, crash: bool = False) -> dict:
                 not (old_retired / "ready.json").is_symlink(),
                 "CANARY_RUNNING_SCHEMA3_" + gate + "_OLD_EPOCH_NOT_TERMINAL")
         return new_generation, new_pid
+
+    # Independent observations on the real newly bound owner. The historical
+    # positive test below still has to pass; never label a refusal as success.
+    # A refused unchanged request must not prevent measuring a separate
+    # actual changed request and a real Stop/Boot in this disposable guest.
+    owner_record = JOURNAL.read_bytes()
+    config_image = CONFIG.read_bytes()
+    active_rules = g04_runtime.owned_rules()
+    owner = json.loads(owner_record)
+    if owner.get("manifest", {}).get("schema") == 2:
+        def attempt_bound(fields, label):
+            reply = subprocess.run(
+                [str(SERVICE), "shared-apply-run", "strategies", envelope(fields, saved)],
+                env=owner_service_environment(), capture_output=True, text=True,
+                timeout=420, check=False)
+            result = {
+                "case": label, "rc": reply.returncode,
+                "applied": bool(re.search(r"(?m)^applied-id=[0-9a-f]{32}$", reply.stdout)),
+                "journal_unchanged": JOURNAL.read_bytes() == owner_record,
+                "config_unchanged": CONFIG.read_bytes() == config_image,
+                "ipfw_unchanged": g04_runtime.owned_rules() == active_rules,
+                "pid_unchanged": PID.is_file() and not PID.is_symlink() and
+                    PID.read_text().strip() == str(first_pid),
+            }
+            print("CANARY_BOUND_SCOPE=" + json.dumps(result, sort_keys=True), flush=True)
+            return result
+
+        unchanged = attempt_bound({"general": {"enabled": "1", "waninterface": "lo0"},
+                                   "hostlist": {"mode": "auto"}}, "unchanged")
+        if unchanged["rc"] != 0 and all(unchanged[key] for key in (
+                "journal_unchanged", "config_unchanged", "ipfw_unchanged", "pid_unchanged")):
+            changed = attempt_bound({"general": {"autorestart": "daily"}}, "changed")
+            if changed["rc"] != 0 and all(changed[key] for key in (
+                    "journal_unchanged", "config_unchanged", "ipfw_unchanged", "pid_unchanged")):
+                service_action("stop")
+                check_process(False)
+                stopped_receipts(ident, learning, debug_inode)
+                before_boot = JOURNAL.read_bytes()
+                boot = command(str(SERVICE), "start", timeout=420)
+                print("CANARY_BOUND_BOOT=" + json.dumps({
+                    "rc": boot.returncode,
+                    "journal_unchanged": JOURNAL.read_bytes() == before_boot,
+                    "config_unchanged": CONFIG.read_bytes() == config_image,
+                    "pid_present": PID.is_file() and not PID.is_symlink(),
+                    "status_rc": command(str(SERVICE), "status").returncode,
+                }, sort_keys=True), flush=True)
+                raise Refused("CANARY_BOUND_PUBLIC_APPLY_REFUSED_SEPARATE_BOOT_MEASURED")
+            raise Refused("CANARY_BOUND_PUBLIC_UNCHANGED_APPLY_REFUSED")
+        if unchanged["rc"] != 0:
+            raise Refused("CANARY_BOUND_UNCHANGED_REFUSAL_OWNER_CHANGED")
+        # A successful no-op can be recognized only if every original
+        # owner/config/IPFW fact stayed the same. The complete new semantics
+        # still require independent source/effective evidence before changing
+        # the historical expectation of the following acceptance sequence.
+        require(all(unchanged[key] for key in (
+                "journal_unchanged", "config_unchanged", "ipfw_unchanged", "pid_unchanged")),
+                "CANARY_BOUND_PROBE_CHANGED_OWNER")
 
     # No changes to saved user fields (the original owner's failing case).
     ident, first_pid = running_auto_apply(

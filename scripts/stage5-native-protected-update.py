@@ -56,14 +56,19 @@ def original_fixture(filename, module_name):
     return module
 
 
-def seed_qualified_stable_tag_for_disposable_guest(g03):
+def seed_qualified_stable_tag_for_disposable_guest(g03, *, schema3_canary=False):
     """Reuse the already native-verified _85 public stable-release cache tactic.
 
     This is test-only setup metadata, never a runtime fallback. The installed
     setup worker still clones, verifies the exact upstream Git tag and compiles.
     """
-    need(os.environ.get("GITHUB_ACTIONS") == "true" and
-         os.environ.get("ZAPRET2_PROTECTED_PKG_NATIVE_TEST") == "1" and
+    scoped = (os.environ.get("ZAPRET2_PROTECTED_PKG_NATIVE_TEST") == "1"
+              if schema3_canary is False else
+              schema3_canary is True and
+              os.environ.get("ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE") == "1" and
+              os.environ.get("ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL") == "1" and
+              os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1")
+    need(os.environ.get("GITHUB_ACTIONS") == "true" and scoped and
          os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
          g03.RELEASE == "v1.0.7",
          "NATIVE_STABLE_RELEASE_CACHE_NOT_QUALIFIED")
