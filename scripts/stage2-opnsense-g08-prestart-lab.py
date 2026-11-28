@@ -7,6 +7,7 @@ jobs. Never start the normal service to prepare this witness.
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -23,6 +24,7 @@ ENGINE = Path("/usr/local/etc/zapret2/binaries/my/dvtws2")
 PID = Path("/var/run/dvtws2.pid")
 SERVICE = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh")
 JOURNAL = Path("/var/db/zapret2/shared-apply/operation.json")
+ACTIVE = Path("/usr/local/etc/zapret2/runtime-v2")
 LAB_PATH = "/api/zapret/strategy_lab/"
 TARGET = "yandex.ru"
 OWNED = re.compile(r"^19(?:0[0-9]{2}|1(?:0[0-9]|[12][0-9]|3[01]))\s")
@@ -85,7 +87,8 @@ def stopped_truth(web, saved, foreign_before):
     result = command(str(SERVICE), "status")
     need(result.returncode == 1 and "not running" in result.stdout,
          "G08_NATIVE_SERVICE_NOT_STOPPED")
-    need(not PID.exists() and not PID.is_symlink() and
+    need(all(not p.exists() and not p.is_symlink() for p in
+             (PID, JOURNAL, ACTIVE)) and
          CONFIG.read_bytes() == saved,
          "G08_LAB_CHANGED_SAVED_CONFIG_OR_NORMAL_PID")
     ps = command("/bin/ps", "-ax", "-o", "command=")
@@ -244,6 +247,36 @@ def self_test():
 
 
 
+def verify_native_release(g03, phase):
+    """Require the same exact post-make binding as standalone G03."""
+    release = g03.STATE / "runtime.release"
+    need(ENGINE.is_file() and not ENGINE.is_symlink() and
+         os.access(ENGINE, os.X_OK),
+         "S03C2_G03_NATIVE_ENGINE_MISSING_" + phase)
+    git = "/usr/local/bin/git"
+    current = command(git, "-C", str(g03.ROOT), "rev-parse", "HEAD")
+    tagged = command(git, "-C", str(g03.ROOT), "rev-parse",
+                     "refs/tags/v1.0.7^{commit}")
+    commit = current.stdout.strip()
+    need(current.returncode == 0 and tagged.returncode == 0 and
+         re.fullmatch(r"[0-9a-f]{40}", commit) is not None and
+         commit == tagged.stdout.strip(),
+         "S03C2_G03_NATIVE_TAG_NOT_EXACT_" + phase)
+    expected = (f"v1.0.7\ncommit={commit}\n"
+                f"engine_sha256={hashlib.sha256(ENGINE.read_bytes()).hexdigest()}\n"
+                ).encode("ascii")
+    need(release.is_file() and not release.is_symlink() and
+         release.read_bytes() == expected,
+         "S03C2_G03_RELEASE_MARKER_NOT_NATIVE_" + phase)
+    need(all(not p.exists() and not p.is_symlink() for p in
+             (Path(str(g03.ROOT) + ".first-install"),
+              g03.STATE / "first-install.intent",
+              g03.STATE / "runtime-rollback")),
+         "S03C2_G03_SETUP_RESIDUE_" + phase)
+    print("G08_G03_BUILD_BOUND_" + phase + "=PASS", flush=True)
+    return commit
+
+
 def actual_g03_upstream_install_without_ordinary_start(g03):
     """Reuse G03's stock configd setup/reinstall, never its five-list Start.
 
@@ -255,6 +288,11 @@ def actual_g03_upstream_install_without_ordinary_start(g03):
     need(not ENGINE.exists() and not ENGINE.is_symlink() and
          not PID.exists() and not JOURNAL.exists(),
          "S03C2_G03_STARTED_WITH_AN_ORDINARY_OWNER")
+    need(all(not p.exists() and not p.is_symlink() for p in
+             (ACTIVE, g03.STATE / "runtime.release",
+              g03.STATE / "first-install.intent",
+              g03.STATE / "runtime-rollback")),
+         "S03C2_G03_NOT_PRISTINE_PRESTART")
     initial_config = CONFIG.read_bytes()
     initial_ipfw = observed_rules()
     before_templates = g03.native_template_snapshot()
@@ -275,6 +313,12 @@ def actual_g03_upstream_install_without_ordinary_start(g03):
     except g03.Refusal:
         g03.bounded_disposable_failure_evidence()
         raise Refusal("S03C2_G03_FIRST_CONFIGD_INSTALL_REFUSED") from None
+    first_commit = verify_native_release(g03, "FIRST")
+    need(CONFIG.read_bytes() == initial_config and
+         observed_rules() == initial_ipfw and
+         all(not p.exists() and not p.is_symlink() for p in
+             (PID, JOURNAL, ACTIVE)),
+         "S03C2_G03_FIRST_INSTALL_CHANGED_CONFIG_IPFW_OR_RUNTIME")
     try:
         second = g03.dispatch_and_poll()
     except g03.Refusal:
@@ -288,25 +332,16 @@ def actual_g03_upstream_install_without_ordinary_start(g03):
     need(ENGINE.is_file() and not ENGINE.is_symlink() and
          CONFIG.read_bytes() == initial_config and
          observed_rules() == initial_ipfw and
-         not PID.exists() and not JOURNAL.exists(),
+         all(not p.exists() and not p.is_symlink() for p in
+             (PID, JOURNAL, ACTIVE)),
          "S03C2_G03_INSTALL_CHANGED_CONFIG_IPFW_OR_RUNTIME")
-    release = g03.STATE / "runtime.release"
-    need(release.is_file() and not release.is_symlink() and
-         release.read_text().strip() == "v1.0.7",
-         "S03C2_G03_RELEASE_MARKER_NOT_NATIVE")
+    need(verify_native_release(g03, "REINSTALL") == first_commit,
+         "S03C2_G03_REINSTALL_CHANGED_TAG_COMMIT")
     for name, old_hash in before_templates.items():
         candidate = g03.ROOT / name
         need(candidate.is_file() and not candidate.is_symlink() and
              g03.hashlib.sha256(candidate.read_bytes()).hexdigest() == old_hash,
              "S03C2_G03_CHANGED_EXISTING_STOCK_TEMPLATE")
-    # Verify the actual selected upstream tag: not just the setup UI label.
-    git = "/usr/local/bin/git"
-    current = command(git, "-C", str(g03.ROOT), "rev-parse", "HEAD")
-    tagged = command(git, "-C", str(g03.ROOT), "rev-parse",
-                     "refs/tags/v1.0.7^{commit}")
-    need(current.returncode == 0 and tagged.returncode == 0 and
-         current.stdout.strip() == tagged.stdout.strip(),
-         "S03C2_G03_NATIVE_TAG_NOT_EXACT")
     ps = command("/bin/ps", "-ax", "-o", "command=")
     need(ps.returncode == 0 and
          not any(line.startswith(str(ENGINE))
