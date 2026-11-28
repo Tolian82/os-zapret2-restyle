@@ -207,7 +207,58 @@ class RetryPreparedTest(unittest.TestCase):
 
     def test_new_prepared_no_false_predecessor(self):
         self.assertEqual(self.prepare(),{'result':'original-first-retry-prepared','id':self.new_id})
-        self.assertEqual(self.store.read(),{'schema':1,'phase':'prepared','detail':self.detail})
+        import hashlib
+        from auto_detect_epoch_receipts import _canonical
+        from shared_apply_operation import committed_owner, committed_manifest
+        expected = {'schema':1,'phase':'prepared','detail':self.detail,
+            'first_retry_archive':{'id':self.old_id,
+                'sha256':hashlib.sha256(_canonical(self.old)).hexdigest()}}
+        self.assertEqual(self.store.read(),expected)
+        self.assertIsNone(committed_owner(expected))
+        self.assertIsNone(committed_manifest(expected))
+
+    def test_interrupted_retry_cannot_use_generic_recovery_or_legacy_gate(self):
+        from shared_apply_operation import SharedOperationError, native_lifecycle_gate
+        self.prepare()
+        unbound = self.store.read()
+        bound = {**unbound,'manifest':{**self.old['manifest'],
+            'generation':self.new_id,'candidate_sha256':self.detail['candidate']}}
+        for candidate in (unbound,bound):
+            with self.subTest(bound='manifest' in candidate):
+                self.store._persist_record(candidate)
+                raw = self.wal.read_bytes()
+                for phase in ('activating','restored'):
+                    with self.assertRaises(SharedOperationError):
+                        self.store.advance(phase,self.detail)
+                with self.assertRaises(SharedOperationError):
+                    self.store.recover_prepared(self.new_id,lambda: True)
+                self.assertEqual(self.wal.read_bytes(),raw)
+                # Even a future qualified RESTORED must not open the legacy
+                # gate or treat the historical abort as a committed owner.
+                restored = {**candidate,'phase':'restored'}
+                self.store._persist_record(restored)
+                for action in (None,'common-apply','strategy-lab-native'):
+                    self.assertFalse(native_lifecycle_gate(action,root=self.store.root)['safe_to_mutate'])
+                with self.assertRaises(SharedOperationError):
+                    self.store.advance('prepared',{**self.detail,'id':'9'*32})
+                self.assertEqual(self.store.read(),restored)
+
+    def test_retry_archive_provenance_strict_scope(self):
+        from shared_apply_operation import SharedOperationError
+        self.prepare()
+        before = self.store.read()
+        raw = self.wal.read_bytes()
+        for altered in (
+            {**before,'first_retry_archive':{'id':self.new_id,'sha256':'e'*64}},
+            {**before,'first_retry_archive':{'id':self.old_id,'sha256':'bad'}},
+            {**before,'first_retry_archive':{'id':self.old_id,'sha256':'e'*64,'extra':1}},
+            {**before,'previous':self.old['detail']},
+            {**before,'detail':{**self.detail,'page':'voice'}},
+            {**before,'detail':{**self.detail,'changed_fields':[]}},
+        ):
+            with self.subTest(keys=list(altered)),self.assertRaises(SharedOperationError):
+                self.store._persist_record(altered)
+            self.assertEqual(self.wal.read_bytes(),raw)
 
     def test_config_and_descriptor_refusal(self):
         for kw in ({'witness':'0'*64},{'queue_fd':5},{'config_fd':6}):

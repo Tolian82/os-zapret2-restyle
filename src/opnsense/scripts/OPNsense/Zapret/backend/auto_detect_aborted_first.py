@@ -415,6 +415,13 @@ def _first_retry_candidate(record, operation):
     return detail, seal
 
 
+def _first_retry_archive_ref(record):
+    """Pin the already-attested historical receipt, not a live owner."""
+    import hashlib
+    return {"id": record["detail"]["id"],
+            "sha256": hashlib.sha256(_canonical(record)).hexdigest()}
+
+
 def prepare_first_retry_locked(operation, witness, *, config_fd, queue_fd):
     """Replace ONLY the current restored WAL, under old P2a and native FD4."""
     from shared_apply_operation import SCHEMA, committed_owner
@@ -453,7 +460,8 @@ def prepare_first_retry_locked(operation, witness, *, config_fd, queue_fd):
         raise ArchiveRefused('FIRST_RETRY_PREIMAGE_CHANGED')
     # Reuse the sole journal writer; the canceled generation is historical,
     # not a previous committed owner. No generic restored fence is relaxed.
-    expected = {'schema': SCHEMA, 'phase': 'prepared', 'detail': first[0]}
+    expected = {'schema': SCHEMA, 'phase': 'prepared', 'detail': first[0],
+                'first_retry_archive': _first_retry_archive_ref(record)}
     scope()
     if store._persist_record(expected) != expected or store.read() != expected:
         raise ArchiveRefused('FIRST_RETRY_PREPARED_READBACK_REQUIRED')
@@ -477,7 +485,8 @@ def native_prepare_first_retry(operation, candidate):
         reply = _run_bound_restore_joined(['/usr/local/bin/php', str(SCRIPT / 'shared_apply_config.php'),
             'ordinary-first-retry', operation, 'strategies', '--queue-fd=' + str(fd),
             record['detail']['id']], pass_fds=(9, fd), capture_output=True, budget=180)
-        expected = {'schema': SCHEMA, 'phase': 'prepared', 'detail': detail}
+        expected = {'schema': SCHEMA, 'phase': 'prepared', 'detail': detail,
+                    'first_retry_archive': _first_retry_archive_ref(record)}
         if (reply.returncode != 0 or type(reply.stdout) is not bytes or len(reply.stdout) > 4096 or
                 reply.stdout.count(b'\n') != 1 or not reply.stdout.endswith(b'\n') or
                 json.loads(reply.stdout) != {'result': 'original-first-retry-prepared', 'id': operation} or

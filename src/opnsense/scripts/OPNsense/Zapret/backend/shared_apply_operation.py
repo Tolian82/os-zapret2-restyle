@@ -398,7 +398,7 @@ def _validate_record(record: object) -> dict:
     )
     if (type(record) is not dict or
             (keys - {"failure", "manifest", "previous_manifest", "managed", "first_running_sha256",
-                     "first_pretraffic_sha256"}) not in allowed or
+                     "first_pretraffic_sha256", "first_retry_archive"}) not in allowed or
             ("failure" in record and (record.get("phase") not in
                                       ("committed", "requires-review") or
                                       "found" in record)) or
@@ -408,6 +408,20 @@ def _validate_record(record: object) -> dict:
     _validate_detail(record["detail"])
     if "manifest" in record:
         _validate_manifest_binding(record["manifest"], record["detail"])
+    if "first_retry_archive" in record:
+        history = record["first_retry_archive"]
+        detail = record["detail"]
+        if (type(history) is not dict or set(history) != {"id", "sha256"} or
+                type(history["id"]) is not str or not OP_ID.fullmatch(history["id"]) or
+                history["id"] == detail["id"] or
+                type(history["sha256"]) is not str or not DIGEST.fullmatch(history["sha256"]) or
+                detail["page"] != "strategies" or detail["base"] == detail["candidate"] or
+                "general.enabled" not in detail["changed_fields"] or
+                {"previous", "previous_manifest", "found", "managed"} & keys or
+                ("manifest" in record and record["manifest"].get("schema") != 2) or
+                record["phase"] not in ("prepared", "activating", "activated", "epoch-finalizing",
+                                        "committed", "restored", "restore-failed", "requires-review")):
+            raise SharedOperationError("invalid original first retry archive provenance")
     # No old Voice/Strategies record may invent protected physical or
     # Config-save uncertainty checkpoints without this exact found intent.
     if record["phase"] in FOUND_FILE_PHASES | FOUND_CONFIG_PHASES | {FOUND_RESTORING} and "found" not in record:
@@ -579,7 +593,7 @@ class SharedApplyOperation:
                     for name in FOUND_NAMES)):
             raise SharedOperationError("unqualified original found candidate")
         before = self.read()
-        if restored_first_learning(before):
+        if restored_first_learning(before) or restored_first_retry(before):
             raise SharedOperationError("restored first learning Found successor not qualified")
         if before is not None and before["phase"] not in TERMINAL:
             raise SharedOperationError("unfinished original common Apply")
@@ -879,7 +893,7 @@ class SharedApplyOperation:
         _validate_detail(detail)
         before = self.read()
         if phase == "prepared":
-            if restored_first_learning(before):
+            if restored_first_learning(before) or restored_first_retry(before):
                 raise SharedOperationError("restored first learning successor not qualified")
             if before is not None and before["phase"] not in TERMINAL:
                 raise SharedOperationError("unfinished common Apply operation")
@@ -897,6 +911,8 @@ class SharedApplyOperation:
             # KeyError traceback must never substitute for the FD9 refusal.
             if "found" in before:
                 raise SharedOperationError("found files require original durable transaction")
+            if "first_retry_archive" in before:
+                raise SharedOperationError("first retry requires original bound transaction")
             if phase not in NEXT.get(before["phase"], frozenset()):
                 raise SharedOperationError("illegal common Apply phase transition")
             # S10b1 never calls the launcher: a bound root must be freshly
@@ -1623,6 +1639,11 @@ class SharedApplyOperation:
             # physical sources remained untouched after an interrupted
             # found transaction. Do not grant cold recovery by old rules.
             raise SharedOperationError("prepared-only recovery refused")
+        # A first retry has no committed predecessor. A seal alone cannot
+        # prove its archived abort and native Config/base/physical state.
+        # Keep the same WAL pending until the dedicated recovery qualifies it.
+        if "first_retry_archive" in record:
+            raise SharedOperationError("first retry prepared recovery requires original archive proof")
         if "manifest" in record or "previous_manifest" in record:
             # The root is a sibling, deliberately outside the original bundle
             # seal. Boot's legacy seal callback cannot authenticate its pin.
@@ -2302,6 +2323,12 @@ def restored_first_learning(record: dict | None) -> bool:
             "first_running_sha256" in record and "first_pretraffic_sha256" in record)
 
 
+def restored_first_retry(record: dict | None) -> bool:
+    """Historical abort provenance is a fence, never an active predecessor."""
+    return (type(record) is dict and record.get("phase") == "restored" and
+            "first_retry_archive" in record)
+
+
 def native_lifecycle_gate(action: str | None = None, *,
                           root: Path = DEFAULT_ROOT) -> dict:
     """Read-only FD9 policy from the ONE current shared Apply journal.
@@ -2325,7 +2352,7 @@ def native_lifecycle_gate(action: str | None = None, *,
     if record is None:
         return {"state": "clear", "safe_to_mutate": True}
     phase = record["phase"]
-    if restored_first_learning(record):
+    if restored_first_learning(record) or restored_first_retry(record):
         # Retain the aborted seed/producer and immutable work. A subsequent
         # first Apply needs a separately qualified admission, not legacy Start.
         return {"state": "blocked", "reason": "restored-first-learning-preflight-required",

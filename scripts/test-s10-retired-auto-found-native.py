@@ -989,6 +989,8 @@ def native_positive():
                 retry_lock = (old_producer / "worker.lock").stat()
                 need(retry_record["phase"] == "committed" and retry_record["manifest"]["schema"] == 2 and
                      retry_id != op and "previous" not in retry_record and "previous_manifest" not in retry_record and
+                     retry_record.get("first_retry_archive") == {"id": op,
+                         "sha256": hashlib.sha256((archive / "restored.json").read_bytes()).hexdigest()} and
                      retry_record["detail"]["base"] == rec["detail"]["base"] and
                      hashlib.sha256(retry_seed.read_bytes()).hexdigest() == retry_record["first_pretraffic_sha256"] and
                      (retry_lock.st_dev, retry_lock.st_ino) != (old_lock.st_dev, old_lock.st_ino) and
