@@ -798,6 +798,43 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
                 "S11_NATIVE_SAVED_START_BIND_REFUSED:rc=" +
                 str(bound_reply.returncode) + ":" +
                 (bound_reply.stdout + bound_reply.stderr)[-850:])
+        # Independent original FD9 native readback of BOTH immutable pins;
+        # exact terminal stopped source projection, no new process or kernel
+        # owner. A filename/rc alone is not a root authorization receipt.
+        dual_probe = r'''
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from voice_ipfw_adapter import require_lifecycle_lock
+from shared_apply_operation import SharedApplyOperation
+from neutral_root_stage import verify_original_operation_pins
+from auto_detect_origin_map import verify_learning_start_successor
+from shared_apply_seal import WORK
+
+require_lifecycle_lock()
+wal = SharedApplyOperation(owner=0).read()
+if wal['phase'] != 'prepared' or wal['detail']['id'] != sys.argv[2] or wal['manifest']['schema'] != 2 or wal['previous_manifest']['schema'] != 2:
+    raise RuntimeError('S11_BOUND_DUAL_ROOT_WAL_CHANGED')
+verify_original_operation_pins(record=wal, parent=WORK, owner_uid=0)
+verify_learning_start_successor(
+    WORK / wal['previous']['id'], WORK / wal['detail']['id'],
+    wal['detail']['candidate'])
+if SharedApplyOperation(owner=0).read() != wal:
+    raise RuntimeError('S11_BOUND_DUAL_ROOT_JOURNAL_RACED')
+print('S11_NATIVE_BOUND_DUAL_ROOT_READBACK=PASS')
+'''
+        dual = command(
+            "/bin/sh", "-c",
+            'exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
+            "s11-dual-root-independent", str(SERVICE.with_name("python_runtime.sh")),
+            "-c", dual_probe, str(SERVICE.parent / "backend"), candidate_id,
+            timeout=90)
+        require(dual.returncode == 0 and
+                dual.stdout.splitlines() == ["S11_NATIVE_BOUND_DUAL_ROOT_READBACK=PASS"] and
+                CONFIG.read_bytes() == config_image and
+                g04_runtime.owned_rules() == stopped_rules and not PID.exists(),
+                "S11_NATIVE_BOUND_DUAL_ROOT_READBACK_REFUSED:rc=" +
+                str(dual.returncode) + ":" + dual.stderr[-400:])
         print("S11_NATIVE_SAVED_BUILD_SEALED_SUCCESSOR=PASS", flush=True)
         # A duplicate PREPARED attempt cannot manufacture another successor
         # or silently treat this as an authorized physical Start.
