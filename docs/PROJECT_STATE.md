@@ -1,4 +1,21 @@
-## 27 November 2026 — v0.6.5.x current S10 state
+## 28 November 2026 — S10 integrated recovery evidence / pre-PR checkpoint
+
+Accepted main `0.6.5_241` (`f4d059292b0729b9fed9563401476a87e60aad5e`); working candidate `0.6.5_242`, last production-tested source `78a52328b2f3ffd905df1b538929dec3ee415147`. **S10 OPEN — integrated PR/GO not yet accepted; S11 BLOCKED.** No owner-device action or published package. [Requirements](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) · [Issue #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319).
+
+| Evidence (actual tested head, not a claim of new-head PASS) | Result |
+|---|---|
+| First Auto ACTIVATED before/after native Config save, first retry archive provenance, interrupted retry PREPARED unbound and bound, exact original WAL restored, subsequent real HTTPS Apply COMMITTED then Stop/ACK | [Native #46092563682](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46092563682), `78a52328`, 3/3 PASS; disposable installed OPNsense 26.7, prior archive and candidate inode preserved. |
+| Source producer All/List/Auto, five ordered profiles, Voice, registry, drift refusal, P2a and protected Found | [Portable #46092563686](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46092563686), same SHA, 199 Python tests (31+43+34+46+45); complementary native workflow fast suite 189 (31+24+46+43+45), overlapping tests not added together. |
+| Installed first/linked managed successor, post-save recovery, pre-save rollback | [#45960403608](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45960403608), [#45966358074](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45966358074), [#45973301023](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45973301023); historical G03 evidence. |
+| STOPPED Found/P1 and real Config save uncertainty; three exact atomic rename gaps | [#45997659746](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45997659746) `85a90ad0`; [#45998707468](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45998707468) `f091aaa5`; genuine native COMMITTED, not physical Start. |
+| Retired Auto Found pre-save rollback and pristine PREPARED | [#46046712004](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46046712004) `d275e3ae`; [#46054428373](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46054428373) `cd82e528`; native source/Config/ACK/roots/IPFW preserved. |
+| UFS/ZFS source rollback; installed purge; independent WAN-only no-engine | [#45953633549](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45953633549), [#45961872460](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45961872460), [#45709442830](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45709442830); distinct prior evidence, not full current installed package. Both unchanged purge sources cover /var/db/zapret2 including new archive. |
+
+**Remaining boundaries:** final exact-head canonical CI / scope-qualified native PR checks / postmerge main; reconcile earlier changed dependencies and the independent prestart Lab contract. Earlier intermittent FIRST_BASE rc70/ACTIVATED was fail-closed but not causally diagnosed; subsequent exact diagnostic runs and the current production head passed. Do not claim a fix of that intermittent failure. Unknown pre-WAL detached work, partial/unpinned root and ambiguous/cross-device recovery still refuse without deleting evidence. No additional lifecycle actor, WAL, Config writer or locks. Running physical transitions remain within S11–S14 boundaries. Full local clone unavailable (DNS); source/CI evidence distinguished.
+
+Temporary branch-push inode/P2a workflows removed before integrated PR; retain reusable source fixtures in canonical CI and the existing native Auto workflow as scope-specific PR/manual regression, not a second push matrix. Exact PR checks must pass; no merge or issue closure based on earlier runs.
+
+## 27 November 2026 — previous S10 checkpoint (historical)
 
 Accepted main `0.6.5_241` (`f4d059292b0729b9fed9563401476a87e60aad5e`); unmerged working candidate `0.6.5_242` on `draft/tz6v5-s10-integrated` (exact qualified `75712458417b50c117ad8bb6e94b52aebf4ca08b`). **S10 OPEN, S11 BLOCKED.** Only disposable OPNsense installs; no published test pkg, owner-router action, integrated PR or main merge. [Current next action](START_HERE.md) · [Approved S10](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) · [Evidence issue #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319).
 
