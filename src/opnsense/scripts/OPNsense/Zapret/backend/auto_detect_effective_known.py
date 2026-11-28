@@ -1680,8 +1680,94 @@ def _managed_refusal_trace(error: BaseException) -> None:
         pass
 
 
+def native_attest_saved_start_locked(operation: str, config_digest: str,
+                                     *, config_fd: int, queue_fd: int) -> dict:
+    """Read-only S11-B original FD9 -> borrowed P2a FD3 -> Config FD4 gate.
+
+    Reuse the original retired-epoch queue reader and exact immutable pins.
+    No new queue, Config writer, journal advance, launcher or kernel write.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import verify_original_operation_pins
+    from neutral_schema3_quiescent_preimage import (
+        _cold_locked_producer, _zero_processes, _empty_kernel,
+        CHILD_PID, MONITOR_PID, DAEMON_PID)
+    from neutral_schema3_saved_wan_preimage import _native_wan_locked
+    from auto_detect_origin_map import verify_learning_start_successor
+    from shared_apply_operation import SharedApplyOperation, DIGEST, OP_ID
+    from shared_apply_seal import WORK, _release_hash
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(config_digest) is not str or not DIGEST.fullmatch(config_digest) or
+            config_fd != 4 or queue_fd != 3):
+        raise EffectiveKnownRefused("S11_NATIVE_ORIGINAL_LOCK_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    if (type(before) is not dict or
+            set(before) != {"schema", "phase", "detail", "previous",
+                            "previous_manifest", "manifest"} or
+            before.get("phase") != "prepared" or
+            before["detail"]["id"] != operation or
+            before["detail"]["page"] != "strategies" or
+            before["detail"]["base"] != config_digest or
+            before["detail"]["candidate"] != config_digest or
+            before["detail"]["changed_fields"] != [] or
+            before["previous"]["candidate"] != config_digest or
+            before["previous_manifest"].get("schema") != 2 or
+            before["manifest"].get("schema") != 2):
+        raise EffectiveKnownRefused("S11_NATIVE_PREPARED_ORIGINAL_OWNER_REQUIRED")
+    old = WORK / before["previous"]["id"]
+    new = WORK / operation
+
+    def observe():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if store.read() != before:
+            raise EffectiveKnownRefused("S11_NATIVE_ORIGINAL_WAL_RACED")
+        verify_original_operation_pins(record=before, parent=WORK, owner_uid=0)
+        verify_learning_start_successor(old, new, config_digest)
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        retired, idle = _cold_locked_producer(before, queue_fd)
+        if (type(retired) is not str or not DIGEST.fullmatch(retired) or
+                type(idle) is not tuple or len(idle) != 2):
+            raise EffectiveKnownRefused("S11_NATIVE_ORIGINAL_RETIREMENT_INVALID")
+        original = _release_hash(old / "release", 0)
+        active = _release_hash(
+            __import__("voice_live_inspect").COMMON_ACTIVE, 0)
+        if active != original:
+            raise EffectiveKnownRefused("S11_NATIVE_OLD_ACTIVE_TREE_CHANGED")
+        kernel = _empty_kernel(old / "release")
+        wan = _native_wan_locked(config_fd)
+        if not isinstance(wan, str) or not wan:
+            raise EffectiveKnownRefused("S11_NATIVE_WAN_CHANGED")
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if store.read() != before:
+            raise EffectiveKnownRefused("S11_NATIVE_ORIGINAL_LOCK_SCOPE_RACED")
+        return retired, idle, original, kernel, wan
+
+    state = observe()
+    if observe() != state:
+        raise EffectiveKnownRefused("S11_NATIVE_ORIGINAL_LOCK_PROOF_CHANGED")
+    return {"result": "saved-start-locked-attested", "id": operation}
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "attest-saved-start-locked":
+        if len(argv) != 4 or argv[3] != "--inherited-queue":
+            return 64
+        try:
+            reply = native_attest_saved_start_locked(
+                argv[1], argv[2], config_fd=4, queue_fd=3)
+            print(json.dumps(reply, separators=(",", ":")))
+            return 0
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError, AttributeError):
+            print("ERROR: original saved Start locked preflight refused", file=sys.stderr)
+            return 69
     if len(argv) == 2 and argv[0] == "bound-retired-finish-original":
         try:
             return native_bound_retired_found_finish_original_fd9(argv[1])

@@ -2525,6 +2525,26 @@ shared_apply_saved_start_bind_service()
         echo 'S11_SAVED_BIND_REFUSED=native-s10-source' >&2
         return 70
     }
+    # Exact original FD9 -> inherited P2a/FD3 -> native Config/FD4.
+    # Never acquire P2a while PHP holds Config. The scoped child borrows
+    # FD9; both children must join before this original caller returns.
+    _s11_locked=$(
+        (
+            _s11_p2a=/var/db/zapret2-auto-detect/worker.lock
+            [ -f "$_s11_p2a" ] && [ ! -L "$_s11_p2a" ] || exit 70
+            exec 3<>"$_s11_p2a" || exit 70
+            /usr/bin/lockf -s -t 0 3 || exit 70
+            shared_apply_native_config saved-start-locked-preflight \
+                "$_s11_id" strategies --queue-fd=3
+        )
+    ) || {
+        echo 'S11_SAVED_BIND_REFUSED=original-fd3-fd4' >&2
+        return 70
+    }
+    [ "$_s11_locked" = "{\"result\":\"saved-start-locked-attested\",\"id\":\"$_s11_id\"}" ] || {
+        echo 'S11_SAVED_BIND_REFUSED=original-locked-receipt' >&2
+        return 70
+    }
     printf 'bound-saved-start-bind=%s\n' "$_s11_id"
 }
 # One FD9 operation now stages a submitted native request AND builds its

@@ -853,6 +853,7 @@ print('S11_NATIVE_BOUND_DUAL_ROOT_READBACK=PASS')
         print("S11_NATIVE_SAVED_START_ORIGINAL_WAL_PREPARED=PASS", flush=True)
         print("S11_NATIVE_SAVED_START_ORIGINAL_ROOT_BOUND=PASS", flush=True)
         print("S11_NATIVE_SAVED_START_QUIESCENT_PROPOSAL=PASS", flush=True)
+        print("S11_NATIVE_SAVED_START_ORIGINAL_FD3_FD4=PASS", flush=True)
         return {"status": "PASS_S11_START_PREFLIGHT", "source_sha": head,
                 "generation": ident, "verified_running_noop": True,
                 "verified_stopped_preimage": True, "verified_detached_projection": True,
@@ -860,6 +861,7 @@ print('S11_NATIVE_BOUND_DUAL_ROOT_READBACK=PASS')
                 "verified_original_saved_prepared_wal": True,
                 "verified_original_saved_root_bound": True,
                 "verified_stopped_start_proposal": True,
+                "verified_original_queue_config_lock": True,
                 "physical_start_tested": False}
 
     # A genuine first Auto Apply was not sufficient: reproduce the owner's

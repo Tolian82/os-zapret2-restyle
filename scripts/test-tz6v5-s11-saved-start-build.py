@@ -117,4 +117,13 @@ except OriginalSourceGateRefused:
 else:
     raise AssertionError("S11 accepted prematurely activating bound WAL")
 
+# The native FD3/FD4 prelaunch guard is not a portable or public actuator.
+from auto_detect_effective_known import native_attest_saved_start_locked, EffectiveKnownRefused
+with patch("auto_detect_effective_known.sys.platform", "linux"):
+    try:
+        native_attest_saved_start_locked("a" * 32, digest, config_fd=4, queue_fd=3)
+    except EffectiveKnownRefused:
+        pass
+    else:
+        raise AssertionError("S11 non-FreeBSD inherited lock gate accepted")
 print("S11_SAVED_START_BUILD_READONLY_SOURCE=PASS")

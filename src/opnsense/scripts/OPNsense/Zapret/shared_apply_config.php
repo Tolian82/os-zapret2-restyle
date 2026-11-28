@@ -466,7 +466,8 @@ final class SharedApplyConfigWorker
         $boundBegin = $mode === 'begin-bound-found-save-locked';
         $begin = $mode === 'begin-found-save-locked' || $boundBegin;
         $managedWrite = in_array($mode, ['write-managed-handoff-locked',
-            'write-first-disabled-handoff-locked', 'write-first-enabled-handoff-locked'], true);
+            'write-first-disabled-handoff-locked', 'write-first-enabled-handoff-locked',
+            'attest-saved-start-locked'], true);
         $joined = in_array($mode, ['recover-bound-found-locked', 'finish-bound-found-locked', 'finish-ordinary-restore-locked', 'recover-managed-config-locked',
             'begin-managed-config-save-locked', 'confirm-managed-config-save-locked',
             'write-managed-handoff-locked', 'write-first-disabled-handoff-locked',
@@ -482,7 +483,8 @@ final class SharedApplyConfigWorker
                     'finish-bound-found-locked', 'recover-bound-found-locked', 'recover-found-locked',
                     'confirm-found-save-locked',
                     'finish-ordinary-restore-locked', 'recover-managed-config-locked',
-                    'recover-first-config-locked', 'archive-first-restored-locked', 'prepare-first-retry-locked', 'recover-first-retry-prepared-locked', 'write-first-enabled-handoff-locked'], true)))) {
+                    'recover-first-config-locked', 'archive-first-restored-locked', 'prepare-first-retry-locked', 'recover-first-retry-prepared-locked', 'write-first-enabled-handoff-locked',
+                    'attest-saved-start-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
         }
         if ($boundBegin) {
@@ -959,7 +961,8 @@ final class SharedApplyConfigWorker
                 (string)$argv[5], $matches) === 1);
         $queueOther = (in_array($action, ['found-recover', 'found-bound-finish', 'found-bound-recover',
                 'ordinary-restore-finish', 'managed-save-recover',
-                'ordinary-first-recover', 'ordinary-first-archive', 'first-enabled-apply'], true) &&
+                'ordinary-first-recover', 'ordinary-first-archive', 'first-enabled-apply',
+                'saved-start-locked-preflight'], true) &&
             count($argv) === 5 &&
             preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D',
                 (string)$argv[4], $matches) === 1);
@@ -976,9 +979,11 @@ final class SharedApplyConfigWorker
                 $queueOther) ? 5 : 4);
         if (($retry && (!$queueRetry || $argv[3] !== 'strategies')) || count($argv) !== $expectedCount ||
             !in_array($action, ['preflight', 'save', 'saved', 'managed-save', 'managed-apply', 'first-disabled-apply', 'first-enabled-apply',
-                'ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover', 'ordinary-first-archive', 'ordinary-first-retry', 'ordinary-first-retry-recover', 'managed-save-recover', ...$foundActions], true) ||
+                'ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover', 'ordinary-first-archive', 'ordinary-first-retry', 'ordinary-first-retry-recover', 'managed-save-recover',
+                'saved-start-locked-preflight', ...$foundActions], true) ||
             !in_array($argv[3], $found || in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply'], true)
-                ? ['strategies'] : ['voice', 'strategies'], true)) {
+                ? ['strategies'] : ($action === 'saved-start-locked-preflight'
+                    ? ['strategies'] : ['voice', 'strategies']), true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
         }
@@ -1012,7 +1017,7 @@ final class SharedApplyConfigWorker
             } elseif ($queueFd !== null) {
                 $queueStream = self::openOriginalFoundQueue($queueFd);
             }
-            if ($retry || $archive || $found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover',
+            if ($retry || $archive || $found || in_array($action, ['saved-start-locked-preflight', 'ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover',
                 'save', 'saved', 'managed-save', 'managed-save-recover', 'managed-apply',
                 'first-disabled-apply', 'first-enabled-apply'], true)) {
                 // Core may repair unreadable Config from a backup on load.
@@ -1206,6 +1211,40 @@ final class SharedApplyConfigWorker
                     $config->unlock();
                 }
                 echo json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+                return 0;
+            }
+            if ($action === 'saved-start-locked-preflight') {
+                if ($queueFd !== 3 || !is_resource($queueStream) ||
+                    $plan['page'] !== 'strategies' ||
+                    ($plan['changed_fields'] ?? null) !== []) {
+                    throw new \\RuntimeException('Original saved Start queue/plan scope refused');
+                }
+                $config->lock();
+                try {
+                    self::requireReadableConfig();
+                    $model = $factory();
+                    $first = self::preflight($plan, $model->getNodes(), 'strategies', $model);
+                    if (($first['result'] ?? null) !== 'prepared' ||
+                        ($first['enabled'] ?? null) !== '1' ||
+                        ($first['fields'] ?? null) !== [] ||
+                        ($first['base'] ?? null) !== ($first['candidate'] ?? null) ||
+                        ($first['snapshot'] ?? null) !== $first['candidate']) {
+                        throw new \\RuntimeException('Original saved Start Config image changed');
+                    }
+                    $reply = self::originalLockedFileEvidence(
+                        $config, $argv[2], 'attest-saved-start-locked',
+                        $first['snapshot'], null, null, $queueStream);
+                    $again = $factory();
+                    if ($reply !== ['result'=>'saved-start-locked-attested', 'id'=>$argv[2]] ||
+                        self::preflight($plan, $again->getNodes(), 'strategies', $again) !== $first ||
+                        self::readPlan($argv[2], self::ROOT, 0) !== $plan) {
+                        throw new \\RuntimeException('Original saved Start locked readback changed');
+                    }
+                    self::requireReadableConfig();
+                } finally {
+                    $config->unlock();
+                }
+                echo json_encode($reply, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\\n";
                 return 0;
             }
             if ($argv[1] === 'preflight' || $argv[1] === 'saved') {
