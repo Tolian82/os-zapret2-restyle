@@ -835,6 +835,24 @@ print('S11_NATIVE_BOUND_DUAL_ROOT_READBACK=PASS')
                 g04_runtime.owned_rules() == stopped_rules and not PID.exists(),
                 "S11_NATIVE_BOUND_DUAL_ROOT_READBACK_REFUSED:rc=" +
                 str(dual.returncode) + ":" + dual.stderr[-400:])
+        # The same native Config/P2a endpoint MUST refuse a child without
+        # the exact original queue FD3. This cannot bind an alternative lock
+        # or infer authorization from the already persisted PREPARED root.
+        absent_fd3 = command(
+            "/bin/sh", "-c",
+            'exec 3<&-; exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
+            "s11-absent-borrowed-p2a", "/usr/local/bin/php",
+            str(SERVICE.parent / "shared_apply_config.php"),
+            "saved-start-locked-preflight", candidate_id, "strategies",
+            "--queue-fd=3", timeout=40)
+        require(absent_fd3.returncode == 69 and
+                not absent_fd3.stdout.strip() and
+                json.loads(JOURNAL.read_bytes()) == prepared and
+                CONFIG.read_bytes() == config_image and
+                g04_runtime.owned_rules() == stopped_rules and not PID.exists(),
+                "S11_NATIVE_ABSENT_FD3_NOT_REFUSED:rc=" +
+                str(absent_fd3.returncode) + ":" + absent_fd3.stderr[-350:])
+        print("S11_NATIVE_ABSENT_QUEUE_FD3_REFUSED=PASS", flush=True)
         print("S11_NATIVE_SAVED_BUILD_SEALED_SUCCESSOR=PASS", flush=True)
         # A duplicate PREPARED attempt cannot manufacture another successor
         # or silently treat this as an authorized physical Start.
