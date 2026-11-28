@@ -1695,7 +1695,9 @@ def native_attest_saved_start_locked(operation: str, config_digest: str,
     from neutral_schema3_saved_wan_preimage import _native_wan_locked
     from auto_detect_origin_map import verify_learning_start_successor
     from shared_apply_operation import SharedApplyOperation, DIGEST, OP_ID
-    from shared_apply_seal import WORK, _release_hash
+    from shared_apply_seal import WORK
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from voice_live_inspect import COMMON_ACTIVE
     from voice_ipfw_adapter import require_lifecycle_lock
 
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
@@ -1735,11 +1737,9 @@ def native_attest_saved_start_locked(operation: str, config_digest: str,
         if (type(retired) is not str or not DIGEST.fullmatch(retired) or
                 type(idle) is not tuple or len(idle) != 2):
             raise EffectiveKnownRefused("S11_NATIVE_ORIGINAL_RETIREMENT_INVALID")
-        original = _release_hash(old / "release", 0)
-        active = _release_hash(
-            __import__("voice_live_inspect").COMMON_ACTIVE, 0)
-        if active != original:
-            raise EffectiveKnownRefused("S11_NATIVE_OLD_ACTIVE_TREE_CHANGED")
+        # Reuse the exact original predecessor full sealed tree verifier,
+        # not a new subset or an independently guessed installed hash.
+        original = _full_prior_tree(old, COMMON_ACTIVE, 0)
         kernel = _empty_kernel(old / "release")
         wan = _native_wan_locked(config_fd)
         if not isinstance(wan, str) or not wan:

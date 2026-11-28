@@ -1217,7 +1217,7 @@ final class SharedApplyConfigWorker
                 if ($queueFd !== 3 || !is_resource($queueStream) ||
                     $plan['page'] !== 'strategies' ||
                     ($plan['changed_fields'] ?? null) !== []) {
-                    throw new \\RuntimeException('Original saved Start queue/plan scope refused');
+                    throw new \RuntimeException('Original saved Start queue/plan scope refused');
                 }
                 $config->lock();
                 try {
@@ -1229,7 +1229,7 @@ final class SharedApplyConfigWorker
                         ($first['fields'] ?? null) !== [] ||
                         ($first['base'] ?? null) !== ($first['candidate'] ?? null) ||
                         ($first['snapshot'] ?? null) !== $first['candidate']) {
-                        throw new \\RuntimeException('Original saved Start Config image changed');
+                        throw new \RuntimeException('Original saved Start Config image changed');
                     }
                     $reply = self::originalLockedFileEvidence(
                         $config, $argv[2], 'attest-saved-start-locked',
@@ -1238,13 +1238,13 @@ final class SharedApplyConfigWorker
                     if ($reply !== ['result'=>'saved-start-locked-attested', 'id'=>$argv[2]] ||
                         self::preflight($plan, $again->getNodes(), 'strategies', $again) !== $first ||
                         self::readPlan($argv[2], self::ROOT, 0) !== $plan) {
-                        throw new \\RuntimeException('Original saved Start locked readback changed');
+                        throw new \RuntimeException('Original saved Start locked readback changed');
                     }
                     self::requireReadableConfig();
                 } finally {
                     $config->unlock();
                 }
-                echo json_encode($reply, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\\n";
+                echo json_encode($reply, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
                 return 0;
             }
             if ($argv[1] === 'preflight' || $argv[1] === 'saved') {
