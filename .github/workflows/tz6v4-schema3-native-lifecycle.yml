@@ -1,9 +1,6 @@
 name: TZ6v4 schema3 real disposable OPNsense native lifecycle canary
 
 on:
-  # Temporary exact-head repair check, remove before the replacement PR.
-  push:
-    branches: [draft/tz6v5-s10-integration-repair]
   pull_request:
     paths:
       - scripts/stage2-opnsense-schema3-native-lifecycle.py

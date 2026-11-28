@@ -1,3 +1,23 @@
+## 28 November 2026 — owner-approved G2 handoff / S10 internal acceptance
+
+**Approved by owner:** sequential S10→S11→S12→S13→S14, one integrated release/merge only after S14. [Updated ordered plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) · [S10 #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319). Accepted main `0.6.5_241 f4d059292b0729b9fed9563401476a87e60aad5e` unchanged. Working branch `draft/tz6v5-s10-integration-repair`, candidate `0.6.5_242`, frozen source/test checkpoint [b2461444](https://github.com/Tolian82/os-zapret2-restyle/commit/b2461444785493eb9eb8cd45bcb84a91c968e3ac); last production change `8484f986`. No release, owner-router operation, merge or final GO.
+
+| Internal S10 evidence | Result / limit |
+|---|---|
+| Same original FD9/seal/root, native semantic source and managed successor | [G03 #45960403608](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45960403608); [portable #46092563686](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46092563686) PASS on actual earlier heads |
+| Native first Auto, interrupted first retry, PREPARED/base/saved recovery | [#46092563682](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46092563682) 3/3 PASS |
+| Bound stopped Found CAS and Config uncertainty; atomic rename gaps | [#45997659746](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45997659746), [#45998707468](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45998707468), [#46046712004](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46046712004), [#46054428373](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46054428373) SUCCESS |
+| UFS/ZFS rollback and purge | [#45953633549](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45953633549), [#45961872460](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45961872460) SUCCESS; earlier exact heads |
+| Historical installed update and exit callback | [#46114772487](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46114772487), [#46114772485](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46114772485), [#46114772474](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46114772474) SUCCESS on 20bc4279 |
+| Existing ordinary STOPPED mode-only Auto | [P5b2b #46115645976](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46115645976) 2/2 PASS on 8484f986 |
+| Protected update incl real interrupted pkg extraction | [#46116014968](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46116014968) 2/2 PASS on e62096f2; previous intermittent partial retirement not causally resolved |
+| Independent WAN-only + no ordinary Start prestart Lab | earlier [G05 #45709442830](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/45709442830) PASS; corrected actual runtime-v2 root and current combined G05→G03→G08 require one final scoped native check. **PENDING; not internal GO yet.** |
+| Bound public lifecycle | [#46116754077](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46116754077) RED: unchanged/edited Apply rc69 with exact unchanged Config/WAL/IPFW/PID; actual Stop/ACK PASS; Boot rc69 even after interrupted terminal archival. Retain as mandatory S11–S14 integration gate, no bypass or synthetic PASS. |
+
+**Next:** final scoped G08 existing workflow on this documentation/CI-only checkpoint, including G05. If PASS and no independent S10 criterion remains, record S10 internal GO and open S11; if RED fix the measured same-scope failure or explicitly leave it open. Do not run full matrix until S14. Remove temporary branch-only push trigger after the result. S10 final acceptance remains OPEN until combined merge; S11 internal start pending this gate. Earlier sections below are historical, not current instructions. Full local checkout unavailable; native exact-source evidence is not a claim of current whole-matrix PASS.
+
+---
+
 ## 28 November 2026 — S10 integrated recovery evidence / pre-PR checkpoint
 
 Accepted main `0.6.5_241` (`f4d059292b0729b9fed9563401476a87e60aad5e`); working candidate `0.6.5_242`, last production-tested source `78a52328b2f3ffd905df1b538929dec3ee415147`. **S10 OPEN — integrated PR/GO not yet accepted; S11 BLOCKED.** No owner-device action or published package. [Requirements](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) · [Issue #1319](https://github.com/Tolian82/os-zapret2-restyle/issues/1319).

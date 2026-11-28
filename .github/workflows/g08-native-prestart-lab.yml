@@ -1,6 +1,9 @@
 name: G08 native Standard Extended Lab before first normal Start
 
 on:
+  # Temporary exact-head repair check, remove before the replacement PR.
+  push:
+    branches: [draft/tz6v5-s10-integration-repair]
   pull_request:
     branches: [main]
     paths:
