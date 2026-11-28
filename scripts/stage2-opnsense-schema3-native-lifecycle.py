@@ -543,6 +543,18 @@ def execute(*, crash: bool = False) -> dict:
             [str(SERVICE), "shared-apply-run", "strategies", submit],
             env=owner_service_environment(), capture_output=True, text=True,
             timeout=420, check=False)
+        # Retain the actual public behavior before asserting the historical
+        # lifecycle expectation. A new immutable owner may not be bypassed.
+        state = json.loads(JOURNAL.read_bytes())
+        print("CANARY_RUNNING_AUTO_DISPATCH=" + json.dumps({
+            "case": gate, "rc": attempt.returncode,
+            "phase": state.get("phase") if state.get("phase") in
+                ("committed", "prepared", "activating", "activated", "restored", "requires-review") else "other",
+            "bound": "manifest" in state,
+            "original_generation": state.get("detail", {}).get("id") == old_generation,
+            "applied": bool(re.search(r"(?m)^applied-id=[0-9a-f]{32}$", attempt.stdout)),
+            "old_pidfile_present": PID.is_file() and not PID.is_symlink(),
+        }, sort_keys=True), flush=True)
         require(attempt.returncode == 0 and
                 re.search(r"(?m)^applied-id=[0-9a-f]{32}$", attempt.stdout),
                 "CANARY_RUNNING_SCHEMA3_" + gate + "_APPLY_REFUSED:rc=" +

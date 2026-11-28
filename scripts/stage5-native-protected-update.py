@@ -833,6 +833,10 @@ def native_partial_payload_interruption(archive, target, digest):
     retire_reason = re.search(
         r"auto-detect-retire-refused=([A-Za-z][A-Za-z0-9_]*)",
         prepared.stderr)
+    # Existing production CLI already emits finite guard categories.
+    # Preserve those categories, not raw stderr, in this test receipt.
+    guard = re.search(r"(?m)^auto-detect-retire-guard=(stopped_learning_[a-z_]{1,75}|unknown)$", prepared.stderr)
+    guard_name = guard.group(1) if guard else "none"
     terminal = EPOCHS / old_id / "learning-retirement"
     archived_names = [Path(row["auto_inbox"]).name for row in old_learning]
     archived_names.append("debug.log")
@@ -845,6 +849,7 @@ def native_partial_payload_interruption(archive, target, digest):
         "old_learning_N_count": len(old_learning),
         "old_terminal_retired": prepared_retired,
         "retire_refusal_type": retire_reason.group(1) if retire_reason else "none",
+        "retire_guard": guard_name,
         "intent_exists": (terminal / "intent.json").is_file(),
         "ready_exists": (terminal / "ready.json").is_file(),
         "archived_source_count": sum(
