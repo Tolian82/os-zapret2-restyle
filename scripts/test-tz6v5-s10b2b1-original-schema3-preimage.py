@@ -149,6 +149,38 @@ class GenuineNativePromotedS10b2b1(unittest.TestCase):
             str(path.relative_to(self.parent)): sha(path.read_bytes())
             for path in self.parent.rglob("*") if path.is_file()})
 
+    def test_start_successor_preserves_generated_release_except_epoch_identity(self):
+        from auto_detect_owner import MAP_NAME
+        from shared_apply_seal import SEAL
+
+        successor = self.parent / ("f" * 32)
+        uid = os.geteuid()
+        old_seal = verify_seal(self.work, owner=uid)
+        shutil.copytree(self.work, successor, copy_function=shutil.copy2)
+        (successor / SEAL).unlink()
+        new_release = successor / "release"
+        projection = origin._learning_start_projection(self.work, successor.name, self.candidate)
+        self.assertEqual(set(projection), {origin.ORIGIN_FILE, MAP_NAME, "dvtws.args",
+                                           "dvtws.args.global-policy.json"})
+        for name, content in projection.items():
+            (new_release / name).write_bytes(content)
+        old_args = (self.release / "dvtws.args").read_bytes()
+        self.assertEqual(projection["dvtws.args"], old_args.replace(
+            b"/learning-" + self.work.name.encode() + b"-",
+            b"/learning-" + successor.name.encode() + b"-"))
+        create_seal(successor, owner=uid)
+        origin.verify_learning_start_successor(self.work, successor, self.candidate)
+        self.assertEqual(verify_seal(self.work, owner=uid), old_seal)
+        # A valid candidate can carry a different list. Start from saved
+        # policy may not pick up these bytes as an implicit Apply.
+        (successor / SEAL).unlink()
+        (new_release / "managed/hostlist-youtube.txt").write_text("changed.example\n")
+        create_seal(successor, owner=uid)
+        with self.assertRaisesRegex(origin.AttributionError, "learning_start_successor_release_changed"):
+            origin.verify_learning_start_successor(self.work, successor, self.candidate)
+        with self.assertRaisesRegex(origin.AttributionError, "learning_start_requires_fresh_generation"):
+            origin._learning_start_projection(self.work, self.work.name, self.candidate)
+
     def test_wrong_native_sha_numbers_or_trust_authorization_refused(self):
         for change in (
             dict(original_args_sha256="f"*64),

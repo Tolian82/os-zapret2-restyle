@@ -539,8 +539,9 @@ def native_prepare_learning_producer(release: Path) -> None:
     prepare_native_learning(names)
 
 
-def _learning_pretraffic_owner(workspace: Path, candidate: str, queue_fd: int | None):
-    """First bound learning launch borrows original P2a; legacy is unchanged."""
+def _learning_pretraffic_owner(workspace: Path, candidate: str, queue_fd: int | None,
+                              *, learning_names: tuple[str, ...] = ()) -> tuple[dict, str | None] | None:
+    """Verify original bound pretraffic under the inherited P2a lock."""
     from shared_apply_operation import SharedApplyOperation
     from shared_apply_seal import WORK
     from neutral_root_stage import verify_original_operation_pins
@@ -549,24 +550,44 @@ def _learning_pretraffic_owner(workspace: Path, candidate: str, queue_fd: int | 
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     record = store.read()
-    bound_first = (type(record) is dict and
-                   record.get("manifest", {}).get("schema") == 2 and
-                   "previous" not in record and "previous_manifest" not in record and
-                   "found" not in record)
+    bound = type(record) is dict and record.get("manifest", {}).get("schema") == 2
     if queue_fd is None:
-        if bound_first:
-            raise PostDropRefused("first_bound_learning_requires_inherited_queue")
+        if bound:
+            raise PostDropRefused("bound_learning_requires_inherited_queue")
         return None
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             type(queue_fd) is not int or queue_fd < 3 or queue_fd in (4, 9) or
-            not bound_first or record["phase"] != "activating" or
+            not bound or record["phase"] != "activating" or "found" in record or
             workspace != WORK / record["detail"]["id"] or
             candidate != record["detail"]["candidate"]):
-        raise PostDropRefused("first_bound_learning_queue_scope_required")
+        raise PostDropRefused("bound_learning_queue_scope_required")
     verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    retired = None
+    if "previous" in record:
+        from auto_detect_origin_map import verify_learning_start_successor
+        from neutral_schema3_quiescent_preimage import (
+            EPOCH_ROOT, _retired_ready_digest, _verify_retired_history,
+        )
+
+        detail, prior = record["detail"], record["previous"]
+        if (record.get("previous_manifest", {}).get("schema") != 2 or
+                prior.get("id") == detail["id"] or prior.get("candidate") != candidate or
+                detail["base"] != candidate or detail["changed_fields"] != [] or
+                detail["page"] != "strategies" or not learning_names):
+            raise PostDropRefused("bound_learning_start_predecessor_required")
+        try:
+            verify_learning_start_successor(WORK / prior["id"], workspace, candidate)
+            queue, receipts = _original_epoch_queue(learning_names)
+            with queue.inherited_exclusive(queue_fd):
+                retired = _retired_ready_digest(EPOCH_ROOT, prior["id"], 0)
+                _verify_retired_history(record, queue, receipts, retired)
+                if _retired_ready_digest(EPOCH_ROOT, prior["id"], 0) != retired:
+                    raise PostDropRefused("bound_learning_start_retirement_changed")
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise PostDropRefused("bound_learning_start_retirement_unverified") from exc
     if store.read() != record:
-        raise PostDropRefused("first_bound_learning_queue_owner_changed")
-    return record
+        raise PostDropRefused("bound_learning_queue_owner_changed")
+    return record, retired
 
 
 def native_capture_learning_before_launch(release: Path, *, queue_fd: int | None = None) -> str:
@@ -574,9 +595,9 @@ def native_capture_learning_before_launch(release: Path, *, queue_fd: int | None
     from voice_live_inspect import COMMON_ACTIVE
     workspace, candidate, sources = _learning_release_sources(release)
     if queue_fd is not None and release != COMMON_ACTIVE:
-        raise PostDropRefused("first_bound_learning_active_release_required")
-    owner = _learning_pretraffic_owner(workspace, candidate, queue_fd)
+        raise PostDropRefused("bound_learning_active_release_required")
     _, names = _qualified_learning_sources(sources, ROOT)
+    owner = _learning_pretraffic_owner(workspace, candidate, queue_fd, learning_names=names)
     _parent(ROOT, 0)
     identity = pwd.getpwnam(ENGINE_USER)
     if identity.pw_uid <= 0 or identity.pw_gid <= 0:
@@ -586,8 +607,8 @@ def native_capture_learning_before_launch(release: Path, *, queue_fd: int | None
         engine_uid=identity.pw_uid, engine_gid=identity.pw_gid,
         learning_names=names, queue_fd=queue_fd)
     if (_learning_release_sources(release) != (workspace, candidate, sources) or
-            _learning_pretraffic_owner(workspace, candidate, queue_fd) != owner):
-        raise PostDropRefused("first_bound_learning_capture_owner_changed")
+            _learning_pretraffic_owner(workspace, candidate, queue_fd, learning_names=names) != owner):
+        raise PostDropRefused("bound_learning_capture_owner_changed")
     return _witness_line_learning(witness, sources)
 
 
@@ -607,12 +628,12 @@ def native_seal_learning_epoch(
     _, names = _qualified_learning_sources(sources, ROOT)
     queue, receipts = _original_epoch_queue(names)
     identity = pwd.getpwnam(ENGINE_USER)
-    owner = _learning_pretraffic_owner(workspace, candidate, queue_fd)
+    owner = _learning_pretraffic_owner(workspace, candidate, queue_fd, learning_names=names)
 
     def same_owner() -> bool:
         return (_learning_release_sources(COMMON_ACTIVE) == (
             workspace, candidate, sources) and
-            _learning_pretraffic_owner(workspace, candidate, queue_fd) == owner)
+            _learning_pretraffic_owner(workspace, candidate, queue_fd, learning_names=names) == owner)
     with (queue.exclusive() if queue_fd is None else queue.inherited_exclusive(queue_fd)):
         receipts.seal_learning_pretraffic(
             queue, workspace=workspace, candidate_sha256=candidate,

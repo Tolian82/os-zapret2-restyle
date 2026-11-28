@@ -691,7 +691,7 @@ class PostDropContract(unittest.TestCase):
               patch("neutral_root_stage.verify_original_operation_pins") as verify):
             store = factory.return_value
             store.read.return_value = record
-            self.assertEqual(_learning_pretraffic_owner(workspace, candidate, 3), record)
+            self.assertEqual(_learning_pretraffic_owner(workspace, candidate, 3), (record, None))
             verify.assert_called_once_with(record=record, parent=WORK, owner_uid=0)
             for fd in (None, 4, 9, -1, True):
                 with self.subTest(fd=fd), self.assertRaises(PostDropRefused):
@@ -714,6 +714,71 @@ class PostDropContract(unittest.TestCase):
             store.read.side_effect = [record, {**record, "phase": "activated"}]
             with self.assertRaises(PostDropRefused):
                 _learning_pretraffic_owner(workspace, candidate, 3)
+
+    def test_bound_learning_start_requires_retired_owner_under_same_queue(self):
+        from auto_detect_post_drop import _learning_pretraffic_owner
+        from shared_apply_seal import WORK
+        from unittest.mock import MagicMock
+
+        generation, previous, candidate = "a" * 32, "b" * 32, "c" * 64
+        ready = "d" * 64
+        record = {"phase": "activating", "detail": {"id": generation,
+                    "page": "strategies", "base": candidate, "candidate": candidate,
+                    "changed_fields": []}, "manifest": {"schema": 2},
+                  "previous": {"id": previous, "candidate": candidate},
+                  "previous_manifest": {"schema": 2}}
+        names = (f"learning-{generation}-3.txt",)
+        workspace = WORK / generation
+        queue = MagicMock()
+        receipts = MagicMock()
+        driver = "neutral_schema3_quiescent_preimage."
+        with (patch("auto_detect_post_drop.sys.platform", "freebsd"),
+              patch("auto_detect_post_drop.os.geteuid", return_value=0),
+              patch("voice_ipfw_adapter.require_lifecycle_lock"),
+              patch("shared_apply_operation.SharedApplyOperation") as factory,
+              patch("neutral_root_stage.verify_original_operation_pins"),
+              patch("auto_detect_origin_map.verify_learning_start_successor") as verify_release,
+              patch("auto_detect_post_drop._original_epoch_queue",
+                    return_value=(queue, receipts)) as original_queue,
+              patch(driver + "_retired_ready_digest", return_value=ready) as read_ready,
+              patch(driver + "_verify_retired_history") as verify_history):
+            store = factory.return_value
+            store.read.return_value = record
+
+            def observe(fd=3):
+                return _learning_pretraffic_owner(workspace, candidate, fd, learning_names=names)
+
+            self.assertEqual(observe(), (record, ready))
+            verify_release.assert_called_once_with(WORK / previous, workspace, candidate)
+            queue.inherited_exclusive.assert_called_once_with(3)
+            queue.exclusive.assert_not_called()
+            original_queue.assert_called_once_with(names)
+            verify_history.assert_called_once_with(record, queue, receipts, ready)
+            self.assertEqual([call.args[1] for call in read_ready.call_args_list], [previous, previous])
+            for wrong in ({**record, "phase": "prepared"},
+                          {**record, "previous_manifest": {"schema": 1}},
+                          {**record, "previous": {"id": generation, "candidate": candidate}},
+                          {**record, "detail": {**record["detail"], "base": "f" * 64}},
+                          {**record, "detail": {**record["detail"], "changed_fields": ["general.enabled"]}}):
+                with self.subTest(wrong=wrong):
+                    store.read.return_value = wrong
+                    with self.assertRaises(PostDropRefused):
+                        observe()
+            store.read.return_value = record
+            with self.assertRaises(PostDropRefused):
+                observe(None)
+            verify_release.side_effect = ValueError("changed release")
+            with self.assertRaises(PostDropRefused):
+                observe()
+            verify_release.side_effect = None
+            verify_history.side_effect = ValueError("invalid terminal ACK")
+            with self.assertRaises(PostDropRefused):
+                observe()
+            verify_history.side_effect = None
+            read_ready.side_effect = [ready, "e" * 64]
+            with self.assertRaises(PostDropRefused):
+                observe()
+            store._persist_record.assert_not_called()
 
     def test_pretraffic_does_not_reject_native_append_after_start(self):
         # The original prelaunch witness stays valid after raw/debug append.

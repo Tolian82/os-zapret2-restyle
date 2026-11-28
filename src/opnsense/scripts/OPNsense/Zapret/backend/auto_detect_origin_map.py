@@ -1169,6 +1169,60 @@ def verify_learning_promotion(workspace: Path, candidate_digest: str) -> dict:
     return expected
 
 
+def _learning_start_projection(previous: Path, generation: str,
+                              candidate_digest: str) -> dict[str, bytes]:
+    """Rebind the previous native release to a fresh epoch without a rebuild."""
+    from auto_detect_owner import LEARNING_ACTIVE, MAP_NAME, MAX_MAP
+
+    if not re.fullmatch(r"[0-9a-f]{32}", generation) or previous.name == generation:
+        raise AttributionError("learning_start_requires_fresh_generation")
+    verify_learning_promotion(previous, candidate_digest)
+    release = previous / "release"
+    original = _capture_file(release / "dvtws.original.args", owner_uid=os.geteuid())
+    source = json.loads(_capture_file(release / ORIGIN_FILE, limit=MAX_MAP,
+                                     owner_uid=os.geteuid()))
+    profiles = []
+    for index, row in enumerate(source["profiles"]):
+        ordinal = index + 1 if index < len(source["profiles"]) - 1 else "default"
+        if row["id"] != f"{previous.name}:{ordinal}":
+            raise AttributionError("learning_start_source_identity_changed")
+        profiles.append({**row, "id": f"{generation}:{ordinal}"})
+    source = {**source, "generation": generation, "profiles": profiles}
+    args, mapping = plan_learning_tier(source, original, owner_id=generation,
+                                      owner_candidate_sha256=candidate_digest)
+    mapping.update(evidence=LEARNING_ACTIVE, activation_authorized=True)
+
+    def encode(value: dict) -> bytes:
+        return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+    projection = {ORIGIN_FILE: encode(source), MAP_NAME: encode(mapping), "dvtws.args": args}
+    policy = release / "dvtws.args.global-policy.json"
+    if policy.exists() or policy.is_symlink():
+        projection[policy.name] = encode({"schema": 1, "argv_sha256": _sha(args),
+                                          "profiles": len(segments(_text(args)))})
+    return projection
+
+
+def verify_learning_start_successor(previous: Path, successor: Path,
+                                    candidate_digest: str) -> None:
+    """Require the exact sealed predecessor with only epoch identity rebinding."""
+    from auto_detect_owner import MAX_MAP
+    from shared_apply_seal import _release_hash, verify_seal
+
+    uid = os.geteuid()
+    before = verify_seal(previous, owner=uid)
+    after = verify_seal(successor, owner=uid)
+    projection = _learning_start_projection(previous, successor.name, candidate_digest)
+    verify_learning_promotion(successor, candidate_digest)
+    replacements = tuple(
+        (name, _sha(_capture_file(previous / "release" / name, limit=MAX_MAP, owner_uid=uid)),
+         _sha(raw)) for name, raw in projection.items())
+    if (_release_hash(previous / "release", uid, replacements=replacements) !=
+            after["sha256"]["release"] or verify_seal(previous, owner=uid) != before or
+            verify_seal(successor, owner=uid) != after):
+        raise AttributionError("learning_start_successor_release_changed")
+
+
 def promote_learning_release(workspace: Path, candidate_digest: str) -> dict:
     """Promote native two-tier candidate in the ORIGINAL shared workspace.
 

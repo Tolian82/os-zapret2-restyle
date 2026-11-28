@@ -228,6 +228,60 @@ def stopped_receipts(generation: str, learning: list[dict],
             "CANARY_NATIVE_STOPPED_DEBUG_INODE_NOT_RETIRED")
 
 
+def stopped_start_projection(generation: str) -> None:
+    # The real owner remains terminal on the disposable guest. Exercise the
+    # installed projection on a detached copy without inventing a new WAL.
+    probe = r'''
+import json
+from pathlib import Path
+import shutil
+import sys
+import tempfile
+from uuid import uuid4
+
+sys.path.insert(0, sys.argv[1])
+from auto_detect_learning_gc import qualified_completed_learning
+from auto_detect_origin_map import _learning_start_projection, verify_learning_start_successor
+from auto_detect_post_drop import _original_epoch_queue
+from shared_apply_operation import SharedApplyOperation
+from shared_apply_seal import WORK, create_seal
+from voice_ipfw_adapter import require_lifecycle_lock
+
+require_lifecycle_lock()
+store = SharedApplyOperation(owner=0)
+record = store.read()
+detail = record['detail']
+if record['phase'] != 'committed' or detail['id'] != sys.argv[2] or record['manifest']['schema'] != 2:
+    raise RuntimeError('S11_DETACHED_PROJECTION_WRONG_OWNER')
+previous = WORK / detail['id']
+candidate = detail['candidate']
+queue, receipts = _original_epoch_queue()
+with tempfile.TemporaryDirectory(prefix='s11-start-projection-') as private:
+    work = Path(private) / uuid4().hex
+    work.mkdir(mode=0o700)
+    with queue.exclusive(existing_only=True):
+        qualified_completed_learning(receipts, queue, detail['id'], expected_candidate=candidate)
+        for name in ('plan.json', 'candidate.xml'):
+            shutil.copy2(previous / name, work / name)
+        shutil.copytree(previous / 'release', work / 'release')
+        for name, content in _learning_start_projection(previous, work.name, candidate).items():
+            (work / 'release' / name).write_bytes(content)
+        create_seal(work, owner=0)
+        verify_learning_start_successor(previous, work, candidate)
+        qualified_completed_learning(receipts, queue, detail['id'], expected_candidate=candidate)
+        if store.read() != record:
+            raise RuntimeError('S11_DETACHED_PROJECTION_CHANGED_OWNER')
+print('S11_NATIVE_DETACHED_START_PROJECTION=PASS')
+'''
+    result = command("/bin/sh", "-c",
+                     'exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
+                     "s11-start-projection", str(SERVICE.with_name("python_runtime.sh")),
+                     "-c", probe, str(SERVICE.parent / "backend"), generation)
+    require(result.returncode == 0 and result.stdout.splitlines() == ["S11_NATIVE_DETACHED_START_PROJECTION=PASS"],
+            "S11_NATIVE_START_PROJECTION_REFUSED:rc=" + str(result.returncode) + ":" + result.stderr[-500:])
+    print(result.stdout.strip(), flush=True)
+
+
 def owner_service_environment() -> dict[str, str]:
     """Exercise real explicit Auto without a schema3 CI traffic switch.
 
@@ -560,6 +614,7 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
         stopped_receipts(ident, learning, debug_inode)
         stopped_rules = g04_runtime.owned_rules()
         stopped_journal = JOURNAL.read_bytes()
+        stopped_start_projection(ident)
         result = subprocess.run([str(SERVICE), "start"], env=owner_service_environment(),
                                 capture_output=True, text=True, timeout=180, check=False)
         require(result.returncode == 69 and not result.stdout.strip() and
@@ -573,7 +628,8 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
                 "S11_STOPPED_START_PREFLIGHT_CHANGED_OWNER")
         return {"status": "PASS_S11_START_PREFLIGHT", "source_sha": head,
                 "generation": ident, "verified_running_noop": True,
-                "verified_stopped_preimage": True, "physical_start_tested": False}
+                "verified_stopped_preimage": True, "verified_detached_projection": True,
+                "physical_start_tested": False}
 
     # A genuine first Auto Apply was not sufficient: reproduce the owner's
     # failing action while a REAL schema3 learner is already RUNNING.

@@ -80,10 +80,17 @@ def _hash_file(path: Path, owner: int, maximum: int) -> str:
     return digest.hexdigest()
 
 
-def _release_hash(release: Path, owner: int, *, replacement: tuple[str, str, str] | None = None) -> str:
+def _release_hash(release: Path, owner: int, *, replacement: tuple[str, str, str] | None = None,
+                  replacements: tuple[tuple[str, str, str], ...] = ()) -> str:
     _stat(release, owner, directory=True)
+    if replacement is not None:
+        if replacements:
+            raise SharedBundleError("conflicting release projections")
+        replacements = (replacement,)
+    projected = {name: (before, after) for name, before, after in replacements}
+    if len(projected) != len(replacements):
+        raise SharedBundleError("duplicate release projection target")
     count, total = 0, 0
-    matched = False
     proof = hashlib.sha256()
     # Strict traversal: no symlinks, special files or path escape possible.
     for root, dirs, files in os.walk(release, topdown=True, followlinks=False):
@@ -106,14 +113,14 @@ def _release_hash(release: Path, owner: int, *, replacement: tuple[str, str, str
                 raise SharedBundleError("shared release exceeds bounded inventory")
             name = child.relative_to(release).as_posix()
             sha = _hash_file(child, owner, MAX_BYTES)
-            if replacement is not None and name == replacement[0]:
-                if sha != replacement[1]:
-                    raise SharedBundleError("managed projection preimage changed")
-                sha = replacement[2]
-                matched = True
+            if name in projected:
+                before, after = projected.pop(name)
+                if sha != before:
+                    raise SharedBundleError("release projection preimage changed")
+                sha = after
             proof.update(("F\0" + name + "\0" + sha + "\n").encode())
-    if replacement is not None and not matched:
-        raise SharedBundleError("managed projection target missing")
+    if projected:
+        raise SharedBundleError("release projection target missing")
     if count == 0:
         raise SharedBundleError("empty shared candidate release")
     return proof.hexdigest()

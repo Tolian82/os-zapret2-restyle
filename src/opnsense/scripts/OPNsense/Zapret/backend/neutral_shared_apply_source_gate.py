@@ -2036,7 +2036,7 @@ def native_run_first_enabled_apply_fd9(operation: str, raw_pipe: bytes, *,
         # continuously across the joined PHP/physical/confirmation children.
         with queue.exclusive():
             fd = queue.locked_fd
-            if (_learning_pretraffic_owner(work, candidate, fd) != activating or
+            if (_learning_pretraffic_owner(work, candidate, fd) != (activating, None) or
                     _learning_release_sources(release) != (workspace, candidate, sources)):
                 raise OriginalSourceGateRefused("S10_FIRST_LEARNING_QUEUE_OWNER_CHANGED")
             _capture(ROOT, root_uid=0, root_gid=0, engine_uid=identity.pw_uid,
