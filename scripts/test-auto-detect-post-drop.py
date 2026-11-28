@@ -786,7 +786,7 @@ class PostDropContract(unittest.TestCase):
             prepare.assert_not_called()
             original.assert_called_once_with(names)
             self.assertEqual(queue.inherited_exclusive.call_args.args, (3,))
-            self.assertEqual(source.call_count, 7)
+            self.assertEqual(source.call_count, 8)
 
     def test_bound_learning_start_requires_retired_owner_under_same_queue(self):
         from auto_detect_post_drop import _learning_pretraffic_owner
