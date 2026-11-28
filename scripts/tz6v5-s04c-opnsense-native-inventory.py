@@ -281,7 +281,11 @@ def install(clean):
 
 def upstream():
     g03 = load("s04c_g03", "stage2-opnsense-g03-first-install.py")
-    result = g03.dispatch_and_poll()
+    try:
+        result = g03.dispatch_and_poll()
+    except (g03.Refusal, OSError, subprocess.TimeoutExpired):
+        g03.bounded_disposable_failure_evidence()
+        raise
     need(result["installed"] == "1" and result["service"] == "stopped" and
          result["version"] == "v1.0.7" and ENGINE.is_file() and
          not ENGINE.is_symlink(), "S04C_REAL_UPSTREAM_NOT_READY")

@@ -549,6 +549,19 @@ try {
         json.dumps(request, separators=(',', ':')).encode()).decode().rstrip('=')
     # This is the actual GUI/backend transaction; never set auto in XML
     # behind the one authoritative Config writer.
+    journal = Path('/var/db/zapret2/shared-apply/operation.json')
+    work = Path('/var/db/zapret2/shared-work')
+    print('P2_INSTALLED_AUTO_BASE=' + json.dumps({
+        'journal_present': journal.is_file() and not journal.is_symlink(),
+        'journal_directory_present': journal.parent.exists() or journal.parent.is_symlink(),
+        'ordinary_args_present': (active / 'dvtws.args').is_file(),
+        'voice_plan_present': (active / 'voice-plan.json').exists(),
+        'generation_map_present': (active / 'auto-detect-generation.json').exists(),
+        'active_root_present': (active / 'manifest.json').exists(),
+        'detached_work_count': len(list(work.iterdir())) if work.is_dir() and not work.is_symlink() else 0,
+        'saved_enabled': old.findtext('./OPNsense/Zapret/general/enabled') == '1',
+        'status_rc': run(str(SERVICE), 'status', timeout=25).returncode,
+    }, sort_keys=True), flush=True)
     prepared = run(cli, 'zapret', 'shared_apply', 'strategies', token, timeout=240)
     if prepared.returncode != 0 or b'applied-id=' not in prepared.stdout:
         # The real configd path has bounded phase receipts; preserve them
