@@ -66,4 +66,55 @@ with patch("neutral_shared_apply_source_gate.sys.platform", "linux"):
         pass
     else:
         raise AssertionError("S11 non-FreeBSD root bind accepted")
+# The S10 authorizing witness is BoundRootReceipt (not the pre-stage
+# PreparedRootReceipt); its safety bits remain NONE and False.
+from dataclasses import replace
+from neutral_shared_apply_source_gate import (
+    SourceGateReceipt, _saved_start_bound_receipt_qualified)
+from neutral_root_bound_preflight import BoundRootReceipt
+from neutral_root_stage import PreparedRootReceipt
+gen = "a" * 32
+oldgen = "c" * 32
+root = "d" * 64
+seal = "e" * 64
+old = {"id": oldgen, "page": "strategies", "base": digest,
+       "candidate": digest, "changed_fields": []}
+detail = {"id": gen, "page": "strategies", "base": digest,
+          "candidate": digest, "changed_fields": []}
+before = {"schema": 1, "phase": "prepared", "detail": detail,
+          "previous": old, "previous_manifest": {
+              "schema": 2, "generation": oldgen, "root_sha256": root,
+              "seal_sha256": seal, "candidate_sha256": digest}}
+bound = {**before, "manifest": {
+    "schema": 2, "generation": gen, "root_sha256": root,
+    "seal_sha256": seal, "candidate_sha256": digest}}
+source = SourceGateReceipt("auto", digest, (),
+    generation=gen, requested_enabled=True, native_candidate_sha256=digest)
+receipt = BoundRootReceipt(gen, root, seal, digest)
+assert _saved_start_bound_receipt_qualified(source, receipt, bound, before, gen) is True
+for mismatch in (
+    PreparedRootReceipt(gen, root, seal, digest),
+    replace(receipt, generation=oldgen),
+    replace(receipt, physical_transition_allowed=True),
+    replace(receipt, promotion_allowed=True),
+    replace(receipt, authorization="START"),
+    replace(receipt, native_owner_preflight_required=False),
+    replace(receipt, root_sha256="f" * 64),
+    replace(receipt, original_seal_sha256="f" * 64),
+    replace(receipt, original_candidate_sha256="f" * 64),
+):
+    try:
+        _saved_start_bound_receipt_qualified(source, mismatch, bound, before, gen)
+    except OriginalSourceGateRefused:
+        pass
+    else:
+        raise AssertionError("S11 accepted wrong S10 bound receipt")
+try:
+    _saved_start_bound_receipt_qualified(source, receipt,
+        {**bound, "phase": "activating"}, before, gen)
+except OriginalSourceGateRefused:
+    pass
+else:
+    raise AssertionError("S11 accepted prematurely activating bound WAL")
+
 print("S11_SAVED_START_BUILD_READONLY_SOURCE=PASS")

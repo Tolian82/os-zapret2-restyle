@@ -967,6 +967,36 @@ def native_bind_original_prepared_fd9(operation: str, raw_pipe: bytes):
 
 
 
+def _saved_start_bound_receipt_qualified(source, receipt, bound: object,
+                                       before: object, operation: str) -> bool:
+    """Check S10's real BOUND receipt, never its earlier PREPARED witness."""
+    from neutral_root_bound_preflight import BoundRootReceipt
+
+    if (type(source) is not SourceGateReceipt or source.mode != "auto" or
+            source.requested_enabled is not True or source.generation != operation or
+            source.authorization != "NONE" or source.physical_transition_allowed or
+            type(before) is not dict or type(bound) is not dict or
+            type(receipt) is not BoundRootReceipt or
+            receipt.status != "PREPARED_ORIGINAL_BOUND_READ_ONLY" or
+            receipt.authorization != "NONE" or
+            receipt.physical_transition_allowed or receipt.promotion_allowed or
+            receipt.reattest_under_original_fd9 is not True or
+            receipt.native_owner_preflight_required is not True or
+            receipt.generation != operation or
+            type(bound.get("manifest")) is not dict or
+            bound.get("phase") != "prepared" or
+            {k: v for k, v in bound.items() if k != "manifest"} != before or
+            bound["manifest"].get("schema") != 2 or
+            bound["manifest"].get("generation") != operation or
+            bound["manifest"].get("candidate_sha256") != before["detail"]["candidate"] or
+            source.native_candidate_sha256 != before["detail"]["candidate"] or
+            receipt.root_sha256 != bound["manifest"].get("root_sha256") or
+            receipt.original_seal_sha256 != bound["manifest"].get("seal_sha256") or
+            receipt.original_candidate_sha256 != before["detail"]["candidate"]):
+        raise OriginalSourceGateRefused("S11_SAVED_START_BOUND_RECEIPT_CHANGED")
+    return True
+
+
 def native_bind_saved_start_prepared_fd9(operation: str, raw_pipe: bytes) -> None:
     """Bind one stopped Auto successor using S10's ONLY root/WAL writer.
 
@@ -975,7 +1005,7 @@ def native_bind_saved_start_prepared_fd9(operation: str, raw_pipe: bytes) -> Non
     original FD9 recovery, never a fallback to an unbound Start.
     """
     from auto_detect_origin_map import verify_learning_start_successor
-    from neutral_root_stage import PreparedRootReceipt, verify_original_operation_pins
+    from neutral_root_stage import verify_original_operation_pins
     from shared_apply_operation import (
         SharedApplyOperation, _saved_start_plan_scope)
     from shared_apply_seal import WORK, verify_seal
@@ -1019,17 +1049,8 @@ def native_bind_saved_start_prepared_fd9(operation: str, raw_pipe: bytes) -> Non
         raise OriginalSourceGateRefused("S11_SAVED_START_BIND_PREIMAGE_CHANGED")
     source, receipt = native_bind_original_prepared_fd9(operation, raw_pipe)
     bound = store.read()
-    if (type(source) is not SourceGateReceipt or
-            source.mode != "auto" or source.requested_enabled is not True or
-            source.native_candidate_sha256 != before["detail"]["candidate"] or
-            source.generation != operation or
-            source.authorization != "NONE" or source.physical_transition_allowed or
-            type(receipt) is not PreparedRootReceipt or
-            type(bound) is not dict or bound.get("phase") != "prepared" or
-            {k: v for k, v in bound.items() if k != "manifest"} != before or
-            bound.get("manifest", {}).get("schema") != 2 or
-            bound["manifest"]["generation"] != operation or
-            bound["manifest"]["candidate_sha256"] != before["detail"]["candidate"] or
+    if (not _saved_start_bound_receipt_qualified(
+                source, receipt, bound, before, operation) or
             observe(bound) != prior or observe(bound) != prior):
         raise OriginalSourceGateRefused("S11_SAVED_START_BOUND_PIN_CHANGED")
     # This does NOT transition ACTIVATING or claim a running process.
