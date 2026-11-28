@@ -45,6 +45,9 @@ jobs:
           set -eu
           python3.13 -m py_compile scripts/stage2-opnsense-schema3-native-lifecycle.py
           python3.13 scripts/stage2-opnsense-schema3-native-lifecycle.py --self-test
+          python3.13 scripts/test-auto-detect-post-drop.py
+          sh scripts/test-auto-detect-fd9-launch.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
           if GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 \
               ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE=1 \
