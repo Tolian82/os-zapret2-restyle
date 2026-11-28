@@ -19,6 +19,7 @@ on:
     branches: [draft/tz6v5-s10-integration-repair]
     paths:
       - scripts/stage2-opnsense-schema3-native-lifecycle.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/neutral_schema3_quiescent_preimage.py
   workflow_dispatch:
 
 permissions:

@@ -309,6 +309,46 @@ class OriginalQuiescentTests(unittest.TestCase):
             activate.assert_not_called()
 
 
+    def test_first_learning_layout_uses_the_original_pretraffic_owner_receipt(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            parent = Path(tmp)
+            op, base, candidate = "a" * 32, "b" * 64, "c" * 64
+            work = parent / "work" / op
+            release = work / "release"
+            release.mkdir(parents=True)
+            active = parent / "runtime-v2"
+            record = {"phase": "activating", "detail": {
+                "id": op, "base": base, "candidate": candidate}, "manifest": {"schema": 2}}
+            store = Mock(read=Mock(return_value=record))
+            producer = object()
+            for name, value in (("WORK", work.parent), ("COMMON_ACTIVE", active),
+                                ("EPOCH_ROOT", parent / "epochs")):
+                stack.enter_context(patch.object(gate, name, value))
+            stack.enter_context(patch("sys.platform", "freebsd15"))
+            stack.enter_context(patch("os.geteuid", return_value=0))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            stack.enter_context(patch("shared_apply_seal._stat", side_effect=lambda path, *_a, **_k: path.lstat()))
+            stack.enter_context(patch("shared_apply_seal.WORK", work.parent))
+            stack.enter_context(patch("shared_apply_seal.verify_seal", return_value={"sha256": {"release": "tree"}}))
+            stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            stack.enter_context(patch("neutral_root_stage._original_plan_matches", return_value=True))
+            stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root",
+                                      return_value=b'{"service":{"enabled":true,"target_mode":"auto"}}'))
+            stack.enter_context(patch("auto_detect_post_drop._learning_release_sources",
+                                      return_value=(work, candidate, ())))
+            stack.enter_context(patch("auto_detect_post_drop._qualified_learning_sources",
+                                      return_value=(op, ())))
+            stack.enter_context(patch("auto_detect_post_drop._capture", return_value=producer))
+            stack.enter_context(patch.object(gate, "_zero_processes"))
+            stack.enter_context(patch.object(gate, "_first_inert_kernel_state", return_value="empty"))
+            self.assertEqual(gate._first_inert_recovery_layout(record, config_fd=4, config_digest=base,
+                queue_fd=3, store=store, first_learning_launch=True), (None, None, "empty", producer))
+
     def test_first_disabled_install_normalizes_only_the_exact_empty_tree(self):
         import json
         import subprocess

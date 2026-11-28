@@ -1389,7 +1389,7 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
             raise QuiescentPreimageRefused("FIRST_LEARNING_LAUNCH_MODE_REQUIRED")
         workspace, candidate, sources = _learning_release_sources(release)
         if (workspace != work or candidate != detail["candidate"] or
-                _learning_pretraffic_owner(workspace, candidate, queue_fd) != record):
+                _learning_pretraffic_owner(workspace, candidate, queue_fd) != (record, None)):
             raise QuiescentPreimageRefused("FIRST_LEARNING_LAUNCH_OWNER_REQUIRED")
         _, names = _qualified_learning_sources(sources, PRODUCER_ROOT)
         identity = pwd.getpwnam(ENGINE_USER)
@@ -1473,7 +1473,7 @@ def _first_inert_recovery_layout(record: dict, *, config_fd: int,
     if first_learning_launch:
         if (capture() != producer or _learning_release_sources(release) !=
                 (workspace, candidate, sources) or
-                _learning_pretraffic_owner(workspace, candidate, queue_fd) != record):
+                _learning_pretraffic_owner(workspace, candidate, queue_fd) != (record, None)):
             raise QuiescentPreimageRefused("FIRST_LEARNING_LAUNCH_PRODUCER_CHANGED")
         _safe_empty_directory(EPOCH_ROOT, 0)
         return live, staged, kernel, producer
