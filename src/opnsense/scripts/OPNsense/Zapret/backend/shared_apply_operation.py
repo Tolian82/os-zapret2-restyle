@@ -2434,6 +2434,143 @@ def native_bound_prepare_gate(operation: str) -> None:
         raise SharedOperationError("bound prepare retired predecessor changed")
 
 
+
+def _saved_start_plan_scope(plan: object, saved_digest: str) -> None:
+    """Reject anything except PHP's exact no-change enabled Auto shape.
+
+    This is a read-only scope validator, not a new serializer or an
+    authorization to alter Config, the installed release or the WAL.
+    """
+    if (type(plan) is not dict or plan.get("result") != "prepared" or
+            plan.get("page") != "strategies" or
+            plan.get("dependencies") != saved_digest or
+            plan.get("changed_fields") != [] or
+            "found_intent" in plan or "found_batch" in plan):
+        raise SharedOperationError("saved Start detached plan changed")
+    candidate = plan.get("candidate")
+    general = candidate.get("general") if type(candidate) is dict else None
+    hostlist = candidate.get("hostlist") if type(candidate) is dict else None
+    mode = hostlist.get("mode") if type(hostlist) is dict else None
+    if type(mode) is dict:
+        selected = []
+        for name, option in mode.items():
+            flag = option.get("selected") if type(option) is dict else None
+            if (name not in ("all", "list", "auto") or
+                    type(flag) not in (bool, int, str) or flag not in (0, 1, "0", "1")):
+                raise SharedOperationError("saved Start invalid native mode")
+            if flag in (1, "1"):
+                selected.append(name)
+        mode = selected[0] if len(selected) == 1 else None
+    if (type(general) is not dict or general.get("enabled") != "1" or
+            mode != "auto"):
+        raise SharedOperationError("saved Start requires unchanged enabled Auto")
+
+
+def native_bound_saved_start_build_gate(operation: str) -> None:
+    """Read-only original FD9 admission of PHP saved-unchanged Start candidate.
+
+    Only a fresh detached work directory may be inspected. The old root,
+    Config, stopped processes, retirement ACK/archives, base-only queue and
+    existing P2a lock must remain exact. This does NOT prepare a new WAL,
+    acquire FD4, create inboxes, signal an engine or grant Start permission.
+    """
+    from auto_detect_post_drop import _original_epoch_queue
+    from auto_detect_learning_gc import qualified_completed_learning
+    from neutral_root_stage import verify_original_operation_pins
+    from neutral_schema3_quiescent_preimage import (
+        EPOCH_ROOT, _retired_ready_digest, _verify_idle_producer)
+    from neutral_schema3_saved_wan_preimage import _native_preflight
+    from shared_apply_render import regular
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation)):
+        raise SharedOperationError("saved Start build requires original root FD9")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    pin = committed_manifest(record)
+    prior = committed_owner(record)
+    if (type(record) is not dict or record.get("phase") != "committed" or
+            pin is None or pin["schema"] != 2 or type(prior) is not dict or
+            prior["page"] != "strategies" or "failure" in record or
+            "found" in record or "first_retry_archive" in record or
+            operation in (prior["id"], record.get("previous", {}).get("id"))):
+        raise SharedOperationError("saved Start build requires committed Auto predecessor")
+    if native_bound_start_preflight(prior["id"], "strategies") != "stopped":
+        raise SharedOperationError("saved Start build predecessor is not STOPPED")
+    workspace = WORK / operation
+    old_work = WORK / prior["id"]
+
+    def identity(path: Path) -> tuple:
+        info = regular(path, 0)
+        return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+                info.st_ctime_ns, info.st_mode, info.st_uid, info.st_nlink)
+
+    def observe() -> tuple:
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise SharedOperationError("saved Start build journal changed")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        regular(WORK, 0, directory=True)
+        regular(workspace, 0, directory=True)
+        if set(os.listdir(workspace)) != {"candidate.xml", "plan.json"}:
+            raise SharedOperationError("saved Start build requires detached original files")
+        plan_path = workspace / "plan.json"
+        xml_path = workspace / "candidate.xml"
+        before = identity(plan_path), identity(xml_path)
+        if before[0][2] > 65536 or before[1][2] > 16777216:
+            raise SharedOperationError("saved Start candidate exceeds fixed bounds")
+        plan_raw = plan_path.read_bytes()
+        candidate_xml = xml_path.read_bytes()
+        if (before != (identity(plan_path), identity(xml_path)) or
+                len(plan_raw) != before[0][2] or
+                len(candidate_xml) != before[1][2]):
+            raise SharedOperationError("saved Start candidate inode changed")
+        _saved_start_plan_scope(json.loads(plan_raw), prior["candidate"])
+        # Original native Config lock is acquired by PHP's existing preflight.
+        # Require exactly its saved digest and no changed user field.
+        config = _native_preflight(operation, "strategies")
+        if (type(config) is not dict or config.get("base") != prior["candidate"] or
+                config.get("candidate") != prior["candidate"] or
+                config.get("fields") != [] or config.get("enabled") != "1"):
+            raise SharedOperationError("saved Start native Config does not match")
+        # A no-change PHP candidate contains byte-identical saved XML. The
+        # independent native Config probe brackets this read; it never writes.
+        from auto_detect_original_lock_handoff import CONFIG_PATH
+        fd = os.open(CONFIG_PATH, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        try:
+            current = os.fstat(fd)
+            if (not stat.S_ISREG(current.st_mode) or
+                    current.st_size != len(candidate_xml) or
+                    os.read(fd, len(candidate_xml) + 1) != candidate_xml or
+                    os.fstat(fd) != current):
+                raise SharedOperationError("saved Start XML differs from original Config")
+        finally:
+            os.close(fd)
+        queue, receipts = _original_epoch_queue()
+        with queue.exclusive(existing_only=True):
+            idle = _verify_idle_producer(queue, receipts)
+            ready = _retired_ready_digest(EPOCH_ROOT, prior["id"], 0)
+            qualified_completed_learning(
+                receipts, queue, prior["id"], expected_candidate=prior["candidate"],
+                expected_ready_sha256=ready)
+            if (_verify_idle_producer(queue, receipts) != idle or
+                    _retired_ready_digest(EPOCH_ROOT, prior["id"], 0) != ready or
+                    store.read() != record):
+                raise SharedOperationError("saved Start retired original changed")
+        if (identity(plan_path), identity(xml_path)) != before:
+            raise SharedOperationError("saved Start detached inode changed")
+        if store.read() != record:
+            raise SharedOperationError("saved Start committed owner changed")
+        return before, hashlib.sha256(plan_raw).hexdigest(), hashlib.sha256(candidate_xml).hexdigest(), ready, idle
+
+    before = observe()
+    if observe() != before or native_bound_start_preflight(prior["id"], "strategies") != "stopped":
+        raise SharedOperationError("saved Start build preimage raced")
+
+
 def restored_first_learning(record: dict | None) -> bool:
     """Recognize only an aborted first bound Auto owner; never a live owner."""
     return (type(record) is dict and record.get("phase") == "restored" and
@@ -2533,6 +2670,9 @@ def main(argv: list[str]) -> int:
     found_pending = len(argv) == 2 and argv[1] == "found-pending"
     bound_prepare_request = (len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-prepare"] and
                              bool(OP_ID.fullmatch(argv[3])))
+    bound_saved_start_build_request = (
+        len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-saved-start-build"] and
+        bool(OP_ID.fullmatch(argv[3])))
     bound_auto_stop_request = (
         len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-auto-stop"] and
         bool(OP_ID.fullmatch(argv[3])))
@@ -2595,7 +2735,7 @@ def main(argv: list[str]) -> int:
     cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or retry_context or retry_stage or retry_work or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_auto_stop_request or
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or retry_context or retry_stage or retry_work or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_saved_start_build_request or bound_auto_stop_request or
             bound_gui_stage_request or bound_gui_execute_request or bound_start_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
@@ -2646,6 +2786,9 @@ def main(argv: list[str]) -> int:
             print("bound-start=" + native_bound_start_preflight(argv[3], argv[4]))
         elif bound_prepare_request:
             native_bound_prepare_gate(argv[3])
+        elif bound_saved_start_build_request:
+            native_bound_saved_start_build_gate(argv[3])
+            print("bound-saved-start-build=qualified")
         elif retry_context:
             record = SharedApplyOperation(owner=0).read()
             print(record["detail"]["id"] if restored_first_learning(record) else "none")

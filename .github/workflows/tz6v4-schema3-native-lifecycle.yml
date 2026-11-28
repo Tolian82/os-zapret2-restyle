@@ -46,6 +46,7 @@ jobs:
           python3.13 -m py_compile scripts/stage2-opnsense-schema3-native-lifecycle.py
           python3.13 scripts/stage2-opnsense-schema3-native-lifecycle.py --self-test
           python3.13 scripts/test-auto-detect-post-drop.py
+          python3.13 scripts/test-tz6v5-s11-saved-start-build.py
           sh scripts/test-auto-detect-fd9-launch.sh
           sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh

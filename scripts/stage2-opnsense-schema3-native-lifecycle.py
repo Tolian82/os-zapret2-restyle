@@ -326,6 +326,49 @@ print('S11_NATIVE_DETACHED_START_PROJECTION=PASS')
     print(result.stdout.strip(), flush=True)
 
 
+
+def stopped_saved_start_build_admission(generation: str, saved_config: bytes) -> None:
+    """Qualified PHP saved-unchanged staging; never advances the original WAL."""
+    probe = r'''
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from shared_apply_operation import SharedApplyOperation, native_bound_saved_start_build_gate
+from voice_ipfw_adapter import require_lifecycle_lock
+
+require_lifecycle_lock()
+store = SharedApplyOperation(owner=0)
+old = store.read()
+if old['phase'] != 'committed' or old['detail']['id'] != sys.argv[2]:
+    raise RuntimeError('S11_SAVED_BUILD_PREDECESSOR_CHANGED')
+reply = subprocess.run(
+    ['/usr/local/bin/php', str(Path(sys.argv[1]).parent / 'shared_apply_request.php'),
+     'saved-unchanged'], capture_output=True, timeout=35, check=False, pass_fds=(9,))
+if reply.returncode or not re.fullmatch(rb'prepared-id=[a-f0-9]{32}\n', reply.stdout):
+    raise RuntimeError('S11_SAVED_BUILD_PHP_ORIGINAL_CANDIDATE_REFUSED')
+operation = reply.stdout.decode().strip().split('=', 1)[1]
+native_bound_saved_start_build_gate(operation)
+if store.read() != old:
+    raise RuntimeError('S11_SAVED_BUILD_MODIFIED_ORIGINAL_WAL')
+print('S11_NATIVE_SAVED_UNCHANGED_BUILD_ADMISSION=PASS')
+'''
+    check = command(
+        "/bin/sh", "-c",
+        'exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
+        "s11-saved-build-admission", str(SERVICE.with_name("python_runtime.sh")),
+        "-c", probe, str(SERVICE.parent / "backend"), generation, timeout=120)
+    require(check.returncode == 0 and
+            check.stdout.strip() == "S11_NATIVE_SAVED_UNCHANGED_BUILD_ADMISSION=PASS" and
+            CONFIG.read_bytes() == saved_config,
+            "S11_NATIVE_SAVED_BUILD_ADMISSION_REFUSED:rc=" +
+            str(check.returncode) + ":" + check.stderr[-600:])
+    print(check.stdout.strip(), flush=True)
+
+
 def owner_service_environment() -> dict[str, str]:
     """Exercise real explicit Auto without a schema3 CI traffic switch.
 
@@ -669,6 +712,7 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
         stopped_rules = g04_runtime.owned_rules()
         stopped_journal = JOURNAL.read_bytes()
         stopped_start_projection(ident)
+        stopped_saved_start_build_admission(ident, config_image)
         result = subprocess.run([str(SERVICE), "start"], env=owner_service_environment(),
                                 capture_output=True, text=True, timeout=180, check=False)
         require(result.returncode == 69 and not result.stdout.strip() and
