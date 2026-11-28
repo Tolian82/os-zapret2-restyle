@@ -1964,6 +1964,25 @@ def native_begin_quiescent_bound_promotion_fd9(
         raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_PRECHECK_REFUSED") from None
 
 
+_FIRST_ENABLED_UNCERTAIN = "S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN"
+_FIRST_ENABLED_DIAGNOSTIC = re.compile(
+    _FIRST_ENABLED_UNCERTAIN + r"_(?:ACTIVATING|ACTIVATED|EPOCH_FINALIZING|COMMITTED|UNKNOWN)_D(?:[012][0-9]|30)"
+)
+
+
+def _first_enabled_uncertain_reason(stderr: bytes, saved: dict | None) -> str:
+    """Use only markers already emitted by the original Config children."""
+    if type(stderr) is not bytes or len(stderr) > 8192:
+        return _FIRST_ENABLED_UNCERTAIN
+    phases = {"activating", "activated", "epoch-finalizing", "committed"}
+    phase = saved.get("phase") if type(saved) is dict else None
+    label = phase.upper().replace("-", "_") if isinstance(phase, str) and phase in phases else "UNKNOWN"
+    for line in reversed(stderr.split(b"\n")[:-1][:64]):
+        if re.fullmatch(rb"S10_FIRST_TRACE=D(?:[01][0-9]|2[0-47-9]|30)", line):
+            return _FIRST_ENABLED_UNCERTAIN + "_" + label + "_" + line[-3:].decode("ascii")
+    return _FIRST_ENABLED_UNCERTAIN
+
+
 def native_run_first_enabled_apply_fd9(operation: str, raw_pipe: bytes, *,
                                        source: SourceGateReceipt,
                                        semantic: OriginalSemanticReceipt) -> dict:
@@ -2062,7 +2081,7 @@ def native_run_first_enabled_apply_fd9(operation: str, raw_pipe: bytes, *,
             {k: v for k, v in saved.items() if k not in pins} != committed or
             any(type(saved.get(pin)) is not str or not DIGEST.fullmatch(saved[pin])
                 for pin in pins)):
-        raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN")
+        raise OriginalSourceGateRefused(_first_enabled_uncertain_reason(reply.stderr, saved))
     return saved
 
 
@@ -2303,7 +2322,7 @@ def main(argv: list[str] | None = None) -> int:
                 "S10_FIRST_AUTO_GUI_OUTCOME_UNCERTAIN",
                 "S10_FIRST_ENABLED_APPLY_SCOPE_REQUIRED",
                 "S10_FIRST_ENABLED_APPLY_PREIMAGE_CHANGED",
-                "S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN",
+                _FIRST_ENABLED_UNCERTAIN,
                 "S10_FIRST_LEARNING_SOURCE_CHANGED",
                 "S10_FIRST_LEARNING_QUEUE_OWNER_CHANGED",
                 "S10_BOUND_ENGINE_UNQUALIFIED",
@@ -2335,7 +2354,7 @@ def main(argv: list[str] | None = None) -> int:
                 QuiescentPreimageRefused: {"ORIGINAL_QUIESCENT_PREIMAGE_REFUSED",
                     "FIRST_LEARNING_WAN_SOURCE_CHANGED", "FIRST_LEARNING_WAN_RESOLVER_REFUSED"},
             }
-            if reason not in safe:
+            if reason not in safe and not _FIRST_ENABLED_DIAGNOSTIC.fullmatch(reason):
                 reason = (str(error) if str(error) in fixed.get(type(error), set())
                           else _fixed_unclassified_reason(error))
             print("ORIGINAL_SOURCE_GATE_REFUSAL=" + reason, file=sys.stderr)

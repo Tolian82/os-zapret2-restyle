@@ -568,6 +568,15 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
         [str(SERVICE), "shared-apply-run", "strategies", request],
         env=owner_service_environment(), capture_output=True, text=True,
         timeout=420, check=False)
+    if run.returncode != 0 and JOURNAL.is_file() and not JOURNAL.is_symlink():
+        try:
+            wal = json.loads(JOURNAL.read_bytes()) if JOURNAL.stat().st_size <= 8192 else {}
+            phase = wal.get("phase")
+        except (OSError, ValueError, AttributeError):
+            phase = None
+        if phase not in ("prepared", "activating", "activated", "epoch-finalizing", "committed"):
+            phase = "unknown"
+        print("S11_FIRST_AUTO_WAL=" + phase, flush=True)
     require(run.returncode == 0 and
             re.search(r"(?m)^applied-id=[0-9a-f]{32}$", run.stdout),
             "CANARY_REAL_SHARED_APPLY_REFUSED:rc=" +

@@ -113,6 +113,26 @@ class OriginalFd9SourceGate(unittest.TestCase):
             self.assertRegex(code, r"^[A-Z0-9_]{4,64}$")
             self.assertNotIn("private", code)
 
+    def test_first_apply_uncertainty_reports_only_wal_phase_and_original_stage(self):
+        from contextlib import redirect_stderr
+        from io import BytesIO, StringIO
+        from types import SimpleNamespace
+
+        raw = b"S10_FIRST_TRACE=D18\nprivate value\nS10_FIRST_TRACE=D26\nS10_FIRST_TRACE=D99\n"
+        code = gate._first_enabled_uncertain_reason(raw, {"phase": "activated"})
+        self.assertEqual(code, "S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN_ACTIVATED_D18")
+        refused = StringIO()
+        with (patch.object(gate.sys, "stdin", SimpleNamespace(buffer=BytesIO(b""))),
+              patch.object(gate, "native_first_auto_gui_handoff_fd9",
+                           side_effect=OriginalSourceGateRefused(code)),
+              redirect_stderr(refused)):
+            self.assertEqual(gate.main(["op", "candidate", "--first-auto-apply"]), 70)
+        self.assertEqual(refused.getvalue(), f"ORIGINAL_SOURCE_GATE_REFUSAL={code}\n")
+        self.assertEqual(gate._first_enabled_uncertain_reason(b"S10_FIRST_TRACE=D18", None),
+                         gate._FIRST_ENABLED_UNCERTAIN)
+        self.assertEqual(gate._first_enabled_uncertain_reason(raw + b"x" * 8192, None),
+                         gate._FIRST_ENABLED_UNCERTAIN)
+
     def test_missing_file_role_is_fixed_and_no_path_leaks(self):
         missing = FileNotFoundError(2, "private-host.example",
                                     "/var/db/zapret2/shared-work/private/traffic.input")
