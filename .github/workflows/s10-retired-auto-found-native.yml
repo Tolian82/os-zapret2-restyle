@@ -5,6 +5,8 @@ on:
     branches: [draft/tz6v5-s10-integrated]
     paths:
       - scripts/test-s10-retired-auto-found-native.py
+      - scripts/test-s10-first-restored-archive.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_aborted_first.py
       - .github/workflows/s10-retired-auto-found-native.yml
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_operation.py
