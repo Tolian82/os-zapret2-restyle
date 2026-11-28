@@ -629,6 +629,7 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
     first_pid = check_process(True)
     require(first_pid is not None, "CANARY_START_PID_MISSING")
     learning, debug_inode = schema3_receipts(ident, first_pid)
+    print("S11_NATIVE_FIRST_BOUND_AUTO_NO_REGRESSION=PASS", flush=True)
     saved_root = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
     require(saved_root is not None and
             saved_root.findtext("general/enabled") == "1" and

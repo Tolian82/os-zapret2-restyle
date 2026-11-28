@@ -788,6 +788,32 @@ class PostDropContract(unittest.TestCase):
             original.assert_not_called()
             self.assertEqual(source.call_count, 8)
 
+    def test_first_bound_learning_prepare_keeps_original_preconfig_route(self):
+        from auto_detect_post_drop import native_prepare_learning_producer
+        from shared_apply_seal import WORK
+        from voice_live_inspect import COMMON_ACTIVE
+
+        generation, candidate = "a" * 32, "b" * 64
+        workspace = WORK / generation
+        names = (f"learning-{generation}-3.txt",)
+        sources = ((3, "youtube", str(self.root / names[0])),)
+        first = {"phase": "activating", "manifest": {"schema": 2},
+                 "detail": {"id": generation, "candidate": candidate}}
+        with (patch("auto_detect_post_drop._learning_release_sources",
+                    return_value=(workspace, candidate, sources)),
+              patch("auto_detect_post_drop._qualified_learning_sources",
+                    return_value=(generation, names)),
+              patch("shared_apply_operation.SharedApplyOperation") as factory,
+              patch("auto_detect_storage.prepare_native_learning") as prepare):
+            factory.return_value.read.return_value = first
+            native_prepare_learning_producer(COMMON_ACTIVE)
+            prepare.assert_called_once_with(names)
+            factory.return_value.read.return_value = {
+                **first, "previous": {"id": "c" * 32, "candidate": candidate}}
+            with self.assertRaisesRegex(PostDropRefused, "requires_inherited_queue"):
+                native_prepare_learning_producer(COMMON_ACTIVE)
+            self.assertEqual(prepare.call_count, 1)
+
     def test_linked_capture_prepares_before_original_zero_cut_only(self):
         from auto_detect_post_drop import native_capture_learning_before_launch
         from shared_apply_seal import WORK

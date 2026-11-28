@@ -546,7 +546,8 @@ def native_prepare_learning_producer(release: Path, *, queue_fd: int | None = No
     _, names = _qualified_learning_sources(sources, ROOT)
     record = SharedApplyOperation(owner=0).read()
     if queue_fd is None:
-        if type(record) is dict and record.get("manifest", {}).get("schema") == 2:
+        if (type(record) is dict and record.get("manifest", {}).get("schema") == 2
+                and "previous" in record):
             raise PostDropRefused("bound_learning_prepare_requires_inherited_queue")
         prepare_native_learning(names)
         return
