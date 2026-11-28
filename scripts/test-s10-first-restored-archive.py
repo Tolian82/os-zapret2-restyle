@@ -237,8 +237,14 @@ class RetryPreparedTest(unittest.TestCase):
                 # gate or treat the historical abort as a committed owner.
                 restored = {**candidate,'phase':'restored'}
                 self.store._persist_record(restored)
-                for action in (None,'common-apply','strategy-lab-native'):
-                    self.assertFalse(native_lifecycle_gate(action,root=self.store.root)['safe_to_mutate'])
+                # The native preparation fixture mocks os.geteuid globally.
+                # For the real temporary WAL reader restore the actual owner
+                # identity, not the simulated FreeBSD root UID.
+                with patch.object(self.a.os,'geteuid',return_value=self.store.owner):
+                    for action in (None,'common-apply','strategy-lab-native'):
+                        gate = native_lifecycle_gate(action,root=self.store.root)
+                        self.assertFalse(gate['safe_to_mutate'])
+                        self.assertEqual(gate['reason'],'restored-first-learning-preflight-required')
                 with self.assertRaises(SharedOperationError):
                     self.store.advance('prepared',{**self.detail,'id':'9'*32})
                 self.assertEqual(self.store.read(),restored)
