@@ -720,13 +720,26 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
         # Real root FD9 shell builder; must produce only a new sealed
         # generation, not a WAL write or a replacement of the old runtime.
         candidate_build = command(str(SERVICE), "shared-apply-prepare", candidate_id, timeout=210)
+        # The builder's 0 exit is deliberately NOT a receipt: its
+        # 'preflight-rejected=...' reports also exit zero. Require a separate
+        # genuine original FD9 witness from the immutable sealed successor.
+        sealed = command(
+            "/bin/sh", "-c",
+            'exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
+            "s11-sealed-build-witness", str(SERVICE.with_name("python_runtime.sh")),
+            str(SERVICE.parent / "backend/shared_apply_operation.py"),
+            "native-gate", "common-bound-saved-start-sealed", candidate_id,
+            timeout=90)
         require(candidate_build.returncode == 0 and
+                sealed.returncode == 0 and
+                sealed.stdout.splitlines() == ["bound-saved-start-sealed=qualified"] and
                 JOURNAL.read_bytes() == stopped_journal and
                 CONFIG.read_bytes() == config_image and
                 not PID.exists(),
-                "S11_NATIVE_SAVED_BUILD_CHANGED_STOPPED_OWNER:rc=" +
-                str(candidate_build.returncode) + ":" +
-                (candidate_build.stdout + candidate_build.stderr)[-700:])
+                "S11_NATIVE_SAVED_BUILD_NOT_SEALED:build_rc=" +
+                str(candidate_build.returncode) + ":sealed_rc=" +
+                str(sealed.returncode) + ":" +
+                (candidate_build.stdout + candidate_build.stderr + sealed.stderr)[-700:])
         print("S11_NATIVE_SAVED_BUILD_SEALED_SUCCESSOR=PASS", flush=True)
         result = subprocess.run([str(SERVICE), "start"], env=owner_service_environment(),
                                 capture_output=True, text=True, timeout=180, check=False)
