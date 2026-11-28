@@ -2494,16 +2494,37 @@ shared_apply_saved_start_bind_service()
     wan_first_service require || return $?
     # The original PHP has already placed fresh detached candidate.xml and
     # plan.json. This call must stay in the current shell: no $(...) child.
-    shared_apply_prepare_service "$_s11_id" >/dev/null || return 69
-    [ "${_shared_prepare_receipt:-}" = "prepared-id=$_s11_id" ] || return 69
-    _s11_seal=$(preflight_shared_apply_journal common-bound-saved-start-sealed "$_s11_id") || return 69
-    [ "$_s11_seal" = bound-saved-start-sealed=qualified ] || return 69
+    shared_apply_prepare_service "$_s11_id" >/dev/null || {
+        echo 'S11_SAVED_BIND_REFUSED=build-command' >&2
+        return 69
+    }
+    [ "${_shared_prepare_receipt:-}" = "prepared-id=$_s11_id" ] || {
+        echo 'S11_SAVED_BIND_REFUSED=build-receipt' >&2
+        return 69
+    }
+    _s11_seal=$(preflight_shared_apply_journal common-bound-saved-start-sealed "$_s11_id") || {
+        echo 'S11_SAVED_BIND_REFUSED=sealed-gate' >&2
+        return 69
+    }
+    [ "$_s11_seal" = bound-saved-start-sealed=qualified ] || {
+        echo 'S11_SAVED_BIND_REFUSED=sealed-receipt' >&2
+        return 69
+    }
     _s11_prepared=$("$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
-        native-gate common-bound-saved-start-record "$_s11_id") || return 70
-    [ "$_s11_prepared" = bound-saved-start-record=prepared ] || return 70
+        native-gate common-bound-saved-start-record "$_s11_id") || {
+        echo 'S11_SAVED_BIND_REFUSED=original-wal' >&2
+        return 70
+    }
+    [ "$_s11_prepared" = bound-saved-start-record=prepared ] || {
+        echo 'S11_SAVED_BIND_REFUSED=prepared-receipt' >&2
+        return 70
+    }
     # Original thirteen-source-field frame, native setup-bound engine, S10
     # stage + original atomic manifest writer + same original PREPARED WAL.
-    shared_apply_original_source_gate "$_s11_id" --saved-start-bind || return 70
+    shared_apply_original_source_gate "$_s11_id" --saved-start-bind || {
+        echo 'S11_SAVED_BIND_REFUSED=native-s10-source' >&2
+        return 70
+    }
     printf 'bound-saved-start-bind=%s\n' "$_s11_id"
 }
 # One FD9 operation now stages a submitted native request AND builds its

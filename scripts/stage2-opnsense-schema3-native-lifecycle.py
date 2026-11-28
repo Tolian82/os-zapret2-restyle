@@ -768,6 +768,20 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
         expected = {"schema": 1, "phase": "prepared", "detail": expected_detail,
                     "previous": old["detail"], "previous_manifest": old["manifest"]}
         pin = prepared.get("manifest", {})
+        if bound_reply.returncode != 0:
+            diagnostic = json.loads(JOURNAL.read_bytes()) if JOURNAL.is_file() else {}
+            print("S11_NATIVE_BIND_FAILURE_SCOPE=" + json.dumps({
+                "rc": bound_reply.returncode,
+                "phase": diagnostic.get("phase"),
+                "old_pin": "previous_manifest" in diagnostic,
+                "new_pin": "manifest" in diagnostic,
+                "old_owner_preserved": diagnostic.get("previous") == old.get("detail"),
+                "config_unchanged": CONFIG.read_bytes() == config_image,
+                "process_stopped": not PID.exists(),
+                "ipfw_unchanged": g04_runtime.owned_rules() == stopped_rules,
+                "stage": [s for s in bound_reply.stderr.splitlines()
+                          if s.startswith("S11_SAVED_BIND_REFUSED=")],
+            }, sort_keys=True), flush=True)
         require(bound_reply.returncode == 0 and
                 bound_reply.stdout.splitlines() ==
                 ["bound-saved-start-bind=" + candidate_id] and
