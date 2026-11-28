@@ -312,6 +312,8 @@ Apply [DEVELOPMENT_PLANNING.md](../DEVELOPMENT_PLANNING.md) DEV-007/DEV-017 and 
 - S11: canonical sealed Start/fresh epoch and readiness. S12: Stop, ACK/retirement replay and bounded force. S13: callers and effective decision dispatch (unchanged = NO_CHANGE only with exact proof, changed Apply and Boot must work). S14: mandatory end-to-end, including original RED canary, failure/rollback, GUI RU/EN, IPFW ranges, prestart Lab/WAN and protected upgrade. Сохранить полный scope каждого этапа; текущие критерии не считать автоматически PASS.
 - Один итоговый R3 PR, applicable exact-head CI, merge и проверка main после S14; #1319 закрыть только после общей приёмки. Предыдущие draft/history оставить как evidence; не запускать полную матрицу до завершения связанной реализации. No public package or owner-device operation authorized.
 
+**Фактический результат 28.11.2026:** [G08 #46124729927](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46124729927) 2/2 SUCCESS, exact `42564468c51b71ffe4765c93ea98df20249f258f`. S10 internal GO зафиксирован; S11 разрешён, [#1364](https://github.com/Tolian82/os-zapret2-restyle/issues/1364). Финальный GO/merge G2 остаётся после S14, #1319 не закрывать.
+
 ### S11. Единственный физический Start
 
 1. В `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh` создать ONE authoritative Start transition по authenticated active release/held FD9; не компилировать стратегии/парсить XML в нём.

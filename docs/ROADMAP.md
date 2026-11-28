@@ -1,6 +1,6 @@
 ## Current priority — TZ6v5 functional blocks
 
-Complete S10 (one original FD9 transaction) using the [functional-block plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) and [risk-based testing rules](TESTING_RULES.md). S10-A: transaction readiness and semantic decision; S10-B: original atomic promotion/rollback; integrated S10 GO qualification, then S11–S20 in existing order. Preserve all approved V5 requirements and mandatory native/release gates.
+S10 internal GO recorded; current [S11 #1364](https://github.com/Tolian82/os-zapret2-restyle/issues/1364) — one physical Start. Follow the [functional-block plan](architecture/ZAPRET2_TZ6V5_STEP_BY_STEP_PLAN.md) and [risk-based testing rules](TESTING_RULES.md). S11→S12→S13→S14 on the same candidate, one final G2 PR/merge; then S15–S20 in approved order. Preserve all approved V5 requirements and mandatory native/release gates.
 
 ---
 
