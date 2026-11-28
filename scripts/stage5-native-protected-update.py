@@ -308,6 +308,17 @@ def native_running_reinstall(archive, target, candidate_sha):
     auto_apply = run(["/usr/local/sbin/configctl", "zapret", "shared_apply",
                       "strategies", old_bridge.request("auto")], timeout=240)
     auto_state = json.loads(JOURNAL.read_text())
+    # Before opening the generation map, preserve the actual user-command
+    # receipt. A missing map is a consequence, not a diagnosis.
+    refusal = re.search(r"(?m)^preflight-rejected=([a-z0-9-]{1,80})$", auto_apply.stdout)
+    print("NATIVE_PROTECTED_AUTO_DISPATCH=" + json.dumps({
+        "rc": auto_apply.returncode,
+        "applied": "applied-id=" in auto_apply.stdout,
+        "refusal": refusal.group(1) if refusal else "none",
+        "phase": auto_state.get("phase") if auto_state.get("phase") in
+            ("committed", "prepared", "activating", "activated", "restored", "requires-review") else "other",
+        "bound": "manifest" in auto_state,
+    }, sort_keys=True), flush=True)
     auto_id = auto_state.get("detail", {}).get("id", "")
     auto_epoch = (EPOCHS / auto_id / "epoch.json").is_file()
     auto_schema, auto_learning = original_auto_generation(auto_id, True)

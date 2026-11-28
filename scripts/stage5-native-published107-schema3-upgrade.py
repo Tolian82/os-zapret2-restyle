@@ -274,6 +274,13 @@ def main():
     # Run the genuine INSTALLED _107 service's protected pkg updater. It
     # performs original FD9 Stop -> native pkg -> successor FD9 Boot.
     updated = run([str(service), "pkg-update", str(candidate)], timeout=450)
+    refusal = re.search(r"(?m)^pkg-update-refused=([A-Z0-9_]{1,80})$", updated.stderr)
+    restore = re.search(r"(?m)^pkg-update-restore-evidence=(rc:(?:0|69|70|other),stage:(?:boot|unknown),guard:[a-z-]{1,64})$", updated.stderr)
+    print("NATIVE_PUBLISHED107_DISPATCH=" + json.dumps({
+        "rc": updated.returncode,
+        "refusal": refusal.group(1) if refusal else "none",
+        "restore": restore.group(1) if restore else "none",
+    }, sort_keys=True), flush=True)
     after_status = run([str(service), "status"]).returncode
     new_state = json.loads(journal.read_bytes())
     new_id = new_state.get("detail", {}).get("id", "")

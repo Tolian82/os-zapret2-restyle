@@ -1,6 +1,9 @@
 name: Protected native pkg update (original FD9, one disposable OPNsense)
 
 on:
+  # Temporary exact-head repair check, remove before the replacement PR.
+  push:
+    branches: [draft/tz6v5-s10-integration-repair]
   pull_request:
     branches: [main]
     paths:
@@ -39,6 +42,9 @@ jobs:
           set -eu
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/protected_pkg_update.py scripts/test-protected-pkg-update.py scripts/stage5-native-protected-update.py scripts/stage5-native-pkg-midextract.py scripts/test-stage5-native-pkg-midextract.py
           python3.13 scripts/test-protected-pkg-update.py -v
+          python3.13 -m pip install idna
+          python3.13 scripts/test-shared-apply-operation.py TestJournal.test_native_gate_uses_only_trusted_shared_apply_owner
+          python3.13 scripts/test-shared-apply-execute.sh
           python3.13 scripts/test-stage5-native-pkg-midextract.py -v
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
           for hook in pkg/+PRE_INSTALL pkg/+PRE_DEINSTALL pkg/+POST_INSTALL pkg/+POST_DEINSTALL; do sh -n "$hook"; done

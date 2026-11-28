@@ -256,6 +256,14 @@ def main():
     # New installed service performs its own normal cold Start through
     # original FD9; the old retired observer can never be reused as a PID.
     start = run([str(SERVICE), "start"], timeout=180)
+    # Report the original refusal before the strict PID reader, without
+    # reading private argv, Config, or raw error messages into CI.
+    guard = re.search(r"(?m)^native-common-boot-guard=([a-z0-9-]{1,64})$", start.stderr)
+    print("NATIVE_79_START_DISPATCH=" + json.dumps({
+        "rc": start.returncode, "guard": guard.group(1) if guard else "none",
+        "pid_present": DVTWS_PID.is_file() and not DVTWS_PID.is_symlink(),
+        "config_unchanged": hash_file(CONFIG) == saved_xml,
+    }, sort_keys=True), flush=True)
     new_id = current_owner()
     new_pid = running_pid()
     result = {
