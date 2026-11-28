@@ -756,6 +756,15 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
         # exclusively private (0600) detached PHP candidate. Check it
         # independently without downgrading its root/inode/write safety.
         config_stat = CONFIG.lstat()
+        print("S11_NATIVE_CANONICAL_CONFIG_METADATA=" + json.dumps({
+            "file_type": ("regular" if stat.S_ISREG(config_stat.st_mode)
+                          else "symlink" if stat.S_ISLNK(config_stat.st_mode)
+                          else "other"),
+            "uid": config_stat.st_uid,
+            "gid": config_stat.st_gid,
+            "mode": oct(stat.S_IMODE(config_stat.st_mode)),
+            "link_count": config_stat.st_nlink,
+        }, sort_keys=True), flush=True)
         def config_identity(info):
             return (info.st_dev, info.st_ino, info.st_size,
                     info.st_mtime_ns, info.st_ctime_ns,
