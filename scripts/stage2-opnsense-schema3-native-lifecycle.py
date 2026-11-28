@@ -775,7 +775,7 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
                 type(pin) is dict and pin.get("schema") == 2 and
                 pin.get("generation") == candidate_id and
                 pin.get("candidate_sha256") == old["detail"]["candidate"] and
-                (WORK / candidate_id / "manifest.json").is_file() and
+                (Path("/var/db/zapret2/shared-work") / candidate_id / "manifest.json").is_file() and
                 CONFIG.read_bytes() == config_image and
                 config_identity(CONFIG.lstat()) == config_identity_before and
                 g04_runtime.owned_rules() == stopped_rules and
