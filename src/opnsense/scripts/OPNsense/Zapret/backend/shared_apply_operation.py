@@ -2686,7 +2686,19 @@ def native_bound_saved_start_record_prepared(operation: str) -> dict:
                     named = path.lstat()
                 else:
                     named = regular(path, 0)
-                if (not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or
+                if path == CONFIG_PATH:
+                    # Reuse the native OPNsense Config owner contract from
+                    # assert_inherited_config_fd(): /conf and config.xml
+                    # share a possibly non-root service UID and root GID.
+                    # Only this hard-coded Config path may be non-root-owned.
+                    parent = path.parent.lstat()
+                    trusted_owner = (stat.S_ISDIR(parent.st_mode) and
+                        not parent.st_mode & 0o022 and
+                        parent.st_uid == named.st_uid == st.st_uid and
+                        parent.st_gid == named.st_gid == st.st_gid == 0)
+                else:
+                    trusted_owner = st.st_uid == named.st_uid == 0
+                if (not stat.S_ISREG(st.st_mode) or not trusted_owner or
                         st.st_nlink != 1 or st.st_mode & 0o022 or
                         (st.st_dev, st.st_ino) != (named.st_dev, named.st_ino) or
                         st.st_size > 16 * 1024 * 1024 or st.st_size <= 0):

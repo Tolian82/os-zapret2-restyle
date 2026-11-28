@@ -769,8 +769,13 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
             return (info.st_dev, info.st_ino, info.st_size,
                     info.st_mtime_ns, info.st_ctime_ns,
                     info.st_mode, info.st_uid, info.st_nlink)
-        require(stat.S_ISREG(config_stat.st_mode) and
-                config_stat.st_uid == 0 and config_stat.st_nlink == 1 and
+        parent_config = CONFIG.parent.lstat()
+        require(stat.S_ISDIR(parent_config.st_mode) and
+                not parent_config.st_mode & 0o022 and
+                stat.S_ISREG(config_stat.st_mode) and
+                config_stat.st_uid == parent_config.st_uid and
+                config_stat.st_gid == parent_config.st_gid == 0 and
+                config_stat.st_nlink == 1 and
                 not config_stat.st_mode & 0o022,
                 "S11_NATIVE_CANONICAL_CONFIG_UNTRUSTED")
         config_identity_before = config_identity(config_stat)
