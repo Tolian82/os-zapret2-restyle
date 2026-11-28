@@ -15,14 +15,18 @@ on:
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_learning_gc.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/validator.sh
+  push:
+    branches: [draft/tz6v5-s10-integration-repair]
+    paths:
+      - scripts/stage2-opnsense-schema3-native-lifecycle.py
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: tz6v4-schema3-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: tz6v4-schema3-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   source:
@@ -84,9 +88,14 @@ jobs:
             export ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE=1
             export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-            /usr/local/bin/python3 scripts/stage2-opnsense-schema3-native-lifecycle.py --native
+            if [ '${{ github.event_name }}' = push ]; then
+              /usr/local/bin/python3 scripts/stage2-opnsense-schema3-native-lifecycle.py --native-start-preflight
+            else
+              /usr/local/bin/python3 scripts/stage2-opnsense-schema3-native-lifecycle.py --native
+            fi
 
   native-crash:
+    if: github.event_name != 'push'
     needs: source
     name: Real original worker crash after fsynced N then original FD9 Boot repair
     runs-on: ubuntu-latest

@@ -810,6 +810,79 @@ class TestJournal(unittest.TestCase):
             with self.assertRaises(SharedOperationError):
                 native_committed_owner_witness(j.root)
 
+    def test_bound_start_preflight_requires_exact_committed_runtime(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from shared_apply_operation import native_bound_start_preflight
+
+        old = detail()
+        pin = {"schema": 2, "generation": old["id"], "root_sha256": "c" * 64,
+               "seal_sha256": "d" * 64, "candidate_sha256": old["candidate"]}
+        record = {"schema": 1, "phase": "committed", "detail": old, "manifest": pin}
+        store = Mock(read=Mock(return_value=record))
+        config = (json.dumps({"result": "committed", "snapshot": old["candidate"],
+                              "enabled": "1"}) + "\n").encode()
+        state = {"state": "stopped", "source": "native-common",
+                 "config_digest": old["candidate"]}
+        running = SimpleNamespace(pid=42, started="engine birth")
+        proof = SimpleNamespace(operation_id=old["id"], generation=old["id"],
+                                owner_candidate_sha256=old["candidate"], owner=running)
+        with ExitStack() as stack:
+            def seam(name, **kw):
+                return stack.enter_context(patch(name, **kw))
+
+            seam("shared_apply_operation.SharedApplyOperation", return_value=store)
+            lock = seam("voice_ipfw_adapter.require_lifecycle_lock")
+            seam("neutral_root_stage.verify_original_operation_pins")
+            saved = seam("neutral_schema3_saved_wan_preimage._native_call", return_value=config)
+            wan = seam("neutral_schema3_saved_wan_preimage._native_wan", return_value="lo0")
+            engine = seam("neutral_shared_apply_source_gate._s10_native_bound_engine_readback",
+                          return_value={"engine_version": "v1.0.7", "engine_sha256": "e" * 64})
+            seam("neutral_shared_apply_source_gate._read_pinned_effective", return_value=("effective", True))
+            seam("neutral_shared_apply_source_gate._read", return_value=b'{"capture":{"wan":"lo0"}}')
+            tree = seam("neutral_schema3_previous_physical._full_prior_tree", return_value="tree")
+            seam("neutral_schema3_previous_physical._running_native", return_value=running)
+            vnode = seam("neutral_schema3_previous_physical._running_executable_identity",
+                         return_value=(1, 2, "engine"))
+            kernel = seam("neutral_schema3_quiescent_preimage._empty_kernel", return_value="empty")
+            processes = seam("neutral_schema3_quiescent_preimage._zero_processes")
+            retired = seam("neutral_schema3_quiescent_preimage._retired_ready")
+            scope = seam("voice_ipfw_adapter.shared_release_manifest",
+                         return_value={"rule_base": 19000, "rule_max": 19099})
+            runtime = seam("voice_live_inspect.examine_shared", return_value=state)
+            seam("auto_detect_owner.attest_learning_stopped_generation", return_value=proof)
+            seam("auto_detect_owner.attest_learning_running_generation", return_value=proof)
+
+            def start():
+                return native_bound_start_preflight(old["id"], old["page"])
+
+            self.assertEqual(start(), "stopped")
+            self.assertEqual(retired.call_count, 2)
+            vnode.assert_not_called()
+            retired.reset_mock()
+            runtime.return_value = {**state, "state": "ready"}
+            self.assertEqual(start(), "running")
+            self.assertEqual(vnode.call_count, 2)
+            retired.assert_not_called()
+            runtime.return_value = state
+
+            for boundary, stage in ((lock, "owner"), (saved, "config"), (engine, "engine"),
+                                    (tree, "release"), (wan, "wan"), (kernel, "firewall"),
+                                    (processes, "runtime"), (retired, "epoch")):
+                with self.subTest(stage=stage):
+                    boundary.side_effect = RuntimeError("private detail")
+                    with self.assertRaisesRegex(SharedOperationError, f"^bound-start-preflight:{stage}$"):
+                        start()
+                    boundary.side_effect = None
+            scope.return_value = {"rule_base": 19000, "rule_max": 19010}
+            with self.assertRaisesRegex(SharedOperationError, "bound-start-preflight:firewall"):
+                start()
+            scope.return_value["rule_max"] = 19099
+            tree.side_effect = ["tree", "changed tree"]
+            with self.assertRaisesRegex(SharedOperationError, "bound-start-preflight:owner"):
+                start()
+            store._persist_record.assert_not_called()
+
     def test_bound_successor_prepare_is_detached_only(self):
         import os
         from shared_apply_operation import native_bound_prepare_gate

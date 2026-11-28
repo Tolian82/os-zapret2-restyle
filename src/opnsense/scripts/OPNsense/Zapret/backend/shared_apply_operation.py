@@ -2150,6 +2150,125 @@ def native_bound_stopped_gui_gate(operation: str | None = None) -> int:
     return pin["schema"]
 
 
+def native_bound_start_preflight(operation: str, page: str) -> str:
+    """Read the committed Start preimage under original FD9 without changing it."""
+    import subprocess
+
+    from auto_detect_minute import inspect_inert_release
+    from auto_detect_owner import (
+        attest_learning_running_generation, attest_learning_stopped_generation,
+    )
+    from neutral_root_stage import verify_original_operation_pins
+    from neutral_schema3_previous_physical import (
+        _full_prior_tree, _running_executable_identity, _running_native,
+    )
+    from neutral_schema3_quiescent_preimage import (
+        CHILD_PID, MONITOR_PID, DAEMON_PID, PRODUCER_ROOT,
+        _empty_kernel, _observe_idle_producer, _retired_ready, _zero_processes,
+    )
+    from neutral_schema3_saved_wan_preimage import _CONFIG, _PHP, _native_call, _native_wan
+    from neutral_shared_apply_source_gate import _read, _read_pinned_effective, _s10_native_bound_engine_readback
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock, shared_release_manifest
+    from voice_live_inspect import CHILD_EXEC, COMMON_ACTIVE, examine_shared
+
+    stage = "owner"
+    try:
+        require_lifecycle_lock()
+        store = SharedApplyOperation(owner=0)
+        record = store.read()
+        if (record is None or record["phase"] != "committed" or
+                "found" in record or "failure" in record):
+            raise SharedOperationError("committed ordinary owner required")
+        detail, pin = committed_owner(record), committed_manifest(record)
+        if (detail["id"] != operation or detail["page"] != page or
+                pin is None or pin["schema"] not in (1, 2)):
+            raise SharedOperationError("exact pinned Start owner required")
+        work = WORK / operation
+        release = work / "release"
+        learning = pin["schema"] == 2
+
+        def observe():
+            nonlocal stage
+            stage = "owner"
+            require_lifecycle_lock()
+            if store.read() != record:
+                raise SharedOperationError("Start journal changed")
+            stage = "config"
+            config = _native_call((_PHP, _CONFIG, "saved", operation, page))
+            expected = {"result": "committed", "snapshot": detail["candidate"], "enabled": "1"}
+            if config.count(b"\n") != 1 or not config.endswith(b"\n") or json.loads(config) != expected:
+                raise SharedOperationError("saved Start owner changed or disabled")
+            stage = "engine"
+            engine = _s10_native_bound_engine_readback()
+            stage = "release"
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            effective, enabled = _read_pinned_effective(
+                detail=detail, binding=pin, parent=WORK,
+                sources=Path(__file__).resolve().parent, owner_uid=0,
+                engine_version=engine["engine_version"])
+            if not enabled:
+                raise SharedOperationError("sealed Start owner disabled")
+            tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
+            capture = json.loads(_read(release / "voice-plan.json", 0, 1_048_576))["capture"]
+            stage = "wan"
+            if _native_wan() != capture["wan"]:
+                raise SharedOperationError("native WAN differs from sealed capture")
+            stage = "firewall"
+            manifest = shared_release_manifest(release)
+            if (manifest["rule_base"], manifest["rule_max"]) != (19000, 19099):
+                raise SharedOperationError("sealed ordinary IPFW range changed")
+            stage = "runtime"
+            state = examine_shared(record)
+            if (type(state) is not dict or state.get("source") != "native-common" or
+                    state.get("config_digest") != detail["candidate"]):
+                raise SharedOperationError("native runtime has no matching owner")
+            if state["state"] == "ready":
+                running = _running_native(release, owner_uid=0, child_pidfile=CHILD_PID,
+                                          monitor_pidfile=MONITOR_PID)
+                executable = _running_executable_identity(
+                    running.pid, engine["engine_sha256"], executable=Path(CHILD_EXEC),
+                    runner=subprocess.run)
+                runtime = ("running", running, executable)
+            elif state["state"] == "stopped":
+                _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+                stage = "firewall"
+                runtime = ("stopped", _empty_kernel(release))
+            else:
+                raise SharedOperationError("native runtime is incomplete")
+            stage = "epoch"
+            if learning:
+                if runtime[0] == "running":
+                    proof = attest_learning_running_generation()
+                    if (proof.owner.pid, proof.owner.started) != (running.pid, running.started):
+                        raise SharedOperationError("running Start epoch process changed")
+                else:
+                    proof = attest_learning_stopped_generation()
+                    _retired_ready(PRODUCER_ROOT, 0)
+                if (proof.operation_id != operation or proof.generation != operation or
+                        proof.owner_candidate_sha256 != detail["candidate"]):
+                    raise SharedOperationError("Start epoch belongs to another owner")
+                runtime += (proof,)
+            else:
+                if inspect_inert_release(release, owner_uid=0) != "inactive":
+                    raise SharedOperationError("unexpected Auto producer in inert release")
+                runtime += (_observe_idle_producer(PRODUCER_ROOT, 0),)
+            stage = "owner"
+            require_lifecycle_lock()
+            if store.read() != record:
+                raise SharedOperationError("Start journal changed during preflight")
+            return runtime, engine, manifest, effective, tree
+
+        before = observe()
+        if observe() != before:
+            stage = "owner"
+            raise SharedOperationError("Start preimage changed")
+        return before[0][0]
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError, AttributeError,
+            subprocess.SubprocessError):
+        raise SharedOperationError("bound-start-preflight:" + stage) from None
+
+
 def native_bound_auto_stop_gate(operation: str) -> None:
     """Only the existing FD9 explicit Stop may retire a genuine schema2 owner.
 
@@ -2417,6 +2536,9 @@ def main(argv: list[str]) -> int:
     bound_auto_stop_request = (
         len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-auto-stop"] and
         bool(OP_ID.fullmatch(argv[3])))
+    bound_start_request = (
+        len(argv) == 5 and argv[1:3] == ["native-gate", "common-bound-start"] and
+        bool(OP_ID.fullmatch(argv[3])) and argv[4] in ("strategies", "voice"))
     retry_context = argv[1:] == ["first-retry-context"]
     retry_stage = argv[1:] == ["native-gate", "common-first-retry-stage"]
     retry_work = (len(argv) == 4 and argv[1] == "native-gate" and
@@ -2474,7 +2596,7 @@ def main(argv: list[str]) -> int:
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
     if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or retry_context or retry_stage or retry_work or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_auto_stop_request or
-            bound_gui_stage_request or bound_gui_execute_request):
+            bound_gui_stage_request or bound_gui_execute_request or bound_start_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -2520,6 +2642,8 @@ def main(argv: list[str]) -> int:
             print("first-restored-archived=" + argv[2])
         elif bound_auto_stop_request:
             native_bound_auto_stop_gate(argv[3])
+        elif bound_start_request:
+            print("bound-start=" + native_bound_start_preflight(argv[3], argv[4]))
         elif bound_prepare_request:
             native_bound_prepare_gate(argv[3])
         elif retry_context:

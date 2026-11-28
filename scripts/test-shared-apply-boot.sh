@@ -60,7 +60,16 @@ SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor.pid"
 LOG="$ROOT/steps.log"
 common_error() { echo "ERROR: $*" >&2; }
 wan_first_service() { echo wan:$1 >> "$LOG"; [ "${WAN_OK:-1}" = 1 ] || return 64; }
-preflight_shared_apply_journal() { echo guard:$1 >> "$LOG"; [ "$GUARD" -eq 0 ]; }
+preflight_shared_apply_journal() {
+  echo guard:$1 >> "$LOG"
+  if [ "$1" = common-bound-start ]; then
+    [ "$2" = "$ID" ] && [ "$3" = voice ] || return 69
+    [ "$START_WITNESS" != refused ] || return 69
+    printf '%s\n' "$START_WITNESS"
+  else
+    [ "$GUARD" -eq 0 ]
+  fi
+}
 shared_apply_bundle_service() { echo seal:$1 >> "$LOG"; [ "$SEAL" -eq 0 ]; }
 shared_apply_native_config() { echo config:$1 >> "$LOG"; [ "$CONFIG" -eq 0 ] || return 69; echo '{"result":"committed","enabled":"'"$BOOT_ENABLED"'"}'; }
 shared_apply_json_field() { case "$1" in *".enabled"*) echo "$BOOT_ENABLED" ;; *".result"*) echo committed ;;*) return 1 ;; esac; }
@@ -190,6 +199,21 @@ reset; COMMIT=1
 expect 70 'guard:common-apply seal:verify config:saved wan:require activate commit '
 reset; GUARD=1
 expect 69 'guard:common-apply '
+# Operator Start under original FD9 may acknowledge an already running
+# pinned owner. A stopped or unqualified pin must never reach legacy Apply.
+for witness in bound-start=running bound-start=stopped refused 'unexpected'; do
+  reset; GUARD=1; START_WITNESS="$witness"
+  rc=0
+  shared_apply_boot_service "committed $ID voice" start > "$ROOT/output" || rc=$?
+  if [ "$witness" = bound-start=running ]; then
+    [ "$rc" -eq 0 ] || fail "verified running bound Start refused (rc=$rc)"
+    grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "bound Start receipt missing"
+  else
+    [ "$rc" -eq 69 ] && [ ! -s "$ROOT/output" ] || fail "bound Start false success: $witness"
+  fi
+  [ "$(cat "$LOG")" = 'guard:common-apply
+guard:common-bound-start' ] || fail "bound Start reached mutation: $witness"
+done
 reset
 if shared_apply_boot_service "restored $ID voice"; then fail "foreign owner booted"; fi
 if shared_apply_boot_service "committed /tmp/x voice"; then fail "path injection booted"; fi

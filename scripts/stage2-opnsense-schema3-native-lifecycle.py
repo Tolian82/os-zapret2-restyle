@@ -456,7 +456,7 @@ def interrupted_original_retirement(generation: str, learning: list[dict],
     }
 
 
-def execute(*, crash: bool = False) -> dict:
+def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
     head = native_root()
     g04 = module("stage2-opnsense-g04-native-config.py")
     # The SAME official-Mk physical archive, pkg installation and real
@@ -533,6 +533,47 @@ def execute(*, crash: bool = False) -> dict:
         result = interrupted_original_retirement(
             ident, learning, debug_inode, CONFIG.read_bytes(), g04_runtime)
         return {"source_sha": head, **result}
+    if start_preflight:
+        # Exercise operator Start independently of the linked Apply/Boot RED
+        # canary. This scope proves the old owner only, not a fresh launch.
+        journal_image = JOURNAL.read_bytes()
+        config_image = CONFIG.read_bytes()
+        installed_args = (ACTIVE / "dvtws.args").read_bytes()
+        active_rules = g04_runtime.owned_rules()
+        require(json.loads(journal_image).get("manifest", {}).get("schema") == 2,
+                "S11_START_PREFLIGHT_BOUND_AUTO_REQUIRED")
+        for arguments in ((), ("--force",), ("--configd-receipt",)):
+            result = subprocess.run([str(SERVICE), "start", *arguments],
+                                    env=owner_service_environment(), capture_output=True,
+                                    text=True, timeout=180, check=False)
+            expected = ("zapret-api-lifecycle-v1:start:running" if arguments == ("--configd-receipt",)
+                        else "native-common-boot=" + ident)
+            require(result.returncode == 0 and expected in result.stdout.splitlines(),
+                    "S11_RUNNING_START_REFUSED:rc=" + str(result.returncode) + ":" + result.stderr[-400:])
+            require(check_process(True) == first_pid and
+                    JOURNAL.read_bytes() == journal_image and CONFIG.read_bytes() == config_image and
+                    (ACTIVE / "dvtws.args").read_bytes() == installed_args and
+                    g04_runtime.owned_rules() == active_rules,
+                    "S11_RUNNING_START_CHANGED_OWNER")
+        service_action("stop")
+        check_process(False)
+        stopped_receipts(ident, learning, debug_inode)
+        stopped_rules = g04_runtime.owned_rules()
+        stopped_journal = JOURNAL.read_bytes()
+        result = subprocess.run([str(SERVICE), "start"], env=owner_service_environment(),
+                                capture_output=True, text=True, timeout=180, check=False)
+        require(result.returncode == 69 and not result.stdout.strip() and
+                result.stderr.splitlines().count("native-common-boot-guard=sealed-stopped-start") == 1,
+                "S11_STOPPED_START_PREIMAGE_REFUSED:rc=" + str(result.returncode) + ":" + result.stderr[-400:])
+        check_process(False)
+        stopped_receipts(ident, learning, debug_inode)
+        require(JOURNAL.read_bytes() == stopped_journal and CONFIG.read_bytes() == config_image and
+                (ACTIVE / "dvtws.args").read_bytes() == installed_args and
+                g04_runtime.owned_rules() == stopped_rules,
+                "S11_STOPPED_START_PREFLIGHT_CHANGED_OWNER")
+        return {"status": "PASS_S11_START_PREFLIGHT", "source_sha": head,
+                "generation": ident, "verified_running_noop": True,
+                "verified_stopped_preimage": True, "physical_start_tested": False}
 
     # A genuine first Auto Apply was not sufficient: reproduce the owner's
     # failing action while a REAL schema3 learner is already RUNNING.
@@ -727,11 +768,12 @@ def main() -> int:
     if sys.argv[1:] == ["--self-test"]:
         self_test()
         return 0
-    if sys.argv[1:] not in (["--native"], ["--native-crash"]):
+    if sys.argv[1:] not in (["--native"], ["--native-crash"], ["--native-start-preflight"]):
         print("TZ6V4_SCHEMA3_NATIVE=REFUSED_INVALID_COMMAND", file=sys.stderr)
         return 2
     try:
-        record = execute(crash=sys.argv[1:] == ["--native-crash"])
+        record = execute(crash=sys.argv[1:] == ["--native-crash"],
+                         start_preflight=sys.argv[1:] == ["--native-start-preflight"])
     except (Refused, OSError, ValueError, KeyError, TypeError,
             ET.ParseError, subprocess.TimeoutExpired) as error:
         print("TZ6V4_SCHEMA3_NATIVE=REFUSED:" + str(error), file=sys.stderr)

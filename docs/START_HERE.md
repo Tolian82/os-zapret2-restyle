@@ -18,7 +18,9 @@
 | Independent WAN-only + no ordinary Start prestart Lab | [G08 #46124729927](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46124729927) 2/2 SUCCESS, exact `42564468c51b71ffe4765c93ea98df20249f258f`. **PASS; internal criterion satisfied.** |
 | Bound public lifecycle | [#46116754077](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/46116754077) RED: unchanged/edited Apply rc69 with exact unchanged Config/WAL/IPFW/PID; actual Stop/ACK PASS; Boot rc69 even after interrupted terminal archival. Retain as mandatory S11–S14 integration gate, no bypass or synthetic PASS. |
 
-**Next:** S11-A original Start source/owner preflight and existing native RED boundary, then S11-B/C as specified in #1364 and the ordered plan. Remove temporary G08 push trigger; retain exact native evidence and existing final integration gate. No full matrix or merge until S14. Earlier sections below are historical. Full local checkout unavailable; no whole-matrix PASS claimed.
+**S11-A source checkpoint.** Explicit Start reuses the original FD9, committed root pins, saved Config, installed engine identity, sealed WAN/argv and current IPFW and process/epoch readbacks. A verified RUNNING owner is acknowledged without a signal. A verified STOPPED owner returns `rc69` before physical activation. The existing fast shell and Python contract tests pass. A draft-only push runs the focused installed OPNsense canary.
+
+**Next:** qualify the explicit Start preflight on native OPNsense, then implement the original FD9 sealed STOPPED→RUNNING transition and fresh Auto epoch (S11-B). The earlier public Apply/Boot RED remains the final integration gate. Remove the temporary canary push route before the G2 PR. Earlier sections below are historical.
 
 ---
 

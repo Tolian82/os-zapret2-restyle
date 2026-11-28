@@ -1298,7 +1298,7 @@ shared_apply_boot_receipt_verified_service()
 
 shared_apply_boot_service()
 {
-    [ "$#" -eq 1 ] || return 64
+    case "$#:${2:-}" in 1:|2:start|2:reconfigure) ;; *) return 64 ;; esac
     case "$1" in committed\ *) ;; *) return 69 ;; esac
     _shared_boot_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
     _shared_boot_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
@@ -1306,7 +1306,22 @@ shared_apply_boot_service()
     case "$_shared_boot_id" in ""|*[!a-f0-9]*) return 69 ;; esac
     [ "${#_shared_boot_id}" -eq 32 ] || return 69
     case "$_shared_boot_page" in voice|strategies) ;; *) return 69 ;; esac
-    preflight_shared_apply_journal common-apply || return 69
+    if [ "${2:-}" = start ]; then
+        if ! preflight_shared_apply_journal common-apply 2>/dev/null; then
+            _shared_boot_preflight=$(preflight_shared_apply_journal common-bound-start \
+                "$_shared_boot_id" "$_shared_boot_page") || return 69
+            case "$_shared_boot_preflight" in
+                bound-start=running)
+                    printf 'native-common-boot=%s\n' "$_shared_boot_id"
+                    return 0 ;;
+                bound-start=stopped)
+                    echo 'native-common-boot-guard=sealed-stopped-start' >&2 ;;
+            esac
+            return 69
+        fi
+    else
+        preflight_shared_apply_journal common-apply || return 69
+    fi
     shared_apply_bundle_service verify "$_shared_boot_id" || return 69
     _shared_boot_saved=$(shared_apply_native_config saved "$_shared_boot_id" "$_shared_boot_page") || return 69
     _shared_boot_mode=$(printf "%s\n" "$_shared_boot_saved" |
@@ -4428,7 +4443,7 @@ EOF_FIRST
                     _shared_owner=$(shared_apply_inspect_service) || return 69
                     case "$_shared_owner" in
                         committed\ *)
-                            shared_apply_boot_service "$_shared_owner"
+                            shared_apply_boot_service "$_shared_owner" "$1"
                             service_api_complete "$?"
                             return $?
                             ;;
