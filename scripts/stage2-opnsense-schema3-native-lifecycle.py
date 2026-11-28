@@ -290,14 +290,14 @@ with tempfile.TemporaryDirectory(prefix='s11-start-projection-') as private:
             ['/bin/sh', '-c', 'exec 3<&"$1"; shift; exec "$@"',
              's11-prepare-fd3', str(queue.locked_fd), sys.executable,
              str(Path(sys.argv[1]) / 'auto_detect_post_drop.py'),
-             'prepare-learning', str(COMMON_ACTIVE), '--inherited-queue'],
+             'capture-learning', str(COMMON_ACTIVE), '--inherited-queue'],
             pass_fds=(9, queue.locked_fd), capture_output=True,
             timeout=35, check=False)
         if (refused.returncode != 69 or refused.stdout or
                 tuple(sorted(os.listdir(queue.root))) != entries or
                 store.read() != record):
             raise RuntimeError('S11_UNBOUND_PREPARE_MUTATED_RETIRED_OWNER')
-        print('S11_NATIVE_PREPARE_REQUIRES_LINKED_WAL=PASS')
+        print('S11_NATIVE_CAPTURE_REQUIRES_LINKED_WAL=PASS')
         for name in ('plan.json', 'candidate.xml'):
             shutil.copy2(previous / name, work / name)
         shutil.copytree(previous / 'release', work / 'release')
@@ -319,7 +319,7 @@ print('S11_NATIVE_DETACHED_START_PROJECTION=PASS')
                      "s11-start-projection", str(SERVICE.with_name("python_runtime.sh")),
                      "-c", probe, str(SERVICE.parent / "backend"), generation)
     require(result.returncode == 0 and result.stdout.splitlines() == [
-                "S11_NATIVE_PREPARE_REQUIRES_LINKED_WAL=PASS",
+                "S11_NATIVE_CAPTURE_REQUIRES_LINKED_WAL=PASS",
                 "S11_NATIVE_RETIREMENT_BORROWED_P2A=PASS",
                 "S11_NATIVE_DETACHED_START_PROJECTION=PASS"],
             "S11_NATIVE_START_PROJECTION_REFUSED:rc=" + str(result.returncode) + ":" + result.stderr[-500:])

@@ -554,16 +554,7 @@ def native_prepare_learning_producer(release: Path, *, queue_fd: int | None = No
             type(record) is not dict or record.get("manifest", {}).get("schema") != 2):
         raise PostDropRefused("bound_learning_prepare_scope_required")
     if "previous" not in record:
-        # The first-bound coordinator already created the protected files.
-        # Never create or repair a first generation while holding Config.
-        before = _learning_pretraffic_owner(
-            workspace, candidate, queue_fd, learning_names=names)
-        queue, _ = _original_epoch_queue(names)
-        with queue.inherited_exclusive(queue_fd):
-            if _learning_pretraffic_owner(
-                    workspace, candidate, queue_fd, learning_names=names) != before:
-                raise PostDropRefused("first_bound_learning_prepare_changed")
-        return
+        raise PostDropRefused("bound_learning_prepare_scope_required")
     # Before any new inode, authenticate the completed predecessor twice
     # against the exact base-only root and its original terminal archive.
     before = _learning_pretraffic_owner(
@@ -641,6 +632,13 @@ def native_capture_learning_before_launch(release: Path, *, queue_fd: int | None
     if queue_fd is not None and release != COMMON_ACTIVE:
         raise PostDropRefused("bound_learning_active_release_required")
     _, names = _qualified_learning_sources(sources, ROOT)
+    if queue_fd is not None:
+        # Preserve first-bound pretraffic unchanged. Only a durable linked
+        # successor may create fresh inboxes before the SAME native capture.
+        from shared_apply_operation import SharedApplyOperation
+        record = SharedApplyOperation(owner=0).read()
+        if type(record) is dict and "previous" in record:
+            native_prepare_learning_producer(release, queue_fd=queue_fd)
     owner = _learning_pretraffic_owner(workspace, candidate, queue_fd, learning_names=names)
     _parent(ROOT, 0)
     identity = pwd.getpwnam(ENGINE_USER)
@@ -1026,7 +1024,7 @@ def original_fd9_command(args: list[str]) -> int:
               "restore-learning": 6, "finish-learning-epoch": 2}
     borrowed = bool(args and args[-1] == "--inherited-queue")
     if borrowed:
-        if args[0] not in ("prepare-learning", "capture-learning", "seal-learning-epoch"):
+        if args[0] not in ("capture-learning", "seal-learning-epoch"):
             return 64
         args = args[:-1]
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
@@ -1061,7 +1059,7 @@ def original_fd9_command(args: list[str]) -> int:
             _learning_release_sources(Path(args[1]))
             print("original-fd9-learning-release=authorized")
         elif args[0] == "prepare-learning":
-            native_prepare_learning_producer(Path(args[1]), queue_fd=queue_fd)
+            native_prepare_learning_producer(Path(args[1]))
             print("original-fd9-learning-producer=prepared")
         elif args[0] == "capture-learning":
             print(native_capture_learning_before_launch(Path(args[1]), queue_fd=queue_fd))

@@ -97,13 +97,9 @@ apply_runtime_original_launcher_once()
                 ;;
             3)
                 if [ "$#" -eq 8 ]; then
-                    # The original coordinator holds P2a before Config.
-                    # First-bound inboxes are only reattested; a linked
-                    # successor creates fresh inboxes after retired ACK under
-                    # this same inherited descriptor. No second queue owner.
-                    _apply_producer=$("$PYTHON_RUNTIME" \
-                        "$BACKEND_DIR/auto_detect_post_drop.py" prepare-learning "$ACTIVE_DIR" "$8") || return 69
-                    [ "$_apply_producer" = original-fd9-learning-producer=prepared ] || return 69
+                    # The original coordinator prepared the qualified producer
+                    # and holds P2a before Config. Never initialize or reacquire
+                    # worker.lock under the native Config lock.
                     _apply_observer_witness=$("$PYTHON_RUNTIME" \
                         "$BACKEND_DIR/auto_detect_post_drop.py" capture-learning "$ACTIVE_DIR" "$8") || return 69
                 else

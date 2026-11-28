@@ -208,13 +208,7 @@ case "$2" in
         printf '%s\n' original-fd9-producer=prepared
         ;;
     prepare-learning)
-        if [ "$#" -eq 4 ] && [ "$4" = --inherited-queue ]; then
-            ( : <&3 ) 2>/dev/null || exit 69
-            printf '%s\n' prepare-learning-inherited >> "$EVENTS"
-        else
-            [ "$#" -eq 3 ] || exit 69
-            printf '%s\n' prepare-learning >> "$EVENTS"
-        fi
+        printf '%s\n' prepare-learning >> "$EVENTS"
         [ "${FAIL_PREPARE:-0}" = 0 ] || exit 69
         printf '%s\n' original-fd9-learning-producer=prepared
         ;;
@@ -353,21 +347,8 @@ printf 'TZ6V4_ORIGINAL_FD9_LEARNING_LAUNCH_CHAIN=PASS\n'
         fail "BORROWED_P2A_LAUNCH_REFUSED"
     ( : <&3 ) || fail "LAUNCHER_CLOSED_PARENT_P2A"
 )
-[ "$(cat "$EVENTS")" = "$(printf 'preflight\nprepare-learning-inherited\ncapture-learning-inherited\nseal-learning-epoch-inherited\nlaunch\nrestore-learning')" ] ||
+[ "$(cat "$EVENTS")" = "$(printf 'preflight\ncapture-learning-inherited\nseal-learning-epoch-inherited\nlaunch\nrestore-learning')" ] ||
     fail "BORROWED_P2A_LAUNCH_ORDER_CHANGED"
-: > "$EVENTS"
-(
-    exec 3< /dev/null
-    FAIL_PREPARE=1
-    export FAIL_PREPARE
-    if apply_runtime_original_launcher_once "$DVTWS_BIN" \
-        "$ACTIVE_DIR/dvtws.args" "$CHILD_PIDFILE" "$DVTWS_LOG" 5 \
-        "$generation" "$candidate" --inherited-queue; then
-        exit 1
-    fi
-) || fail "BORROWED_P2A_FAILED_PREPARATION_LAUNCHED"
-[ "$(cat "$EVENTS")" = "$(printf 'preflight\nprepare-learning-inherited')" ] ||
-    fail "BORROWED_P2A_FAILED_PREPARATION_TOUCHED_ENGINE"
 : > "$EVENTS"
 (
     exec 3<&-
@@ -388,7 +369,7 @@ printf 'S10_FIRST_LEARNING_BORROWED_P2A_LAUNCH_ORDER_NO_LEAK=PASS\n'
         fail "BORROWED_P2A_ACTIVATION_REFUSED"
     ( : <&3 ) || fail "ACTIVATION_CLOSED_PARENT_P2A"
 )
-[ "$(cat "$EVENTS")" = "$(printf 'preflight\nprepare-learning-inherited\ncapture-learning-inherited\nseal-learning-epoch-inherited\nlaunch\nrestore-learning\nfirewall:install\nfirewall:verify-staged\nsupervisor')" ] ||
+[ "$(cat "$EVENTS")" = "$(printf 'preflight\ncapture-learning-inherited\nseal-learning-epoch-inherited\nlaunch\nrestore-learning\nfirewall:install\nfirewall:verify-staged\nsupervisor')" ] ||
     fail "BORROWED_P2A_ACTIVATION_ORDER_CHANGED"
 printf 'S10_FIRST_LEARNING_CANONICAL_ACTIVATION_NO_ENGINE_OR_SUPERVISOR_QUEUE_LEAK=PASS\n'
 : > "$EVENTS"

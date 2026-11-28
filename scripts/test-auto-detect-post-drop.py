@@ -781,12 +781,66 @@ class PostDropContract(unittest.TestCase):
             factory.return_value.read.return_value = {
                 key: value for key, value in record.items()
                 if key not in ("previous", "previous_manifest")}
-            native_prepare_learning_producer(COMMON_ACTIVE, queue_fd=3)
-            self.assertEqual(events, ["new", "new"])
+            with self.assertRaisesRegex(PostDropRefused, "scope_required"):
+                native_prepare_learning_producer(COMMON_ACTIVE, queue_fd=3)
+            self.assertEqual(events, [])
             prepare.assert_not_called()
-            original.assert_called_once_with(names)
-            self.assertEqual(queue.inherited_exclusive.call_args.args, (3,))
+            original.assert_not_called()
             self.assertEqual(source.call_count, 8)
+
+    def test_linked_capture_prepares_before_original_zero_cut_only(self):
+        from auto_detect_post_drop import native_capture_learning_before_launch
+        from shared_apply_seal import WORK
+        from voice_live_inspect import COMMON_ACTIVE
+        from unittest.mock import MagicMock
+
+        generation, candidate = "a" * 32, "b" * 64
+        workspace = WORK / generation
+        names = (f"learning-{generation}-3.txt",)
+        sources = ((3, "youtube", str(self.root / names[0])),)
+        record = {"phase": "activating", "manifest": {"schema": 2},
+                  "detail": {"id": generation, "candidate": candidate},
+                  "previous": {"id": "c" * 32, "candidate": candidate}}
+        events = []
+
+        def prepare(path, *, queue_fd=None):
+            self.assertEqual((path, queue_fd), (COMMON_ACTIVE, 3))
+            events.append("prepare")
+
+        def owner(*args, **kwargs):
+            events.append("owner")
+            return record, "d" * 64
+
+        def capture(*args, **kwargs):
+            events.append("capture")
+            return object()
+
+        with (patch("auto_detect_post_drop._learning_release_sources",
+                    return_value=(workspace, candidate, sources)),
+              patch("auto_detect_post_drop._qualified_learning_sources",
+                    return_value=(generation, names)),
+              patch("shared_apply_operation.SharedApplyOperation") as factory,
+              patch("auto_detect_post_drop.native_prepare_learning_producer",
+                    side_effect=prepare) as preparer,
+              patch("auto_detect_post_drop._learning_pretraffic_owner",
+                    side_effect=owner),
+              patch("auto_detect_post_drop._parent"),
+              patch("auto_detect_post_drop.pwd.getpwnam",
+                    return_value=MagicMock(pw_uid=1, pw_gid=2)),
+              patch("auto_detect_post_drop._capture", side_effect=capture),
+              patch("auto_detect_post_drop._witness_line_learning", return_value="wire")):
+            factory.return_value.read.return_value = record
+            self.assertEqual(native_capture_learning_before_launch(
+                COMMON_ACTIVE, queue_fd=3), "wire")
+            self.assertEqual(events, ["prepare", "owner", "capture", "owner"])
+            preparer.assert_called_once_with(COMMON_ACTIVE, queue_fd=3)
+            events.clear()
+            factory.return_value.read.return_value = {
+                key: value for key, value in record.items() if key != "previous"}
+            self.assertEqual(native_capture_learning_before_launch(
+                COMMON_ACTIVE, queue_fd=3), "wire")
+            self.assertEqual(events, ["owner", "capture", "owner"])
+            self.assertEqual(preparer.call_count, 1)
 
     def test_bound_learning_start_requires_retired_owner_under_same_queue(self):
         from auto_detect_post_drop import _learning_pretraffic_owner
