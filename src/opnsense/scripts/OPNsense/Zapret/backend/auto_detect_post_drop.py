@@ -531,16 +531,56 @@ def _learning_release_sources(
     return workspace, candidate, approved
 
 
-def native_prepare_learning_producer(release: Path) -> None:
-    """Prepare exact qualified N-inboxes; refuse stale old ROOT contents."""
+def native_prepare_learning_producer(release: Path, *, queue_fd: int | None = None) -> None:
+    """Prepare linked Auto inboxes only after original stopped retirement.
+
+    First bound activation prepared inboxes before Config FD4. A linked
+    stopped successor must borrow FD3, attest completed previous retirement,
+    then create fresh N-inboxes under the original P2a owner.
+    """
     from auto_detect_storage import prepare_native_learning
-    _, _, sources = _learning_release_sources(release)
+    from shared_apply_operation import SharedApplyOperation
+    from voice_live_inspect import COMMON_ACTIVE
+
+    workspace, candidate, sources = _learning_release_sources(release)
     _, names = _qualified_learning_sources(sources, ROOT)
+    record = SharedApplyOperation(owner=0).read()
+    if queue_fd is None:
+        if type(record) is dict and record.get("manifest", {}).get("schema") == 2:
+            raise PostDropRefused("bound_learning_prepare_requires_inherited_queue")
+        prepare_native_learning(names)
+        return
+    if (release != COMMON_ACTIVE or type(queue_fd) is not int or queue_fd != 3 or
+            type(record) is not dict or record.get("manifest", {}).get("schema") != 2):
+        raise PostDropRefused("bound_learning_prepare_scope_required")
+    if "previous" not in record:
+        # The first-bound coordinator already created the protected files.
+        # Never create or repair a first generation while holding Config.
+        before = _learning_pretraffic_owner(
+            workspace, candidate, queue_fd, learning_names=names)
+        queue, _ = _original_epoch_queue(names)
+        with queue.inherited_exclusive(queue_fd):
+            if _learning_pretraffic_owner(
+                    workspace, candidate, queue_fd, learning_names=names) != before:
+                raise PostDropRefused("first_bound_learning_prepare_changed")
+        return
+    # Before any new inode, authenticate the completed predecessor twice
+    # against the exact base-only root and its original terminal archive.
+    before = _learning_pretraffic_owner(
+        workspace, candidate, queue_fd, learning_names=names, preparing=True)
+    if _learning_pretraffic_owner(
+            workspace, candidate, queue_fd, learning_names=names, preparing=True) != before:
+        raise PostDropRefused("bound_learning_prepare_preimage_changed")
     prepare_native_learning(names)
+    if (_learning_release_sources(release) != (workspace, candidate, sources) or
+            _learning_pretraffic_owner(
+                workspace, candidate, queue_fd, learning_names=names) != before):
+        raise PostDropRefused("bound_learning_prepare_postimage_changed")
 
 
 def _learning_pretraffic_owner(workspace: Path, candidate: str, queue_fd: int | None,
-                              *, learning_names: tuple[str, ...] = ()) -> tuple[dict, str | None] | None:
+                              *, learning_names: tuple[str, ...] = (),
+                              preparing: bool = False) -> tuple[dict, str | None] | None:
     """Verify original bound pretraffic under the inherited P2a lock."""
     from shared_apply_operation import SharedApplyOperation
     from shared_apply_seal import WORK
@@ -559,7 +599,8 @@ def _learning_pretraffic_owner(workspace: Path, candidate: str, queue_fd: int | 
             type(queue_fd) is not int or queue_fd < 3 or queue_fd in (4, 9) or
             not bound or record["phase"] != "activating" or "found" in record or
             workspace != WORK / record["detail"]["id"] or
-            candidate != record["detail"]["candidate"]):
+            candidate != record["detail"]["candidate"] or
+            (preparing and ("previous" not in record or not learning_names))):
         raise PostDropRefused("bound_learning_queue_scope_required")
     verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
     retired = None
@@ -567,6 +608,7 @@ def _learning_pretraffic_owner(workspace: Path, candidate: str, queue_fd: int | 
         from auto_detect_origin_map import verify_learning_start_successor
         from neutral_schema3_quiescent_preimage import (
             EPOCH_ROOT, _retired_ready_digest, _verify_retired_history,
+            _verify_idle_producer,
         )
 
         detail, prior = record["detail"], record["previous"]
@@ -577,8 +619,10 @@ def _learning_pretraffic_owner(workspace: Path, candidate: str, queue_fd: int | 
             raise PostDropRefused("bound_learning_start_predecessor_required")
         try:
             verify_learning_start_successor(WORK / prior["id"], workspace, candidate)
-            queue, receipts = _original_epoch_queue(learning_names)
+            queue, receipts = _original_epoch_queue(() if preparing else learning_names)
             with queue.inherited_exclusive(queue_fd):
+                if preparing:
+                    _verify_idle_producer(queue, receipts)
                 retired = _retired_ready_digest(EPOCH_ROOT, prior["id"], 0)
                 _verify_retired_history(record, queue, receipts, retired)
                 if _retired_ready_digest(EPOCH_ROOT, prior["id"], 0) != retired:
@@ -982,7 +1026,7 @@ def original_fd9_command(args: list[str]) -> int:
               "restore-learning": 6, "finish-learning-epoch": 2}
     borrowed = bool(args and args[-1] == "--inherited-queue")
     if borrowed:
-        if args[0] not in ("capture-learning", "seal-learning-epoch"):
+        if args[0] not in ("prepare-learning", "capture-learning", "seal-learning-epoch"):
             return 64
         args = args[:-1]
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
@@ -1017,7 +1061,7 @@ def original_fd9_command(args: list[str]) -> int:
             _learning_release_sources(Path(args[1]))
             print("original-fd9-learning-release=authorized")
         elif args[0] == "prepare-learning":
-            native_prepare_learning_producer(Path(args[1]))
+            native_prepare_learning_producer(Path(args[1]), queue_fd=queue_fd)
             print("original-fd9-learning-producer=prepared")
         elif args[0] == "capture-learning":
             print(native_capture_learning_before_launch(Path(args[1]), queue_fd=queue_fd))

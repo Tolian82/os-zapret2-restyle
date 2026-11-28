@@ -715,6 +715,79 @@ class PostDropContract(unittest.TestCase):
             with self.assertRaises(PostDropRefused):
                 _learning_pretraffic_owner(workspace, candidate, 3)
 
+    def test_borrowed_successor_prepares_only_after_retired_base_checks(self):
+        from auto_detect_post_drop import native_prepare_learning_producer
+        from shared_apply_seal import WORK
+        from voice_live_inspect import COMMON_ACTIVE
+        from unittest.mock import MagicMock
+
+        generation, previous, candidate = "a" * 32, "b" * 32, "c" * 64
+        workspace = WORK / generation
+        names = (f"learning-{generation}-3.txt",)
+        sources = ((3, "youtube", str(self.root / names[0])),)
+        record = {"phase": "activating", "manifest": {"schema": 2},
+                  "detail": {"id": generation, "page": "strategies",
+                             "base": candidate, "candidate": candidate,
+                             "changed_fields": []},
+                  "previous": {"id": previous, "candidate": candidate},
+                  "previous_manifest": {"schema": 2}}
+        ready = "d" * 64
+        events = []
+        queue = MagicMock()
+
+        def check_owner(work, sha, fd, *, learning_names=(), preparing=False):
+            self.assertEqual((work, sha, fd, learning_names),
+                             (workspace, candidate, 3, names))
+            events.append("retired" if preparing else "new")
+            return record, ready
+
+        def create(found):
+            self.assertEqual(found, names)
+            events.append("create")
+
+        with (patch("auto_detect_post_drop._learning_release_sources",
+                    return_value=(workspace, candidate, sources)) as source,
+              patch("auto_detect_post_drop._qualified_learning_sources",
+                    return_value=(generation, names)),
+              patch("shared_apply_operation.SharedApplyOperation") as factory,
+              patch("auto_detect_post_drop._learning_pretraffic_owner",
+                    side_effect=check_owner) as owner,
+              patch("auto_detect_post_drop._original_epoch_queue",
+                    return_value=(queue, MagicMock())) as original,
+              patch("auto_detect_storage.prepare_native_learning",
+                    side_effect=create) as prepare):
+            factory.return_value.read.return_value = record
+            for fd in (None, 4, 9, True):
+                with self.subTest(fd=fd), self.assertRaises(PostDropRefused):
+                    native_prepare_learning_producer(COMMON_ACTIVE, queue_fd=fd)
+            self.assertEqual(events, [])
+            native_prepare_learning_producer(COMMON_ACTIVE, queue_fd=3)
+            self.assertEqual(events, ["retired", "retired", "create", "new"])
+            original.assert_not_called()
+            self.assertEqual(prepare.call_count, 1)
+
+            # A changed retirement receipt must refuse before any mutation.
+            events.clear()
+            prepare.reset_mock()
+            owner.side_effect = [(record, ready), (record, "e" * 64)]
+            with self.assertRaisesRegex(PostDropRefused, "preimage_changed"):
+                native_prepare_learning_producer(COMMON_ACTIVE, queue_fd=3)
+            prepare.assert_not_called()
+
+            # The first bound generation already has its inboxes and may
+            # reattest them, but must not create another set under FD4.
+            events.clear()
+            owner.side_effect = check_owner
+            factory.return_value.read.return_value = {
+                key: value for key, value in record.items()
+                if key not in ("previous", "previous_manifest")}
+            native_prepare_learning_producer(COMMON_ACTIVE, queue_fd=3)
+            self.assertEqual(events, ["new", "new"])
+            prepare.assert_not_called()
+            original.assert_called_once_with(names)
+            self.assertEqual(queue.inherited_exclusive.call_args.args, (3,))
+            self.assertEqual(source.call_count, 7)
+
     def test_bound_learning_start_requires_retired_owner_under_same_queue(self):
         from auto_detect_post_drop import _learning_pretraffic_owner
         from shared_apply_seal import WORK
@@ -755,6 +828,13 @@ class PostDropContract(unittest.TestCase):
             original_queue.assert_called_once_with(names)
             verify_history.assert_called_once_with(record, queue, receipts, ready)
             self.assertEqual([call.args[1] for call in read_ready.call_args_list], [previous, previous])
+            with patch(driver + "_verify_idle_producer") as idle:
+                original_queue.reset_mock()
+                self.assertEqual(
+                    _learning_pretraffic_owner(workspace, candidate, 3,
+                        learning_names=names, preparing=True), (record, ready))
+                original_queue.assert_called_once_with(())
+                idle.assert_called_once_with(queue, receipts)
             for wrong in ({**record, "phase": "prepared"},
                           {**record, "previous_manifest": {"schema": 1}},
                           {**record, "previous": {"id": generation, "candidate": candidate}},
