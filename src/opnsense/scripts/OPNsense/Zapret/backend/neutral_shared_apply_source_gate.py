@@ -967,6 +967,74 @@ def native_bind_original_prepared_fd9(operation: str, raw_pipe: bytes):
 
 
 
+def native_bind_saved_start_prepared_fd9(operation: str, raw_pipe: bytes) -> None:
+    """Bind one stopped Auto successor using S10's ONLY root/WAL writer.
+
+    No new Config/P1 writer, P2a owner, activation or second compiler.
+    A failure after S10 staging leaves the actual PREPARED evidence for
+    original FD9 recovery, never a fallback to an unbound Start.
+    """
+    from auto_detect_origin_map import verify_learning_start_successor
+    from neutral_root_stage import PreparedRootReceipt, verify_original_operation_pins
+    from shared_apply_operation import (
+        SharedApplyOperation, _saved_start_plan_scope)
+    from shared_apply_seal import WORK, verify_seal
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation) or
+            decode_pipe(raw_pipe)["mode"] != b"auto"):
+        raise OriginalSourceGateRefused("S11_SAVED_START_BIND_SCOPE_REFUSED")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    if (type(before) is not dict or
+            set(before) != {"schema", "phase", "detail", "previous", "previous_manifest"} or
+            before.get("phase") != "prepared" or
+            before["detail"]["id"] != operation or
+            before["detail"]["page"] != "strategies" or
+            before["detail"]["changed_fields"] != [] or
+            before["detail"]["base"] != before["detail"]["candidate"] or
+            before["detail"]["base"] != before["previous"]["candidate"] or
+            before["previous"]["page"] != "strategies" or
+            before["previous_manifest"]["schema"] != 2):
+        raise OriginalSourceGateRefused("S11_SAVED_START_BIND_PREPARED_REQUIRED")
+    old, new = WORK / before["previous"]["id"], WORK / operation
+    # Both detached generations, old immutable pin, and exact no-change
+    # epoch projection were already proven before the PREPARED fsync. Check
+    # once more before staging and again after the existing pin writer.
+    def observe(expected: dict) -> tuple:
+        require_lifecycle_lock()
+        if store.read() != expected:
+            raise OriginalSourceGateRefused("S11_SAVED_START_BIND_OWNER_CHANGED")
+        verify_original_operation_pins(record=expected, parent=WORK, owner_uid=0)
+        plan = json.loads(_read(new / "plan.json", 0, MAX_FILE))
+        _saved_start_plan_scope(plan, expected["detail"]["candidate"])
+        verify_learning_start_successor(
+            old, new, expected["detail"]["candidate"])
+        return verify_seal(new, owner=0), verify_seal(old, owner=0)
+
+    prior = observe(before)
+    if observe(before) != prior:
+        raise OriginalSourceGateRefused("S11_SAVED_START_BIND_PREIMAGE_CHANGED")
+    source, receipt = native_bind_original_prepared_fd9(operation, raw_pipe)
+    bound = store.read()
+    if (type(source) is not SourceGateReceipt or
+            source.mode != "auto" or source.requested_enabled is not True or
+            source.native_candidate_sha256 != before["detail"]["candidate"] or
+            source.generation != operation or
+            source.authorization != "NONE" or source.physical_transition_allowed or
+            type(receipt) is not PreparedRootReceipt or
+            type(bound) is not dict or bound.get("phase") != "prepared" or
+            {k: v for k, v in bound.items() if k != "manifest"} != before or
+            bound.get("manifest", {}).get("schema") != 2 or
+            bound["manifest"]["generation"] != operation or
+            bound["manifest"]["candidate_sha256"] != before["detail"]["candidate"] or
+            observe(bound) != prior or observe(bound) != prior):
+        raise OriginalSourceGateRefused("S11_SAVED_START_BOUND_PIN_CHANGED")
+    # This does NOT transition ACTIVATING or claim a running process.
+
+
 def _read_pinned_effective(*, detail: dict, binding: dict, parent: Path,
                            sources: Path, owner_uid: int,
                            engine_version: str) -> tuple[EffectiveSnapshot, bool]:
@@ -2303,6 +2371,20 @@ def native_first_auto_gui_handoff_fd9(operation: str, raw_pipe: bytes,
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+    if "--saved-start-bind" in args:
+        if len(args) != 2 or args[-1] != "--saved-start-bind":
+            return 64
+        try:
+            # Exact original NUL frame from the existing shell producer.
+            raw = sys.stdin.buffer.read(MAX_PIPE + 1)
+            native_bind_saved_start_prepared_fd9(args[0], raw)
+            return 0
+        except (ValueError, RuntimeError, OSError, TypeError, KeyError, IndexError):
+            # After PREPARED any failed pin is uncertain original WAL
+            # evidence, never a recoverable preflight or plaintext leak.
+            print("ORIGINAL_SOURCE_GATE_REFUSAL=S11_SAVED_START_BIND_REFUSED",
+                  file=sys.stderr)
+            return 70
     if "--first-auto-apply" in args:
         if len(args) != 3 or args[-1] != "--first-auto-apply":
             return 64

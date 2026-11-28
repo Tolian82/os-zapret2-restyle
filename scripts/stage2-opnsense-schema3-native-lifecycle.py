@@ -717,30 +717,6 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
         stopped_journal = JOURNAL.read_bytes()
         stopped_start_projection(ident)
         candidate_id = stopped_saved_start_build_admission(ident, config_image)
-        # Real root FD9 shell builder; must produce only a new sealed
-        # generation, not a WAL write or a replacement of the old runtime.
-        candidate_build = command(str(SERVICE), "shared-apply-prepare", candidate_id, timeout=210)
-        # The builder's 0 exit is deliberately NOT a receipt: its
-        # 'preflight-rejected=...' reports also exit zero. Require a separate
-        # genuine original FD9 witness from the immutable sealed successor.
-        sealed = command(
-            "/bin/sh", "-c",
-            'exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
-            "s11-sealed-build-witness", str(SERVICE.with_name("python_runtime.sh")),
-            str(SERVICE.parent / "backend/shared_apply_operation.py"),
-            "native-gate", "common-bound-saved-start-sealed", candidate_id,
-            timeout=90)
-        require(candidate_build.returncode == 0 and
-                sealed.returncode == 0 and
-                sealed.stdout.splitlines() == ["bound-saved-start-sealed=qualified"] and
-                JOURNAL.read_bytes() == stopped_journal and
-                CONFIG.read_bytes() == config_image and
-                not PID.exists(),
-                "S11_NATIVE_SAVED_BUILD_NOT_SEALED:build_rc=" +
-                str(candidate_build.returncode) + ":sealed_rc=" +
-                str(sealed.returncode) + ":" +
-                (candidate_build.stdout + candidate_build.stderr + sealed.stderr)[-700:])
-        print("S11_NATIVE_SAVED_BUILD_SEALED_SUCCESSOR=PASS", flush=True)
         result = subprocess.run([str(SERVICE), "start"], env=owner_service_environment(),
                                 capture_output=True, text=True, timeout=180, check=False)
         require(result.returncode == 69 and not result.stdout.strip() and
@@ -779,35 +755,36 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
                 not config_stat.st_mode & 0o022,
                 "S11_NATIVE_CANONICAL_CONFIG_UNTRUSTED")
         config_identity_before = config_identity(config_stat)
-        # A PREPARED journal must come from the original single FD9 writer,
-        # after the independently attested full sealed projection. Verify
-        # the immutable predecessor pin, no process/IPFW change, unchanged
-        # saved Config and precise single native WAL record.
-        record_result = command(
-            "/bin/sh", "-c",
-            'exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
-            "s11-record-prepared", str(SERVICE.with_name("python_runtime.sh")),
-            str(SERVICE.parent / "backend/shared_apply_operation.py"),
-            "native-gate", "common-bound-saved-start-record", candidate_id,
-            timeout=120)
+        # One actual ORIGINAL service shell performs build -> source-consistent
+        # PREPARED -> S10 immutable binding. The public Start remains denied.
+        bound_reply = command(str(SERVICE), "shared-apply-saved-start-bind",
+                              candidate_id, timeout=240)
         prepared = json.loads(JOURNAL.read_bytes())
         old = json.loads(stopped_journal)
         expected_detail = {"id": candidate_id, "page": "strategies",
                            "base": old["detail"]["candidate"],
                            "candidate": old["detail"]["candidate"],
                            "changed_fields": []}
-        require(record_result.returncode == 0 and
-                record_result.stdout.splitlines() == ["bound-saved-start-record=prepared"] and
-                prepared == {"schema": 1, "phase": "prepared", "detail": expected_detail,
-                             "previous": old["detail"], "previous_manifest": old["manifest"]} and
+        expected = {"schema": 1, "phase": "prepared", "detail": expected_detail,
+                    "previous": old["detail"], "previous_manifest": old["manifest"]}
+        pin = prepared.get("manifest", {})
+        require(bound_reply.returncode == 0 and
+                bound_reply.stdout.splitlines() ==
+                ["bound-saved-start-bind=" + candidate_id] and
+                {k: v for k, v in prepared.items() if k != "manifest"} == expected and
+                type(pin) is dict and pin.get("schema") == 2 and
+                pin.get("generation") == candidate_id and
+                pin.get("candidate_sha256") == old["detail"]["candidate"] and
+                (WORK / candidate_id / "manifest.json").is_file() and
                 CONFIG.read_bytes() == config_image and
                 config_identity(CONFIG.lstat()) == config_identity_before and
                 g04_runtime.owned_rules() == stopped_rules and
                 (ACTIVE / "dvtws.args").read_bytes() == installed_args and
                 not PID.exists(),
-                "S11_NATIVE_SAVED_START_PREPARED_WAL_REFUSED:rc=" +
-                str(record_result.returncode) + ":" +
-                (record_result.stdout + record_result.stderr)[-600:])
+                "S11_NATIVE_SAVED_START_BIND_REFUSED:rc=" +
+                str(bound_reply.returncode) + ":" +
+                (bound_reply.stdout + bound_reply.stderr)[-850:])
+        print("S11_NATIVE_SAVED_BUILD_SEALED_SUCCESSOR=PASS", flush=True)
         # A duplicate PREPARED attempt cannot manufacture another successor
         # or silently treat this as an authorized physical Start.
         duplicate = command(
@@ -823,11 +800,13 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
                 g04_runtime.owned_rules() == stopped_rules and not PID.exists(),
                 "S11_NATIVE_DUPLICATE_PREPARED_ALLOWED")
         print("S11_NATIVE_SAVED_START_ORIGINAL_WAL_PREPARED=PASS", flush=True)
+        print("S11_NATIVE_SAVED_START_ORIGINAL_ROOT_BOUND=PASS", flush=True)
         return {"status": "PASS_S11_START_PREFLIGHT", "source_sha": head,
                 "generation": ident, "verified_running_noop": True,
                 "verified_stopped_preimage": True, "verified_detached_projection": True,
                 "verified_borrowed_retirement_queue": True,
                 "verified_original_saved_prepared_wal": True,
+                "verified_original_saved_root_bound": True,
                 "physical_start_tested": False}
 
     # A genuine first Auto Apply was not sufficient: reproduce the owner's

@@ -2474,6 +2474,38 @@ shared_apply_run_service()
     # BEFORE checking the candidate snapshot, and again before Config::save.
     shared_apply_execute_service "$_shared_run_id" "$_shared_run_page" ${_shared_run_retry:+first-retry}
 }
+# S11 private pre-Start *preparation*, not a lifecycle command.
+# Retain the same original shell source scalars from orchestrator_build_release
+# through PREPARED and S10 immutable bind; an independently invoked renderer
+# cannot supply this original producer's NUL frame.
+shared_apply_saved_start_bind_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#1}" -eq 32 ] || return 64
+    _s11_id=$1
+    _s11_old=$(shared_apply_inspect_service) || return 69
+    case "$_s11_old" in committed\ *\ strategies) ;; *) return 69 ;; esac
+    _s11_old_id=$(printf '%s\n' "$_s11_old" | cut -d ' ' -f 2)
+    case "$_s11_old_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_s11_old_id}" -eq 32 ] && [ "$_s11_old_id" != "$_s11_id" ] || return 69
+    _s11_stopped=$(preflight_shared_apply_journal common-bound-start "$_s11_old_id" strategies) || return 69
+    [ "$_s11_stopped" = bound-start=stopped ] || return 69
+    wan_first_service require || return $?
+    # The original PHP has already placed fresh detached candidate.xml and
+    # plan.json. This call must stay in the current shell: no $(...) child.
+    shared_apply_prepare_service "$_s11_id" >/dev/null || return 69
+    [ "${_shared_prepare_receipt:-}" = "prepared-id=$_s11_id" ] || return 69
+    _s11_seal=$(preflight_shared_apply_journal common-bound-saved-start-sealed "$_s11_id") || return 69
+    [ "$_s11_seal" = bound-saved-start-sealed=qualified ] || return 69
+    _s11_prepared=$("$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
+        native-gate common-bound-saved-start-record "$_s11_id") || return 70
+    [ "$_s11_prepared" = bound-saved-start-record=prepared ] || return 70
+    # Original thirteen-source-field frame, native setup-bound engine, S10
+    # stage + original atomic manifest writer + same original PREPARED WAL.
+    shared_apply_original_source_gate "$_s11_id" --saved-start-bind || return 70
+    printf 'bound-saved-start-bind=%s\n' "$_s11_id"
+}
 # One FD9 operation now stages a submitted native request AND builds its
 # entire detached shared runtime. No kernel, Config save, or engine changes.
 shared_apply_build_service()
@@ -3945,6 +3977,10 @@ service_dispatch()
         shared-apply-prepare)
             shared_apply_prepare_service "${2:-}"
             ;;
+        shared-apply-saved-start-bind)
+            [ "$#" -eq 2 ] || return 64
+            shared_apply_saved_start_bind_service "$2"
+            ;;
         shared-apply-record)
             shift
             shared_apply_record_service "$@"
@@ -4748,7 +4784,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|shared-apply-recover-reviewed-native|pkg-update-prepare|pkg-update-postinstall|pkg-update-finish|pkg-update-continue-prepare|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-saved-start-bind|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|shared-apply-recover-reviewed-native|pkg-update-prepare|pkg-update-postinstall|pkg-update-finish|pkg-update-continue-prepare|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

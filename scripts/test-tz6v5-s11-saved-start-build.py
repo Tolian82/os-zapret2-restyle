@@ -56,4 +56,14 @@ with patch("shared_apply_operation.sys.platform", "linux"):
         pass
     else:
         raise AssertionError("S11 non-native original WAL mutation was allowed")
+# An invented source frame or nonnative caller must never bind a WAL.
+from neutral_shared_apply_source_gate import (
+    native_bind_saved_start_prepared_fd9, OriginalSourceGateRefused)
+with patch("neutral_shared_apply_source_gate.sys.platform", "linux"):
+    try:
+        native_bind_saved_start_prepared_fd9("a" * 32, b"")
+    except OriginalSourceGateRefused:
+        pass
+    else:
+        raise AssertionError("S11 non-FreeBSD root bind accepted")
 print("S11_SAVED_START_BUILD_READONLY_SOURCE=PASS")
