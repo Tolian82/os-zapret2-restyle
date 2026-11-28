@@ -1053,7 +1053,37 @@ def native_bind_saved_start_prepared_fd9(operation: str, raw_pipe: bytes) -> Non
                 source, receipt, bound, before, operation) or
             observe(bound) != prior or observe(bound) != prior):
         raise OriginalSourceGateRefused("S11_SAVED_START_BOUND_PIN_CHANGED")
-    # This does NOT transition ACTIVATING or claim a running process.
+    # Reuse the one S10 read-only semantic/lifecycle observer in this SAME
+    # original source process; no second parser or presumed START permission.
+    # It independently proves the committed STOPPED predecessor, exact
+    # archived Auto epoch, WAN, Config, kernel and both immutable roots.
+    from neutral_schema3_quiescent_preimage import QuiescentPreimage
+    semantic = native_plan_original_prepared_fd9(source)
+    physical = semantic.previous_physical
+    if (type(semantic) is not OriginalSemanticReceipt or
+            semantic.lifecycle_proposal != "START" or
+            semantic.status != "ORIGINAL_PREPARED_SEMANTIC_PROPOSAL_ONLY" or
+            semantic.authorization != "NONE" or
+            semantic.physical_transition_allowed or semantic.promotion_allowed or
+            semantic.final_original_fd9_reattest_required is not True or
+            semantic.generation != operation or
+            semantic.previous_generation != before["previous"]["id"] or
+            semantic.candidate_root_sha256 != bound["manifest"]["root_sha256"] or
+            semantic.previous_root_sha256 != before["previous_manifest"]["root_sha256"] or
+            type(physical) is not QuiescentPreimage or
+            physical.old_state != "committed-stopped" or
+            physical.retirement_state != "original-epoch-ack-retired" or
+            physical.generation != operation or
+            physical.root_sha256 != bound["manifest"]["root_sha256"] or
+            physical.previous_generation != before["previous"]["id"] or
+            physical.config_base_sha256 != before["detail"]["base"] or
+            physical.config_candidate_sha256 != before["detail"]["candidate"] or
+            physical.authorization != "NONE" or physical.physical_transition_allowed or
+            physical.promotion_allowed or
+            physical.original_executor_recheck_required is not True or
+            observe(bound) != prior or store.read() != bound):
+        raise OriginalSourceGateRefused("S11_SAVED_START_QUIESCENT_PROPOSAL_REFUSED")
+    # A START proposal is NOT a physical permit. No ACTIVATING/launcher.
 
 
 def _read_pinned_effective(*, detail: dict, binding: dict, parent: Path,
