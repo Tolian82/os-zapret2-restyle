@@ -2679,17 +2679,33 @@ def native_bound_saved_start_record_prepared(operation: str) -> dict:
             fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
             try:
                 st = os.fstat(fd)
-                named = regular(path, 0)
-                if (not stat.S_ISREG(st.st_mode) or
+                if path == CONFIG_PATH:
+                    # OPNsense's canonical /conf/config.xml may be readable
+                    # by its original group; it is NOT a detached 0600 work
+                    # candidate. Never call the detached-only regular() here.
+                    named = path.lstat()
+                else:
+                    named = regular(path, 0)
+                if (not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or
+                        st.st_nlink != 1 or st.st_mode & 0o022 or
                         (st.st_dev, st.st_ino) != (named.st_dev, named.st_ino) or
                         st.st_size > 16 * 1024 * 1024 or st.st_size <= 0):
                     raise SharedOperationError("saved Start PREPARED XML inode differs")
+                def signature(info):
+                    # Read access may advance atime; compare only bytes,
+                    # identity, owner, mode and mutation timestamps.
+                    return (info.st_dev, info.st_ino, info.st_size,
+                            info.st_mtime_ns, info.st_ctime_ns,
+                            info.st_mode, info.st_uid, info.st_nlink)
+                before_signature = signature(st)
                 data = os.read(fd, st.st_size + 1)
-                if (len(data) != st.st_size or os.fstat(fd) != st or
-                        regular(path, 0) != named):
+                after_name = (path.lstat() if path == CONFIG_PATH
+                              else regular(path, 0))
+                if (len(data) != st.st_size or
+                        signature(os.fstat(fd)) != before_signature or
+                        signature(after_name) != before_signature):
                     raise SharedOperationError("saved Start PREPARED XML changed")
-                return data, (st.st_dev, st.st_ino, st.st_size,
-                              st.st_mtime_ns, st.st_ctime_ns)
+                return data, before_signature
             finally:
                 os.close(fd)
         original_bytes, original_inode = snap(CONFIG_PATH)
