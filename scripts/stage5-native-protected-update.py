@@ -56,18 +56,27 @@ def original_fixture(filename, module_name):
     return module
 
 
-def seed_qualified_stable_tag_for_disposable_guest(g03, *, schema3_canary=False):
+def seed_qualified_stable_tag_for_disposable_guest(g03, *, schema3_canary=False,
+                                                     prestart_lab=False):
     """Reuse the already native-verified _85 public stable-release cache tactic.
 
     This is test-only setup metadata, never a runtime fallback. The installed
     setup worker still clones, verifies the exact upstream Git tag and compiles.
     """
-    scoped = (os.environ.get("ZAPRET2_PROTECTED_PKG_NATIVE_TEST") == "1"
-              if schema3_canary is False else
-              schema3_canary is True and
-              os.environ.get("ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE") == "1" and
-              os.environ.get("ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL") == "1" and
-              os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1")
+    need(type(schema3_canary) is bool and type(prestart_lab) is bool and
+         not (schema3_canary and prestart_lab),
+         "NATIVE_STABLE_RELEASE_CACHE_SCOPE_INVALID")
+    if prestart_lab:
+        scoped = (os.environ.get("ZAPRET2_G08_NATIVE_PRESTART") == "1" and
+                  os.environ.get("ZAPRET2_G05_DISPOSABLE_NATIVE") == "1" and
+                  os.environ.get("ZAPRET2_G03_DISPOSABLE_NATIVE") == "1" and
+                  os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1")
+    else:
+        scoped = (os.environ.get("ZAPRET2_PROTECTED_PKG_NATIVE_TEST") == "1"
+                  if not schema3_canary else
+                  os.environ.get("ZAPRET2_STAGE2_SCHEMA3_DISPOSABLE_NATIVE") == "1" and
+                  os.environ.get("ZAPRET2_TZ6V4_SCHEMA3_NATIVE_TRIAL") == "1" and
+                  os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1")
     need(os.environ.get("GITHUB_ACTIONS") == "true" and scoped and
          os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
          g03.RELEASE == "v1.0.7",

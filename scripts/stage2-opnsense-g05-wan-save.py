@@ -504,7 +504,10 @@ def verify_s07_installed_readonly_projection():
     return True
 
 
-def main():
+def main(*, prestart_lab=False):
+    need(type(prestart_lab) is bool and (not prestart_lab or
+         os.environ.get("ZAPRET2_G08_NATIVE_PRESTART") == "1"),
+         "G05_PRESTART_COMPOSITION_NOT_QUALIFIED")
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1" and
          os.environ.get("ZAPRET2_G05_DISPOSABLE_NATIVE") == "1" and
@@ -610,8 +613,20 @@ def main():
          "S10_COLD_WAN_SAME_ARCHIVE_REINSTALL_CREATED_S10_OWNER_OR_CHANGED_P1")
     # S06: same genuine G05 guest and same native package, ordinary delete,
     # not a force reinstall; preserve saved Config and all three Found files.
-    s06_preserved = verify_s06_ordinary_remove_reinstall(web, package, sha, ipfw_before)
-    s07_readonly = verify_s07_installed_readonly_projection()
+    # G08 must continue with an empty pre-upstream guest. The S06 fixture
+    # intentionally seeds User/Exclude/IPSET/Found and S07 reads that image.
+    # Keep the default standalone G05 contract intact; the independent
+    # S06/S07 assertions already passed on the same production source.
+    s06_preserved = s07_readonly = None
+    if prestart_lab:
+        need(not (node().findtext("hostlist/userdomains") or "") and
+             _s10_native_cold_no_engine_witness() == s10_cold,
+             "G05_PRESTART_USER_DATA_OR_OWNER_PRESENT")
+        print("G05_PRESTART_COMPOSITION=S06_S07_SEEDED_FOLLOWUPS_NOT_RUN",
+              flush=True)
+    else:
+        s06_preserved = verify_s06_ordinary_remove_reinstall(web, package, sha, ipfw_before)
+        s07_readonly = verify_s07_installed_readonly_projection()
     print("G05_NATIVE=" + json.dumps({
         "status": "PASS_G05_COLD_NO_ENGINE_WAN_ONLY_HTTPS_CONFIG_AND_REINSTALL",
         "first_api_authenticated": True,

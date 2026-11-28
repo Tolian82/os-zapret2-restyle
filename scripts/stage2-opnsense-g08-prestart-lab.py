@@ -265,6 +265,11 @@ def actual_g03_upstream_install_without_ordinary_start(g03):
     # Preserve the STOCK G03 bounded, redacted failure witness on this
     # disposable guest. Native setup failure must never be relabelled
     # as successful G08 restoration or silently retried under new runtime.
+    # The original installer still clones, verifies and compiles the
+    # actual selected tag; only the disposable release-list metadata is
+    # seeded, using the already accepted stable-cache helper.
+    cache = module("stage5-native-protected-update.py")
+    cache.seed_qualified_stable_tag_for_disposable_guest(g03, prestart_lab=True)
     try:
         first = g03.dispatch_and_poll()
     except g03.Refusal:
@@ -325,7 +330,7 @@ def execute():
     voice = module("stage2-opnsense-real-native-voice-http.py")
     # G05 builds the real Mk archive, proves no-WAN precedence, then SAVES
     # a real WAN with genuinely no upstream or ordinary engine Start.
-    g05.main()
+    g05.main(prestart_lab=True)
     need(not ENGINE.exists() and not JOURNAL.exists(),
          "G08_G05_DID_NOT_LEAVE_NEVER_STARTED_RUNTIME")
     # G03.main() includes a *separate* legacy five-list Start/Restart
