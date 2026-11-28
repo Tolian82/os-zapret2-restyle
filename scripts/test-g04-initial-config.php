@@ -62,7 +62,7 @@ class G04Model
     {
         must($this->config->locked, 'Model mutation without Config lock');
         if (!in_array($reference,
-                ['strategy.trafficargs', 'hostlist.youtubedomains'], true)) {
+                ['strategy.trafficargs', 'hostlist.youtubedomains', 'hostlist.mode'], true)) {
             return false;
         }
         $this->changes[$reference] = $value;
@@ -87,6 +87,8 @@ $clean = new G04Config();
 $result = InitialConfig::initialize($clean, fn() => new G04Model($clean));
 must($result === 'initialized' && $clean->saveCalls === 1,
      'truly absent Zapret root must save exactly once');
+must(($clean->fields['hostlist.mode'] ?? null) === 'list',
+     'initial target mode must be Only listed domains');
 must($clean->fields['hostlist.youtubedomains'] === InitialConfig::YOUTUBE_DOMAINS,
      'initial YouTube domains not saved byte-for-byte');
 must($clean->fields['strategy.trafficargs'] === InitialConfig::TRAFFIC_STRATEGY,
@@ -106,6 +108,10 @@ must(InitialConfig::initialize($clean, fn() => new G04Model($clean)) === 'preser
 
 foreach ([
     [], // persisted but empty root
+    ['hostlist.mode' => 'all'],
+    ['hostlist.mode' => 'list'],
+    ['hostlist.mode' => 'auto'],
+    ['hostlist.mode' => ''],
     ['strategy.trafficargs' => '', 'hostlist.youtubedomains' => ''],
     ['strategy.trafficargs' => 'my custom'], // other field missing
     ['hostlist.youtubedomains' => 'edited.example'],

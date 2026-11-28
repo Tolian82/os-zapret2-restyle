@@ -182,6 +182,37 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         self.assert_old()
         self.assertEqual(journal.read()["phase"], "found-files-writing")
 
+    def test_stage_identity_drift_after_ready_leaves_original_destination(self):
+        journal, _, _, apply = self.journaled()
+        original_advance = journal.advance_found_stage
+        target = self.targets["youtube"]
+        original_identity = destination._file_identity(target.lstat())
+        replacement = self.root / "replacement.tmp"
+        replacement.write_text(self.new["youtube"])
+        replacement.chmod(0o600)
+        observed = {}
+
+        def advance_then_drift(detail, raw, name, phase, pin, attest):
+            original_advance(detail, raw, name, phase, pin, attest)
+            if name == "youtube" and phase == "ready":
+                temp = target.with_name(pin["temp"])
+                replacement.replace(temp)
+                observed["path"] = temp
+                observed["identity"] = destination._file_identity(temp.lstat())
+
+        journal.advance_found_stage = advance_then_drift
+        with self.assertRaises(DestinationRefused):
+            apply()
+        self.assert_old()
+        self.assertEqual(destination._file_identity(target.lstat()), original_identity)
+        self.assertEqual(destination._file_identity(observed["path"].lstat()),
+                         observed["identity"])
+        current = journal.read()
+        self.assertEqual(current["phase"], "found-files-writing")
+        stage = current["found"]["stages"]["youtube"]
+        self.assertEqual(stage["state"], "ready")
+        self.assertNotEqual(stage["pin"]["inode"], observed["identity"][1])
+
     def test_stage_installed_fsync_failure_keeps_ambiguous_wal(self):
         journal, _, _, apply = self.journaled()
         original_advance = journal.advance_found_stage
@@ -882,6 +913,111 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
 
     @unittest.skipIf(sys.platform.startswith("freebsd") and os.geteuid() == 0,
                      "A native root requires a real FD9 parent, not a fixture")
+    def test_retired_bound_recovery_hands_same_existing_queue_to_original_php(self):
+        from types import SimpleNamespace
+        from auto_detect_effective_known import native_found_recover_original_fd9
+        from auto_detect_queue import DurableInbox, QueueSafetyError
+        import fcntl
+
+        producer = self.root / "producer"
+        producer.mkdir(mode=0o700)
+        (producer / "pending").mkdir(mode=0o700)
+        queue = DurableInbox(producer, owner_uid=self.uid)
+        queue.inbox.write_bytes(b"")
+        queue.inbox.chmod(0o600)
+        operation = "a" * 32
+        record = {"detail": {"id": operation, "page": "strategies"},
+                  "found": {}, "manifest": {"schema": 1}, "previous_manifest": {"schema": 2},
+                  "phase": "found-config-saving"}
+        store = SimpleNamespace(read=lambda: record)
+        calls = []
+
+        def run(args, **kwargs):
+            calls.append(args)
+            expected = ("found-bound-recover" if "previous_manifest" in record and
+                        record["phase"] != "prepared" else "found-recover")
+            self.assertEqual(args[2:5], [expected, operation, "strategies"])
+            if "previous_manifest" in record:
+                self.assertEqual(kwargs["pass_fds"], (queue.locked_fd, 9))
+                self.assertEqual(args[5], "--queue-fd=" + str(queue.locked_fd))
+                self.assertEqual(os.fstat(queue.locked_fd).st_ino, pin)
+                foreign = os.open(queue.lock, os.O_RDONLY)
+                try:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(foreign, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                finally:
+                    os.close(foreign)
+            else:
+                self.assertFalse(queue._held)
+                self.assertEqual(kwargs["pass_fds"], (9,))
+                self.assertEqual(len(args), 5)
+            return SimpleNamespace(returncode=70)
+
+        with patch("sys.platform", "freebsd15"), patch("os.geteuid", return_value=0), \
+                patch("pwd.getpwnam", return_value=SimpleNamespace(pw_gid=65534)), \
+                patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                patch("shared_apply_operation.SharedApplyOperation", return_value=store), \
+                patch("auto_detect_queue.DurableInbox", return_value=queue), \
+                patch("subprocess.run", side_effect=run):
+            with self.assertRaises(FileNotFoundError):
+                native_found_recover_original_fd9(operation)
+            self.assertFalse(queue.lock.exists())
+            with queue.exclusive():
+                pin = queue.lock.stat().st_ino
+                with self.assertRaises(QueueSafetyError):
+                    native_found_recover_original_fd9(operation)
+            self.assertEqual(calls, [])
+            self.assertEqual(native_found_recover_original_fd9(operation), 70)
+            self.assertFalse(queue._held)
+            record["phase"] = "found-config-saved"
+            self.assertEqual(native_found_recover_original_fd9(operation), 70)
+            self.assertFalse(queue._held)
+            record["phase"] = "prepared"
+            self.assertEqual(native_found_recover_original_fd9(operation), 70)
+            saved_pin = record.pop("manifest")
+            self.assertEqual(native_found_recover_original_fd9(operation), 70)
+            record["manifest"] = saved_pin
+            record["phase"] = "found-config-saving"
+            record.pop("previous_manifest")
+            self.assertEqual(native_found_recover_original_fd9(operation), 70)
+            self.assertEqual(len(calls), 5)
+            with self.assertRaises(RuntimeError):
+                native_found_recover_original_fd9("b" * 32)
+            self.assertEqual(len(calls), 5)
+
+    def test_bound_found_recovery_chooses_locked_image_without_fallback(self):
+        from types import SimpleNamespace
+        from auto_detect_effective_known import recover_native_bound_found_locked
+        op, base, candidate = "a" * 32, "b" * 64, "c" * 64
+        rec = {"detail": {"id": op, "base": base, "candidate": candidate},
+               "manifest": {"schema": 1}, "previous_manifest": {"schema": 2},
+               "found": {"runtime_mode": "0"}, "phase": "found-config-saving"}
+        store = SimpleNamespace(read=lambda: rec)
+        with patch("auto_detect_destination_commit._native_found_wal_context",
+                   return_value=(store, rec, None, None, None, lambda: True)), \
+             patch("auto_detect_effective_known.finish_native_bound_stopped_found_locked",
+                   return_value={"result": "committed", "mode": "0"}) as finish, \
+             patch("auto_detect_effective_known.advance_native_found_locked",
+                   return_value={"result": "restored"}) as rollback:
+            def run(digest, queue_fd=3):
+                return recover_native_bound_found_locked(op, digest, config_fd=4, queue_fd=queue_fd)
+            self.assertEqual(run(candidate)["result"], "committed")
+            finish.assert_called_once_with(op, candidate, config_fd=4, queue_fd=3)
+            rollback.assert_not_called()
+            self.assertEqual(run(base)["result"], "restored")
+            rollback.assert_called_once_with("recover-found-locked", op, base, config_fd=4, queue_fd=3)
+            for digest, fd in (("d"*64, 3), (candidate, None), (base, None)):
+                with self.assertRaises(RuntimeError):
+                    run(digest, fd)
+            rec["phase"] = "found-config-saved"
+            with self.assertRaises(RuntimeError):
+                run(base)
+            self.assertEqual(run(candidate)["result"], "committed")
+            finish.side_effect = RuntimeError("physical proof refused")
+            with self.assertRaises(RuntimeError):
+                run(candidate)
+            self.assertEqual(rollback.call_count, 1)
+
     def test_public_original_fd9_entry_refuses_non_native(self):
         with self.assertRaisesRegex(DestinationRefused,
                                     "original_native_fd9_required"):

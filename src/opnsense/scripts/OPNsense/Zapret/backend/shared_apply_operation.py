@@ -41,6 +41,8 @@ FOUND_CONFIG_PHASES = frozenset(("found-config-saving", "found-config-saved"))
 FOUND_POST_PHASES = frozenset(("found-files-written", *FOUND_CONFIG_PHASES))
 FOUND_ROLLBACK_FROM = frozenset((*FOUND_FILE_PHASES, "found-config-saving"))
 FOUND_RESTORING = "found-restoring"
+MANAGED_WRITING = "managed-writing"
+MANAGED_CONFIG_SAVING = "managed-config-saving"
 FOUND_RUNTIME_NEXT = {
     "found-config-saved": {"activating"},
     "activating": {"activated"},
@@ -61,7 +63,8 @@ PHASES = frozenset((
     "prepared", "activating", "activated", "config-saved",
     "epoch-finalizing", "committed", "restored", "restore-failed", "requires-review",
     "found-files-writing", "found-files-written",
-    "found-config-saving", "found-config-saved", FOUND_RESTORING,
+    "found-config-saving", "found-config-saved", FOUND_RESTORING, MANAGED_WRITING,
+    MANAGED_CONFIG_SAVING,
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -125,6 +128,22 @@ def _validate_detail(detail: object) -> dict:
     ) or len(fields) != len(set(fields)):
         raise SharedOperationError("invalid common Apply field proof")
     return detail
+
+
+def _config_save_witness(detail: dict, plan_sha256: str) -> str:
+    proof = "\0".join((detail["page"], detail["base"], detail["candidate"],
+                       plan_sha256, ",".join(detail["changed_fields"])))
+    return hashlib.sha256(proof.encode("ascii")).hexdigest()
+
+
+def _config_observation_witness(detail: dict, plan_sha256: str, observed: str) -> str:
+    proof = _config_save_witness(detail, plan_sha256) + "\0" + observed
+    return hashlib.sha256(proof.encode("ascii")).hexdigest()
+
+
+def _managed_restore_has_base(record: dict, saved_base: str | None) -> bool:
+    return (record.get("phase") == MANAGED_CONFIG_SAVING and
+            saved_base == record["detail"]["base"] and saved_base != record["detail"]["candidate"])
 
 
 
@@ -208,18 +227,89 @@ def _validate_found_stages(stages: object) -> dict:
         if not isinstance(row, dict) or set(row) != {"state", "pin"} or \
                 row["state"] not in ("ready", "installed"):
             raise SharedOperationError("invalid found staged source status")
-        pin = row["pin"]
-        fields = {"device", "inode", "mtime_ns", "size", "sha256"}
-        if not isinstance(pin, dict) or set(pin) not in (fields, fields | {"temp"}) or \
-                any(type(pin[k]) is not int or pin[k] <= 0
-                    for k in ("device", "inode", "mtime_ns")) or \
-                type(pin["size"]) is not int or pin["size"] < 0 or \
-                type(pin["sha256"]) is not str or not DIGEST.fullmatch(pin["sha256"]):
-            raise SharedOperationError("invalid found staged inode pin")
-        if "temp" in pin and (not isinstance(pin["temp"], str) or not re.fullmatch(
-                r"\.auto-(?:detect|hostlist)-[a-f0-9]{32}\.tmp", pin["temp"])):
-            raise SharedOperationError("invalid found temporary filename")
+        _validate_stage_pin(row["pin"])
     return stages
+
+
+def _validate_stage_pin(pin: object) -> None:
+    fields = {"device", "inode", "mtime_ns", "size", "sha256"}
+    if not isinstance(pin, dict) or set(pin) not in (fields, fields | {"temp"}) or \
+            any(type(pin[k]) is not int or pin[k] <= 0
+                for k in ("device", "inode", "mtime_ns")) or \
+            type(pin["size"]) is not int or pin["size"] < 0 or \
+            type(pin["sha256"]) is not str or not DIGEST.fullmatch(pin["sha256"]):
+        raise SharedOperationError("invalid staged inode pin")
+    if "temp" in pin and (not isinstance(pin["temp"], str) or not re.fullmatch(
+            r"\.auto-(?:detect|hostlist)-[a-f0-9]{32}\.tmp", pin["temp"])):
+        raise SharedOperationError("invalid staged temporary filename")
+
+
+_MANAGED_BASE = {"name", "before_sha256", "after_sha256", "before_identity"}
+
+
+def _validate_managed_write(record: dict) -> None:
+    from neutral_effective_diff import _REF_FILE
+
+    row = record["managed"]
+    if (set(record) != {"schema", "phase", "detail", "previous", "manifest",
+                        "previous_manifest", "managed"} or
+            record["detail"]["page"] != "strategies" or
+            record["previous"]["candidate"] != record["detail"]["base"] or
+            record["manifest"]["schema"] != 1 or record["previous_manifest"]["schema"] != 1 or
+            type(row) is not dict or not _MANAGED_BASE <= row.keys() or
+            row.keys() - _MANAGED_BASE - {"ready", "barrier", "installed", "restore", "running_sha256"} or
+            type(row["name"]) is not str or not _REF_FILE.fullmatch(row["name"]) or
+            any(type(row[k]) is not str or not DIGEST.fullmatch(row[k])
+                for k in ("before_sha256", "after_sha256")) or
+            row["before_sha256"] == row["after_sha256"] or
+            ("ready" not in row and ("installed" in row or "restore" in row))):
+        raise SharedOperationError("invalid original managed write intent")
+    if "running_sha256" in row and (type(row["running_sha256"]) is not str or
+                                    not DIGEST.fullmatch(row["running_sha256"])):
+        raise SharedOperationError("invalid managed running owner digest")
+    if (record["phase"] == MANAGED_CONFIG_SAVING and
+            not {"running_sha256", "installed"} <= row.keys()):
+        raise SharedOperationError("managed Config save lacks installed owner")
+    if (record["phase"] == MANAGED_CONFIG_SAVING and "restore" in row and
+            record["detail"]["base"] == record["detail"]["candidate"]):
+        raise SharedOperationError("managed Config restore requires distinct base image")
+    for key in ("before_identity", "installed"):
+        if key not in row:
+            continue
+        identity = row[key]
+        if (type(identity) is not list or len(identity) != 9 or
+                any(type(n) is not int or n < 0 for n in identity) or
+                not identity[1] or identity[8] != 1 or not stat.S_ISREG(identity[5]) or
+                identity[5] & 0o022):
+            raise SharedOperationError("invalid managed file identity")
+    for key, digest in (("ready", "after_sha256"), ("restore", "before_sha256")):
+        if key in row:
+            pin = row[key]
+            _validate_stage_pin(pin)
+            if (not pin.get("temp", "").startswith(".auto-detect-") or
+                    pin["sha256"] != row[digest]):
+                raise SharedOperationError("invalid managed file checkpoint")
+    if "barrier" in row:
+        from managed_inode_barrier import ManagedBarrierRefused, _validate_pin
+        if "ready" not in row:
+            raise SharedOperationError("managed barrier requires original ready WAL")
+        try:
+            _validate_pin(row["barrier"], row["ready"]["temp"])
+        except ManagedBarrierRefused as exc:
+            raise SharedOperationError("invalid managed scratch inode pin") from exc
+    if "ready" in row and [row["ready"]["device"], row["ready"]["inode"]] == row["before_identity"][:2]:
+        raise SharedOperationError("managed staged inode aliases the preimage")
+    if "restore" in row and row["restore"]["temp"] == row["ready"]["temp"]:
+        raise SharedOperationError("managed restore aliases the forward temporary name")
+    if "installed" in row:
+        if "barrier" not in row:
+            raise SharedOperationError("managed installed inode lacks scratch WAL proof")
+        installed = row["installed"]
+        ready = row["ready"]
+        if ([installed[i] for i in (0, 1, 3, 4)] !=
+                [ready[k] for k in ("device", "inode", "mtime_ns", "size")] or
+                installed[5:] != row["before_identity"][5:]):
+            raise SharedOperationError("managed installed inode differs from ready")
 
 
 def _validate_found_post(post: object) -> dict:
@@ -253,6 +343,46 @@ def _validate_found_post(post: object) -> dict:
     return post
 
 
+def _first_running_pin_scope(record: dict) -> bool:
+    return ("previous" not in record and "previous_manifest" not in record and
+            "found" not in record and record.get("manifest", {}).get("schema") in (1, 2))
+
+
+def _validate_first_running_pin(record: dict) -> None:
+    has_running = "first_running_sha256" in record
+    has_seed = "first_pretraffic_sha256" in record
+    if not has_running and not has_seed:
+        return
+    learning = record.get("manifest", {}).get("schema") == 2
+    phases = ("activated", "epoch-finalizing", "committed", "restored") if learning else (
+        "activated", "config-saved", "committed", "restored")
+    if (not _first_running_pin_scope(record) or record["phase"] not in phases or
+            not has_running or has_seed != learning or
+            any(type(record[key]) is not str or not DIGEST.fullmatch(record[key])
+                for key in ("first_running_sha256", "first_pretraffic_sha256") if key in record)):
+        raise SharedOperationError("invalid first bound running owner pin")
+
+
+def _first_running_pin_matches(record: dict, running, config_fd: int, *,
+                               pretraffic_sha256: str | None = None) -> bool:
+    if not _first_running_pin_scope(record):
+        return "first_running_sha256" not in record and "first_pretraffic_sha256" not in record
+    learning = record["manifest"]["schema"] == 2
+    if running is None:
+        return (not learning and "first_running_sha256" not in record and
+                "first_pretraffic_sha256" not in record and pretraffic_sha256 is None)
+    pinned = record.get("first_running_sha256")
+    if (pinned is None or (learning and (pretraffic_sha256 is None or
+            pretraffic_sha256 != record.get("first_pretraffic_sha256"))) or
+            (not learning and (pretraffic_sha256 is not None or "first_pretraffic_sha256" in record))):
+        return False
+    _validate_first_running_pin(record)
+    from neutral_schema3_quiescent_preimage import _first_running_digest
+    from shared_apply_seal import WORK
+    return pinned == _first_running_digest(WORK / record["detail"]["id"] / "release",
+                                           running, config_fd=config_fd)
+
+
 def _validate_record(record: object) -> dict:
     # Existing unextended records remain readable; a new transaction can
     # retain precisely ONE predecessor inside the SAME durable journal.
@@ -267,7 +397,8 @@ def _validate_record(record: object) -> dict:
         {"schema", "phase", "detail", "previous", "found"},
     )
     if (type(record) is not dict or
-            (keys - {"failure", "manifest", "previous_manifest"}) not in allowed or
+            (keys - {"failure", "manifest", "previous_manifest", "managed", "first_running_sha256",
+                     "first_pretraffic_sha256", "first_retry_archive"}) not in allowed or
             ("failure" in record and (record.get("phase") not in
                                       ("committed", "requires-review") or
                                       "found" in record)) or
@@ -276,9 +407,21 @@ def _validate_record(record: object) -> dict:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
     if "manifest" in record:
-        if "found" in record and record["phase"] != "prepared":
-            raise SharedOperationError("bound Found physical transition not implemented")
         _validate_manifest_binding(record["manifest"], record["detail"])
+    if "first_retry_archive" in record:
+        history = record["first_retry_archive"]
+        detail = record["detail"]
+        if (type(history) is not dict or set(history) != {"id", "sha256"} or
+                type(history["id"]) is not str or not OP_ID.fullmatch(history["id"]) or
+                history["id"] == detail["id"] or
+                type(history["sha256"]) is not str or not DIGEST.fullmatch(history["sha256"]) or
+                detail["page"] != "strategies" or detail["base"] == detail["candidate"] or
+                "general.enabled" not in detail["changed_fields"] or
+                {"previous", "previous_manifest", "found", "managed"} & keys or
+                ("manifest" in record and record["manifest"].get("schema") != 2) or
+                record["phase"] not in ("prepared", "activating", "activated", "epoch-finalizing",
+                                        "committed", "restored", "restore-failed", "requires-review")):
+            raise SharedOperationError("invalid original first retry archive provenance")
     # No old Voice/Strategies record may invent protected physical or
     # Config-save uncertainty checkpoints without this exact found intent.
     if record["phase"] in FOUND_FILE_PHASES | FOUND_CONFIG_PHASES | {FOUND_RESTORING} and "found" not in record:
@@ -293,15 +436,25 @@ def _validate_record(record: object) -> dict:
         if "previous" not in record:
             raise SharedOperationError("invalid original predecessor root pin")
         _validate_manifest_binding(record["previous_manifest"], record["previous"])
-        # Both Found root pins may coexist ONLY in PREPARED.
-        # Physical Found mutation remains fenced until qualified separately.
         if "found" in record and (
-                record["phase"] != "prepared" or
-                record["previous"]["candidate"] != record["detail"]["base"]):
-            raise SharedOperationError("pinned found cannot mutate before dual binding")
+                record["previous"]["candidate"] != record["detail"]["base"] or
+                (record["phase"] != "prepared" and "manifest" not in record)):
+            raise SharedOperationError("pinned found cannot mutate before candidate binding")
         if ("manifest" not in record and
                 record["phase"] not in ("prepared", "restored")):
             raise SharedOperationError("unbound successor of immutable root")
+    if "found" in record and "manifest" in record:
+        if record["phase"] in FOUND_RUNTIME_PHASES:
+            raise SharedOperationError("bound Found runtime witness not integrated")
+        prior = record.get("previous")
+        if ((prior is None and record["phase"] != "prepared") or
+                (prior is not None and prior["candidate"] != record["detail"]["base"])):
+            raise SharedOperationError("bound found predecessor Config mismatch")
+    if ("managed" in record) != (record["phase"] in (MANAGED_WRITING, MANAGED_CONFIG_SAVING)):
+        raise SharedOperationError("managed write phase lacks original intent")
+    if "managed" in record:
+        _validate_managed_write(record)
+    _validate_first_running_pin(record)
     if "failure" in record:
         failure = record["failure"]
         late = record["phase"] == "committed"
@@ -440,6 +593,8 @@ class SharedApplyOperation:
                     for name in FOUND_NAMES)):
             raise SharedOperationError("unqualified original found candidate")
         before = self.read()
+        if restored_first_learning(before) or restored_first_retry(before):
+            raise SharedOperationError("restored first learning Found successor not qualified")
         if before is not None and before["phase"] not in TERMINAL:
             raise SharedOperationError("unfinished original common Apply")
         # Preserve the predecessor root in the SAME durable original WAL.
@@ -490,9 +645,51 @@ class SharedApplyOperation:
             result["previous_manifest"] = previous_manifest
         return self._persist_record(result)
 
+    def _attest_bound_found_checkpoint(self, record: dict, bound_attest) -> None:
+        """Guard original file/Config WAL phases; never a launcher permit.
+
+        For a bound transaction both immutable pins are checked with the
+        existing root verifier on either side of the phase-specific native
+        Config/P2 callback. The legacy caller has no bound callback and
+        cannot enter any bound physical checkpoint. No extra WAL or lock.
+        """
+        if "manifest" not in record and "previous_manifest" not in record:
+            if bound_attest is not None:
+                raise SharedOperationError("unexpected bound found witness")
+            return
+        from shared_apply_seal import WORK
+        from neutral_root_stage import verify_original_operation_pins
+        from voice_ipfw_adapter import require_lifecycle_lock
+        if ("manifest" not in record or "found" not in record or
+                type(record.get("previous")) is not dict or
+                record["previous"]["candidate"] != record["detail"]["base"] or
+                not callable(bound_attest)):
+            raise SharedOperationError("bound found original Config/P2 witness required")
+        try:
+            require_lifecycle_lock()
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=self.owner)
+            if self.read() != record or bound_attest(record) is not True:
+                raise SharedOperationError("bound found phase witness refused")
+            require_lifecycle_lock()
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=self.owner)
+            if self.read() != record:
+                raise SharedOperationError("bound found phase owner changed")
+        except (OSError, ValueError, RuntimeError, TypeError, KeyError) as exc:
+            if isinstance(exc, SharedOperationError):
+                raise
+            raise SharedOperationError("bound found immutable proof refused") from None
+
+    def _persist_found_checkpoint(self, before: dict, after: dict, bound_attest) -> dict:
+        self._attest_bound_found_checkpoint(before, bound_attest)
+        result = self._persist_record(after)
+        if self.read() != result:
+            raise SharedOperationError("original found durable readback refused")
+        return result
+
     def advance_found_files(self, phase: str, detail: dict,
                             sealed_plan: bytes, attest, *,
-                            post_images: dict | None = None) -> dict:
+                            post_images: dict | None = None,
+                            bound_attest=None) -> dict:
         """Durable original-journal P2 file checkpoints; import-only.
 
         Caller's original FD9 + native Config FD + original P2 flock must
@@ -507,8 +704,7 @@ class SharedApplyOperation:
             raise SharedOperationError("invalid original found-files checkpoint")
         record = self.read()
         if (record is None or record["detail"] != detail or
-                "found" not in record or "previous_manifest" in record or
-                "manifest" in record or
+                "found" not in record or
                 FOUND_NEXT.get(record["phase"]) != phase or
                 record["found"]["plan_sha256"] !=
                 hashlib.sha256(sealed_plan).hexdigest()):
@@ -561,10 +757,11 @@ class SharedApplyOperation:
             advanced["found"] = {**record["found"], "stages": {}}
         if phase == "found-files-written":
             advanced["found"] = {**record["found"], "post": post_images}
-        return self._persist_record(advanced)
+        return self._persist_found_checkpoint(record, advanced, bound_attest)
 
     def advance_found_stage(self, detail: dict, sealed_plan: bytes,
-                            name: str, phase: str, pin: dict, attest) -> dict:
+                            name: str, phase: str, pin: dict, attest, *,
+                            bound_attest=None) -> dict:
         """One fsynced staged temp inode BEFORE rename, then installed proof.
 
         Called ONLY by the existing original Config->P2-held FD9 writer.
@@ -613,10 +810,11 @@ class SharedApplyOperation:
             raise SharedOperationError("original staged journal changed under locks")
         next_found = {**record["found"], "stages": {
             **stages, name: {"state": phase, "pin": pin}}}
-        return self._persist_record({**record, "found": next_found})
+        return self._persist_found_checkpoint(
+            record, {**record, "found": next_found}, bound_attest)
 
     def advance_found_config(self, phase: str, detail: dict,
-                             sealed_plan: bytes, attest) -> dict:
+                             sealed_plan: bytes, attest, *, bound_attest=None) -> dict:
         """Two durable original FD9 Config checkpoints, import-only.
 
         'found-config-saving' MUST fsync before the first native
@@ -645,11 +843,11 @@ class SharedApplyOperation:
             raise SharedOperationError("original Config journal changed under locks")
         record = dict(before)
         record["phase"] = phase
-        return self._persist_record(record)
+        return self._persist_found_checkpoint(before, record, bound_attest)
 
     def record_found_rollback(self, record: dict, sealed_plan: bytes, *,
                               source: str | None = None, pin: dict | None = None,
-                              complete: bool = False) -> dict:
+                              complete: bool = False, bound_attest=None) -> dict:
         """Persist rollback intent and each before-inode pin under Config/P2."""
         if ("found" not in record or
                 record["found"]["plan_sha256"] != hashlib.sha256(sealed_plan).hexdigest() or
@@ -657,27 +855,28 @@ class SharedApplyOperation:
             raise SharedOperationError("original found rollback record changed")
         phase = record["phase"]
         if phase in FOUND_ROLLBACK_FROM and source is None and not complete:
-            return self._persist_record({
+            return self._persist_found_checkpoint(record, {
                 **record, "phase": FOUND_RESTORING,
                 "found": {**record["found"], "restoring": {}},
-            })
+            }, bound_attest)
         if phase != FOUND_RESTORING:
             raise SharedOperationError("original found rollback phase mismatch")
         if complete and source is None:
             restored = dict(record)
             restored.pop("found")
             restored["phase"] = "restored"
-            return self._persist_record(restored)
+            return self._persist_found_checkpoint(record, restored, bound_attest)
         if source not in record["found"]["stages"] or complete:
             raise SharedOperationError("source was not written by the found transaction")
         restoring = {**record["found"]["restoring"], source: pin}
-        return self._persist_record({
+        return self._persist_found_checkpoint(record, {
             **record, "found": {**record["found"], "restoring": restoring},
-        })
+        }, bound_attest)
 
     def advance_found_runtime(self, phase: str, record: dict, sealed_plan: bytes, attest) -> dict:
         """Keep the file intent through the ordinary runtime/IPFW lifecycle."""
         if ("found" not in record or
+                "manifest" in record or "previous_manifest" in record or
                 record["found"].get("runtime_mode") not in ("0", "1") or
                 phase not in FOUND_RUNTIME_NEXT.get(record["phase"], set()) or
                 record["found"]["plan_sha256"] != hashlib.sha256(sealed_plan).hexdigest() or
@@ -694,6 +893,8 @@ class SharedApplyOperation:
         _validate_detail(detail)
         before = self.read()
         if phase == "prepared":
+            if restored_first_learning(before) or restored_first_retry(before):
+                raise SharedOperationError("restored first learning successor not qualified")
             if before is not None and before["phase"] not in TERMINAL:
                 raise SharedOperationError("unfinished common Apply operation")
             if before is not None and before["detail"]["id"] == detail["id"]:
@@ -710,6 +911,8 @@ class SharedApplyOperation:
             # KeyError traceback must never substitute for the FD9 refusal.
             if "found" in before:
                 raise SharedOperationError("found files require original durable transaction")
+            if "first_retry_archive" in before:
+                raise SharedOperationError("first retry requires original bound transaction")
             if phase not in NEXT.get(before["phase"], frozenset()):
                 raise SharedOperationError("illegal common Apply phase transition")
             # S10b1 never calls the launcher: a bound root must be freshly
@@ -718,9 +921,12 @@ class SharedApplyOperation:
             if phase == "activating" and (
                     "manifest" in before or "previous_manifest" in before):
                 raise SharedOperationError("immutable root preactivation gate not implemented")
-            if (phase == "restored" and before["phase"] == "prepared" and
-                    ("manifest" in before or "previous_manifest" in before)):
-                raise SharedOperationError("bound prepared requires original pinned recovery")
+            if "manifest" in before or "previous_manifest" in before:
+                if phase == "restored" and before["phase"] == "prepared":
+                    raise SharedOperationError("bound prepared requires original pinned recovery")
+                # The legacy record CLI cannot terminalize a future bound
+                # operation merely because its phase is otherwise legal.
+                raise SharedOperationError("bound phase requires original physical witness")
             previous = before.get("previous")
             previous_manifest = before.get("previous_manifest")
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
@@ -733,6 +939,348 @@ class SharedApplyOperation:
         if phase != "prepared" and before is not None and "manifest" in before:
             record["manifest"] = before["manifest"]
         return self._persist_record(record)
+
+    def attest_unbound_config_save(self, identity: str, witness_sha256: str, *,
+                                   shared_work_parent: Path) -> None:
+        """Check the original ordinary save under the caller's FD9/Config locks."""
+        from neutral_root_stage import ROOT_NAME, PENDING_NAME
+        from shared_apply_seal import verify_seal
+
+        if (type(identity) is not str or not OP_ID.fullmatch(identity) or
+                type(witness_sha256) is not str or not DIGEST.fullmatch(witness_sha256)):
+            raise SharedOperationError("invalid ordinary Config save witness")
+        record = self.read()
+        if (record is None or record["phase"] != "activated" or
+                record["detail"]["id"] != identity or
+                {"found", "manifest", "previous_manifest"} & record.keys()):
+            raise SharedOperationError("ordinary Config save requires unbound activated owner")
+        work = shared_work_parent / identity
+
+        def check_root():
+            for directory in (work, work / "release"):
+                if _exists(directory / ROOT_NAME) or _exists(directory / PENDING_NAME):
+                    raise SharedOperationError("ordinary Config save has unbound root artifacts")
+
+        check_root()
+        seal = verify_seal(work, owner=self.owner)
+        if _config_save_witness(record["detail"], seal["sha256"]["plan.json"]) != witness_sha256:
+            raise SharedOperationError("ordinary Config save differs from original activation")
+        check_root()
+        if self.read() != record:
+            raise SharedOperationError("ordinary Config save owner changed")
+
+    def _checkpoint_managed_write(self, expected: dict, managed: dict | None, attest, *,
+                                  shared_work_parent: Path, saved_base: str | None = None) -> dict:
+        """Fsync one managed list intent or inode pin in the original WAL."""
+        if self.read() != expected or not callable(attest):
+            raise SharedOperationError("managed write owner changed")
+        next_record = dict(expected)
+        recovering_save = _managed_restore_has_base(expected, saved_base)
+        if saved_base is not None and not recovering_save:
+            raise SharedOperationError("managed restore requires exact saved base")
+        if (expected["phase"] == "prepared" and type(managed) is dict and
+                managed.keys() - {"running_sha256"} == _MANAGED_BASE):
+            next_record.update(phase=MANAGED_WRITING, managed=managed)
+        elif expected["phase"] == MANAGED_WRITING or recovering_save:
+            if managed is None:
+                next_record.pop("managed")
+                next_record["phase"] = "restored"
+            else:
+                stage = expected["managed"]
+                changed = {key for key in stage.keys() | managed.keys()
+                           if stage.get(key) != managed.get(key)}
+                available = {"restore"} if "ready" in stage else {"ready"}
+                if "ready" in stage and not {"barrier", "installed", "restore"} & stage.keys():
+                    available.add("barrier")
+                if "barrier" in stage and not {"installed", "restore"} & stage.keys():
+                    available.add("installed")
+                if recovering_save:
+                    available = {"restore"}
+                if not stage.keys() <= managed.keys() or len(changed) != 1 or not changed <= available:
+                    raise SharedOperationError("managed write checkpoint out of order")
+                next_record["managed"] = managed
+        else:
+            raise SharedOperationError("managed write requires prepared owner")
+        return self._persist_managed_checkpoint(expected, next_record, attest,
+                                                shared_work_parent=shared_work_parent)
+
+    def _checkpoint_managed_config(self, expected: dict, *, saved: bool, attest,
+                                   shared_work_parent: Path) -> dict:
+        """Begin the uncertain Config window or publish the verified new owner."""
+        phase = MANAGED_CONFIG_SAVING if saved else MANAGED_WRITING
+        if self.read() != expected or expected["phase"] != phase:
+            raise SharedOperationError("managed Config checkpoint owner changed")
+        row = expected["managed"]
+        if not {"running_sha256", "installed"} <= row.keys() or "restore" in row:
+            raise SharedOperationError("managed Config checkpoint lacks installed owner")
+        next_record = {**expected, "phase": "committed" if saved else MANAGED_CONFIG_SAVING}
+        if saved:
+            next_record.pop("managed")
+        return self._persist_managed_checkpoint(expected, next_record, attest,
+                                                shared_work_parent=shared_work_parent)
+
+    def _persist_managed_checkpoint(self, expected: dict, next_record: dict, attest, *,
+                                    shared_work_parent: Path) -> dict:
+        from neutral_root_stage import verify_original_operation_pins
+        from voice_ipfw_adapter import require_lifecycle_lock
+
+        _validate_record(next_record)
+
+        def verify():
+            require_lifecycle_lock()
+            verify_original_operation_pins(record=expected, parent=shared_work_parent,
+                                           owner_uid=self.owner)
+            if self.read() != expected:
+                raise SharedOperationError("managed write owner changed")
+
+        verify()
+        if attest() is not True:
+            raise SharedOperationError("managed write physical witness refused")
+        verify()
+        result = self._persist_record(next_record)
+        if self.read() != result:
+            raise SharedOperationError("managed write durable readback refused")
+        return result
+
+    def _advance_bound_ordinary(self, phase: str, expected: dict, attest, *,
+                                shared_work_parent: Path | None = None,
+                                first_running_sha256: str | None = None,
+                                first_pretraffic_sha256: str | None = None) -> dict:
+        """Internal original FD9 transition with exact immutable pins.
+
+        This is the same WAL writer and phase table as ordinary Apply.
+        The original coordinator MUST supply the phase-specific native
+        witness (not an analytic receipt or a generic CLI boolean).
+        PREPARED abort remains recover_prepared; Found remains fenced until
+        its original Config/P2 writer and recovery are integrated.
+        """
+        from neutral_root_stage import verify_original_operation_pins, RootStageRefused
+        from shared_apply_seal import WORK
+        from voice_ipfw_adapter import require_lifecycle_lock
+
+        parent = WORK if shared_work_parent is None else shared_work_parent
+        before = self.read()
+        if (type(expected) is not dict or before != expected or
+                type(before) is not dict or "found" in before or
+                "manifest" not in before or not isinstance(parent, Path) or
+                phase not in NEXT.get(before["phase"], frozenset()) or
+                (before["phase"] == "prepared" and phase != "activating") or
+                not callable(attest)):
+            raise SharedOperationError("bound ordinary transition refused")
+        if ("previous" in before and
+                before["previous"]["candidate"] != before["detail"]["base"]):
+            raise SharedOperationError("bound ordinary predecessor Config mismatch")
+
+        next_record = {**before, "phase": phase}
+        if first_running_sha256 is not None or first_pretraffic_sha256 is not None:
+            if (phase != "activated" or before["phase"] != "activating" or
+                    not _first_running_pin_scope(before) or
+                    "first_running_sha256" in before or "first_pretraffic_sha256" in before):
+                raise SharedOperationError("first running owner pin scope refused")
+            if first_running_sha256 is not None:
+                next_record["first_running_sha256"] = first_running_sha256
+            if first_pretraffic_sha256 is not None:
+                next_record["first_pretraffic_sha256"] = first_pretraffic_sha256
+            _validate_first_running_pin(next_record)
+
+        def pins():
+            require_lifecycle_lock()
+            verify_original_operation_pins(
+                record=before, parent=parent, owner_uid=self.owner)
+            if self.read() != before:
+                raise SharedOperationError("bound ordinary journal changed")
+
+        try:
+            pins()
+            if attest() is not True:
+                raise SharedOperationError("bound ordinary native witness refused")
+            pins()
+        except (RootStageRefused, OSError, ValueError, RuntimeError) as exc:
+            if isinstance(exc, SharedOperationError):
+                raise
+            raise SharedOperationError("bound ordinary pin or native proof refused") from None
+        # Persist the exact candidate/predecessor bindings through every
+        # allowed phase, including review/restore. No second writer or
+        # physical action; failure before fsync leaves the old phase.
+        result = self._persist_record(next_record)
+        # Failure after fsync is uncertain, not a verified old phase.
+        if self.read() != result:
+            raise SharedOperationError("bound ordinary durable readback refused")
+        return result
+
+    def _record_native_bound_activated(self, record: dict, *, preimage,
+                                       config_fd: int, config_digest: str,
+                                       queue_fd: int | None = None) -> tuple[dict, "StagedBoundRuntimeReceipt"]:
+        """Same original WAL after physical promotion, before Config save.
+
+        An unqualified staged image retains ACTIVATING. This internal
+        in-flight transition is not a cold recovery or launcher command.
+        """
+        from neutral_schema3_quiescent_preimage import (
+            StagedBoundRuntimeReceipt, attest_bound_quiescent_staged_under_fd9)
+
+        if (self.root != DEFAULT_ROOT or self.owner != 0 or
+                type(record) is not dict or self.read() != record or
+                record.get("phase") != "activating" or "found" in record or
+                record.get("manifest", {}).get("schema") not in (1, 2)):
+            raise SharedOperationError("bound native activated scope refused")
+
+        if config_digest != record["detail"]["base"]:
+            raise SharedOperationError("bound native activated Config base refused")
+        receipt = None
+
+        def attest():
+            nonlocal receipt
+            receipt = attest_bound_quiescent_staged_under_fd9(
+                record, preimage=preimage, config_fd=config_fd,
+                config_digest=config_digest, queue_fd=queue_fd)
+            return (type(receipt) is StagedBoundRuntimeReceipt and
+                    receipt.generation == record["detail"]["id"] and
+                    receipt.root_sha256 == record["manifest"]["root_sha256"] and
+                    receipt.config_base_sha256 == record["detail"]["base"] and
+                    receipt.observed_config_sha256 == config_digest and
+                    (receipt.pretraffic_sha256 is not None) == (record["manifest"]["schema"] == 2))
+
+        if _first_running_pin_scope(record):
+            if not attest():
+                raise SharedOperationError("first activated physical witness refused")
+            initial = receipt
+            learning = record["manifest"]["schema"] == 2
+            if learning and (initial.running is None or initial.pretraffic_sha256 is None):
+                raise SharedOperationError("first learning activation requires running and pretraffic proof")
+            if initial.running is not None:
+                from neutral_schema3_quiescent_preimage import _first_running_digest
+                from shared_apply_seal import WORK
+                release = WORK / record["detail"]["id"] / "release"
+                digest = _first_running_digest(release, initial.running, config_fd=config_fd)
+
+                def attest_pinned():
+                    return (attest() and receipt == initial and
+                            _first_running_digest(release, receipt.running,
+                                                  config_fd=config_fd) == digest)
+
+                pins = {"first_running_sha256": digest}
+                if learning:
+                    pins["first_pretraffic_sha256"] = initial.pretraffic_sha256
+                result = self._advance_bound_ordinary("activated", record, attest_pinned, **pins)
+            else:
+                result = self._advance_bound_ordinary("activated", record,
+                    lambda: attest() and receipt == initial)
+        else:
+            result = self._advance_bound_ordinary("activated", record, attest)
+        # Keep the actual PID, tree, backup and zero-cut from this checkpoint
+        # in the SAME in-flight coordinator through Config::save. Do not
+        # reconstruct them from a different post-save process.
+        return result, receipt
+
+
+    def _record_native_bound_saved(self, record: dict, *, preimage, activated_receipt,
+                                   config_fd: int, config_digest: str,
+                                   queue_fd: int | None = None) -> dict:
+        """Original Config owner's post-save readback while rollback survives.
+
+        The caller already holds a fresh native Config lock after Config::save;
+        fsync that descriptor and recheck the SAME staged image. For Auto the
+        original borrowed P2a remains held, and the zero receipt is still
+        unfinished. The existing finalizer, not this checkpoint, writes epoch.
+        """
+        from dataclasses import replace
+        from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+        from neutral_schema3_quiescent_preimage import (
+            StagedBoundRuntimeReceipt, attest_bound_quiescent_staged_under_fd9)
+        from voice_ipfw_adapter import require_lifecycle_lock
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                self.root != DEFAULT_ROOT or self.owner != 0 or
+                type(record) is not dict or self.read() != record or
+                record.get("phase") != "activated" or "found" in record or
+                record.get("manifest", {}).get("schema") not in (1, 2) or
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+                config_digest != record["detail"]["candidate"] or
+                type(activated_receipt) is not StagedBoundRuntimeReceipt or
+                activated_receipt.generation != record["detail"]["id"] or
+                activated_receipt.root_sha256 != record["manifest"]["root_sha256"] or
+                activated_receipt.config_base_sha256 != record["detail"]["base"] or
+                activated_receipt.observed_config_sha256 != record["detail"]["base"]):
+            raise SharedOperationError("bound native saved scope refused")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        os.fsync(config_fd)
+        learning = record["manifest"]["schema"] == 2
+
+        def attest():
+            receipt = attest_bound_quiescent_staged_under_fd9(
+                record, preimage=preimage, config_fd=config_fd,
+                config_digest=config_digest, queue_fd=queue_fd, saved=True)
+            return (type(receipt) is StagedBoundRuntimeReceipt and
+                    receipt.generation == record["detail"]["id"] and
+                    receipt.root_sha256 == record["manifest"]["root_sha256"] and
+                    receipt.config_base_sha256 == record["detail"]["base"] and
+                    receipt == replace(activated_receipt, observed_config_sha256=config_digest) and
+                    _first_running_pin_matches(record, receipt.running, config_fd,
+                                               pretraffic_sha256=receipt.pretraffic_sha256) and
+                    (receipt.pretraffic_sha256 is not None) == learning)
+
+        return self._advance_bound_ordinary(
+            "epoch-finalizing" if learning else "config-saved", record, attest)
+
+
+    def _finish_native_bound_ordinary(self, record: dict, *, config_fd: int,
+                                      config_digest: str, enabled: bool,
+                                      runtime_mode: str, activated_receipt,
+                                      queue_fd: int | None = None) -> dict:
+        """Original FD9/FD4 terminal checkpoint; not a public command.
+
+        Do not accept a generic callback, a synthetic committed predecessor,
+        or a saved-image match as physical proof. Fsync the actual native
+        Config descriptor before the final two read-only observations, then
+        use the existing original WAL writer. Found runtime remains fenced.
+        """
+        from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+        from neutral_schema3_previous_physical import (
+            FinalBoundRuntimeReceipt, attest_bound_candidate_final_under_fd9)
+        from neutral_schema3_quiescent_preimage import StagedBoundRuntimeReceipt
+        from voice_ipfw_adapter import require_lifecycle_lock
+
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                self.root != DEFAULT_ROOT or self.owner != 0 or
+                type(record) is not dict or self.read() != record or
+                "found" in record or "manifest" not in record or
+                record["phase"] not in ("config-saved", "epoch-finalizing") or
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+                config_digest != record["detail"]["candidate"] or
+                type(activated_receipt) is not StagedBoundRuntimeReceipt or
+                activated_receipt.generation != record["detail"]["id"] or
+                activated_receipt.root_sha256 != record["manifest"]["root_sha256"] or
+                activated_receipt.config_base_sha256 != record["detail"]["base"] or
+                activated_receipt.observed_config_sha256 != record["detail"]["base"]):
+            raise SharedOperationError("bound native terminal scope refused")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        os.fsync(config_fd)
+
+        def attest():
+            receipt = attest_bound_candidate_final_under_fd9(
+                record, config_fd=config_fd, config_digest=config_digest,
+                enabled=enabled, runtime_mode=runtime_mode,
+                retired_ready_sha256=activated_receipt.retired_ready_sha256,
+                queue_fd=queue_fd, expected_idle_producer=activated_receipt.idle_producer)
+            return (type(receipt) is FinalBoundRuntimeReceipt and
+                    receipt.generation == record["detail"]["id"] and
+                    receipt.root_sha256 == record["manifest"]["root_sha256"] and
+                    receipt.config_sha256 == config_digest and
+                    receipt.release_sha256 == activated_receipt.release_sha256 and
+                    receipt.running == activated_receipt.running and
+                    _first_running_pin_matches(record, receipt.running, config_fd,
+                                               pretraffic_sha256=receipt.pretraffic_sha256) and
+                    receipt.pretraffic_sha256 == activated_receipt.pretraffic_sha256 and
+                    receipt.retired_ready_sha256 == activated_receipt.retired_ready_sha256 and
+                    receipt.idle_producer == activated_receipt.idle_producer and
+                    (receipt.epoch_sha256 is not None) == (record["manifest"]["schema"] == 2) and
+                    receipt.authorization == "NONE" and
+                    receipt.physical_transition_allowed is False)
+
+        return self._advance_bound_ordinary("committed", record, attest)
+
 
     def bind_prepared_manifest(self, generation: str, *,
                                effective, native, mode: str, enabled: bool,
@@ -840,6 +1388,8 @@ class SharedApplyOperation:
         before = self.read()
         if before is None or before["phase"] != "committed":
             raise SharedOperationError("no committed Remove trial to revert")
+        if "manifest" in before or "previous_manifest" in before:
+            raise SharedOperationError("bound Remove requires original pinned recovery")
         trial, old = before["detail"], before.get("previous")
         if not isinstance(old, dict) or trial["id"] != trial_id or old["id"] != old_id:
             raise SharedOperationError("Remove trial or predecessor identity mismatch")
@@ -1089,6 +1639,11 @@ class SharedApplyOperation:
             # physical sources remained untouched after an interrupted
             # found transaction. Do not grant cold recovery by old rules.
             raise SharedOperationError("prepared-only recovery refused")
+        # A first retry has no committed predecessor. A seal alone cannot
+        # prove its archived abort and native Config/base/physical state.
+        # Keep the same WAL pending until the dedicated recovery qualifies it.
+        if "first_retry_archive" in record:
+            raise SharedOperationError("first retry prepared recovery requires original archive proof")
         if "manifest" in record or "previous_manifest" in record:
             # The root is a sibling, deliberately outside the original bundle
             # seal. Boot's legacy seal callback cannot authenticate its pin.
@@ -1136,6 +1691,8 @@ class SharedApplyOperation:
                 record["detail"]["id"] != identity or \
                 record.get("previous", {}).get("id") != previous_id:
             raise SharedOperationError("pristine activating recovery refused")
+        if "manifest" in record or "previous_manifest" in record:
+            return self._finish_bound_inert_cold_restore(record, attest)
         if not callable(attest) or attest() is not True:
             raise SharedOperationError("pristine activating attestation refused")
         if self.read() != record:
@@ -1157,11 +1714,24 @@ class SharedApplyOperation:
                 record["detail"]["id"] != identity or \
                 record.get("previous", {}).get("id") != previous_id:
             raise SharedOperationError(phase + " rollback completion refused")
+        if "manifest" in record or "previous_manifest" in record:
+            return self._finish_bound_inert_cold_restore(record, attest)
         if not callable(attest) or attest() is not True:
             raise SharedOperationError(phase + " rollback attestation refused")
         if self.read() != record:
             raise SharedOperationError(phase + " journal changed during recovery")
         return self.advance("restored", record["detail"])
+
+    def _finish_bound_inert_cold_restore(self, record: dict, attest) -> dict:
+        """Existing original cold recovery; never trust legacy seal alone."""
+        from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
+        if self.root != DEFAULT_ROOT or self.owner != 0:
+            raise SharedOperationError("bound cold restore requires native original store")
+        if not callable(attest) or attest() is not True or self.read() != record:
+            raise SharedOperationError("bound cold restore bundle witness refused")
+        # The original PHP Config owner retains FD4 through the child WAL
+        # fsync. Do not also write restored from this outer CLI process.
+        return native_finish_bound_cold_restore(record)
 
     def finish_activated_restore(self, identity: str, previous_id: str, attest) -> dict:
         return self._finish_cold_pre_save_restore(
@@ -1188,6 +1758,8 @@ class SharedApplyOperation:
         before = self.read()
         if before is None or before["phase"] != "config-saved":
             raise SharedOperationError("no config-saved Remove trial to restore")
+        if "manifest" in before or "previous_manifest" in before:
+            raise SharedOperationError("bound Remove requires original pinned recovery")
         proof = native_remove_prepared_trial(self.root, state)
         if (proof is None or proof["phase"] != "config-saved" or
                 proof["id"] != identity or proof["old"]["id"] != previous_id):
@@ -1230,6 +1802,7 @@ class SharedApplyOperation:
         """Inspect exactly one failed FIRST Voice handoff from Strategies."""
         record = self.read()
         if record is None or record["phase"] != "requires-review" or \
+                "manifest" in record or "previous_manifest" in record or \
                 "previous" in record or record["detail"]["page"] != "voice":
             raise SharedOperationError("not an initial reviewed Voice handoff")
         return record["detail"]
@@ -1243,7 +1816,8 @@ class SharedApplyOperation:
         Those independent facts must be proved by the original FD9 service.
         """
         record = self.read()
-        if record is None or record["phase"] != "requires-review":
+        if record is None or record["phase"] != "requires-review" or \
+                "manifest" in record or "previous_manifest" in record:
             raise SharedOperationError("no reviewed native generation")
         current, previous = record["detail"], record.get("previous")
         if (not isinstance(previous, dict) or
@@ -1404,6 +1978,357 @@ def native_remove_rollback_pair(root: Path = DEFAULT_ROOT,
     return {"state": "trial", "old": owner, "trial": trial["id"]}
 
 
+def restored_retired_found_owner(record: dict | None) -> bool:
+    """Read-only scope for the next stopped Found Apply, not a lifecycle permit.
+
+    The original old root remains authoritative after RESTORED. The aborted
+    candidate, if bound, must still be verified by the caller; never use it
+    as the current root. No admission of other restored runtime classes.
+    """
+    if type(record) is not dict or record.get("phase") != "restored":
+        return False
+    _validate_record(record)
+    prior = committed_owner(record)
+    pin = committed_manifest(record)
+    return (type(prior) is dict and type(pin) is dict and pin["schema"] == 2 and
+            record["detail"]["page"] == "strategies" and
+            prior["candidate"] == record["detail"]["base"] and
+            ("manifest" not in record or record["manifest"]["schema"] == 1) and
+            not any(key in record for key in ("found", "failure")))
+
+
+def native_bound_stopped_gui_gate(operation: str | None = None) -> int:
+    """Read-only FD9 admission for a disabled List/All Found successor.
+
+    Stage/execution admission is NOT a physical permit. The original locked
+    PHP/Python P1 writer and terminal owner reattest Config, immutable roots,
+    saved files, journal, processes and IPFW before each actual mutation.
+    """
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from neutral_schema3_quiescent_preimage import (
+        _zero_processes, _safe_empty_directory, _empty_kernel,
+        CHILD_PID, MONITOR_PID, DAEMON_PID, PRODUCER_ROOT)
+    from auto_detect_minute import inspect_inert_release
+    from voice_live_inspect import COMMON_ACTIVE, examine_shared
+    from shared_apply_seal import WORK, verify_seal
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            (operation is not None and
+             (type(operation) is not str or not OP_ID.fullmatch(operation)))):
+        raise SharedOperationError("bound GUI gate original native FD9 required")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    restored = restored_retired_found_owner(record)
+    if (type(record) is not dict or
+            (record["phase"] != "committed" and not restored) or
+            (committed_manifest(record) or {}).get("schema") not in (1, 2) or
+            "found" in record or "failure" in record):
+        raise SharedOperationError("bound GUI gate inert terminal owner required")
+    detail, pin = committed_owner(record), committed_manifest(record)
+    old_work = WORK / detail["id"]
+    retired = pin["schema"] == 2
+
+    def observe_retired():
+        # The same original FD9/P2a lifetime as the private retired save.
+        # No repair, no queue creation, no ACK or physical mutation.
+        import pwd
+        from auto_detect_owner import attest_learning_stopped_generation
+        from auto_detect_learning_retirement import retired_learning_stopped, RETIRE_DIR, READY
+        from auto_detect_epoch_receipts import EpochReceipts, _read
+        from auto_detect_queue import DurableInbox
+        from auto_detect_storage import ROOT, ENGINE_USER
+        from auto_detect_fd import _probe_original_inode
+        from neutral_schema3_quiescent_preimage import _verify_idle_producer
+        gid = pwd.getpwnam(ENGINE_USER).pw_gid
+        if gid <= 0:
+            raise SharedOperationError("bound GUI gate retired queue gid refused")
+        queue = DurableInbox(ROOT, owner_uid=0, writer_gid=gid)
+        receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+        with queue.exclusive(existing_only=True):
+            def attest():
+                require_lifecycle_lock()
+                if store.read() != record:
+                    raise SharedOperationError("bound GUI gate retired owner changed")
+                return (attest_learning_stopped_generation(restored_record=record)
+                        if restored else attest_learning_stopped_generation())
+            def inspect(path, device, inode, *, owner, writer_gid):
+                return _probe_original_inode(path, device, inode, owner=owner,
+                    writer_gid=writer_gid, attest_owner=lambda: attest().owner == owner)
+            proof = attest()
+            if (proof.operation_id != detail["id"] or proof.generation != detail["id"] or
+                    proof.owner_candidate_sha256 != detail["candidate"]):
+                raise SharedOperationError("bound GUI gate retired historical owner changed")
+            ready = receipts._generation(detail["id"], create=False) / RETIRE_DIR / READY
+            raw = _read(ready, 0)
+            if not retired_learning_stopped(receipts, queue, proof, old_work,
+                    attest=attest, inspect=inspect, repair=False):
+                raise SharedOperationError("bound GUI gate retirement incomplete")
+            idle = _verify_idle_producer(queue, receipts)
+            if (attest() != proof or _read(ready, 0) != raw or
+                    _verify_idle_producer(queue, receipts) != idle or store.read() != record):
+                raise SharedOperationError("bound GUI gate retired proof changed")
+            return proof, hashlib.sha256(raw).hexdigest(), idle
+
+    def observe_old():
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise SharedOperationError("bound GUI gate journal changed")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=pin, parent=WORK, owner_uid=0))
+        if retired:
+            if (root["service"]["enabled"] is not True or
+                    root["service"]["target_mode"] != "auto"):
+                raise SharedOperationError("bound GUI gate retired Auto root required")
+        elif (root["service"]["enabled"] is not False or
+                root["service"]["target_mode"] not in ("list", "all") or
+                inspect_inert_release(old_work / "release", owner_uid=0) != "inactive"):
+            raise SharedOperationError("bound GUI gate old root not inert")
+        current = examine_shared(record)
+        if (type(current) is not dict or current.get("state") != "stopped" or
+                current.get("source") != "native-common" or
+                current.get("config_digest") != detail["candidate"]):
+            raise SharedOperationError("bound GUI gate previous owner not stopped")
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        history = observe_retired() if retired else None
+        if not retired:
+            _safe_empty_directory(PRODUCER_ROOT, 0)
+        tree = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+        kernel = _empty_kernel(old_work / "release")
+        if store.read() != record:
+            raise SharedOperationError("bound GUI gate predecessor changed")
+        return tree, kernel, history
+
+    previous = observe_old()
+    if operation is not None:
+        if operation in (detail["id"], record["detail"]["id"]):
+            raise SharedOperationError("bound GUI gate cannot reuse generation")
+        work = WORK / operation
+        # The immutable candidate root is attached only by the existing
+        # original bound P1 writer AFTER it durably enters PREPARED.
+        # A detached sealed bundle does not yet contain manifest.json.
+        signed = verify_seal(work, owner=0)
+        raw = (work / "plan.json").read_bytes()
+        if hashlib.sha256(raw).hexdigest() != signed["sha256"]["plan.json"]:
+            raise SharedOperationError("bound GUI gate candidate plan changed")
+        plan = json.loads(raw)
+        candidate = plan.get("candidate") if type(plan) is dict else None
+        general = candidate.get("general") if type(candidate) is dict else None
+        hostlist = candidate.get("hostlist") if type(candidate) is dict else None
+        mode = hostlist.get("mode") if type(hostlist) is dict else None
+        if type(mode) is dict:
+            selected = []
+            for name, option in mode.items():
+                flag = option.get("selected") if type(option) is dict else None
+                if (name not in ("all", "list", "auto") or
+                        type(flag) not in (bool, int, str) or
+                        flag not in (0, 1, "0", "1")):
+                    raise SharedOperationError("bound GUI gate invalid target option")
+                if flag in (1, "1"):
+                    selected.append(name)
+            mode = selected[0] if len(selected) == 1 else None
+        if (type(plan) is not dict or plan.get("page") != "strategies" or
+                plan.get("result") != "prepared" or
+                plan.get("dependencies") != detail["candidate"] or
+                type(general) is not dict or general.get("enabled") != "0" or
+                mode not in ("all", "list") or
+                type(plan.get("changed_fields")) is not list or
+                type(plan.get("found_intent")) is not dict or
+                plan["found_intent"].get("commit_authorized") is not False or
+                plan["found_intent"].get("config_revision") != detail["candidate"] or
+                type(plan.get("found_batch")) is not dict):
+            raise SharedOperationError("bound GUI gate candidate not stopped Found")
+        from auto_detect_destination_commit import _qualified_shared_found_batch
+        _qualified_shared_found_batch(plan["found_batch"])
+        if verify_seal(work, owner=0) != signed:
+            raise SharedOperationError("bound GUI gate candidate changed")
+    if observe_old() != previous:
+        raise SharedOperationError("bound GUI gate previous owner changed")
+    return pin["schema"]
+
+
+def native_bound_auto_stop_gate(operation: str) -> None:
+    """Only the existing FD9 explicit Stop may retire a genuine schema2 owner.
+
+    This is read-only admission, not a second Stop, ACK writer, or command.
+    The original Stop immediately rechecks native Config, full active tree,
+    exact running or stopped PID/birth, owned IPFW and epoch before altering
+    any process. Do not admit a pending Found/Config or inert schema1 owner.
+    """
+    from auto_detect_owner import (
+        attest_learning_running_generation, attest_learning_stopped_generation)
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from shared_apply_seal import WORK
+    from voice_live_inspect import COMMON_ACTIVE, examine_shared
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation)):
+        raise SharedOperationError("original schema2 FD9 Stop required")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "committed" or
+            "found" in record or "failure" in record or
+            type(record.get("manifest")) is not dict or
+            record["manifest"].get("schema") != 2 or
+            record.get("detail", {}).get("id") != operation):
+        raise SharedOperationError("original schema2 committed Stop owner required")
+    detail, pin = record["detail"], record["manifest"]
+    old_work = WORK / operation
+
+    def observe():
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise SharedOperationError("original schema2 Stop journal changed")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=pin, parent=WORK, owner_uid=0))
+        if (root["service"]["enabled"] is not True or
+                root["service"]["target_mode"] != "auto"):
+            raise SharedOperationError("original schema2 Auto root required")
+        physical = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+        state = examine_shared(record)
+        if (type(state) is not dict or state.get("source") != "native-common" or
+                state.get("state") not in ("ready", "stopped") or
+                state.get("config_digest") != detail["candidate"]):
+            raise SharedOperationError("original schema2 Stop runtime not verified")
+        proof = (attest_learning_running_generation() if state["state"] == "ready"
+                 else attest_learning_stopped_generation())
+        if (proof.operation_id != operation or proof.generation != operation or
+                proof.owner_candidate_sha256 != detail["candidate"] or
+                store.read() != record):
+            raise SharedOperationError("original schema2 Stop owner changed")
+        return physical, state["state"], proof
+    first = observe()
+    if observe() != first:
+        raise SharedOperationError("original schema2 Stop owner raced")
+
+
+def native_bound_prepare_gate(operation: str) -> None:
+    """Only a fresh detached ordinary/Found candidate, never a lifecycle permit."""
+    from neutral_root_stage import verify_original_operation_pins
+    from shared_apply_render import regular
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation)):
+        raise SharedOperationError("bound prepare requires original native FD9")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    restored = restored_retired_found_owner(record)
+    if (type(record) is not dict or
+            (record.get("phase") != "committed" and not restored) or
+            (committed_manifest(record) or {}).get("schema") not in (1, 2) or
+            "found" in record or "failure" in record or
+            operation in (record["detail"]["id"], record.get("previous", {}).get("id"))):
+        raise SharedOperationError("bound prepare requires ordinary terminal owner")
+    owner = committed_owner(record)
+    retired = committed_manifest(record)["schema"] == 2
+    if retired and native_bound_stopped_gui_gate() != 2:
+        raise SharedOperationError("bound prepare retired predecessor refused")
+    work = WORK / operation
+
+    def observe():
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise SharedOperationError("bound prepare owner changed")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        regular(WORK, 0, directory=True)
+        regular(work, 0, directory=True)
+        if set(os.listdir(work)) != {"candidate.xml", "plan.json"}:
+            raise SharedOperationError("bound prepare requires fresh detached work")
+        plan_path = work / "plan.json"
+        xml_path = work / "candidate.xml"
+        def identity(path):
+            info = regular(path, 0)
+            return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+                    info.st_ctime_ns, info.st_mode, info.st_uid, info.st_nlink)
+
+        identities = identity(plan_path), identity(xml_path)
+        plan_raw, xml_raw = plan_path.read_bytes(), xml_path.read_bytes()
+        if (identity(plan_path), identity(xml_path)) != identities:
+            raise SharedOperationError("bound prepare detached source changed")
+        plan = json.loads(plan_raw)
+        candidate = plan.get("candidate") if type(plan) is dict else None
+        general = candidate.get("general") if type(candidate) is dict else None
+        hostlist = candidate.get("hostlist") if type(candidate) is dict else None
+        # Unchanged OPNsense OptionField values retain native getNodes()
+        # dictionaries. Match the selected-flag contract of VoiceModelValues
+        # without treating a display label or an ambiguous selection as mode.
+        mode = hostlist.get("mode") if type(hostlist) is dict else None
+        if type(mode) is dict:
+            selected = []
+            for name, option in mode.items():
+                flag = option.get("selected") if type(option) is dict else None
+                if (name not in ("all", "list", "auto") or
+                        type(flag) not in (bool, int, str) or flag not in (0, 1, "0", "1")):
+                    raise SharedOperationError("bound prepare invalid native mode option")
+                if flag in (1, "1"):
+                    selected.append(name)
+            mode = selected[0] if len(selected) == 1 else None
+        if (type(plan) is not dict or plan.get("result") != "prepared" or
+                plan.get("page") != "strategies" or
+                plan.get("dependencies") != owner["candidate"] or
+                type(general) is not dict or general.get("enabled") not in ("0", "1") or
+                mode not in ("all", "list")):
+            raise SharedOperationError("bound prepare detached plan scope refused")
+        found_plan = "found_intent" in plan or "found_batch" in plan
+        # Disabled ordinary candidates still require the later lifecycle
+        # executor. A disabled Found plan is only a detached P1 after-image.
+        # Native STOPPED owner/CAS/Config evidence is required before writes.
+        if retired and (general["enabled"] != "0" or not found_plan):
+            raise SharedOperationError("bound prepare retired successor must be disabled Found")
+        if general["enabled"] == "0" and not found_plan:
+            raise SharedOperationError("bound prepare detached plan scope refused")
+        if found_plan:
+            intent = plan.get("found_intent")
+            if (type(intent) is not dict or
+                    intent.get("config_revision") != plan["dependencies"] or
+                    intent.get("commit_authorized") is not False or
+                    type(plan.get("changed_fields")) is not list or
+                    type(plan.get("found_batch")) is not dict):
+                raise SharedOperationError("bound prepare detached Found intent refused")
+            # Reuse the original canonical P1 batch validator. Detached
+            # validation grants no physical CAS or Config permission;
+            # the existing builder and FD4/P2 transaction reattest live preimages.
+            from auto_detect_destination_commit import (
+                DestinationRefused, _qualified_shared_found_batch)
+            try:
+                _qualified_shared_found_batch(plan["found_batch"])
+            except (DestinationRefused, OSError, ValueError, TypeError) as exc:
+                raise SharedOperationError("bound prepare detached Found batch refused") from exc
+        if store.read() != record:
+            raise SharedOperationError("bound prepare owner changed")
+        return identities, plan_raw, xml_raw
+
+    first = observe()
+    if observe() != first:
+        raise SharedOperationError("bound prepare detached source changed")
+    if retired and (native_bound_stopped_gui_gate() != 2 or store.read() != record):
+        raise SharedOperationError("bound prepare retired predecessor changed")
+
+
+def restored_first_learning(record: dict | None) -> bool:
+    """Recognize only an aborted first bound Auto owner; never a live owner."""
+    return (type(record) is dict and record.get("phase") == "restored" and
+            record.get("manifest", {}).get("schema") == 2 and
+            not ({"previous", "previous_manifest", "found"} & record.keys()) and
+            "first_running_sha256" in record and "first_pretraffic_sha256" in record)
+
+
+def restored_first_retry(record: dict | None) -> bool:
+    """Historical abort provenance is a fence, never an active predecessor."""
+    return (type(record) is dict and record.get("phase") == "restored" and
+            "first_retry_archive" in record)
+
+
 def native_lifecycle_gate(action: str | None = None, *,
                           root: Path = DEFAULT_ROOT) -> dict:
     """Read-only FD9 policy from the ONE current shared Apply journal.
@@ -1420,19 +2345,50 @@ def native_lifecycle_gate(action: str | None = None, *,
         "common-recover-reviewed-legacy": "requires-review",
         "common-recover-reviewed-native": "requires-review",
         "strategy-lab-native": "committed",
+        "common-existing-unbound-auto": "committed",
     }
     if action is not None and action not in exceptions:
         raise SharedOperationError("invalid native lifecycle gate action")
     record = SharedApplyOperation(root).read()
+    if action == "common-existing-unbound-auto":
+        # Preserve the existing pre-S10 ordinary Auto path only for an
+        # actual committed unbound owner. This is NOT a bound-root fallback,
+        # first-start admission, recovery action or physical authorization.
+        if (record is not None and record["phase"] == "committed" and
+                not ({"manifest", "previous_manifest", "first_retry_archive",
+                      "first_running_sha256", "first_pretraffic_sha256",
+                      "found", "managed", "failure"} & record.keys())):
+            return {"state": "clear", "safe_to_mutate": True}
+        return {"state": "blocked", "reason": "existing-unbound-auto-owner-required",
+                "phase": None if record is None else record["phase"], "safe_to_mutate": False}
     if record is None:
         return {"state": "clear", "safe_to_mutate": True}
     phase = record["phase"]
+    if restored_first_learning(record) or restored_first_retry(record):
+        # Retain the aborted seed/producer and immutable work. A subsequent
+        # first Apply needs a separately qualified admission, not legacy Start.
+        return {"state": "blocked", "reason": "restored-first-learning-preflight-required",
+                "phase": phase, "safe_to_mutate": False}
     # Legacy Apply/Lab must not retire or replace an immutable owner before
     # the new original bound preactivation path is available. A restored
     # candidate's own pin is NOT the active predecessor's pin.
     if committed_manifest(record) is not None or (
             phase not in TERMINAL and
             ("manifest" in record or "previous_manifest" in record)):
+        # Only the existing pre-save cold recovery functions may reconcile
+        # an exact inert bound owner. All Apply/Start/Stop/Lab, Found, live
+        # Auto and saved/uncertain recovery remain fenced.
+        if (root == DEFAULT_ROOT and "found" not in record and
+                (action, phase) in (
+                    ("common-recover-activating", "activating"),
+                    ("common-recover-activated", "activated"))):
+            from neutral_schema3_quiescent_preimage import attest_inert_bound_cold_recovery
+            try:
+                attest_inert_bound_cold_recovery(record, restored=False)
+            except (OSError, ValueError, RuntimeError, TypeError, KeyError):
+                pass
+            else:
+                return {"state": "clear", "safe_to_mutate": True}
         return {"state": "blocked", "reason": "immutable-root-preflight-required",
                 "phase": phase, "safe_to_mutate": False}
     if action == "strategy-lab-native":
@@ -1456,12 +2412,27 @@ def native_lifecycle_gate(action: str | None = None, *,
 def main(argv: list[str]) -> int:
     inspection = len(argv) == 2 and argv[1] == "inspect"
     found_pending = len(argv) == 2 and argv[1] == "found-pending"
+    bound_prepare_request = (len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-prepare"] and
+                             bool(OP_ID.fullmatch(argv[3])))
+    bound_auto_stop_request = (
+        len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-auto-stop"] and
+        bool(OP_ID.fullmatch(argv[3])))
+    retry_context = argv[1:] == ["first-retry-context"]
+    retry_stage = argv[1:] == ["native-gate", "common-first-retry-stage"]
+    retry_work = (len(argv) == 4 and argv[1] == "native-gate" and
+                  argv[2] in ("common-first-retry-prepare", "common-first-retry-execute") and
+                  bool(OP_ID.fullmatch(argv[3])))
+    bound_gui_stage_request = argv[1:] == ["native-gate", "common-bound-stopped-stage"]
+    bound_gui_execute_request = (
+        len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-stopped-execute"] and
+        bool(OP_ID.fullmatch(argv[3])))
     native_gate_request = len(argv) in (2, 3) and argv[1] == "native-gate" and (
         len(argv) == 2 or argv[2] in (
             "common-apply", "common-recover-saved",
             "common-recover-activating", "common-recover-activated",
             "common-recover-reviewed-legacy",
             "common-recover-reviewed-native", "strategy-lab-native",
+            "common-existing-unbound-auto",
         )
     )
     owner_witness = len(argv) == 2 and argv[1] == "owner-witness"
@@ -1486,14 +2457,24 @@ def main(argv: list[str]) -> int:
                      bool(OP_ID.fullmatch(argv[2])))
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
-    finish = len(argv) == 3 and argv[1] == "finish-saved" and bool(OP_ID.fullmatch(argv[2]))
-    pristine = len(argv) == 4 and argv[1] == "recover-activating" and all(
-        OP_ID.fullmatch(value) for value in argv[2:]
+    archive_first = len(argv) == 3 and argv[1] == "archive-first-restored" and bool(OP_ID.fullmatch(argv[2]))
+    first_pristine = len(argv) == 3 and argv[1] in (
+        "recover-first-activating", "recover-first-activated", "recover-first-config-saved",
+        "recover-first-epoch-finalizing") and bool(OP_ID.fullmatch(argv[2]))
+    managed_recovery = len(argv) == 4 and argv[1] == "recover-managed" and all(
+        OP_ID.fullmatch(value) for value in argv[2:4]
     )
-    cold_restore = len(argv) == 4 and argv[1] in (
+    finish = len(argv) == 3 and argv[1] == "finish-saved" and bool(OP_ID.fullmatch(argv[2]))
+    pristine_bound_only = len(argv) == 5 and argv[4] == "--bound-only"
+    pristine = (len(argv) == 4 or pristine_bound_only) and argv[1] == "recover-activating" and all(
+        OP_ID.fullmatch(value) for value in argv[2:4]
+    )
+    cold_bound_only = pristine_bound_only and argv[1] in ("finish-activated", "finish-activating")
+    cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
-    ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or finish or pristine or cold_restore or native_gate_request):
+    ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or retry_context or retry_stage or retry_work or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_auto_stop_request or
+            bound_gui_stage_request or bound_gui_execute_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -1533,6 +2514,26 @@ def main(argv: list[str]) -> int:
             record = SharedApplyOperation().read()
             if record is not None and "found" in record:
                 print(record["detail"]["id"])
+        elif archive_first:
+            from auto_detect_aborted_first import native_archive_first_restored
+            native_archive_first_restored(argv[2])
+            print("first-restored-archived=" + argv[2])
+        elif bound_auto_stop_request:
+            native_bound_auto_stop_gate(argv[3])
+        elif bound_prepare_request:
+            native_bound_prepare_gate(argv[3])
+        elif retry_context:
+            record = SharedApplyOperation(owner=0).read()
+            print(record["detail"]["id"] if restored_first_learning(record) else "none")
+        elif retry_stage or retry_work:
+            from auto_detect_aborted_first import native_first_retry_gate
+            native_first_retry_gate(None if retry_stage else argv[3],
+                sealed=retry_work and argv[2] == "common-first-retry-execute")
+        elif bound_gui_stage_request:
+            native_bound_stopped_gui_gate()
+        elif bound_gui_execute_request:
+            schema = native_bound_stopped_gui_gate(argv[3])
+            print("bound-stopped-schema=" + str(schema))
         elif native_gate_request:
             action = argv[2] if len(argv) == 3 else None
             state = native_lifecycle_gate(action)
@@ -1627,27 +2628,90 @@ def main(argv: list[str]) -> int:
                     # Returning 'restored' here would send the ordinary
                     # service to LEGACY boot over the preceding common owner.
                     print("committed " + prior["id"] + " " + prior["page"])
+            elif (record["phase"] in ("activating", "activated", "config-saved") and
+                    "previous" not in record and "found" not in record and
+                    record.get("manifest", {}).get("schema") == 1):
+                detail = record["detail"]
+                print(record["phase"] + "-first " + detail["id"] + " " + detail["page"])
+            elif (record["phase"] in ("activated", "epoch-finalizing") and
+                    _first_running_pin_scope(record) and record["manifest"]["schema"] == 2 and
+                    "first_running_sha256" in record and "first_pretraffic_sha256" in record):
+                detail = record["detail"]
+                print(record["phase"] + "-first " + detail["id"] + " " + detail["page"])
+            elif record["phase"] == "prepared" and "first_retry_archive" in record:
+                detail = record["detail"]
+                print("prepared-first-retry " + detail["id"] + " " + detail["page"])
             elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"])
-            elif record["phase"] in ("activating", "activated") and "previous" in record:
+            elif record["phase"] in ("activating", "activated", MANAGED_WRITING,
+                                     MANAGED_CONFIG_SAVING) and "previous" in record:
                 detail, previous = record["detail"], record["previous"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"] +
                       " " + previous["id"] + " " + previous["page"])
             else:
                 # Never make an incomplete operation look like no owner.
                 raise SharedOperationError("unfinished common Apply blocks native boot")
+        elif first_pristine:
+            from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
+
+            store = SharedApplyOperation(owner=0)
+            record = store.read()
+            if (record is None or record["phase"] != argv[1].removeprefix("recover-first-") or
+                    record["detail"]["id"] != argv[2] or "previous" in record or
+                    "previous_manifest" in record or "found" in record or
+                    record.get("manifest", {}).get("schema") not in (1, 2)):
+                raise SharedOperationError("first activating recovery owner mismatch")
+            learning = record["manifest"]["schema"] == 2
+            if learning and (record["phase"] not in ("activated", "epoch-finalizing") or
+                    "first_running_sha256" not in record or "first_pretraffic_sha256" not in record):
+                raise SharedOperationError("first learning recovery owner mismatch")
+            if not learning and record["phase"] == "epoch-finalizing":
+                raise SharedOperationError("first inert recovery phase mismatch")
+            result = native_finish_bound_cold_restore(record)
+            admitted = (("restored", "committed") if record["phase"] == "activated" else
+                ("committed",)) if learning else {"activating": ("restored",),
+                "activated": ("restored", "committed"), "config-saved": ("committed",)}[record["phase"]]
+            if (result["phase"] not in admitted or result != {**record, "phase": result["phase"]} or
+                    store.read() != result):
+                raise SharedOperationError("first Config recovery readback mismatch")
+            print("first-" + record["phase"] + "-" + result["phase"] + "=" + argv[2])
+        elif managed_recovery:
+            from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
+
+            record = SharedApplyOperation(owner=0).read()
+            if (record is None or record["phase"] not in (MANAGED_WRITING, MANAGED_CONFIG_SAVING) or
+                    (record["detail"]["id"], record["previous"]["id"]) != tuple(argv[2:4])):
+                raise SharedOperationError("managed cold recovery owner mismatch")
+            result = native_finish_bound_cold_restore(record)
+            print("managed-" + result["phase"] + "=" + argv[2])
         elif recovery:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)
-            store.recover_prepared(
-                argv[2],
-                lambda: bool(verify_seal(WORK / argv[2], owner=0)),
-            )
+            record = store.read()
+            if (record is not None and record["phase"] == "prepared" and
+                    "first_retry_archive" in record):
+                from auto_detect_aborted_first import native_recover_first_retry_prepared
+                native_recover_first_retry_prepared(argv[2])
+            else:
+                store.recover_prepared(
+                    argv[2],
+                    lambda: bool(verify_seal(WORK / argv[2], owner=0)),
+                )
             print("prepared-restored")
         elif pristine:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)
+            if pristine_bound_only:
+                # Exactly one private dispatch: only a positively identified
+                # unbound original owner may use the legacy shell deletion.
+                record = store.read()
+                if (type(record) is not dict or record["phase"] != "activating" or
+                        "found" in record or record["detail"]["id"] != argv[2] or
+                        record.get("previous", {}).get("id") != argv[3]):
+                    raise SharedOperationError("pristine recovery owner mismatch")
+                if "manifest" not in record and "previous_manifest" not in record:
+                    return 3
             store.recover_activating_pristine(
                 argv[2], argv[3],
                 lambda: bool(verify_seal(WORK / argv[2], owner=0) and
@@ -1657,6 +2721,14 @@ def main(argv: list[str]) -> int:
         elif cold_restore:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)
+            if cold_bound_only:
+                record = store.read()
+                if (type(record) is not dict or record["phase"] != argv[1][7:] or
+                        "found" in record or record["detail"]["id"] != argv[2] or
+                        record.get("previous", {}).get("id") != argv[3]):
+                    raise SharedOperationError("installed recovery owner mismatch")
+                if "manifest" not in record and "previous_manifest" not in record:
+                    return 3
             if argv[1] == "finish-remove-saved":
                 if (os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1" or
                         os.environ.get("EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE") != "1"):

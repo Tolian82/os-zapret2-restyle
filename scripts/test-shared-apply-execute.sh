@@ -57,6 +57,11 @@ shared_apply_require_tools() { return 0; }
 # transition ledger. An expected post-PREPARED refusal must still return 70.
 common_error() { :; }
 shared_apply_bundle_service() { printf "bundle:%s\n" "$1" >> "$LOG"; [ "$1" != verify ] || [ "$BAD_BUNDLE" = 0 ]; }
+shared_apply_original_source_gate() {
+    [ "$#" -eq 2 ] && [ "$1" = "$ID" ] && [ "$2" = --sealed ] || return 69
+    echo source-recheck >> "$LOG"
+    [ "$SOURCE_RECHECK_OK" = 1 ]
+}
 shared_apply_native_config() {
     case "$1" in
         preflight) [ "$CONFIG_PREFLIGHT_RC" = 0 ] || return "$CONFIG_PREFLIGHT_RC"; echo '{"snapshot":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","enabled":"1","base":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","candidate":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","fields":["voice.telegram.enabled"]}' ;;
@@ -145,7 +150,7 @@ apply_runtime_verify_retired_legacy_committed() {
     echo runtime-final-verify >> "$LOG"
     [ "$FINAL_RC" -eq 0 ]
 }
-reset() { : > "$LOG"; FOUND_DRIFT=0; export FOUND_DRIFT; FINISH_FAIL=0; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; CONFIG_PREFLIGHT_RC=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; STAGE_ROOT_AFTER_PROBE=0; STAGE_ROOT_AFTER_PREPARED=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; _apply_engine=0; }
+reset() { : > "$LOG"; unset _shared_prepare_receipt; SOURCE_RECHECK_OK=1; FOUND_DRIFT=0; export FOUND_DRIFT; FINISH_FAIL=0; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; CONFIG_PREFLIGHT_RC=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; STAGE_ROOT_AFTER_PROBE=0; STAGE_ROOT_AFTER_PREPARED=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; _apply_engine=0; }
 expect_status() {
     expected="$1"; shift
     set +e
@@ -159,6 +164,13 @@ expect_status() {
 reset
 expect_status 0 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:committed '
 grep -Fqx "applied-id=$ID" "$ROOT/response.txt" || fail "successful receipt"
+# The combined original producer must be rechecked before any mutation.
+reset; _shared_prepare_receipt="prepared-id=$ID"; SOURCE_RECHECK_OK=0
+expect_status 0 'bundle:verify source-recheck '
+grep -Fqx 'preflight-rejected=seal' "$ROOT/response.txt" ||
+    fail "same-source drift crossed the original mutation boundary"
+reset; _shared_prepare_receipt="prepared-id=$ID"
+expect_status 0 'bundle:verify source-recheck runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:committed '
 # S10b2a: real original executor refuses ANY unbound/pending root before
 # native candidate/save/journal/IPFW. A symlink including a dangling target
 # is not an absent root. The S10a owner will later use a separate bound path.

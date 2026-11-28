@@ -219,6 +219,59 @@ class VoiceReleaseStageTests(unittest.TestCase):
                     source, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 989, ordinary
                 )
 
+    def test_common_hostlist_delta_preserves_full_release_seal(self):
+        import hashlib
+        import os
+        from shared_apply_seal import SharedBundleError, _release_hash, create_seal, verify_seal
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            uid = os.geteuid()
+            relative = "managed/hostlist-youtube.txt"
+            images = (b"youtube.com\n", b"youtube.com\ns10-g03-successor.example.org\n")
+            works, seals = [], []
+            for generation, content in zip(("a" * 32, "b" * 32), images):
+                work = tmp / generation
+                work.mkdir()
+                root = fixture(False)
+                hosts = root.find("./OPNsense/Zapret/hostlist")
+                ET.SubElement(hosts, "youtubedomains").text = content.decode().rstrip("\n")
+                source, managed = write_fixture(work, root)
+                candidate = work / "candidate.xml"
+                source.rename(candidate)
+                release = work / "release"
+                release.mkdir()
+                managed.rename(release / "managed")
+                (work / "ipset-manifest.json").rename(release / "ipset-manifest.json")
+                (release / relative).write_bytes(content)
+                ordinary = release / "traffic-user.conf"
+                ordinary.write_text("--filter-tcp=443\n--filter-l7=tls\n"
+                    "--hostlist=" + str(ACTIVE_ROOT / relative) + "\n")
+                artifacts = stage.compile_bundle(candidate, release / "managed",
+                    ACTIVE_ROOT, "vtnet1", 19000, 19010, 989, ordinary)
+                self.assertEqual(hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                    json.loads(artifacts["metadata.json"])["saved_xml_sha256"])
+                stage.stage_common_runtime(release, ACTIVE_ROOT, artifacts)
+                (work / "plan.json").write_text("{}\n")
+                seals.append(create_seal(work, owner=uid))
+                works.append(work)
+            old, new = works
+            self.assertNotEqual(seals[0]["sha256"]["candidate.xml"], seals[1]["sha256"]["candidate.xml"])
+            replacement = (relative, *(hashlib.sha256(data).hexdigest() for data in images))
+            self.assertEqual(_release_hash(old / "release", uid, replacement=replacement),
+                seals[1]["sha256"]["release"])
+            self.assertEqual((old / "release/voice-plan.json").read_bytes(),
+                (new / "release/voice-plan.json").read_bytes())
+            for name in ("candidate.xml", "release/voice-plan.json", "release/traffic.conf"):
+                path = new / name
+                original = path.read_bytes()
+                path.write_bytes(original + b" ")
+                with self.assertRaises(SharedBundleError):
+                    verify_seal(new, owner=uid)
+                path.write_bytes(original)
+            self.assertEqual(verify_seal(new, owner=uid), seals[1])
+            self.assertEqual(verify_seal(old, owner=uid), seals[0])
+
     def test_source_xml_changes_mid_stage_are_detected(self):
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)

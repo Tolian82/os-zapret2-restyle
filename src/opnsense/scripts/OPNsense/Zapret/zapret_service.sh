@@ -541,6 +541,12 @@ shared_apply_workspace()
 }
 shared_apply_native_config()
 {
+    # Bound retired Found rollback needs the original P2a BEFORE the
+    # native Config lock. The Python parent invokes this SAME PHP owner.
+    if [ "$#" -eq 3 ] && [ "$1" = found-recover ] && [ "$3" = strategies ]; then
+        "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" recover-found-original "$2"
+        return $?
+    fi
     /usr/local/bin/php "${SCRIPT_DIR}/shared_apply_config.php" "$@"
 }
 shared_apply_json_field()
@@ -618,6 +624,22 @@ shared_apply_recover_saved_service()
 # An interrupted ACTIVATING can be closed only when every observed
 # resource is still the previous *sealed common* release, i.e. no mutation
 # took effect. Never infer safety from empty IPFW/processes alone.
+# Bound stage deletion and terminal fsync share original P2a/Config/FD9.
+# Only rc 3 from the positively identified unbound journal selects legacy.
+shared_apply_bound_pristine_service()
+{
+    [ "$#" -eq 2 ] || return 70
+    [ -x "${PYTHON_RUNTIME}" ] || return 70
+    if "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \
+        recover-activating "$1" "$2" --bound-only; then
+        return 0
+    else
+        _bound_pristine_rc=$?
+    fi
+    [ "$_bound_pristine_rc" -eq 3 ] && return 3
+    return 70
+}
+
 shared_apply_recover_activating_pristine_service()
 {
     [ "$#" -eq 1 ] || return 64
@@ -670,6 +692,21 @@ shared_apply_recover_activating_pristine_service()
         [ ! -L "$_shared_pristine_new_dir/release" ] || return 69
         atomic_verify_tree "$_shared_pristine_new_dir/release" "$_shared_pristine_stage" || return 69
         shared_apply_bundle_service verify "$_shared_pristine_id" || return 69
+        # Recheck immutable operation pins and saved old Config at the
+        # existing physical stage-removal boundary, not just entry.
+        preflight_shared_apply_journal common-recover-activating || return 69
+    fi
+    # A bound owner also uses this route if a prior crash already removed
+    # its stage. Never retry another actuator after an uncertain WAL write.
+    if shared_apply_bound_pristine_service "$_shared_pristine_id" "$_shared_pristine_old"; then
+        [ ! -e "$_shared_pristine_stage" ] && [ ! -L "$_shared_pristine_stage" ] || return 70
+        printf "recovered-pristine-id=%s\n" "$_shared_pristine_id"
+        return 0
+    else
+        _shared_pristine_bound_rc=$?
+    fi
+    [ "$_shared_pristine_bound_rc" -eq 3 ] || return 70
+    if [ -e "$_shared_pristine_stage" ] || [ -L "$_shared_pristine_stage" ]; then
         atomic_remove_tree "$_shared_pristine_stage" || return 70
         [ ! -e "$_shared_pristine_stage" ] && [ ! -L "$_shared_pristine_stage" ] || return 70
     fi
@@ -744,6 +781,20 @@ shared_apply_recover_activated_cold_service()
     fi
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 69
+    # Bound installed-new recovery uses the original PHP Config owner
+    # for physical IPFW/tree rollback and terminal WAL closure. Only an
+    # exact unbound journal (rc3) can still enter the legacy actuator.
+    if [ "$_shared_cold_phase" != config-saved ]; then
+        if [ ! -x "${PYTHON_RUNTIME}" ]; then return 70; fi
+        if "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \
+            "finish-$_shared_cold_phase" "$_shared_cold_id" "$_shared_cold_old" --bound-only; then
+            printf "recovered-%s-id=%s\n" "$_shared_cold_phase" "$_shared_cold_id"
+            return 0
+        else
+            _shared_cold_bound_rc=$?
+        fi
+        [ "$_shared_cold_bound_rc" -eq 3 ] || return 70
+    fi
     # On power loss before native Config save, ACTIVATED may contain a whole
     # new release and its exact uncommitted IPFW rules/stage tables. No
     # process may be live. Recover only a verified common predecessor: first
@@ -766,6 +817,9 @@ shared_apply_recover_activated_cold_service()
            supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then return 69; fi
         _apply_engine=0
         apply_runtime_attest_engine_inventory || return 69
+        if [ "$_shared_cold_phase" != config-saved ]; then
+            preflight_shared_apply_journal "common-recover-$_shared_cold_phase" || return 69
+        fi
         if firewall_shared_runtime verify-staged \
             "$_shared_cold_old_root/release" "$_shared_cold_new_root/release"; then
             # The existing IPFW transaction proves exact active new rules,
@@ -795,6 +849,9 @@ shared_apply_recover_activated_cold_service()
         atomic_verify_tree "$_shared_cold_new_root/release" "$ACTIVE_DIR" || return 69
         shared_apply_bundle_service verify "$_shared_cold_old" || return 69
         # Existing common atomic helper preserves failed candidate in BACKUP_ROOT.
+        if [ "$_shared_cold_phase" != config-saved ]; then
+            preflight_shared_apply_journal "common-recover-$_shared_cold_phase" || return 69
+        fi
         atomic_install_tree "$_shared_cold_old_root/release" "$ACTIVE_DIR" "$BACKUP_ROOT" >/dev/null || return 70
     fi
     atomic_verify_tree "$_shared_cold_old_root/release" "$ACTIVE_DIR" || return 70
@@ -878,6 +935,19 @@ shared_apply_recover_activating_parked_service()
     shared_apply_bundle_service verify "$_parked_old" || return 69
     atomic_verify_tree "$_parked_new_root/release" "$_parked_stage" || return 69
     atomic_verify_tree "$_parked_old_root/release" "$_parked_previous" || return 69
+    preflight_shared_apply_journal common-recover-activating || return 69
+    # Bound parked recovery must keep Config locked through the copy
+    # and the original journal fsync. Only a proven unbound owner may
+    # enter the legacy atomic installer below.
+    if [ ! -x "${PYTHON_RUNTIME}" ]; then return 70; fi
+    if "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \
+        finish-activating "$_parked_id" "$_parked_old" --bound-only; then
+        printf "recovered-parked-id=%s\n" "$_parked_id"
+        return 0
+    else
+        _parked_bound_rc=$?
+    fi
+    [ "$_parked_bound_rc" -eq 3 ] || return 70
     atomic_install_tree "$_parked_old_root/release" "$ACTIVE_DIR" "$BACKUP_ROOT" >/dev/null || return 70
     atomic_verify_tree "$_parked_old_root/release" "$ACTIVE_DIR" || return 70
     atomic_verify_tree "$_parked_new_root/release" "$_parked_stage" || return 70
@@ -919,6 +989,37 @@ shared_apply_inspect_service()
 {
     [ -x "${PYTHON_RUNTIME}" ] || return 69
     "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" inspect
+}
+
+# The managed-file recovery has no whole-tree or IPFW rollback fallback.
+shared_apply_recover_managed_cold_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    IFS=' ' read -r _managed_phase _managed_id _managed_page _managed_old _managed_old_page <<EOF
+$1
+EOF
+    case "$_managed_phase:$_managed_page" in
+        managed-writing:strategies|managed-config-saving:strategies) ;;
+        *) return 69 ;;
+    esac
+    [ "$1" = "$_managed_phase $_managed_id $_managed_page $_managed_old $_managed_old_page" ] || return 69
+    case "$_managed_id:$_managed_old" in *[!a-f0-9:]*) return 69 ;; esac
+    [ "${#_managed_id}" -eq 32 ] && [ "${#_managed_old}" -eq 32 ] || return 69
+    case "$_managed_old_page" in strategies|voice) ;; *) return 69 ;; esac
+
+    _managed_receipt=$("${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \
+        recover-managed "$_managed_id" "$_managed_old") || return 70
+    case "$_managed_receipt" in
+        "managed-restored=$_managed_id") _managed_expected="committed $_managed_old $_managed_old_page" ;;
+        "managed-committed=$_managed_id")
+            [ "$_managed_phase" = managed-config-saving ] || return 70
+            _managed_expected="committed $_managed_id $_managed_page"
+            ;;
+        *) return 70 ;;
+    esac
+    _managed_owner=$(shared_apply_inspect_service) || return 70
+    [ "$_managed_owner" = "$_managed_expected" ] || return 70
+    printf '%s\n' "$_managed_owner"
 }
 
 # Stop exactly the committed common owner, using the original FD9 lifecycle.
@@ -1015,7 +1116,14 @@ shared_apply_stop_service()
     case "$_shared_stop_id" in ""|*[!a-f0-9]*) return 69 ;; esac
     [ "${#_shared_stop_id}" -eq 32 ] || return 69
     case "$_shared_stop_page" in voice|strategies) ;; *) return 69 ;; esac
-    preflight_shared_apply_journal common-apply || return 69
+    # The public original explicit Stop cannot be fenced by common-apply
+    # merely because its genuine active Auto owner has immutable schema2.
+    # This read-only positive gate never replaces original Stop; all native
+    # process/IPFW/epoch checks below remain mandatory and in the same FD9.
+    preflight_shared_apply_journal common-apply >/dev/null 2>&1 ||
+        { [ "$#" -eq 1 ] &&
+          preflight_shared_apply_journal common-bound-auto-stop "$_shared_stop_id"; } ||
+        return 69
     shared_apply_require_tools || return 69
     shared_apply_bundle_service verify "$_shared_stop_id" || return 69
     _shared_stop_saved=$(shared_apply_native_config saved \
@@ -1383,13 +1491,105 @@ shared_apply_unbound_root_preflight_service()
     done
     return 0
 }
+# S10 narrow positive path. The inherited original FD9 shell has just
+# built this exact GUI request and retained its original producer scalars.
+# Only a disabled List/All Found candidate with an attested STOPPED schema1
+# predecessor may reach the existing PHP FD4/P2 P1-and-Config writer.
+shared_apply_execute_bound_stopped_found_service()
+{
+    [ "$#" -eq 1 ] &&
+    [ "${_shared_run_page:-}" = strategies ] &&
+    [ "${_shared_prepare_receipt:-}" = "prepared-id=$1" ] &&
+    [ -n "${_shared_run_encoded:-}" ] || return 69
+    _bound_id="$1"
+    _bound_work=$(shared_apply_workspace "$_bound_id") || return 69
+    _bound_route=$(preflight_shared_apply_journal common-bound-stopped-execute "$_bound_id") || return 69
+    case "$_bound_route" in
+        bound-stopped-schema=1|bound-stopped-schema=2) ;;
+        *) return 69 ;;
+    esac
+    shared_apply_bundle_service verify "$_bound_id" || return 69
+    _bound_native=$(shared_apply_native_config preflight "$_bound_id" strategies) || return 69
+    _bound_mode=$(printf '%s\n' "$_bound_native" |
+        shared_apply_json_field '.enabled | select(.=="0")') || return 69
+    _bound_candidate=$(printf '%s\n' "$_bound_native" |
+        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+    [ "$_bound_mode" = 0 ] || return 69
+    if [ -f "$_bound_work/release/auto-detect-source-map.json" ]; then
+        shared_apply_original_source_gate "$_bound_id" "$_bound_candidate" --sealed ||
+            return 69
+    else
+        shared_apply_original_source_gate "$_bound_id" --sealed || return 69
+    fi
+    # Pass the SAME producer's original NUL frame; not a second config writer
+    # or a synthetic traffic.input. The native PHP worker requires pipe stdin
+    # and hands the byte-identical frame to its inherited FD5 child.
+    _bound_save=$(
+        {
+            printf 'S10C2B1_ORIGINAL_INPUT_V1\0'
+            printf '%s\0' "${TRAFFIC_ARGS:-}" "${YOUTUBE_DOMAINS:-}" "${USER_DOMAINS:-}" \
+                "${TELEGRAM_IPS:-}" "${DISCORD_IPS:-}" "${X_IPS:-}" \
+                "${SIP_IPS:-}" "${CUSTOM_IPS:-}" "${EXCLUDE_DOMAINS:-}" \
+                "${EXCLUDE_IPSET:-}" "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
+        } | {
+            case "$_bound_route" in
+                bound-stopped-schema=1)
+                    shared_apply_native_config found-bound-save "$_bound_id" strategies 0 ;;
+                bound-stopped-schema=2)
+                    "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+                        bound-retired-save-original "$_bound_id" ;;
+                *) return 69 ;;
+            esac
+        }
+    ) || return 70
+    printf '%s\n' "$_bound_save" | /usr/local/bin/jq -e \
+        --arg expected "$_bound_candidate" \
+        'select(.result=="found-config-saved-nonterminal" and
+            .snapshot==$expected and .applied==false and
+            .commit_authorized==false and .requires_review==false)' \
+        >/dev/null || return 70
+    # Original Config locked readback, both root pins, exact three P1
+    # post-images, old/new active tree, no PID/IPFW, then original WAL commit.
+    case "$_bound_route" in
+        bound-stopped-schema=1)
+            _bound_terminal=$(shared_apply_native_config found-bound-finish "$_bound_id" strategies) ||
+                return 70 ;;
+        bound-stopped-schema=2)
+            _bound_terminal=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+                bound-retired-finish-original "$_bound_id") || return 70 ;;
+        *) return 70 ;;
+    esac
+    printf '%s\n' "$_bound_terminal" | /usr/local/bin/jq -e \
+        'select(.result=="committed" and .mode=="0")' >/dev/null || return 70
+    _bound_saved=$(shared_apply_native_config saved "$_bound_id" strategies) || return 70
+    printf '%s\n' "$_bound_saved" | /usr/local/bin/jq -e \
+        --arg expected "$_bound_candidate" \
+        'select(.result=="committed" and .enabled=="0" and .snapshot==$expected)' \
+        >/dev/null || return 70
+    printf 'applied-id=%s\n' "$_bound_id"
+}
+
 shared_apply_execute_service()
 {
-    [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && [ "$3" = after-retirement ]; } || return 64
+    [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && { [ "$3" = after-retirement ] || [ "$3" = first-retry ]; }; } || return 64
     case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
     [ "${#1}" -eq 32 ] || return 64
     case "$2" in voice|strategies) ;; *) return 64 ;; esac
-    preflight_shared_apply_journal common-apply || return 69
+    # This is NOT a generalized bound-root activation. The gate admits
+    # only one genuine disabled STOPPED Found successor from the same GUI
+    # producer; all other traffic still meets the original unbound fence.
+    if [ "${3:-}" = first-retry ]; then
+        [ "$2" = strategies ] &&
+        [ "${_shared_prepare_receipt:-}" = "prepared-id=$1" ] &&
+        [ "${_shared_run_page:-}" = strategies ] &&
+        preflight_shared_apply_journal common-first-retry-execute "$1" || return 69
+    else
+        if preflight_shared_apply_journal common-bound-stopped-execute "$1" >/dev/null 2>&1; then
+            shared_apply_execute_bound_stopped_found_service "$1"
+            return $?
+        fi
+        preflight_shared_apply_journal common-apply || return 69
+    fi
     shared_apply_require_tools || return 69
     _shared_apply_id="$1"
     _shared_apply_page="$2"
@@ -1441,6 +1641,25 @@ shared_apply_execute_service()
     _shared_apply_fields=$(printf "%s\n" "$_shared_apply_preview" |
         shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
     _shared_apply_enabled="$_shared_apply_mode"
+    # The combined original Apply now retains the exact generator scalars.
+    # Recheck their parity against the sealed release and freshly read
+    # Config candidate BEFORE runtime probing, retirement or journal writes.
+    # A standalone legacy build/execute has no same-shell receipt and still
+    # follows its existing unbound fence; this check grants no activation.
+    if [ "${_shared_prepare_receipt:-}" = "prepared-id=$_shared_apply_id" ]; then
+        if [ -f "$_shared_apply_root/release/auto-detect-source-map.json" ]; then
+            shared_apply_original_source_gate "$_shared_apply_id" \
+                "$_shared_apply_candidate" --sealed || {
+                printf '%s\n' preflight-rejected=seal
+                return 0
+            }
+        else
+            shared_apply_original_source_gate "$_shared_apply_id" --sealed || {
+                printf '%s\n' preflight-rejected=seal
+                return 0
+            }
+        fi
+    fi
     if [ "$_shared_found_scope" = found ] &&
        ! launcher_is_running "$CHILD_PIDFILE" &&
        [ "${3:-}" != after-retirement ]; then
@@ -1451,6 +1670,7 @@ shared_apply_execute_service()
             *) _shared_apply_mode=0 ;;
         esac
     fi
+    _shared_first_auto=0
     # Re-read the original source-to-native profile mapping after seal.
     # Each schema has a DIFFERENT independently authenticated verifier.
     # Schema3 can never be accepted by the old schema2 observer verifier.
@@ -1477,6 +1697,38 @@ shared_apply_execute_service()
                     printf '%s\n' preflight-rejected=observer-generation
                     return 0
                 fi
+                # Only the genuine combined first Strategies Apply can
+                # select the bound Auto executor. Never admit a standalone
+                # execute, a Found/retired/old owner, or legacy schema3 Start.
+                if { [ "$#" -eq 2 ] || [ "${3:-}" = first-retry ]; } &&
+                   [ "$_shared_found_scope" = ordinary ] &&
+                   [ "$_shared_apply_page" = strategies ] &&
+                   [ "${_shared_run_page:-}" = strategies ] &&
+                   [ -n "${_shared_run_encoded:-}" ] &&
+                   [ "${_shared_prepare_receipt:-}" = "prepared-id=$_shared_apply_id" ] &&
+                   [ "${HOSTLIST_MODE:-}" = auto ] &&
+                   [ "$_shared_apply_base" != "$_shared_apply_candidate" ] &&
+                   { ! shared_apply_has_record_service || [ "${3:-}" = first-retry ]; }; then
+                    case ",$_shared_apply_fields," in
+                        *,general.enabled,*) _shared_first_auto=1 ;;
+                    esac
+                fi
+                if [ "$_shared_first_auto" != 1 ]; then
+                    # Do not disable a previously supported ordinary Apply or
+                    # saved-unchanged Boot of an existing unbound owner merely
+                    # because first bound Auto now has a separate executor.
+                    # This is still the ORIGINAL unbound path, not a fallback
+                    # from failed binding. Both the journal and candidate
+                    # root fences have already passed; the old full physical
+                    # owner/epoch probes below remain mandatory.
+                    if [ "$_shared_found_scope" != ordinary ] ||
+                       [ "$_shared_apply_page" != strategies ] ||
+                       [ "$#" -ne 2 ] ||
+                       ! preflight_shared_apply_journal common-existing-unbound-auto; then
+                        printf '%s\n' preflight-rejected=bound-auto-required
+                        return 0
+                    fi
+                fi
                 ;;
             *) printf '%s\n' preflight-rejected=observer-generation; return 0 ;;
         esac
@@ -1488,6 +1740,10 @@ shared_apply_execute_service()
         printf '%s\n' preflight-rejected=observer-generation
         return 0
     fi
+    if [ "${3:-}" = first-retry ] && [ "$_shared_first_auto" != 1 ]; then
+        printf '%s\n' preflight-rejected=bound-auto-required
+        return 0
+    fi
     # Reject an active old/legacy owner, partial monitor, foreign IPFW, or
     # invalid candidate BEFORE any durable phase is recorded. This must be
     # purely read-only. The mutating activation repeats the exact probe.
@@ -1495,6 +1751,13 @@ shared_apply_execute_service()
     # when no kernel or Config change has even been attempted.
     if ! apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode"; then
         printf '%s\n' preflight-rejected=runtime-preflight
+        return 0
+    fi
+    # First bound Auto may not retire or signal a predecessor. The original
+    # Python quiescent proof repeats the stricter complete cold inventory.
+    if [ "$_shared_first_auto" = 1 ] &&
+       { [ "$_apply_engine" != 0 ] || { [ "${3:-}" != first-retry ] && shared_apply_has_record_service; }; }; then
+        printf '%s\n' preflight-rejected=bound-auto-required
         return 0
     fi
     # A previously RUNNING original observer must finish its old PID-bound
@@ -1562,7 +1825,11 @@ shared_apply_execute_service()
         printf '%s\n' preflight-rejected=manifest-unbound
         return 0
     fi
-    if [ "$_shared_found_scope" = found ]; then
+    if [ "${3:-}" = first-retry ]; then
+        # The original source-gate child writes PREPARED only after the
+        # archived P2a -> Config FD4 proof. Never call generic record here.
+        [ "$_shared_first_auto" = 1 ] || return 69
+    elif [ "$_shared_found_scope" = found ]; then
         if ! shared_apply_native_config found-save "$_shared_apply_id" \
             strategies "$_shared_apply_mode" >/dev/null; then
             _found_pending=$(shared_apply_pending_found_service) || return 70
@@ -1575,6 +1842,23 @@ shared_apply_execute_service()
     else
         shared_apply_record_service prepared "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
+    fi
+    if [ "$_shared_first_auto" = 1 ]; then
+        # The existing original scalar frame is the ONLY source. From the
+        # durable PREPARED onward a failure is uncertain: do not retry,
+        # report a preflight rejection, or fall into the legacy actuator.
+        if ! shared_apply_original_source_gate "$_shared_apply_id" \
+            "$_shared_apply_candidate" --first-auto-apply; then
+            # Existing execution-status channel, not a second WAL. Only
+            # the fixed original source-gate refusal token is retained.
+            orchestrator_fail_stage "$STAGE_FILE" 8 8 source-gate "$_shared_original_gate_reason" || :
+            common_error "shared Apply: first bound Auto requires review: $_shared_original_gate_reason"
+            return 70
+        fi
+        _shared_first_owner=$(shared_apply_inspect_service) || return 70
+        [ "$_shared_first_owner" = "committed $_shared_apply_id $_shared_apply_page" ] || return 70
+        printf 'applied-id=%s\n' "$_shared_apply_id"
+        return 0
     fi
     shared_apply_activate_and_commit_service
 }
@@ -1844,6 +2128,15 @@ shared_apply_recover_found_service()
             printf 'apply-restored=%s\n' "$_shared_apply_id"
             return 0
             ;;
+        committed)
+            # The original bound locked finisher has already checked the
+            # exact Config/P1/root/physical evidence. Never invoke legacy.
+            printf '%s\n' "$_found_recovery" | /usr/local/bin/jq -e \
+                'select(.mode=="0")' >/dev/null || return 70
+            [ "$(shared_apply_inspect_service)" = "committed $1 strategies" ] || return 70
+            printf 'applied-id=%s\n' "$1"
+            return 0
+            ;;
         found-config-saved) ;;
         *) return 70 ;;
     esac
@@ -1866,11 +2159,14 @@ shared_apply_run_after_found_retirement()
 {
     [ "$#" -eq 1 ] || return 64
     _found_old_owner="$1"
-    _found_rebuilt=$(
-        _shared_found_rebuild_running=1
-        shared_apply_build_service "$_shared_run_encoded"
-    ) || _found_rebuilt=
-    _found_new_receipt=$(printf '%s\n' "$_found_rebuilt" | tail -n 1)
+    # Rebuild in this same FD9 shell as the subsequent execute. The
+    # after-retirement build still has its original scoped mode override.
+    if _shared_found_rebuild_running=1 shared_apply_build_service \
+        "$_shared_run_encoded" >/dev/null; then
+        _found_new_receipt="${_shared_build_receipt:-}"
+    else
+        _found_new_receipt=
+    fi
     case "$_found_new_receipt" in
         prepared-id=*)
             _found_new_result=$(shared_apply_execute_service "${_found_new_receipt#prepared-id=}" \
@@ -2073,14 +2369,40 @@ shared_apply_run_service()
         if [ -n "$_found_pending" ]; then
             # Resolve the interrupted operation first. This click must not
             # dispatch a second candidate after an uncertain earlier Apply.
+            # One original FD9 recovery dispatcher chooses the branch under
+            # native Config lock and inherited P2a when required. Failure
+            # is not permission to invoke another physical route.
             shared_apply_recover_found_service "$_found_pending" >/dev/null || return 70
             printf 'apply-recovered=%s\n' "$_found_pending"
             return 0
         fi
     fi
-    preflight_shared_apply_journal common-apply || return 69
-    _shared_run_report=$(shared_apply_build_service "$_shared_run_encoded") || return $?
-    _shared_run_receipt=$(printf "%s\n" "$_shared_run_report" | tail -n 1)
+    _shared_run_retry=
+    if [ "$_shared_run_page" = strategies ] && shared_apply_has_record_service &&
+       [ "$(shared_apply_inspect_service)" = restored ]; then
+        _shared_retry_old=$("$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" first-retry-context) || return 69
+        case "$_shared_retry_old" in
+            none) ;;
+            ""|*[!a-f0-9]*) return 69 ;;
+            *)
+                [ "${#_shared_retry_old}" -eq 32 ] || return 69
+                _shared_retry_receipt=$("$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" archive-first-restored "$_shared_retry_old") || return 70
+                [ "$_shared_retry_receipt" = "first-restored-archived=$_shared_retry_old" ] || return 70
+                _shared_run_retry=first-retry
+                ;;
+        esac
+    fi
+    if [ "$_shared_run_retry" = first-retry ]; then
+        preflight_shared_apply_journal common-first-retry-stage || return 69
+    else
+        preflight_shared_apply_journal common-apply >/dev/null 2>&1 ||
+            preflight_shared_apply_journal common-bound-stopped-stage || return 69
+    fi
+    # Do not put the original producer in a command-substitution subshell:
+    # its loaded scalars are the same-source input for the final FD9 gate.
+    # The build helper returns its bounded receipt separately from stdout.
+    shared_apply_build_service "$_shared_run_encoded" ${_shared_run_retry:+first-retry} >/dev/null || return $?
+    _shared_run_receipt="${_shared_build_receipt:-}"
     case "$_shared_run_receipt" in
         preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal|preflight-rejected=found-intent|preflight-rejected=found-intent-config-changed|preflight-rejected=found-intent-upload-*|preflight-rejected=found-batch|preflight-rejected=found-youtube-line-*|preflight-rejected=found-user-line-*|preflight-rejected=found-auto-line-*)
             # Nothing reached shared_apply_execute_service: no Config save,
@@ -2096,25 +2418,35 @@ shared_apply_run_service()
     [ "${#_shared_run_id}" -eq 32 ] || return 69
     # The root PHP worker verifies plan.page against the requested page
     # BEFORE checking the candidate snapshot, and again before Config::save.
-    shared_apply_execute_service "$_shared_run_id" "$_shared_run_page"
+    shared_apply_execute_service "$_shared_run_id" "$_shared_run_page" ${_shared_run_retry:+first-retry}
 }
 # One FD9 operation now stages a submitted native request AND builds its
 # entire detached shared runtime. No kernel, Config save, or engine changes.
 shared_apply_build_service()
 {
-    [ "$#" -eq 1 ] || return 64
+    _shared_build_receipt=
+    _shared_prepare_receipt=
+    [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$2" = first-retry ]; } || return 64
     case "$1" in
         ""|*[!A-Za-z0-9_-]*) return 64 ;;
     esac
     [ "${#1}" -le 65536 ] || return 64
-    preflight_shared_apply_journal common-apply || return 69
+    if [ "${2:-}" = first-retry ]; then
+        preflight_shared_apply_journal common-first-retry-stage || return 69
+        _shared_stage_action=stage-first-retry
+    else
+        preflight_shared_apply_journal common-apply >/dev/null 2>&1 ||
+            preflight_shared_apply_journal common-bound-stopped-stage || return 69
+        _shared_stage_action=stage
+    fi
     [ -x /usr/local/bin/php ] || return 69
     _shared_stage_result=$(/usr/local/bin/php \
-        "${SCRIPT_DIR}/shared_apply_request.php" stage "$1") || return 69
+        "${SCRIPT_DIR}/shared_apply_request.php" "$_shared_stage_action" "$1") || return 69
     case "$_shared_stage_result" in
         prepared-id=*) _shared_stage_id="${_shared_stage_result#prepared-id=}" ;;
         preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=found-intent|preflight-rejected=found-intent-config-changed|preflight-rejected=found-intent-upload-*|preflight-rejected=found-batch|preflight-rejected=found-youtube-line-*|preflight-rejected=found-user-line-*|preflight-rejected=found-auto-line-*)
-            printf '%s\n' "$_shared_stage_result"
+            _shared_build_receipt="$_shared_stage_result"
+            printf '%s\n' "$_shared_build_receipt"
             return 0
             ;;
         *) return 69 ;;
@@ -2123,15 +2455,15 @@ shared_apply_build_service()
         *[!a-f0-9]*|"") return 69 ;;
     esac
     [ "${#_shared_stage_id}" -eq 32 ] || return 69
-    _shared_build_result=$(shared_apply_prepare_service "$_shared_stage_id") || return $?
-    _shared_build_last=$(printf '%s\n' "$_shared_build_result" | tail -n 1)
-    case "$_shared_build_last" in
+    shared_apply_prepare_service "$_shared_stage_id" ${2:+first-retry} >/dev/null || return $?
+    case "${_shared_prepare_receipt:-}" in
         preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal)
-            printf '%s\n' "$_shared_build_last"
-            return 0
+            _shared_build_receipt="$_shared_prepare_receipt"
             ;;
+        "prepared-id=$_shared_stage_id") _shared_build_receipt="$_shared_prepare_receipt" ;;
+        *) return 69 ;;
     esac
-    printf "prepared-id=%s\n" "$_shared_stage_id"
+    printf '%s\n' "$_shared_build_receipt"
 }
 # Finalize only the public runtime root before sealing this private FD9 bundle.
 # The parent shared-work directory, candidate.xml and plan remain root-only.
@@ -2185,17 +2517,26 @@ shared_apply_original_source_gate()
 # shared-work directory; no arbitrary file paths can reach this command.
 shared_apply_prepare_service()
 {
-    [ "$#" -eq 1 ] || return 64
+    _shared_prepare_receipt=
+    [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$2" = first-retry ]; } || return 64
     case "$1" in
         *[!a-f0-9]*|"") return 64 ;;
     esac
     [ "${#1}" -eq 32 ] || return 64
-    preflight_shared_apply_journal common-apply || return 69
+    # A bound terminal owner may only authorize a fresh detached build.
+    # The old Apply/Start/Stop/Lab fences and physical route stay closed.
+    if [ "${2:-}" = first-retry ]; then
+        preflight_shared_apply_journal common-first-retry-prepare "$1" || return 69
+    else
+        preflight_shared_apply_journal common-apply ||
+            preflight_shared_apply_journal common-bound-prepare "$1" || return 69
+    fi
     [ -x "${PYTHON_RUNTIME}" ] || return 69
     _shared_work="/var/db/zapret2/shared-work/$1"
     [ -d "$_shared_work" ] && [ ! -L "$_shared_work" ] || return 69
     "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_render.py" render "$1" || {
-        printf '%s\n' preflight-rejected=render
+        _shared_prepare_receipt=preflight-rejected=render
+        printf '%s\n' "$_shared_prepare_receipt"
         return 0
     }
     _shared_template="$_shared_work/templates/usr/local/etc/zapret2/zapret.conf"
@@ -2210,20 +2551,26 @@ shared_apply_prepare_service()
         elif has("found_intent") or has("found_batch") then "invalid"
         else "ordinary" end
     ' "$_shared_work/plan.json") || {
-        printf '%s\n' preflight-rejected=runtime-build
+        _shared_prepare_receipt=preflight-rejected=runtime-build
+        printf '%s\n' "$_shared_prepare_receipt"
         return 0
     }
     _shared_found_build_id=
     case "$_shared_found_build_scope" in
         planned) _shared_found_build_id="$1" ;;
         ordinary) ;;
-        *) printf '%s\n' preflight-rejected=runtime-build; return 0 ;;
+        *)
+            _shared_prepare_receipt=preflight-rejected=runtime-build
+            printf '%s\n' "$_shared_prepare_receipt"
+            return 0
+            ;;
     esac
     orchestrator_build_release \
         "$_shared_template" "$ZAPRET_DIR" "$ACTIVE_DIR" \
         "$_shared_work" "$_shared_work/release" "$STAGE_FILE" \
         shared-candidate "$_shared_work/candidate.xml" "$_shared_found_build_id" || {
-        printf '%s\n' preflight-rejected=runtime-build
+        _shared_prepare_receipt=preflight-rejected=runtime-build
+        printf '%s\n' "$_shared_prepare_receipt"
         return 0
     }
     # The original FD9 and native PHP candidate must agree BEFORE seal.
@@ -2237,12 +2584,14 @@ shared_apply_prepare_service()
         _shared_auto_page=$(/usr/local/bin/jq -er \
             '.page | select(.=="voice" or .=="strategies")' \
             "$_shared_work/plan.json") || {
-            printf '%s\n' preflight-rejected=runtime-build
+            _shared_prepare_receipt=preflight-rejected=runtime-build
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
         _shared_auto_preflight=$(shared_apply_native_config preflight \
             "$1" "$_shared_auto_page") || {
-            printf '%s\n' preflight-rejected=runtime-build
+            _shared_prepare_receipt=preflight-rejected=runtime-build
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
         _shared_auto_mode=$(printf "%s\n" "$_shared_auto_preflight" |
@@ -2254,7 +2603,8 @@ shared_apply_prepare_service()
         # that exact identity BEFORE any schema2/schema3 promotion or seal.
         shared_apply_original_source_gate "$1" "$_shared_auto_digest" || {
             orchestrator_fail_stage "$STAGE_FILE" 8 8 source-gate "${_shared_original_gate_reason:-UNCLASSIFIED_PARITY_REFUSAL}" || return 69
-            printf '%s\n' preflight-rejected=runtime-build
+            _shared_prepare_receipt=preflight-rejected=runtime-build
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
         if [ "$_shared_found_build_scope" = planned ] &&
@@ -2271,14 +2621,16 @@ shared_apply_prepare_service()
             _shared_target_mode=$(/usr/local/bin/jq -er \
                 '.mode | select(.=="auto" or .=="list" or .=="all")' \
                 "$_shared_work/release/auto-detect-source-map.json") || {
-                printf '%s\n' preflight-rejected=runtime-build
+                _shared_prepare_receipt=preflight-rejected=runtime-build
+                printf '%s\n' "$_shared_prepare_receipt"
                 return 0
             }
             if [ "$_shared_target_mode" = auto ]; then
                 _shared_learning_preflight=$("$PYTHON_RUNTIME" \
                     "$BACKEND_DIR/auto_detect_origin_map.py" preflight-learning \
                     "$_shared_work" "$_shared_auto_digest") || {
-                    printf '%s\n' preflight-rejected=runtime-build
+                    _shared_prepare_receipt=preflight-rejected=runtime-build
+                    printf '%s\n' "$_shared_prepare_receipt"
                     return 0
                 }
                 # No eligible per-profile HOSTLIST means no learning epoch.
@@ -2289,14 +2641,16 @@ shared_apply_prepare_service()
                         .evidence == "TZ6V4_ORIGINAL_FD9_LEARNING_PREFLIGHT_NONACTIVATING") |
                      .learning_native_numbers | select(type == "array" and length > 0 and length <= 255)' \
                     >/dev/null; then
-                    printf '%s\n' preflight-rejected=runtime-build
+                    _shared_prepare_receipt=preflight-rejected=runtime-build
+                    printf '%s\n' "$_shared_prepare_receipt"
                     return 0
                 fi
                 if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
                     promote-learning "$_shared_work" "$_shared_auto_digest" >/dev/null ||
                    ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
                     verify-learning-active "$_shared_work" "$_shared_auto_digest" >/dev/null; then
-                    printf '%s\n' preflight-rejected=runtime-build
+                    _shared_prepare_receipt=preflight-rejected=runtime-build
+                    printf '%s\n' "$_shared_prepare_receipt"
                     return 0
                 fi
             else
@@ -2306,7 +2660,8 @@ shared_apply_prepare_service()
                     preview "$_shared_work" "$_shared_auto_digest" >/dev/null ||
                    ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
                     promote "$_shared_work" "$_shared_auto_digest" >/dev/null; then
-                    printf '%s\n' preflight-rejected=runtime-build
+                    _shared_prepare_receipt=preflight-rejected=runtime-build
+                    printf '%s\n' "$_shared_prepare_receipt"
                     return 0
                 fi
             fi
@@ -2316,7 +2671,8 @@ shared_apply_prepare_service()
         # no synthetic candidate digest. Same single preseal read-only gate.
         shared_apply_original_source_gate "$1" || {
             orchestrator_fail_stage "$STAGE_FILE" 8 8 source-gate "${_shared_original_gate_reason:-UNCLASSIFIED_PARITY_REFUSAL}" || return 69
-            printf '%s\n' preflight-rejected=runtime-build
+            _shared_prepare_receipt=preflight-rejected=runtime-build
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
     fi
@@ -2324,11 +2680,13 @@ shared_apply_prepare_service()
     # The native shared candidate needs the same normalization BEFORE SEAL.
     shared_apply_finalize_release_modes "$_shared_work/release" || {
         orchestrator_fail_stage "$STAGE_FILE" 8 8 release-modes VALIDATION_FAILED || return 69
-        printf '%s\n' preflight-rejected=runtime-build
+        _shared_prepare_receipt=preflight-rejected=runtime-build
+        printf '%s\n' "$_shared_prepare_receipt"
         return 0
     }
     shared_apply_bundle_service seal "$1" || {
-        printf '%s\n' preflight-rejected=seal
+        _shared_prepare_receipt=preflight-rejected=seal
+        printf '%s\n' "$_shared_prepare_receipt"
         return 0
     }
     # S10c2b3a: verify the SAME source + final ORIGINAL native refs AFTER
@@ -2336,15 +2694,20 @@ shared_apply_prepare_service()
     # candidate to the existing FD9 Apply. No journal, Config or IPFW write.
     if [ -f "$_shared_work/release/auto-detect-source-map.json" ]; then
         shared_apply_original_source_gate "$1" "$_shared_auto_digest" --sealed || {
-            printf '%s\n' preflight-rejected=seal
+            _shared_prepare_receipt=preflight-rejected=seal
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
     else
         shared_apply_original_source_gate "$1" --sealed || {
-            printf '%s\n' preflight-rejected=seal
+            _shared_prepare_receipt=preflight-rejected=seal
+            printf '%s\n' "$_shared_prepare_receipt"
             return 0
         }
     fi
+    # In-memory receipt of this very producer, never a physical permit.
+    # Standalone prepare retains its old stdout contract.
+    _shared_prepare_receipt="prepared-id=$1"
 }
 # Original common owner is defined by the one shared Apply journal. Before
 # Remove Stop, independently attest saved Config, sealed release, exact active
@@ -3403,6 +3766,45 @@ pkg_update_finish_service()
     return 0
 }
 
+shared_apply_first_running_base_stop_service()
+{
+    # Private joined child of the original FD9 + native Config FD4 owner.
+    [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || return 64
+    if [ "$#" -eq 3 ]; then
+        [ "$3" = --inherited-queue ] || return 64
+    fi
+    case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#1}" -eq 32 ] || return 64
+    case "$2" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#2}" -eq 64 ] || return 64
+    [ -x "$PYTHON_RUNTIME" ] || return 69
+    _first_stop_guard=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+        guard-first-running-base-shell "$@") || return 70
+    case "$_first_stop_guard" in first-running-base-shell=qualified:*:*) ;; *) return 70 ;; esac
+    _first_stop_pids=${_first_stop_guard#first-running-base-shell=qualified:}
+    case "$_first_stop_pids" in *:*:*) return 70 ;; esac
+    _first_stop_child=${_first_stop_pids%%:*}
+    _first_stop_monitor=${_first_stop_pids#*:}
+    for _first_stop_pid in "$_first_stop_child" "$_first_stop_monitor"; do
+        case "$_first_stop_pid" in ""|*[!0-9]*) return 70 ;; esac
+        [ "$_first_stop_pid" -gt 1 ] 2>/dev/null || return 70
+    done
+    [ "$_first_stop_child" != "$_first_stop_monitor" ] || return 70
+    [ "$(common_pidfile_read "$CHILD_PIDFILE")" = "$_first_stop_child" ] || return 70
+    [ "$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE")" = "$_first_stop_monitor" ] || return 70
+    # Close the original guard-to-signal window: reattest birth/argv/kernel.
+    _first_stop_immediate=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+        guard-first-running-base-shell "$@") || return 70
+    [ "$_first_stop_immediate" = "$_first_stop_guard" ] || return 70
+    # Only the original service Stop helpers send signals, never this Python guard.
+    supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" || return 70
+    launcher_stop "$CHILD_PIDFILE" 5 || return 70
+    _first_stop_after=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+        guard-first-running-base-stopped "$@") || return 70
+    [ "$_first_stop_after" = first-running-base-stopped=qualified ] || return 70
+    printf '%s\n' first-running-base-physical=stopped
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -3475,6 +3877,55 @@ service_dispatch()
         shared-apply-record)
             shift
             shared_apply_record_service "$@"
+            ;;
+        shared-apply-first-running-base-physical)
+            # Never acquire a second FD9 or allow unbound public Stop.
+            [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || return 64
+            shift
+            shared_apply_first_running_base_stop_service "$@"
+            ;;
+        shared-apply-first-enabled-physical)
+            # This private action is not part of the normal service lock
+            # router; it REQUIRES original inherited FD9 and Config FD4.
+            printf '%s\n' S10_FIRST_TRACE=D12 >&2
+            [ "$#" -eq 4 ] || [ "$#" -eq 5 ] || return 64
+            if [ "$#" -eq 5 ]; then
+                [ "$5" = --inherited-queue ] || return 64
+            fi
+            case "$2" in ""|*[!a-f0-9]*) return 64 ;; esac
+            [ "${#2}" -eq 32 ] || return 64
+            case "$3" in ""|*[!a-f0-9]*) return 64 ;; esac
+            [ "${#3}" -eq 64 ] || return 64
+            [ -x "$PYTHON_RUNTIME" ] || return 69
+            shift
+            _first_enabled_guard=$("$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+                guard-first-enabled-shell "$@") || return 70
+            [ "$_first_enabled_guard" = first-enabled-shell=qualified ] || return 70
+            printf '%s\n' S10_FIRST_TRACE=D13 >&2
+            # FD4 must not enter the long-lived engine/supervisor. The
+            # original PHP parent still holds its Config flock, and both
+            # original daemon launches already close the original FD9.
+            # After shift: operation, candidate digest, WAN, optional queue.
+            # Both physical variants use the same actuator. No other Start.
+            if [ "$#" -eq 4 ]; then
+                set -- "/var/db/zapret2/shared-work/$1/release" 1 "$1" "$2" "$4"
+            else
+                set -- "/var/db/zapret2/shared-work/$1/release" 1 "$1"
+            fi
+            apply_runtime_activate "$@" >/dev/null 4<&- || {
+                    case "$APPLY_ACTIVATION_STEP" in
+                        D14|D15|D16|D17|D18|D19|D20)
+                            printf '%s\n' "S10_FIRST_TRACE=$APPLY_ACTIVATION_STEP" >&2 ;;
+                    esac
+                    return 70
+                }
+            printf '%s\n' S10_FIRST_TRACE=D20 >&2
+            [ "$APPLY_PHASE" = activated ] &&
+            [ "$APPLY_NEW_RUNNING" = 1 ] && [ "$APPLY_OLD_RUNNING" = 0 ] &&
+            [ "$APPLY_IPFW_INSTALLED" = 1 ] &&
+            [ -z "$APPLY_BACKUP" ] && [ "$APPLY_OLD" = - ] &&
+            [ "$APPLY_NEW" = "$ACTIVE_DIR" ] || return 70
+            printf '%s\n' first-enabled-physical=activated
             ;;
         extra-resources-preview-saved)
             extra_resources_preview_saved_service
@@ -3729,6 +4180,31 @@ service_with_lifecycle_lock()
         return "$_service_complete_rc"
     }
 
+    service_first_recover_pending()
+    {
+        [ "$#" -eq 1 ] || return 70
+        IFS=' ' read -r _first_phase _first_id _first_page <<EOF_FIRST
+$1
+EOF_FIRST
+        case "$_first_phase" in activating-first|activated-first|config-saved-first|epoch-finalizing-first) ;; *) return 70 ;; esac
+        [ "$1" = "$_first_phase $_first_id $_first_page" ] || return 70
+        _first_stage=${_first_phase%-first}
+        case "$_first_id" in ""|*[!a-f0-9]*) return 70 ;; esac
+        [ "${#_first_id}" -eq 32 ] || return 70
+        case "$_first_page" in strategies|voice) ;; *) return 70 ;; esac
+        _first_receipt=$("$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" \
+            "recover-first-$_first_stage" "$_first_id") || return 70
+        case "$_first_stage:$_first_receipt" in
+            "activating:first-activating-restored=$_first_id"|"activated:first-activated-restored=$_first_id")
+                [ "$(shared_apply_inspect_service)" = restored ] || return 70 ;;
+            "activated:first-activated-committed=$_first_id"|"config-saved:first-config-saved-committed=$_first_id"|"epoch-finalizing:first-epoch-finalizing-committed=$_first_id")
+                [ "$(shared_apply_inspect_service)" = "committed $_first_id $_first_page" ] || return 70 ;;
+            *) return 70 ;;
+        esac
+        # Recovery never reports that a new Start has run.
+        return 69
+    }
+
     # This function is also sourced alone by native fail-closed shell tests.
     : "${PKG_UPDATE_RECORD:=/var/db/zapret2/pkg-update/operation.json}"
     _service_lock_timeout="$1"
@@ -3827,7 +4303,40 @@ service_with_lifecycle_lock()
         # WAN-first before any native Start or Restart mutation. A strict
         # action-bound private refusal comes only from original WAN source.
         case "${1:-}" in
-            start) service_wan_first_private start require || return $? ;;
+            start)
+                # A pending FIRST_BASE may have saved Enabled=OFF and no WAN.
+                # Admit only original recovery, never a new Start without WAN.
+                if shared_apply_has_record_service &&
+                   "${PYTHON_RUNTIME}" --check >/dev/null 2>&1 &&
+                   _first_pending=$(shared_apply_inspect_service); then
+                    case "$_first_pending" in
+                        prepared-first-retry\ *)
+                            _wan_response=
+                            if wan_first_service if-start && [ "$_wan_response" = wan-not-required ]; then
+                                extra_resources_block_pending_start_service || return 69
+                                _first_found_pending=$(shared_apply_pending_found_service) || return 70
+                                [ -z "$_first_found_pending" ] || return 70
+                                [ "$(shared_apply_inspect_service)" = "$_first_pending" ] || return 70
+                                shared_apply_recover_prepared_service "prepared ${_first_pending#prepared-first-retry }" || return 70
+                                [ "$(shared_apply_inspect_service)" = restored ] || return 70
+                                return 69
+                            fi
+                            ;;
+                        activated-first\ *)
+                            _wan_response=
+                            if wan_first_service if-start && [ "$_wan_response" = wan-not-required ]; then
+                                extra_resources_block_pending_start_service || return 69
+                                _first_found_pending=$(shared_apply_pending_found_service) || return 70
+                                [ -z "$_first_found_pending" ] || return 70
+                                [ "$(shared_apply_inspect_service)" = "$_first_pending" ] || return 70
+                                service_first_recover_pending "$_first_pending"
+                                return $?
+                            fi
+                            ;;
+                    esac
+                fi
+                service_wan_first_private start require || return $?
+                ;;
             restart) service_wan_first_private restart if-start || return $? ;;
             reconfigure) wan_first_service if-start || return $? ;;
             telegram-voice-enable) wan_first_service require || return $? ;;
@@ -3892,6 +4401,16 @@ service_with_lifecycle_lock()
                             service_api_complete "$?"
                             return $?
                             ;;
+                        managed-writing\ *|managed-config-saving\ *)
+                            _shared_owner=$(shared_apply_recover_managed_cold_service "$_shared_owner") || return $?
+                            shared_apply_boot_service "$_shared_owner"
+                            service_api_complete "$?"
+                            return $?
+                            ;;
+                        activating-first\ *|activated-first\ *|config-saved-first\ *|epoch-finalizing-first\ *)
+                            service_first_recover_pending "$_shared_owner"
+                            return $?
+                            ;;
                         activated\ *)
                             shared_apply_recover_activated_cold_service "$_shared_owner" || return 69
                             _shared_owner=$(shared_apply_inspect_service) || return 69
@@ -3910,9 +4429,19 @@ service_with_lifecycle_lock()
                             # before the phase record reached ACTIVATED.
                             # Each path independently proves Config, owner,
                             # installed tree, process census and scoped IPFW.
-                            if ! shared_apply_recover_activating_pristine_service "$_shared_owner"; then
-                                if ! shared_apply_recover_activated_cold_service "$_shared_owner"; then
-                                    shared_apply_recover_activating_parked_service "$_shared_owner" || return 69
+                            if shared_apply_recover_activating_pristine_service "$_shared_owner"; then
+                                :
+                            else
+                                _shared_recovery_rc=$?
+                                # A failed/uncertain physical mutation must
+                                # never select another recovery actuator.
+                                [ "$_shared_recovery_rc" -eq 69 ] || return "$_shared_recovery_rc"
+                                if shared_apply_recover_activated_cold_service "$_shared_owner"; then
+                                    :
+                                else
+                                    _shared_recovery_rc=$?
+                                    [ "$_shared_recovery_rc" -eq 69 ] || return "$_shared_recovery_rc"
+                                    shared_apply_recover_activating_parked_service "$_shared_owner" || return $?
                                 fi
                             fi
                             _shared_owner=$(shared_apply_inspect_service) || return 69
@@ -3925,6 +4454,12 @@ service_with_lifecycle_lock()
                                 restored) ;;
                                 *) return 69 ;;
                             esac
+                            ;;
+                        prepared-first-retry\ *)
+                            shared_apply_recover_prepared_service "prepared ${_shared_owner#prepared-first-retry }" || return 70
+                            [ "$(shared_apply_inspect_service)" = restored ] || return 70
+                            # Restoring the canceled first owner is not Start.
+                            return 69
                             ;;
                         prepared\ *)
                             shared_apply_recover_prepared_service "$_shared_owner" || return 69

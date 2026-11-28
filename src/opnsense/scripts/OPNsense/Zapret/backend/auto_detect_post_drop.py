@@ -92,7 +92,8 @@ def _identity(path: Path, *, uid: tuple[int, ...], gid: int,
 
 
 def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
-             engine_gid: int, learning_names: tuple[str, ...] = ()) -> OriginalProducer:
+             engine_gid: int, learning_names: tuple[str, ...] = (),
+             queue_fd: int | None = None) -> OriginalProducer:
     """Testable scoped precursor. Does not change either producer file."""
     if (not isinstance(root, Path) or not root.is_absolute() or
             type(root_uid) is not int or root_uid < 0 or
@@ -109,7 +110,9 @@ def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
     try:
         _check_layout(root, root_uid, root_gid, engine_gid, learning_names)
         queue = DurableInbox(root, owner_uid=root_uid, writer_gid=engine_gid)
-        with queue.exclusive():
+        # An in-flight bound Apply holds P2a BEFORE Config. Borrow that
+        # exact OFD, rather than opening/locking worker.lock a second time.
+        with (queue.exclusive() if queue_fd is None else queue.inherited_exclusive(queue_fd)):
             _check_layout(root, root_uid, root_gid, engine_gid, learning_names)
             if queue.segments():
                 raise PostDropRefused("unprocessed_original_pending_prelaunch")
@@ -133,6 +136,107 @@ def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
                                     learning_names)
     except (QueueSafetyError, DebugWindowRefused, OSError) as exc:
         raise PostDropRefused("original_pretraffic_queue_or_inode_unavailable") from exc
+
+
+PROVENANCE_FIELDS = ("release_seal_sha256", "original_args_sha256",
+                     "final_args_sha256", "native_map_sha256",
+                     "source_map_sha256", "witness_sha256")
+
+
+def match_zero_cut(record, sources, producer, seed_raw, provenance, *, historical=False):
+    """Return exact pretraffic bytes for ACTIVATED or explicitly historical RESTORED.
+
+    `producer` MUST be obtained via the existing auto_detect_post_drop._capture
+    while borrowing the original P2a descriptor. The caller must independently
+    verify original locks, record, root/seal and physical runtime before/after.
+    This comparator never reads a mutable file or invents a running owner.
+    """
+    def refuse():
+        raise ValueError('first_learning_zero_cut_not_exact')
+
+    if (type(historical) is not bool or type(record) is not dict or
+            record.get('phase') != ('restored' if historical else 'activated') or
+            record.get('manifest', {}).get('schema') != 2 or
+            any(k in record for k in ('previous', 'previous_manifest', 'found')) or
+            any(type(record.get(k)) is not str or
+                not re.fullmatch(r'[0-9a-f]{64}', record[k])
+                for k in ('first_running_sha256', 'first_pretraffic_sha256')) or
+            type(seed_raw) is not bytes or
+            hashlib.sha256(seed_raw).hexdigest() != record['first_pretraffic_sha256']):
+        refuse()
+    detail = record['detail']
+    generation = detail['id']
+    candidate = detail['candidate']
+    if (not re.fullmatch(r'[0-9a-f]{32}', generation) or
+            not re.fullmatch(r'[0-9a-f]{64}', candidate) or
+            detail['base'] == candidate or
+            type(sources) is not tuple or not 1 <= len(sources) <= 255):
+        refuse()
+    import json
+    seed = json.loads(seed_raw)
+    if (type(provenance) is not dict or set(provenance) != set(PROVENANCE_FIELDS) or
+            any(type(v) is not str or not re.fullmatch(r'[0-9a-f]{64}', v)
+                for v in provenance.values())):
+        refuse()
+    if (type(seed) is not dict or set(seed) != (set(PROVENANCE_FIELDS) |
+            {'schema', 'kind', 'generation', 'owner_candidate_sha256',
+             'files', 'learning', 'ack_authorized'}) or
+            (json.dumps(seed, sort_keys=True, separators=(',', ':')) + '\n').encode() != seed_raw or
+            any(seed[k] != v for k, v in provenance.items()) or
+            type(seed.get('schema')) is not int or
+            seed['schema'] != 3 or seed.get('kind') != 'original-fd9-learning-pretraffic-zero' or
+            seed.get('generation') != generation or
+            seed.get('owner_candidate_sha256') != candidate or
+            seed.get('ack_authorized') is not False):
+        refuse()
+    names = tuple(Path(path).name for _, _, path in sources)
+    if (any(type(number) is not int or not 1 <= number <= 255 or
+            path != str(producer.root / f'learning-{generation}-{number}.txt')
+            for number, _, path in sources) or
+            names != producer.learning_names or
+            len(set(names)) != len(names) or
+            len(producer.identities) != 2 + len(names) or
+            len(set(row[:2] for row in producer.identities)) != len(producer.identities) or
+            any(type(row) is not tuple or len(row) != 3 or
+                any(type(value) is not int for value in row) or
+                row[0] < 0 or row[1] <= 0 or row[2] != 1
+                for row in producer.identities)):
+        refuse()
+    expected_files = [dict(name=name, device=dev, inode=ino, nlink=links)
+                      for name, (dev, ino, links) in
+                      zip(('inbox.txt', 'debug.log', *names), producer.identities)]
+    expected_learning = [dict(native_number=number, hostlist=hostlist, path=path,
+                              device=dev, inode=ino, offset=0,
+                              prefix_sha256=hashlib.sha256(b'').hexdigest())
+                         for (number, hostlist, path), (dev, ino, _) in
+                         zip(sources, producer.identities[2:])]
+    # Strict JSON equality also rules out booleans substituting for integers.
+    def canonical(value):
+        return json.dumps(value, sort_keys=True, separators=(',', ':'))
+    if (canonical(seed.get('files')) != canonical(expected_files) or
+            canonical(seed.get('learning')) != canonical(expected_learning)):
+        refuse()
+    return seed_raw
+
+
+def _zero_cut_provenance(workspace, sources, producer):
+    """Recompute original pretraffic provenance from exact sealed input and inodes."""
+    from auto_detect_epoch_receipts import _canonical
+    from auto_detect_origin_map import ORIGIN_FILE
+    from auto_detect_owner import _secure_bytes, MAX_ARGS, MAX_MAP
+    from shared_apply_seal import verify_seal
+
+    release = workspace / "release"
+    def digest(raw):
+        return hashlib.sha256(raw).hexdigest()
+    return {
+        "release_seal_sha256": digest(_canonical(verify_seal(workspace, owner=0))),
+        "original_args_sha256": digest(_secure_bytes(release / "dvtws.original.args", MAX_ARGS, 0)),
+        "final_args_sha256": digest(_secure_bytes(release / "dvtws.args", MAX_ARGS, 0)),
+        "native_map_sha256": digest(_secure_bytes(release / "auto-detect-generation.json", MAX_MAP, 0)),
+        "source_map_sha256": digest(_secure_bytes(release / ORIGIN_FILE, MAX_MAP, 0)),
+        "witness_sha256": digest(_witness_line_learning(producer, sources).encode()),
+    }
 
 
 def _reattest(witness: OriginalProducer, owner_alive: Callable[[], bool]) -> tuple[str, ...]:
@@ -358,7 +462,7 @@ def native_finish_original_epoch(generation: str, *, reviewed: bool = False) -> 
 # The writer and minute/ACK paths remain deliberately schema2-only until
 # multi-inbox P2 proves managed-before-native transfer and retirement.
 def _learning_release_sources(
-    release: Path,
+    release: Path, *, work_parent: Path | None = None,
 ) -> tuple[Path, str, tuple[tuple[int, str, str], ...]]:
     """Attest the exact sealed original candidate and optional active copy.
 
@@ -391,9 +495,9 @@ def _learning_release_sources(
             not isinstance(candidate, str) or
             not re.fullmatch(r"[0-9a-f]{64}", candidate)):
         raise PostDropRefused("learning_unqualified_operation")
-    workspace = WORK / generation
+    workspace = (WORK if work_parent is None else work_parent) / generation
     sealed = workspace / "release"
-    if release not in (sealed, COMMON_ACTIVE):
+    if release not in ((sealed, COMMON_ACTIVE) if work_parent is None else (sealed,)):
         raise PostDropRefused("learning_release_outside_original_owner")
     verify_seal(workspace, owner=uid)
     expected = verify_learning_promotion(workspace, candidate)
@@ -435,9 +539,43 @@ def native_prepare_learning_producer(release: Path) -> None:
     prepare_native_learning(names)
 
 
-def native_capture_learning_before_launch(release: Path) -> str:
+def _learning_pretraffic_owner(workspace: Path, candidate: str, queue_fd: int | None):
+    """First bound learning launch borrows original P2a; legacy is unchanged."""
+    from shared_apply_operation import SharedApplyOperation
+    from shared_apply_seal import WORK
+    from neutral_root_stage import verify_original_operation_pins
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    bound_first = (type(record) is dict and
+                   record.get("manifest", {}).get("schema") == 2 and
+                   "previous" not in record and "previous_manifest" not in record and
+                   "found" not in record)
+    if queue_fd is None:
+        if bound_first:
+            raise PostDropRefused("first_bound_learning_requires_inherited_queue")
+        return None
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(queue_fd) is not int or queue_fd < 3 or queue_fd in (4, 9) or
+            not bound_first or record["phase"] != "activating" or
+            workspace != WORK / record["detail"]["id"] or
+            candidate != record["detail"]["candidate"]):
+        raise PostDropRefused("first_bound_learning_queue_scope_required")
+    verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    if store.read() != record:
+        raise PostDropRefused("first_bound_learning_queue_owner_changed")
+    return record
+
+
+def native_capture_learning_before_launch(release: Path, *, queue_fd: int | None = None) -> str:
     """Exact original P2a zero-cut witness for every learning native file."""
-    _, _, sources = _learning_release_sources(release)
+    from voice_live_inspect import COMMON_ACTIVE
+    workspace, candidate, sources = _learning_release_sources(release)
+    if queue_fd is not None and release != COMMON_ACTIVE:
+        raise PostDropRefused("first_bound_learning_active_release_required")
+    owner = _learning_pretraffic_owner(workspace, candidate, queue_fd)
     _, names = _qualified_learning_sources(sources, ROOT)
     _parent(ROOT, 0)
     identity = pwd.getpwnam(ENGINE_USER)
@@ -446,12 +584,15 @@ def native_capture_learning_before_launch(release: Path) -> str:
     witness = _capture(
         ROOT, root_uid=0, root_gid=0,
         engine_uid=identity.pw_uid, engine_gid=identity.pw_gid,
-        learning_names=names)
+        learning_names=names, queue_fd=queue_fd)
+    if (_learning_release_sources(release) != (workspace, candidate, sources) or
+            _learning_pretraffic_owner(workspace, candidate, queue_fd) != owner):
+        raise PostDropRefused("first_bound_learning_capture_owner_changed")
     return _witness_line_learning(witness, sources)
 
 
 def native_seal_learning_epoch(
-    generation: str, candidate: str, wire: str,
+    generation: str, candidate: str, wire: str, *, queue_fd: int | None = None,
 ) -> None:
     from auto_detect_epoch_receipts import HEX32, HEX64
     from voice_live_inspect import COMMON_ACTIVE
@@ -466,10 +607,13 @@ def native_seal_learning_epoch(
     _, names = _qualified_learning_sources(sources, ROOT)
     queue, receipts = _original_epoch_queue(names)
     identity = pwd.getpwnam(ENGINE_USER)
+    owner = _learning_pretraffic_owner(workspace, candidate, queue_fd)
+
     def same_owner() -> bool:
-        return _learning_release_sources(COMMON_ACTIVE) == (
-            workspace, candidate, sources)
-    with queue.exclusive():
+        return (_learning_release_sources(COMMON_ACTIVE) == (
+            workspace, candidate, sources) and
+            _learning_pretraffic_owner(workspace, candidate, queue_fd) == owner)
+    with (queue.exclusive() if queue_fd is None else queue.inherited_exclusive(queue_fd)):
         receipts.seal_learning_pretraffic(
             queue, workspace=workspace, candidate_sha256=candidate,
             wire=wire, root_gid=0, engine_uid=identity.pw_uid,
@@ -493,6 +637,77 @@ def native_restore_learning_before_ipfw(
         raise PostDropRefused("learning_postdrop_owner_changed")
 
 
+def native_finish_first_bound_learning_epoch_locked(record: dict, *, config_fd: int,
+                                                     config_digest: str, queue_fd: int) -> dict:
+    """Finish the original first Auto epoch using borrowed FD9/P2a/FD4."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_owner import attest_learning_epoch_finalizing_generation
+    from neutral_root_stage import verify_original_operation_pins
+    from neutral_schema3_previous_physical import _full_prior_tree, _running_native
+    from shared_apply_operation import SharedApplyOperation, _first_running_pin_matches, DIGEST
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock, FreeBSDIPFWAdapter, shared_release_manifest
+    from voice_firewall_transaction import verify_prior_state
+    from voice_live_inspect import COMMON_ACTIVE, CHILD_PID, MONITOR_PID
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or record.get("phase") != "epoch-finalizing" or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 2 or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+            type(queue_fd) is not int or queue_fd < 3 or queue_fd in (9, config_fd) or
+            any(type(record.get(key)) is not str or not DIGEST.fullmatch(record[key])
+                for key in ("first_running_sha256", "first_pretraffic_sha256"))):
+        raise PostDropRefused("first_bound_epoch_scope_required")
+    detail = record["detail"]
+    if config_digest != detail["candidate"]:
+        raise PostDropRefused("first_bound_epoch_config_changed")
+    store = SharedApplyOperation(owner=0)
+    work = WORK / detail["id"]
+    release = work / "release"
+
+    def attest():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if store.read() != record:
+            raise PostDropRefused("first_bound_epoch_owner_changed")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        _full_prior_tree(work, COMMON_ACTIVE, 0)
+        proof = attest_learning_epoch_finalizing_generation(detail["id"])
+        running = _running_native(release, owner_uid=0, child_pidfile=CHILD_PID,
+                                  monitor_pidfile=MONITOR_PID)
+        if (proof.operation_id != detail["id"] or proof.generation != detail["id"] or
+                proof.owner_candidate_sha256 != config_digest or
+                (proof.owner.pid, proof.owner.started) != (running.pid, running.started) or
+                not _first_running_pin_matches(record, running, config_fd,
+                    pretraffic_sha256=record["first_pretraffic_sha256"])):
+            raise PostDropRefused("first_bound_epoch_running_changed")
+        desired = shared_release_manifest(release)
+        if desired["rule_base"] != 19000 or desired["rule_max"] not in (19010, 19099):
+            raise PostDropRefused("first_bound_epoch_kernel_scope_invalid")
+        verify_prior_state(FreeBSDIPFWAdapter(19000, 19099), desired, desired)
+        if store.read() != record:
+            raise PostDropRefused("first_bound_epoch_owner_changed")
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return proof
+
+    proof = attest()
+    workspace, candidate, sources = _learning_release_sources(COMMON_ACTIVE)
+    if (workspace != work or candidate != config_digest or sources != proof.learning):
+        raise PostDropRefused("first_bound_epoch_source_changed")
+    _, names = _qualified_learning_sources(sources, ROOT)
+    queue, receipts = _original_epoch_queue(names)
+    with queue.inherited_exclusive(queue_fd):
+        os.fsync(config_fd)
+        data = receipts.finish_learning_running(proof, queue, workspace=work,
+            attest=attest, expected_pretraffic_sha256=record["first_pretraffic_sha256"])
+        if (data.get("pretraffic_sha256") != record["first_pretraffic_sha256"] or
+                receipts.verify_learning_stopped_epoch(proof, workspace=work) != data or
+                attest() != proof):
+            raise PostDropRefused("first_bound_epoch_readback_changed")
+        return data
+
+
 def native_finish_learning_epoch(generation: str) -> None:
     """Finish original schema3 receipt only after real shared Apply PID gate."""
     from auto_detect_epoch_receipts import HEX32
@@ -502,6 +717,13 @@ def native_finish_learning_epoch(generation: str) -> None:
         raise PostDropRefused("learning_invalid_running_generation")
     attester = attest_learning_epoch_finalizing_generation
     proof = attester(generation)
+    from shared_apply_operation import SharedApplyOperation, _first_running_pin_scope
+    record = SharedApplyOperation(owner=0).read()
+    if (record is not None and record["detail"]["id"] == generation and
+            _first_running_pin_scope(record) and record["manifest"]["schema"] == 2):
+        # A bound first Auto generation must not bypass its durable pair or
+        # acquire another queue lock through the legacy FD9-only command.
+        raise PostDropRefused("first_bound_epoch_requires_original_config_queue")
     workspace, candidate, sources = _learning_release_sources(COMMON_ACTIVE)
     if (proof.operation_id != generation or
             workspace.name != generation or
@@ -737,9 +959,15 @@ def original_fd9_command(args: list[str]) -> int:
               "authorize-learning": 2, "prepare-learning": 2,
               "capture-learning": 2, "seal-learning-epoch": 4,
               "restore-learning": 6, "finish-learning-epoch": 2}
+    borrowed = bool(args and args[-1] == "--inherited-queue")
+    if borrowed:
+        if args[0] not in ("capture-learning", "seal-learning-epoch"):
+            return 64
+        args = args[:-1]
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not args or len(args) != shapes.get(args[0], -1)):
         return 64
+    queue_fd = 3 if borrowed else None
     try:
         from voice_ipfw_adapter import require_lifecycle_lock
         require_lifecycle_lock()  # REAL original same-OFD held FD9, no new lock.
@@ -771,9 +999,9 @@ def original_fd9_command(args: list[str]) -> int:
             native_prepare_learning_producer(Path(args[1]))
             print("original-fd9-learning-producer=prepared")
         elif args[0] == "capture-learning":
-            print(native_capture_learning_before_launch(Path(args[1])))
+            print(native_capture_learning_before_launch(Path(args[1]), queue_fd=queue_fd))
         elif args[0] == "seal-learning-epoch":
-            native_seal_learning_epoch(args[1], args[2], args[3])
+            native_seal_learning_epoch(args[1], args[2], args[3], queue_fd=queue_fd)
             print("original-fd9-learning-pretraffic=sealed")
         elif args[0] == "restore-learning":
             native_restore_learning_before_ipfw(

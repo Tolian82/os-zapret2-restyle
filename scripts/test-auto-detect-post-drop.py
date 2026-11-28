@@ -52,6 +52,61 @@ class PostDropContract(unittest.TestCase):
                         root_gid=self.gid, engine_uid=self.engine,
                         engine_gid=self.gid)
 
+    def test_first_learning_base_zero_cut_preserves_original_queue(self):
+        import json
+        from auto_detect_post_drop import match_zero_cut, PROVENANCE_FIELDS
+        generation = "a" * 32
+        names = tuple(f"learning-{generation}-{n}.txt" for n in (3, 4))
+        sources = tuple((n, "youtube", str(self.root / name))
+                        for n, name in zip((3, 4), names))
+        paths = tuple(self.root / name for name in ("inbox.txt", "debug.log", *names))
+        for path in paths[2:]:
+            path.touch()
+            path.chmod(0o660)
+        queue = DurableInbox(self.root, owner_uid=self.owner, writer_gid=self.gid)
+        with queue.exclusive():
+            def capture():
+                return _capture(self.root, root_uid=self.owner, root_gid=self.gid,
+                    engine_uid=self.engine, engine_gid=self.gid, learning_names=names,
+                    queue_fd=queue.locked_fd)
+            original = capture()
+            provenance = {key: hashlib.sha256(key.encode()).hexdigest()
+                          for key in PROVENANCE_FIELDS}
+            seed = dict(schema=3, kind="original-fd9-learning-pretraffic-zero",
+                generation=generation, owner_candidate_sha256="b" * 64,
+                ack_authorized=False, **provenance,
+                files=[dict(name=p.name, device=d, inode=i, nlink=l)
+                       for p, (d, i, l) in zip(paths, original.identities)],
+                learning=[dict(native_number=n, hostlist=h, path=p, device=d, inode=i,
+                               offset=0, prefix_sha256=hashlib.sha256(b"").hexdigest())
+                          for (n, h, p), (d, i, _) in zip(sources, original.identities[2:])])
+            raw = (json.dumps(seed, sort_keys=True, separators=(",", ":")) + "\n").encode()
+            record = dict(phase="activated", manifest={"schema": 2},
+                detail={"id": generation, "base": "c" * 64, "candidate": "b" * 64},
+                first_running_sha256="d" * 64,
+                first_pretraffic_sha256=hashlib.sha256(raw).hexdigest())
+            def check():
+                return match_zero_cut(record, sources, capture(), raw, provenance)
+            self.assertEqual(check(), raw)
+            self.assertEqual(check(), raw)
+            for path in paths:
+                with self.subTest(nonempty=path.name):
+                    path.write_bytes(b"fixture\n")
+                    with self.assertRaises(PostDropRefused):
+                        check()
+                    self.assertEqual(path.read_bytes(), b"fixture\n")
+                    path.write_bytes(b"")
+            for key in PROVENANCE_FIELDS:
+                with self.subTest(provenance=key), self.assertRaises(ValueError):
+                    match_zero_cut(record, sources, capture(), raw,
+                                   {**provenance, key: "f" * 64})
+            paths[-1].rename(self.root.parent / "old-original")
+            paths[-1].touch()
+            paths[-1].chmod(0o660)
+            with self.assertRaises(ValueError):
+                check()
+            self.assertTrue((self.root.parent / "old-original").is_file())
+
     def test_learning_inboxes_preserve_prelaunch_and_postdrop_inodes(self):
         names = ("learning-" + "a" * 32 + "-3.txt",
                  "learning-" + "a" * 32 + "-4.txt")
@@ -574,6 +629,91 @@ class PostDropContract(unittest.TestCase):
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
         self.assertEqual(self.capture().identities, witness.identities)
+
+    def test_bound_learning_capture_borrows_exact_original_queue(self):
+        name = "learning-" + "a" * 32 + "-3.txt"
+        path = self.root / name
+        path.write_bytes(b"")
+        path.chmod(0o660)
+        def capture(fd=None):
+            return _capture(self.root, root_uid=self.owner, root_gid=self.gid,
+                engine_uid=self.engine, engine_gid=self.gid,
+                learning_names=(name,), queue_fd=fd)
+        queue = DurableInbox(self.root, owner_uid=self.owner, writer_gid=self.gid)
+        baseline = capture()
+        with queue.exclusive(existing_only=True):
+            fd = queue.locked_fd
+            self.assertEqual(capture(fd), baseline)
+            duplicate = os.dup(fd)
+            try:
+                self.assertEqual(capture(duplicate), baseline)
+            finally:
+                os.close(duplicate)
+            foreign = os.open(queue.lock, os.O_RDWR | os.O_NOFOLLOW)
+            try:
+                with self.assertRaises(PostDropRefused):
+                    capture(foreign)
+                # Neither rejected descriptor nor borrowed-child exit releases
+                # the original owner's actual flock.
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(foreign, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            finally:
+                os.close(foreign)
+            with self.assertRaises(PostDropRefused):
+                capture()  # a second acquisition is forbidden
+            path.write_bytes(b"unexpected.example\n")
+            with self.assertRaises(PostDropRefused):
+                capture(fd)
+            self.assertEqual(path.read_bytes(), b"unexpected.example\n")
+            path.write_bytes(b"")
+            self.assertEqual(capture(fd), baseline)
+        unlocked = os.open(queue.lock, os.O_RDWR | os.O_NOFOLLOW)
+        try:
+            with self.assertRaises(PostDropRefused):
+                capture(unlocked)
+        finally:
+            os.close(unlocked)
+        self.assertEqual(capture(), baseline)
+
+    def test_first_bound_learning_owner_scope_requires_original_queue(self):
+        from auto_detect_post_drop import _learning_pretraffic_owner
+        from shared_apply_seal import WORK
+        generation, candidate = "a" * 32, "b" * 64
+        record = {"phase": "activating", "detail": {"id": generation,
+                    "candidate": candidate}, "manifest": {"schema": 2}}
+        workspace = WORK / generation
+        # Only native identity and the original root/WAL reads are isolated.
+        # Real OFD acceptance/refusal is exercised by the preceding test.
+        with (patch("auto_detect_post_drop.sys.platform", "freebsd"),
+              patch("auto_detect_post_drop.os.geteuid", return_value=0),
+              patch("voice_ipfw_adapter.require_lifecycle_lock"),
+              patch("shared_apply_operation.SharedApplyOperation") as factory,
+              patch("neutral_root_stage.verify_original_operation_pins") as verify):
+            store = factory.return_value
+            store.read.return_value = record
+            self.assertEqual(_learning_pretraffic_owner(workspace, candidate, 3), record)
+            verify.assert_called_once_with(record=record, parent=WORK, owner_uid=0)
+            for fd in (None, 4, 9, -1, True):
+                with self.subTest(fd=fd), self.assertRaises(PostDropRefused):
+                    _learning_pretraffic_owner(workspace, candidate, fd)
+            with self.assertRaises(PostDropRefused):
+                _learning_pretraffic_owner(workspace, "c" * 64, 3)
+            with self.assertRaises(PostDropRefused):
+                _learning_pretraffic_owner(WORK / ("c" * 32), candidate, 3)
+            for wrong in ({**record, "phase": "prepared"},
+                          {**record, "previous": {}},
+                          {**record, "found": {}},
+                          {**record, "manifest": {"schema": 1}}):
+                store.read.return_value = wrong
+                with self.assertRaises(PostDropRefused):
+                    _learning_pretraffic_owner(workspace, candidate, 3)
+            store.read.return_value = None
+            self.assertIsNone(_learning_pretraffic_owner(workspace, candidate, None))
+            with self.assertRaises(PostDropRefused):
+                _learning_pretraffic_owner(workspace, candidate, 3)
+            store.read.side_effect = [record, {**record, "phase": "activated"}]
+            with self.assertRaises(PostDropRefused):
+                _learning_pretraffic_owner(workspace, candidate, 3)
 
     def test_pretraffic_does_not_reject_native_append_after_start(self):
         # The original prelaunch witness stays valid after raw/debug append.

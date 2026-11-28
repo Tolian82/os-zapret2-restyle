@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S10b1: exact original PREPARED journal pins S10a root, never activates.
+"""S10 original journal pins, file CAS and recovery with disposable data.
 
 Portable S0 may use local stubs for native-only modules. GitHub Actions
 runs this unchanged test with the actual original SharedApplyOperation and
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -138,6 +139,119 @@ class OriginalDurableRootBinding(unittest.TestCase):
         with self.assertRaises(SharedOperationError):
             self.bind()
 
+    def test_ordinary_config_save_requires_exact_activated_journal_and_seal(self):
+        import auto_detect_effective_known as source
+
+        work = self.case.fx.work
+        root = work / "manifest.json"
+        root.unlink()
+        detail = self.case.detail
+        plan = work / "plan.json"
+        plan_bytes = plan.read_bytes()
+        parts = [detail["page"], detail["base"], detail["candidate"],
+                 hashlib.sha256(plan_bytes).hexdigest(), ",".join(detail["changed_fields"])]
+        witness = lambda values: hashlib.sha256("\0".join(values).encode("ascii")).hexdigest()
+        token = witness(parts)
+
+        def attest(sha=token):
+            self.owner.attest_unbound_config_save(detail["id"], sha,
+                                                   shared_work_parent=work.parent)
+
+        with self.assertRaisesRegex(SharedOperationError, "unbound activated owner"):
+            attest()
+        self.owner.advance("activating", detail)
+        with self.assertRaisesRegex(SharedOperationError, "unbound activated owner"):
+            attest()
+        activated = self.owner.advance("activated", detail)
+        attest()
+        self.assertEqual(self.owner.read(), activated)
+
+        for idx, value in enumerate(("voice", "8" * 64, "9" * 64, "a" * 64, "voice.telegram.enabled")):
+            with self.subTest(field=idx):
+                changed = parts.copy()
+                changed[idx] = value
+                with self.assertRaisesRegex(SharedOperationError, "differs from original activation"):
+                    attest(witness(changed))
+
+        for path in (root, work / "release" / ".manifest.json.pending"):
+            path.symlink_to(work / "missing-root")
+            with self.assertRaisesRegex(SharedOperationError, "unbound root artifacts"):
+                attest()
+            path.unlink()
+        from shared_apply_seal import SharedBundleError
+        plan.write_bytes(plan_bytes + b" ")
+        with self.assertRaises(SharedBundleError):
+            attest()
+        plan.write_bytes(plan_bytes)
+
+        with patch.object(source.sys, "platform", "freebsd15"), \
+             patch.object(source.os, "geteuid", return_value=0), \
+             patch("voice_ipfw_adapter.require_lifecycle_lock") as fd9, \
+             patch("auto_detect_original_lock_handoff.assert_inherited_config_fd") as fd4, \
+             patch("shared_apply_operation.SharedApplyOperation", return_value=self.owner), \
+             patch("shared_apply_seal.WORK", work.parent), \
+             patch("sys.stdout") as output, patch("sys.stderr"):
+            args = ["attest-ordinary-save-locked", detail["id"], token]
+            self.assertEqual(source.main(args), 0)
+            receipt = json.loads(output.write.call_args_list[0].args[0])
+            self.assertEqual(receipt, {"result": "original-ordinary-save-verified", "id": detail["id"]})
+            self.assertEqual(fd9.call_count, 2)
+            self.assertEqual(fd4.call_count, 2)
+            fd4.side_effect = RuntimeError("lost inherited Config lock")
+            self.assertEqual(source.main(args), 69)
+        self.assertEqual(self.owner.read(), activated)
+        self.owner.advance("config-saved", detail)
+        with self.assertRaisesRegex(SharedOperationError, "unbound activated owner"):
+            attest()
+
+
+    def test_bound_ordinary_transition_preserves_pins_and_requires_fresh_native_proof(self):
+        bound = self.bind()
+        root = self.case.fx.work / "manifest.json"
+        original = root.read_bytes()
+        def advance(phase, expected, attest):
+            return self.owner._advance_bound_ordinary(
+                phase, expected, attest, shared_work_parent=self.case.fx.parent)
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None):
+            # An exact bound PREPARED record is still not a legacy CLI permit.
+            with self.assertRaises(SharedOperationError):
+                self.owner.advance("activating", self.case.detail)
+            with self.assertRaises(SharedOperationError):
+                advance("activating", bound, lambda: False)
+            self.assertEqual(self.owner.read(), bound)
+
+            def drift():
+                root.write_bytes(original + b" ")
+                return True
+
+            with self.assertRaises(SharedOperationError):
+                advance("activating", bound, drift)
+            self.assertEqual(self.owner.read(), bound)
+            root.write_bytes(original)
+            # Portable journal evidence only. This callback deliberately
+            # substitutes native physical proof; no runtime is started.
+            activating = advance("activating", bound, lambda: True)
+            self.assertEqual(activating, {**bound, "phase": "activating"})
+            with self.assertRaises(SharedOperationError):
+                self.owner.advance("activated", self.case.detail)
+            with self.assertRaises(SharedOperationError):
+                advance("committed", activating, lambda: True)
+            with self.assertRaises(SharedOperationError):
+                advance("activated", bound, lambda: True)
+            activated = advance("activated", activating, lambda: True)
+            saved = advance("config-saved", activated, lambda: True)
+            with self.assertRaises(SharedOperationError):
+                self.owner.finish_saved(self.case.detail["id"], lambda: True)
+            # A pre-save restore is allowed by the phase table only with
+            # independent proof; a Config-saved rollback is not.
+            with self.assertRaises(SharedOperationError):
+                advance("restored", saved, lambda: True)
+            committed = advance("committed", saved, lambda: True)
+            self.assertEqual(committed_manifest(committed), bound["manifest"])
+            self.assertEqual(self.owner.read(), committed)
+            self.assertFalse(native_lifecycle_gate("common-apply",
+                             root=self.owner.root)["safe_to_mutate"])
 
     def test_restored_candidate_pin_is_not_active_owner_pin(self):
         bound = self.bind()
@@ -208,7 +322,7 @@ class OriginalDurableRootBinding(unittest.TestCase):
                 _validate_record(bad)
         self.assertEqual(self.owner.read(), prepared)
 
-    def _pinned_found_fixture(self):
+    def _pinned_found_fixture(self, rows=None):
         bound = self.bind()
         old = self.owner._persist_record({**bound, "phase": "committed"})
         fresh = {**self.case.detail, "id": "e" * 32,
@@ -219,7 +333,8 @@ class OriginalDurableRootBinding(unittest.TestCase):
             "changed_fields": fresh["changed_fields"], "candidate": {},
             "found_intent": {"config_revision": fresh["base"],
                              "commit_authorized": False},
-            "found_batch": {name: {} for name in ("youtube", "user", "auto")}
+            "found_batch": ({name: {} for name in ("youtube", "user", "auto")}
+                            if rows is None else rows)
         }).encode()
         return bound, old, fresh, plan
 
@@ -320,14 +435,14 @@ class OriginalDurableRootBinding(unittest.TestCase):
                     with self.assertRaises(SharedOperationError):
                         _validate_record(forged)
 
-    def _staged_pinned_found_fixture(self):
+    def _staged_pinned_found_fixture(self, rows=None):
         import hashlib
         import shutil
         from neutral_root_manifest import compile_candidate
         from neutral_root_stage import _stage_candidate
         from shared_apply_seal import create_seal
 
-        old_bound, old, fresh, plan = self._pinned_found_fixture()
+        old_bound, old, fresh, plan = self._pinned_found_fixture(rows)
         parent = self.case.fx.parent
         work = parent / fresh["id"]
         work.mkdir(mode=0o700)
@@ -399,6 +514,105 @@ class OriginalDurableRootBinding(unittest.TestCase):
             self.assertEqual(restored["manifest"], bound["manifest"])
             self.assertEqual(committed_manifest(restored), old_bound["manifest"])
 
+    def test_bound_found_real_cas_and_rollback_preserve_both_immutable_pins(self):
+        import hashlib
+        from auto_detect_destination_commit import (
+            _locked_shared_found_apply_journal, _recover_found_preimages_locked,
+            _bound_found_native_witness)
+        root = self.case.fx.parent / "physical-found"
+        root.mkdir(mode=0o700)
+        targets, rows = {}, {}
+        originals = {"youtube": "example.com\n", "user": "example.org\n", "auto": ""}
+        after = {"youtube": "example.com\nfresh.com\n", "user": "", "auto": "shared.org\n"}
+        for name, old_text in originals.items():
+            path = root / (name + ".txt")
+            path.write_text(old_text)
+            path.chmod(0o600)
+            st = path.lstat()
+            targets[name] = path
+            rows[name] = dict(before=old_text, after=after[name], before_status="present",
+                before_revision=hashlib.sha256(b"present\0" + old_text.encode()).hexdigest(),
+                before_device=st.st_dev, before_inode=st.st_ino,
+                before_ctime_ns=st.st_ctime_ns, before_mtime_ns=st.st_mtime_ns,
+                before_size=st.st_size)
+        # Test fixture deliberately supplies disposable native lock witnesses;
+        # actual manifest/seal verification and file CAS are NOT mocked.
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+             patch("shared_apply_seal.WORK", self.case.fx.parent):
+            old_bound, _, fresh, raw, _, work, _, plan_sha = (
+                self._staged_pinned_found_fixture(rows))
+            bound = self.bind(generation=fresh["id"], found_plan_sha256=plan_sha)
+            qualified = _bound_found_native_witness(self.owner, bound, lambda: True)
+
+            def apply(witness):
+                return _locked_shared_found_apply_journal(
+                    rows, targets, store=self.owner, detail=fresh, plan_bytes=raw,
+                    uid=self.owner.owner, attest=lambda *_: True, bound_attest=witness)
+
+            with self.assertRaises(SharedOperationError):
+                apply(None)
+            self.assertEqual(self.owner.read(), bound)
+            self.assertEqual({n: p.read_text() for n, p in targets.items()}, originals)
+
+            # A tampered root must fail before the first physical rename.
+            sibling = work / "manifest.json"
+            original = sibling.read_bytes()
+            sibling.write_bytes(original + b"drift")
+            with self.assertRaises(SharedOperationError):
+                apply(qualified)
+            self.assertEqual(self.owner.read(), bound)
+            self.assertEqual({n: p.read_text() for n, p in targets.items()}, originals)
+            sibling.write_bytes(original)
+
+            self.assertEqual(apply(qualified)["journal_phase"], "found-files-written")
+            written = self.owner.read()
+            self.assertEqual(written["manifest"], bound["manifest"])
+            self.assertEqual(written["previous_manifest"], old_bound["manifest"])
+            self.assertEqual({n: p.read_text() for n, p in targets.items()}, after)
+            with self.assertRaises(SharedOperationError):
+                self.owner.advance_found_config("found-config-saving", fresh, raw,
+                                                lambda *_: True)
+            saving = self.owner.advance_found_config("found-config-saving", fresh, raw,
+                lambda *_: True, bound_attest=qualified)
+            self.assertEqual(saving["phase"], "found-config-saving")
+            self.assertEqual(saving["manifest"], bound["manifest"])
+            # No Config write in this portable test: simulate a proven base
+            # from native Config and use the exact same physical rollback.
+            reopened = SharedApplyOperation(self.owner.root, owner=self.owner.owner)
+            rollback = _bound_found_native_witness(reopened, saving, lambda: True)
+            def recover():
+                return _recover_found_preimages_locked(
+                    rows, targets, store=reopened, record=reopened.read(),
+                    plan_bytes=raw, uid=reopened.owner, attest=lambda: True,
+                    bound_attest=rollback)
+            sibling.write_bytes(original + b"foreign")
+            with self.assertRaises(SharedOperationError):
+                recover()
+            self.assertEqual(reopened.read(), saving)
+            self.assertEqual({n: p.read_text() for n, p in targets.items()}, after)
+            sibling.write_bytes(original)
+            # A crash after the first actual rollback rename leaves the
+            # original restore inode pin and both immutable root pins.
+            # Reopen the same WAL and resume without adopting foreign bytes.
+            rename = os.replace
+            def interrupted(temp, target):
+                rename(temp, target)
+                if Path(target) == targets["auto"]:
+                    raise OSError("bound rollback interrupted after rename")
+            with patch("auto_detect_destination_commit.os.replace", side_effect=interrupted):
+                with self.assertRaisesRegex(OSError, "bound rollback interrupted"):
+                    recover()
+            interrupted_record = reopened.read()
+            self.assertEqual(interrupted_record["phase"], "found-restoring")
+            self.assertEqual(interrupted_record["manifest"], bound["manifest"])
+            self.assertEqual(interrupted_record["previous_manifest"], old_bound["manifest"])
+            restored = recover()
+            self.assertEqual(restored["phase"], "restored")
+            self.assertNotIn("found", restored)
+            self.assertEqual(restored["manifest"], bound["manifest"])
+            self.assertEqual(committed_manifest(restored), old_bound["manifest"])
+            self.assertEqual({n: p.read_text() for n, p in targets.items()}, originals)
+
     def test_dual_found_root_interrupted_post_fsync_retains_both_pins(self):
         import neutral_root_stage as stage
         with patch("voice_ipfw_adapter.require_lifecycle_lock", return_value=None):
@@ -462,6 +676,22 @@ class OriginalDurableRootBinding(unittest.TestCase):
         with self.assertRaises(SharedOperationError):
             _validate_record(mixed)
 
+    def test_first_running_pin_is_only_first_inert_activated_history(self):
+        bound = self.bind()
+        first = {k: v for k, v in bound.items() if k not in ("previous", "previous_manifest")}
+        pin = "a" * 64
+        for phase in ("activated", "config-saved", "committed", "restored"):
+            _validate_record({**first, "phase": phase, "first_running_sha256": pin})
+        for phase in ("prepared", "activating"):
+            with self.assertRaises(SharedOperationError):
+                _validate_record({**first, "phase": phase, "first_running_sha256": pin})
+        for invalid in ("x", True, None):
+            with self.assertRaises(SharedOperationError):
+                _validate_record({**first, "phase": "activated", "first_running_sha256": invalid})
+        if "previous" in bound:
+            with self.assertRaises(SharedOperationError):
+                _validate_record({**bound, "phase": "activated", "first_running_sha256": pin})
+
     def test_post_bind_reattest_failure_keeps_durable_prepared_refusal(self):
         import neutral_root_stage as staged
         real = staged.attest_staged_candidate
@@ -510,6 +740,751 @@ class OriginalDurableRootBinding(unittest.TestCase):
                             mode="list", enabled=False,
                             shared_work_parent=self.case.fx.parent)
                 self.assertEqual(self.owner.read(), self.before)
+
+
+class OriginalManagedFileCAS(unittest.TestCase):
+    def fixture(self, *, extra_change=False, equal_config=False):
+        import shutil
+        from auto_detect_destination_commit import _sha, _target_identity
+        from neutral_root_manifest import compile_candidate
+        from neutral_root_stage import _stage_candidate
+        from shared_apply_seal import create_seal
+
+        case = _prior.OriginalPreparedS10a("runTest")
+        case.setUp()
+        self.addCleanup(case.doCleanups)
+        store, parent = case.original_journal, case.fx.parent
+        name = "hostlist-youtube.txt"
+        before, after = b"old.example\n", b"new.example\n"
+        (case.fx.release / "managed").mkdir()
+        old_file = case.fx.release / "managed" / name
+        old_file.write_bytes(before)
+        case.stage(case.candidate())
+        bound = store.bind_prepared_manifest(generation=case.detail["id"],
+            effective=case.fx.effective, native=case.fx.native, mode="list",
+            enabled=False, shared_work_parent=parent)
+        for phase in ("activating", "activated", "config-saved", "committed"):
+            bound = store._advance_bound_ordinary(phase, bound, lambda: True,
+                                                   shared_work_parent=parent)
+        detail = {**case.detail, "id": "e" * 32, "base": case.detail["candidate"],
+                  "candidate": case.detail["candidate"] if equal_config else "9" * 64}
+        work = parent / detail["id"]
+        work.mkdir(mode=0o700)
+        shutil.copytree(case.fx.release, work / "release")
+        shutil.copyfile(case.fx.work / "candidate.xml", work / "candidate.xml")
+        (work / "plan.json").write_text(json.dumps({"result": "prepared",
+            "page": detail["page"], "dependencies": detail["base"],
+            "changed_fields": [], "candidate": {"general": {"enabled": "0"}}}))
+        new_file = work / "release" / "managed" / name
+        new_file.write_bytes(after)
+        if extra_change:
+            (work / "release" / "unrelated.txt").write_text("different tree\n")
+        create_seal(work, owner=store.owner)
+        candidate = compile_candidate(effective=case.fx.effective, generation=detail["id"],
+            target_mode="list", enabled=False, original_args=case.fx.args,
+            original_source_map=None, seal_sha256=_sha((work / "bundle-seal.json").read_bytes()),
+            owner_uid=store.owner)
+        store.advance("prepared", detail)
+        _stage_candidate(candidate=candidate, **case.kw(generation=detail["id"]))
+        prepared = store.bind_prepared_manifest(generation=detail["id"],
+            effective=case.fx.effective, native=case.fx.native, mode="list",
+            enabled=False, shared_work_parent=parent)
+        active = parent / "runtime-v2"
+        shutil.copytree(case.fx.release, active)
+        target = active / "managed" / name
+        row = (name, _sha(before), _sha(after), *(_target_identity(path.lstat())
+                for path in (old_file, new_file, target)))
+        return store, prepared, row, parent, active, target, before, after
+
+    def test_original_managed_file_cas_and_interrupted_restore(self):
+        from auto_detect_destination_commit import (
+            _write_bound_managed_file_locked, _restore_bound_managed_file_locked,
+            _target_identity)
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            for interrupted in (False, True):
+                with self.subTest(interrupted=interrupted):
+                    store, prepared, row, parent, active, target, before, after = self.fixture()
+                    kw = dict(parent=parent, active=active, attest=lambda: True)
+                    real_replace = os.replace
+                    seen = []
+
+                    def replace_file(source, dest, **kwargs):
+                        if Path(dest) == target:
+                            intent = store.read()
+                            self.assertEqual(intent["phase"], "managed-writing")
+                            pin = intent["managed"].get("restore", intent["managed"]["ready"])
+                            self.assertEqual(Path(source).stat().st_ino, pin["inode"])
+                            seen.append(pin["sha256"])
+                        result = real_replace(source, dest, **kwargs)
+                        if interrupted and Path(dest) == target:
+                            raise OSError("interrupted after file rename")
+                        return result
+
+                    with patch("os.replace", side_effect=replace_file):
+                        if interrupted:
+                            with self.assertRaisesRegex(OSError, "interrupted after file rename"):
+                                _write_bound_managed_file_locked(store, prepared, row, **kw)
+                        else:
+                            _write_bound_managed_file_locked(store, prepared, row, **kw)
+                    pending = store.read()
+                    self.assertEqual(target.read_bytes(), after)
+                    self.assertEqual("installed" in pending["managed"], not interrupted)
+                    self.assertIn("barrier", pending["managed"])
+                    if not interrupted:
+                        # Genuine post-WAL full inode proof; reproduces UFS
+                        # deferred ctime drift in the original uncorrected writer.
+                        self.assertEqual(list(_target_identity(target.lstat())),
+                                         pending["managed"]["installed"])
+                    token = pending["managed"]["ready"]["temp"][13:-4]
+                    self.assertEqual((active.parent / (".s10-managed-barrier-" + token)).exists(), interrupted)
+                    self.assertFalse(native_lifecycle_gate("common-recover-activating",
+                        root=store.root)["safe_to_mutate"])
+                    with self.assertRaises(SharedOperationError):
+                        store.advance("activated", prepared["detail"])
+                    with self.assertRaises(SharedOperationError):
+                        store.attest_unbound_config_save(prepared["detail"]["id"], "d" * 64,
+                                                        shared_work_parent=parent)
+                    if interrupted:
+                        # Native UFS-only diagnosis of the original _replace
+                        # double-CAS. Report changed field names, NEVER raw
+                        # inode, timestamp, content, native PID or path.
+                        import auto_detect_destination_commit as writer
+                        real_target = writer._target
+                        snapshots = []
+                        phase_snapshots = []
+                        original_checkpoint = store._checkpoint_managed_write
+
+                        def traced_checkpoint(*arguments, **options):
+                            restore_write = (len(arguments) >= 2 and
+                                             isinstance(arguments[1], dict) and
+                                             "restore" in arguments[1])
+                            if restore_write:
+                                phase_snapshots.append(("before-restore-WAL",
+                                                        _target_identity(target.lstat())))
+                            result = original_checkpoint(*arguments, **options)
+                            if restore_write:
+                                phase_snapshots.append(("after-restore-WAL",
+                                                        _target_identity(target.lstat())))
+                            return result
+
+                        def traced_target(item, owner, **kwargs):
+                            data, info = real_target(item, owner, **kwargs)
+                            frame = sys._getframe(1)
+                            while frame is not None and frame.f_code.co_name != "_replace":
+                                frame = frame.f_back
+                            if Path(item) == target and frame is not None:
+                                snapshots.append(_target_identity(info))
+                            return data, info
+
+                        try:
+                            with patch("auto_detect_destination_commit._target",
+                                       side_effect=traced_target), patch.object(
+                                    store, "_checkpoint_managed_write",
+                                    side_effect=traced_checkpoint), patch(
+                                    "os.replace", side_effect=replace_file):
+                                with self.assertRaisesRegex(OSError, "interrupted after file rename"):
+                                    _restore_bound_managed_file_locked(store, pending, **kw)
+                        except Exception:
+                            if len(snapshots) >= 2:
+                                names = ("device", "inode", "ctime", "mtime", "size",
+                                         "mode", "uid", "gid", "links")
+                                drift = [name for idx, name in enumerate(names)
+                                         if snapshots[0][idx] != snapshots[-1][idx]]
+                                baseline = snapshots[0]
+                                timeline = [
+                                    {"point": label, "fields": [
+                                        name for idx, name in enumerate(names)
+                                        if baseline[idx] != value[idx]]}
+                                    for label, value in phase_snapshots
+                                ]
+                                print("S10_NATIVE_RESTORE_CAS_DRIFT=" + json.dumps({
+                                    "fields": drift, "reads": len(snapshots),
+                                    "timeline": timeline},
+                                    sort_keys=True), flush=True)
+                            raise
+                        pending = store.read()
+                        self.assertEqual(target.read_bytes(), before)
+                        self.assertIn("restore", pending["managed"])
+                    restored = _restore_bound_managed_file_locked(store, pending, **kw)
+                    self.assertFalse((active.parent / (".s10-managed-barrier-" + token)).exists())
+                    self.assertEqual(restored["phase"], "restored")
+                    self.assertEqual(committed_manifest(restored), prepared["previous_manifest"])
+                    self.assertEqual(target.read_bytes(), before)
+                    self.assertEqual(seen, [row[2], row[1]] if interrupted else [row[2]])
+
+    def test_original_managed_crash_after_barrier_cleanup_before_installed_wal(self):
+        """The original WAL still owns the after-image even without scratch residue."""
+        from auto_detect_destination_commit import (
+            _write_bound_managed_file_locked, _restore_bound_managed_file_locked)
+        from shared_apply_operation import SharedOperationError
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, before, after = self.fixture()
+            kw = dict(parent=parent, active=active, attest=lambda: True)
+            original_checkpoint = store._checkpoint_managed_write
+            saw_installed_attempt = []
+
+            def interrupt_after_barrier(expected, managed, attest, **kwargs):
+                if isinstance(managed, dict) and "installed" in managed:
+                    current = store.read()
+                    ready = current["managed"]["ready"]
+                    token = ready["temp"][13:-4]
+                    scratch = active.parent / (".s10-managed-barrier-" + token)
+                    self.assertIn("barrier", current["managed"])
+                    self.assertNotIn("installed", current["managed"])
+                    self.assertFalse(scratch.exists())
+                    self.assertEqual(target.read_bytes(), after)
+                    saw_installed_attempt.append(True)
+                    raise OSError("interrupted-after-cleanup-before-installed")
+                return original_checkpoint(expected, managed, attest, **kwargs)
+
+            with patch.object(store, "_checkpoint_managed_write",
+                              side_effect=interrupt_after_barrier):
+                with self.assertRaisesRegex(OSError, "interrupted-after-cleanup-before-installed"):
+                    _write_bound_managed_file_locked(store, prepared, row, **kw)
+            self.assertEqual(saw_installed_attempt, [True])
+            pending = store.read()
+            self.assertEqual(pending["phase"], "managed-writing")
+            self.assertIn("ready", pending["managed"])
+            self.assertIn("barrier", pending["managed"])
+            self.assertNotIn("installed", pending["managed"])
+            self.assertEqual(target.read_bytes(), after)
+            with self.assertRaises(SharedOperationError):
+                store.advance("activated", prepared["detail"])
+            restored = _restore_bound_managed_file_locked(store, pending, **kw)
+            self.assertEqual(restored["phase"], "restored")
+            self.assertEqual(target.read_bytes(), before)
+
+    def test_original_managed_cas_crash_after_ready_before_rename(self):
+        from auto_detect_destination_commit import (
+            _write_bound_managed_file_locked, _restore_bound_managed_file_locked)
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, before, _ = self.fixture()
+            kw = dict(parent=parent, active=active, attest=lambda: True)
+            original = target.stat()
+            real_replace = os.replace
+
+            def stop_at_rename(source, dest, **kwargs):
+                if Path(dest) == target:
+                    os._exit(85)
+                return real_replace(source, dest, **kwargs)
+
+            pid = os.fork()
+            if pid == 0:
+                with patch("os.replace", side_effect=stop_at_rename):
+                    try:
+                        _write_bound_managed_file_locked(store, prepared, row, **kw)
+                    except Exception:
+                        os._exit(86)
+                    os._exit(87)
+            _, status = os.waitpid(pid, 0)
+            self.assertEqual(os.waitstatus_to_exitcode(status), 85)
+            pending = store.read()
+            temp = target.with_name(pending["managed"]["ready"]["temp"])
+            self.assertEqual(temp.stat().st_ino, pending["managed"]["ready"]["inode"])
+            self.assertIn("barrier", pending["managed"])
+            token = pending["managed"]["ready"]["temp"][13:-4]
+            scratch = active.parent / (".s10-managed-barrier-" + token)
+            self.assertTrue(scratch.is_dir())
+            self.assertEqual(target.read_bytes(), before)
+            self.assertEqual(_restore_bound_managed_file_locked(store, pending, **kw)["phase"], "restored")
+            self.assertFalse(temp.exists())
+            self.assertFalse(scratch.exists())
+            self.assertTrue(os.path.samestat(target.stat(), original))
+
+    def test_original_managed_barrier_seed_without_wal_pin_refuses_recovery(self):
+        """Crash between scratch seed and its durable WAL pin cannot delete by name."""
+        from auto_detect_destination_commit import (
+            DestinationRefused, _write_bound_managed_file_locked,
+            _restore_bound_managed_file_locked)
+        from managed_inode_barrier import seed as real_seed
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, before, _ = self.fixture()
+            kw = dict(parent=parent, active=active, attest=lambda: True)
+
+            def crash_after_seed(*args):
+                real_seed(*args)
+                raise OSError("power-loss-window-after-scratch-seed")
+
+            with patch("managed_inode_barrier.seed", side_effect=crash_after_seed):
+                with self.assertRaisesRegex(DestinationRefused, "barrier_seed_refused"):
+                    _write_bound_managed_file_locked(store, prepared, row, **kw)
+            pending = store.read()
+            self.assertEqual(pending["phase"], "managed-writing")
+            self.assertIn("ready", pending["managed"])
+            self.assertNotIn("barrier", pending["managed"])
+            token = pending["managed"]["ready"]["temp"][13:-4]
+            scratch = active.parent / (".s10-managed-barrier-" + token)
+            self.assertTrue(scratch.is_dir())
+            with self.assertRaisesRegex(DestinationRefused, "barrier_recovery_refused"):
+                _restore_bound_managed_file_locked(store, pending, **kw)
+            self.assertEqual(store.read(), pending)
+            self.assertEqual(target.read_bytes(), before)
+            self.assertTrue(scratch.exists())
+
+    def test_original_managed_barrier_foreign_identical_bytes_inode_refused(self):
+        """A same-length/same-content scratch substitution is never recovery authority."""
+        from auto_detect_destination_commit import (
+            DestinationRefused, _write_bound_managed_file_locked,
+            _restore_bound_managed_file_locked)
+        from managed_inode_barrier import _payload
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, _, after = self.fixture()
+            kw = dict(parent=parent, active=active, attest=lambda: True)
+            real_replace = os.replace
+
+            def crash_after_rename(source, dest, **kwargs):
+                result = real_replace(source, dest, **kwargs)
+                if Path(dest) == target:
+                    raise OSError("crash-after-target-rename")
+                return result
+
+            with patch("os.replace", side_effect=crash_after_rename):
+                with self.assertRaisesRegex(OSError, "crash-after-target-rename"):
+                    _write_bound_managed_file_locked(store, prepared, row, **kw)
+            pending = store.read()
+            self.assertIn("barrier", pending["managed"])
+            self.assertNotIn("installed", pending["managed"])
+            token = pending["managed"]["ready"]["temp"]
+            scratch = active.parent / (".s10-managed-barrier-" + token[13:-4])
+            original = scratch / "record"
+            original.rename(scratch / "original")
+            original.write_bytes(_payload(token))
+            original.chmod(0o600)
+            (scratch / "original").unlink()
+            with self.assertRaisesRegex(DestinationRefused, "barrier_recovery_refused"):
+                _restore_bound_managed_file_locked(store, pending, **kw)
+            self.assertEqual(store.read(), pending)
+            self.assertEqual(target.read_bytes(), after)
+
+
+    def test_native_managed_write_restores_a_synchronous_interruption(self):
+        from contextlib import ExitStack
+        from auto_detect_destination_commit import exclusive_destination_lock
+        from neutral_effective_diff import EffectiveDecision
+        from neutral_schema3_previous_physical import LockedRunningPredecessor, PriorRunningToken
+        import neutral_shared_apply_source_gate as gate
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, before, _ = self.fixture()
+            detail, prior = prepared["detail"], prepared["previous"]
+            root = prepared["manifest"]["root_sha256"]
+            old_root = prepared["previous_manifest"]["root_sha256"]
+            running = PriorRunningToken(123, "birth", 456, "monitor-birth", "f" * 64)
+            executable = (1, 2, "f" * 64)
+            physical = LockedRunningPredecessor(detail["id"], prior["id"], old_root,
+                detail["base"], "3" * 64, running, None, executable_identity=executable,
+                managed_preimages=(row,))
+            semantic = gate.OriginalSemanticReceipt(detail["id"], prior["id"], root, old_root,
+                EffectiveDecision("RELOAD_SAFE_CANDIDATE", (row[0],), ()), None,
+                lifecycle_proposal="RELOAD")
+            real_replace = os.replace
+            attempts = []
+
+            def fail_first_live_rename(source, dest, **kwargs):
+                result = real_replace(source, dest, **kwargs)
+                if Path(dest) == target:
+                    attempts.append(target.read_bytes())
+                    if len(attempts) == 1:
+                        raise OSError("interrupted after file rename")
+                return result
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(gate, "native_recheck_running_prepared_fd9", return_value=physical))
+                stack.enter_context(patch.object(gate, "_s10_native_bound_engine_readback",
+                                                return_value={"engine_sha256": executable[2]}))
+                stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+                stack.enter_context(patch("shared_apply_seal.WORK", parent))
+                stack.enter_context(patch("neutral_schema3_previous_physical.COMMON_ACTIVE", active))
+                stack.enter_context(patch("neutral_schema3_previous_physical._running_native", return_value=running))
+                stack.enter_context(patch("neutral_schema3_previous_physical._running_executable_identity",
+                                          return_value=executable))
+                stack.enter_context(patch("voice_ipfw_adapter.shared_release_manifest",
+                    return_value={"rule_base": 19000, "rule_max": 19099}))
+                kernel = stack.enter_context(patch("voice_firewall_transaction.verify_prior_state"))
+                config = stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+                stack.enter_context(patch("auto_detect_destination_commit.exclusive_destination_lock",
+                    side_effect=lambda *_: exclusive_destination_lock(parent / "p2.lock", store.owner)))
+                stack.enter_context(patch("os.replace", side_effect=fail_first_live_rename))
+                with self.assertRaisesRegex(OSError, "interrupted after file rename"):
+                    gate.native_write_running_managed_file_fd9(detail["id"], b"fixture",
+                        source=None, semantic=semantic, config_fd=4, config_digest=detail["base"])
+            self.assertGreaterEqual(config.call_count, 4)
+            self.assertEqual(config.call_count, 2 * kernel.call_count)
+            self.assertEqual(len(attempts), 2)
+            self.assertEqual(attempts[1], before)
+            self.assertEqual(target.read_bytes(), before)
+            self.assertEqual(store.read()["phase"], "restored")
+
+    def test_original_managed_file_cas_refuses_drift_before_any_write(self):
+        from auto_detect_destination_commit import (
+            DestinationRefused, _write_bound_managed_file_locked, _restore_bound_managed_file_locked)
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            for kind in ("another release entry", "same bytes new inode", "foreign postimage"):
+                with self.subTest(kind=kind):
+                    store, prepared, row, parent, active, target, before, after = self.fixture(
+                        extra_change=kind == "another release entry")
+                    kw = dict(parent=parent, active=active, attest=lambda: True)
+                    sibling = target.with_name("substitute")
+                    if kind == "foreign postimage":
+                        pending = _write_bound_managed_file_locked(store, prepared, row, **kw)
+                        sibling.write_bytes(after)
+                        sibling.replace(target)
+                        with self.assertRaisesRegex(DestinationRefused, "foreign_image"):
+                            _restore_bound_managed_file_locked(store, pending, **kw)
+                        self.assertEqual(store.read(), pending)
+                        self.assertEqual(target.read_bytes(), after)
+                    else:
+                        if kind == "same bytes new inode":
+                            sibling.write_bytes(before)
+                            sibling.replace(target)
+                        with self.assertRaises(DestinationRefused):
+                            _write_bound_managed_file_locked(store, prepared, row, **kw)
+                        self.assertEqual(store.read(), prepared)
+                        self.assertEqual(target.read_bytes(), before)
+
+    def test_managed_cold_recovery_reuses_original_boot_and_config_transport(self):
+        from contextlib import ExitStack, redirect_stdout, redirect_stderr
+        import io
+        import subprocess
+        from auto_detect_destination_commit import (
+            _write_bound_managed_file_locked, exclusive_destination_lock,
+        )
+        from auto_detect_minute import inspect_inert_release
+        from shared_apply_seal import _stat
+        import neutral_schema3_quiescent_preimage as gate
+        import shared_apply_operation as journal
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            store, prepared, row, parent, active, target, before, after = self.fixture()
+            pending = _write_bound_managed_file_locked(store, prepared, row,
+                parent=parent, active=active, attest=lambda: True)
+            op, old = pending["detail"], pending["previous"]
+            self.assertEqual(target.read_bytes(), after)
+            cli = ["shared_apply_operation.py", "recover-managed", op["id"], old["id"]]
+
+            def php(command, *, pass_fds, budget, capture_output):
+                self.assertEqual(command[-3:], ["ordinary-restore-finish", op["id"], "strategies"])
+                self.assertEqual(pass_fds, (9,))
+                self.assertEqual(budget, 90)
+                self.assertTrue(capture_output)
+                receipt = gate.finish_bound_cold_restore_locked(op["id"], op["base"], config_fd=4)
+                return subprocess.CompletedProcess(command, 0, (json.dumps(receipt) + "\n").encode())
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(sys, "platform", "freebsd15"))
+                stack.enter_context(patch.object(os, "geteuid", return_value=0))
+                stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+                stack.enter_context(patch.object(journal, "SharedApplyOperation", return_value=store))
+                stack.enter_context(patch.object(gate, "SharedApplyOperation", return_value=store))
+                stack.enter_context(patch.object(gate, "WORK", parent))
+                stack.enter_context(patch.object(gate, "COMMON_ACTIVE", active))
+                stack.enter_context(patch.object(gate, "PRODUCER_ROOT", parent / "absent-producer"))
+                stack.enter_context(patch("shared_apply_seal._stat", side_effect=
+                    lambda path, uid, **kw: _stat(path, store.owner, **kw)))
+                stack.enter_context(patch.object(gate, "inspect_inert_release", side_effect=
+                    lambda path, **kw: inspect_inert_release(path, owner_uid=store.owner)))
+                stack.enter_context(patch("auto_detect_destination_commit.exclusive_destination_lock",
+                    side_effect=lambda *_: exclusive_destination_lock(parent / "p2.lock", store.owner)))
+                config = stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+                processes = stack.enter_context(patch.object(gate, "_zero_processes"))
+                kernel = stack.enter_context(patch.object(gate, "_empty_kernel",
+                                                        return_value="native-managed-kernel-empty"))
+                transport = stack.enter_context(patch.object(gate, "_run_bound_restore_joined", side_effect=php))
+                stdout = stack.enter_context(redirect_stdout(io.StringIO()))
+                stack.enter_context(redirect_stderr(io.StringIO()))
+
+                self.assertEqual(journal.main([cli[0], "inspect"]), 0)
+                self.assertEqual(stdout.getvalue(),
+                    f"managed-writing {op['id']} strategies {old['id']} {old['page']}\n")
+                self.assertEqual(journal.main([*cli[:-1], "7" * 32]), 69)
+                transport.assert_not_called()
+                with self.assertRaises(gate.QuiescentPreimageRefused):
+                    gate.finish_bound_cold_restore_locked(op["id"], op["candidate"], config_fd=4)
+                processes.side_effect = gate.QuiescentPreimageRefused("live process")
+                self.assertEqual(journal.main(cli), 69)
+                processes.side_effect = None
+                kernel.side_effect = gate.QuiescentPreimageRefused("managed kernel is not empty")
+                self.assertEqual(journal.main(cli), 69)
+                kernel.side_effect = None
+                residue = parent / f".{active.name}.stage.{op['id']}"
+                residue.mkdir()
+                self.assertEqual(journal.main(cli), 69)
+                residue.rmdir()
+                self.assertEqual(store.read(), pending)
+                self.assertEqual(target.read_bytes(), after)
+
+                self.assertEqual(journal.main(cli), 0)
+                self.assertTrue(stdout.getvalue().endswith(f"managed-restored={op['id']}\n"))
+                self.assertEqual(journal.main([cli[0], "inspect"]), 0)
+                self.assertTrue(stdout.getvalue().endswith(f"committed {old['id']} {old['page']}\n"))
+                self.assertEqual(journal.main(cli), 69)
+                config.assert_called_with(4, Path("/conf/config.xml"), owner_uid=None)
+
+            self.assertEqual(target.read_bytes(), before)
+            self.assertEqual(committed_manifest(store.read()), prepared["previous_manifest"])
+
+    def test_interrupted_managed_save_reconciles_exact_observed_image(self):
+        from contextlib import ExitStack, redirect_stdout
+        import io
+        import subprocess
+        from auto_detect_destination_commit import (
+            _write_bound_managed_file_locked, exclusive_destination_lock,
+        )
+        from shared_apply_operation import _config_observation_witness
+        from shared_apply_seal import _stat, verify_seal
+        import auto_detect_effective_known as worker
+        import neutral_schema3_quiescent_preimage as gate
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            for mode in ("base", "candidate", "running", "foreign-inode", "equal",
+                         "pre-save-running", "pre-save-unpinned"):
+                with self.subTest(mode=mode):
+                    store, prepared, row, parent, active, target, before, after = self.fixture(
+                        equal_config=mode == "equal")
+                    detail = prepared["detail"]
+                    observed = detail["base" if mode == "base" else "candidate"]
+                    owner = "3" * 64
+                    pending = _write_bound_managed_file_locked(store, prepared, row,
+                        running_sha256=None if mode == "pre-save-unpinned" else owner,
+                        parent=parent, active=active, attest=lambda: True)
+                    saving = (pending if mode.startswith("pre-save-") else
+                              store._checkpoint_managed_config(pending, saved=False, attest=lambda: True,
+                                                               shared_work_parent=parent))
+                    plan_sha = verify_seal(parent / detail["id"], owner=store.owner)["sha256"]["plan.json"]
+
+                    def witness(image):
+                        return _config_observation_witness(detail, plan_sha, image)
+
+                    with ExitStack() as stack:
+                        config = stack.enter_context((parent / "config.xml").open("w+b"))
+                        config.write(b"<opnsense/>\n")
+                        config.flush()
+                        stack.enter_context(patch.object(sys, "platform", "freebsd15"))
+                        stack.enter_context(patch.object(os, "geteuid", return_value=0))
+                        stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+                        stack.enter_context(patch.object(gate, "SharedApplyOperation", return_value=store))
+                        stack.enter_context(patch.object(gate, "WORK", parent))
+                        stack.enter_context(patch.object(gate, "COMMON_ACTIVE", active))
+                        stack.enter_context(patch.object(gate, "PRODUCER_ROOT", parent / "absent-producer"))
+                        pidfile = parent / "child.pid"
+                        stack.enter_context(patch.object(gate, "CHILD_PID", pidfile))
+                        stack.enter_context(patch.object(gate, "MONITOR_PID", parent / "monitor.pid"))
+                        stack.enter_context(patch.object(gate, "DAEMON_PID", parent / "daemon.pid"))
+                        stack.enter_context(patch("shared_apply_seal._stat", side_effect=
+                            lambda path, uid, **kw: _stat(path, store.owner, **kw)))
+                        stack.enter_context(patch("shared_apply_seal.verify_seal", side_effect=
+                            lambda work, **kw: verify_seal(work, owner=store.owner)))
+                        stack.enter_context(patch.object(gate, "inspect_inert_release", return_value="inactive"))
+                        stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+                        stack.enter_context(patch("auto_detect_destination_commit.exclusive_destination_lock",
+                            side_effect=lambda *_: exclusive_destination_lock(parent / "p2.lock", store.owner)))
+                        processes = stack.enter_context(patch.object(gate, "_zero_processes"))
+                        empty = stack.enter_context(patch.object(gate, "_empty_kernel",
+                                                               return_value="native-managed-kernel-empty"))
+                        running = stack.enter_context(patch(
+                            "neutral_shared_apply_source_gate._native_managed_running_digest", return_value=owner))
+
+                        if mode.startswith("pre-save-"):
+                            pidfile.touch()
+                            processes.side_effect = gate.QuiescentPreimageRefused("live process")
+                            finish = gate.finish_bound_cold_restore_locked
+                            running.return_value = "5" * 64
+                            reason = ("RUNNING_OWNER_REQUIRED" if mode == "pre-save-unpinned"
+                                      else "RUNNING_OWNER_CHANGED")
+                            with self.assertRaisesRegex(gate.QuiescentPreimageRefused, reason):
+                                finish(detail["id"], detail["base"], config_fd=config.fileno())
+                            self.assertEqual(store.read(), pending)
+                            self.assertEqual(target.read_bytes(), after)
+                            if mode == "pre-save-unpinned":
+                                running.assert_not_called()
+                            else:
+                                # Change the witnessed process after the initial observation,
+                                # before the original writer can restore the attributed inode.
+                                running.side_effect = [owner, "5" * 64]
+                                with self.assertRaisesRegex(gate.QuiescentPreimageRefused,
+                                                            "RUNNING_OWNER_CHANGED"):
+                                    finish(detail["id"], detail["base"], config_fd=config.fileno())
+                                self.assertEqual(store.read(), pending)
+                                self.assertEqual(target.read_bytes(), after)
+                                running.side_effect = None
+                                running.return_value = owner
+                                self.assertEqual(finish(detail["id"], detail["base"],
+                                                       config_fd=config.fileno()),
+                                    {"result": "original-bound-cold-restored", "id": detail["id"]})
+                                self.assertEqual((store.read()["phase"], target.read_bytes()),
+                                                 ("restored", before))
+                                self.assertEqual(committed_manifest(store.read()),
+                                                 prepared["previous_manifest"])
+                            empty.assert_not_called()
+                            processes.assert_not_called()
+                            continue
+
+                        finish = gate.finish_managed_config_recovery_locked
+                        if mode == "running":
+                            pidfile.touch()
+                        if mode == "equal":
+                            with self.assertRaisesRegex(gate.QuiescentPreimageRefused, "AMBIGUOUS_IMAGE"):
+                                finish(detail["id"], witness(observed), config_fd=config.fileno())
+                            self.assertEqual(store.read(), saving)
+                            continue
+
+                        with self.assertRaisesRegex(gate.QuiescentPreimageRefused, "IMAGE_REFUSED"):
+                            finish(detail["id"], witness("8" * 64), config_fd=config.fileno())
+                        self.assertEqual(store.read(), saving)
+                        if mode == "foreign-inode":
+                            from auto_detect_destination_commit import DestinationRefused
+                            sibling = target.with_name("substitute")
+                            sibling.write_bytes(after)
+                            sibling.replace(target)
+                            with self.assertRaisesRegex(DestinationRefused, "installed_image_changed"):
+                                finish(detail["id"], witness(observed), config_fd=config.fileno())
+                            self.assertEqual(store.read(), saving)
+                            continue
+                        if mode == "running":
+                            running.return_value = "5" * 64
+                            with self.assertRaisesRegex(gate.QuiescentPreimageRefused, "RUNNING_OWNER_CHANGED"):
+                                finish(detail["id"], witness(observed), config_fd=config.fileno())
+                            running.return_value = owner
+                            empty.assert_not_called()
+                        if mode == "base":
+                            real_replace = os.replace
+
+                            def interrupted(source, dest, **kw):
+                                real_replace(source, dest, **kw)
+                                if Path(dest) == target:
+                                    raise OSError("interrupted restoring saved base")
+
+                            with patch("os.replace", side_effect=interrupted):
+                                with self.assertRaisesRegex(OSError, "interrupted restoring saved base"):
+                                    finish(detail["id"], witness(observed), config_fd=config.fileno())
+                            saving = store.read()
+                            self.assertIn("restore", saving["managed"])
+                            with self.assertRaisesRegex(gate.QuiescentPreimageRefused, "IMAGE_REFUSED"):
+                                finish(detail["id"], witness(detail["candidate"]), config_fd=config.fileno())
+
+                        def inherited(operation, proof, *, config_fd, queue_fd):
+                            self.assertEqual((operation, config_fd, queue_fd), (detail["id"], 4, None))
+                            return finish(operation, proof, config_fd=config.fileno())
+
+                        def php(command, *, pass_fds, budget, capture_output):
+                            self.assertEqual(command[-3:], ["managed-save-recover", detail["id"], "strategies"])
+                            self.assertEqual((pass_fds, budget, capture_output), ((9,), 90, True))
+                            with redirect_stdout(io.StringIO()) as output:
+                                rc = worker.main(["recover-managed-config-locked", detail["id"], witness(observed)])
+                            return subprocess.CompletedProcess(command, rc, output.getvalue().encode())
+
+                        stack.enter_context(patch.object(gate, "finish_managed_config_recovery_locked",
+                                                        side_effect=inherited))
+                        stack.enter_context(patch.object(gate, "_run_bound_restore_joined", side_effect=php))
+                        terminal = gate.native_finish_bound_cold_restore(saving)
+                        self.assertEqual(store.read(), terminal)
+                        self.assertNotIn("managed", terminal)
+                        if mode == "base":
+                            self.assertEqual((terminal["phase"], target.read_bytes()), ("restored", before))
+                            self.assertEqual(committed_manifest(terminal), prepared["previous_manifest"])
+                        else:
+                            self.assertEqual((terminal["phase"], target.read_bytes()), ("committed", after))
+                            self.assertEqual(committed_manifest(terminal), prepared["manifest"])
+
+    def test_managed_config_requires_installed_file_and_same_running_owner_through_commit(self):
+        from contextlib import ExitStack, redirect_stdout
+        import io
+        import auto_detect_effective_known as transport
+        from auto_detect_destination_commit import (
+            DestinationRefused, _restore_bound_managed_file_locked,
+            _write_bound_managed_file_locked, exclusive_destination_lock,
+        )
+        from shared_apply_operation import _config_save_witness
+        from shared_apply_seal import verify_seal
+        import neutral_shared_apply_source_gate as gate
+
+        with patch("voice_ipfw_adapter.require_lifecycle_lock"):
+            for foreign_file in (False, True):
+                with self.subTest(foreign_file=foreign_file):
+                    store, prepared, row, parent, active, target, _, after = self.fixture()
+                    detail = prepared["detail"]
+                    running = "3" * 64
+                    witness = _config_save_witness(detail,
+                        verify_seal(parent / detail["id"], owner=store.owner)["sha256"]["plan.json"])
+                    kw = dict(parent=parent, active=active, attest=lambda: True)
+                    pending = _write_bound_managed_file_locked(store, prepared, row,
+                                                              running_sha256=running, **kw)
+                    with ExitStack() as stack:
+                        config = stack.enter_context((parent / "config.xml").open("w+b"))
+                        config.write(b"<opnsense/>\n")
+                        config.flush()
+                        stack.enter_context(patch.object(sys, "platform", "freebsd15"))
+                        stack.enter_context(patch.object(os, "geteuid", return_value=0))
+                        stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+                        stack.enter_context(patch("shared_apply_seal.WORK", parent))
+                        stack.enter_context(patch("shared_apply_seal.verify_seal", side_effect=
+                            lambda work, **_: verify_seal(work, owner=store.owner)))
+                        stack.enter_context(patch("neutral_schema3_previous_physical.COMMON_ACTIVE", active))
+                        stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+                        stack.enter_context(patch("auto_detect_destination_commit.exclusive_destination_lock",
+                            side_effect=lambda *_: exclusive_destination_lock(parent / "p2.lock", store.owner)))
+                        owner = stack.enter_context(patch.object(gate, "_native_managed_running_digest",
+                                                               return_value=running))
+
+                        native_checkpoint = gate.native_checkpoint_managed_config_fd9
+
+                        def checkpoint(*, saved=False, digest=witness):
+                            return native_checkpoint(detail["id"], digest,
+                                config_fd=config.fileno(), saved=saved)
+
+                        def request(mode, phase):
+                            def inherited(operation, digest, *, config_fd, saved):
+                                self.assertEqual(operation, detail["id"])
+                                self.assertEqual(config_fd, 4)
+                                return checkpoint(saved=saved, digest=digest)
+
+                            with patch.object(gate, "native_checkpoint_managed_config_fd9", side_effect=inherited), \
+                                 redirect_stdout(io.StringIO()) as output:
+                                self.assertEqual(transport.main([mode, detail["id"], witness]), 0)
+                            self.assertEqual(json.loads(output.getvalue()), {"result": phase, "id": detail["id"]})
+                            return store.read()
+
+                        with self.assertRaises(gate.OriginalSourceGateRefused):
+                            checkpoint(saved=True)
+                        with self.assertRaisesRegex(gate.OriginalSourceGateRefused, "MANAGED_CONFIG_PLAN_CHANGED"):
+                            checkpoint(digest="4" * 64)
+                        self.assertEqual(store.read(), pending)
+                        saving = request("begin-managed-config-save-locked", "managed-config-saving")
+                        self.assertEqual(saving, {**pending, "phase": "managed-config-saving"})
+                        self.assertEqual(store.read(), saving)
+                        with self.assertRaises(DestinationRefused):
+                            _restore_bound_managed_file_locked(store, saving, **kw)
+                        self.assertFalse(native_lifecycle_gate("common-recover-activating",
+                            root=store.root)["safe_to_mutate"])
+                        with self.assertRaises(gate.OriginalSourceGateRefused):
+                            checkpoint()
+                        with self.assertRaisesRegex(gate.OriginalSourceGateRefused, "MANAGED_CONFIG_PLAN_CHANGED"):
+                            checkpoint(saved=True, digest="4" * 64)
+                        owner.return_value = "5" * 64
+                        with self.assertRaises(SharedOperationError):
+                            checkpoint(saved=True)
+                        self.assertEqual(store.read(), saving)
+                        owner.return_value = running
+                        if foreign_file:
+                            sibling = target.with_name("substitute")
+                            sibling.write_bytes(after)
+                            sibling.replace(target)
+                            with self.assertRaisesRegex(DestinationRefused, "installed_image_changed"):
+                                checkpoint(saved=True)
+                            self.assertEqual(store.read(), saving)
+                        else:
+                            committed = request("confirm-managed-config-save-locked", "committed")
+                            self.assertEqual(committed, store.read())
+                            self.assertEqual(committed["phase"], "committed")
+                            self.assertEqual(committed_manifest(committed), prepared["manifest"])
+                            self.assertNotIn("managed", committed)
+                        self.assertEqual(target.read_bytes(), after)
 
 
 if __name__ == "__main__":

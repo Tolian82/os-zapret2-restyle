@@ -1186,7 +1186,8 @@ class CursorChain:
             raise CursorChainRefused("learning_cycle_original_epoch_changed")
         return folder, seed, encoded
 
-    def learning_tip(self, proof, workspace, *, allow_unfinished_debug_cut=False):
+    def learning_tip(self, proof, workspace, *, allow_unfinished_debug_cut=False,
+                     reclaim_unsealed=True):
         folder, seed, epoch_raw = self.learning_epoch(proof, workspace)
         root = folder / CHAIN
         state = {}
@@ -1221,6 +1222,8 @@ class CursorChain:
             if not (slot / "intent.json").exists():
                 if set(os.listdir(slot)) not in (set(), {"native"}):
                     raise CursorChainRefused("learning_cycle_unsealed_source_has_effects")
+                if not reclaim_unsealed:
+                    raise CursorChainRefused("learning_cycle_unsealed_source_readonly")
                 # Before the aggregate intent exists no destination/native
                 # mutation is permitted. Reclaim only that incomplete
                 # private metadata, then freeze a new physical snapshot.

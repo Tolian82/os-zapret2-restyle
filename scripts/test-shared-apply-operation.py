@@ -810,6 +810,268 @@ class TestJournal(unittest.TestCase):
             with self.assertRaises(SharedOperationError):
                 native_committed_owner_witness(j.root)
 
+    def test_bound_successor_prepare_is_detached_only(self):
+        import os
+        from shared_apply_operation import native_bound_prepare_gate
+        from shared_apply_render import regular
+
+        old = detail("1" * 32)
+        op = "2" * 32
+        pin = {"schema": 1, "generation": old["id"], "root_sha256": "c" * 64,
+               "seal_sha256": "d" * 64, "candidate_sha256": old["candidate"]}
+        record = {"schema": 1, "phase": "committed", "detail": old, "manifest": pin}
+        plan = {"result": "prepared", "page": "strategies", "dependencies": old["candidate"],
+                "candidate": {"general": {"enabled": "1"}, "hostlist": {"mode": "list"}}}
+        uid = os.geteuid()
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            root = Path(tmp)
+            work = root / "work"
+            work.mkdir(mode=0o700)
+            candidate = work / op
+            candidate.mkdir(mode=0o700)
+            xml = candidate / "candidate.xml"
+            xml.write_bytes(b"detached XML")
+            xml.chmod(0o600)
+            plan_file = candidate / "plan.json"
+            plan_file.write_text(json.dumps(plan))
+            plan_file.chmod(0o600)
+            store = SharedApplyOperation(root / "journal", owner=uid)
+            store._persist_record(record)
+            original = (store.root / "operation.json").read_bytes()
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            stack.enter_context(patch("shared_apply_operation.sys.platform", "freebsd15"))
+            stack.enter_context(patch("shared_apply_operation.os.geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("shared_apply_seal.WORK", work))
+            stack.enter_context(patch("shared_apply_render.regular", side_effect=
+                lambda path, owner, **kw: regular(path, uid, **kw)))
+            pins = stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            native_bound_prepare_gate(op)
+            self.assertEqual(pins.call_count, 2)
+            # A genuine three-source Found plan is still only a detached
+            # build input. Reuse real batch SHA/identity/domain validation.
+            rows = {name: {
+                "before": "", "after": "example.org\n" if name == "auto" else "",
+                "before_status": "present",
+                "before_revision": hashlib.sha256(b"present\0").hexdigest(),
+                "before_device": 1, "before_inode": index + 1,
+                "before_ctime_ns": 1, "before_mtime_ns": 1, "before_size": 0}
+                for index, name in enumerate(("youtube", "user", "auto"))}
+            found = {**plan, "changed_fields": [],
+                     "found_intent": {"config_revision": plan["dependencies"],
+                                      "commit_authorized": False},
+                     "found_batch": rows}
+            for mode in ("list", "all", {"list": {"selected": "1"},
+                                         "auto": {"selected": "0"}}):
+                with self.subTest(found_mode=mode):
+                    valid_found = {**found, "candidate": {
+                        **plan["candidate"], "hostlist": {"mode": mode}}}
+                    plan_file.write_text(json.dumps(valid_found))
+                    native_bound_prepare_gate(op)
+                    self.assertEqual(json.loads(plan_file.read_bytes()), valid_found)
+                    self.assertEqual((store.root / "operation.json").read_bytes(), original)
+                    self.assertEqual(set(candidate.iterdir()), {xml, plan_file})
+                    self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+            disabled = {**found, "candidate": {"general": {"enabled": "0"},
+                                               "hostlist": {"mode": "list"}}}
+            plan_file.write_text(json.dumps(disabled))
+            native_bound_prepare_gate(op)
+            self.assertEqual(json.loads(plan_file.read_bytes()), disabled)
+            self.assertEqual((store.root / "operation.json").read_bytes(), original)
+            self.assertEqual(set(candidate.iterdir()), {xml, plan_file})
+            self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+            for malformed in (
+                    {k: v for k, v in disabled.items() if k not in ("found_batch", "found_intent")},
+                    {k: v for k, v in disabled.items() if k != "found_batch"},
+                    {k: v for k, v in disabled.items() if k != "found_intent"},
+                    {**disabled, "candidate": {"general": {"enabled": 0}, "hostlist": {"mode": "list"}}},
+                    {**disabled, "candidate": {"general": {"enabled": "0"}, "hostlist": {"mode": "auto"}}},
+                    {k: v for k, v in found.items() if k != "found_batch"},
+                    {k: v for k, v in found.items() if k != "found_intent"},
+                    {**found, "found_intent": {**found["found_intent"], "config_revision": "0" * 64}},
+                    {**found, "found_intent": {**found["found_intent"], "commit_authorized": True}},
+                    {**found, "found_intent": {**found["found_intent"], "commit_authorized": 0}},
+                    {**found, "found_batch": {}},
+                    {**found, "found_batch": {**rows, "foreign": {}}},
+                    {**found, "found_batch": {**rows, "auto": {**rows["auto"], "before_revision": "0" * 64}}},
+                    {**found, "found_batch": {**rows, "auto": {**rows["auto"], "before_inode": 1.0}}},
+                    {**found, "changed_fields": None},
+                    {**found, "candidate": {"general": {"enabled": "1"}, "hostlist": {"mode": "auto"}}}):
+                with self.subTest(malformed_found=malformed):
+                    plan_file.write_text(json.dumps(malformed))
+                    with self.assertRaises(SharedOperationError):
+                        native_bound_prepare_gate(op)
+                    self.assertEqual((store.root / "operation.json").read_bytes(), original)
+            plan_file.write_text(json.dumps(plan))
+            # A list-only edit preserves the native, unedited OptionField
+            # dictionary in the actual PHP plan. Labels are not authority.
+            for selected_mode in ("all", "list"):
+                for on, off in ((1, 0), (True, False), ("1", "0")):
+                    with self.subTest(mode=selected_mode, selected=on):
+                        options = {name: {"value": "display " + name,
+                                          "selected": on if name == selected_mode else off}
+                                   for name in ("all", "list", "auto")}
+                        native_plan = {**plan, "candidate": {
+                            **plan["candidate"], "hostlist": {"mode": options}}}
+                        plan_file.write_text(json.dumps(native_plan))
+                        native_bound_prepare_gate(op)
+            for options in (
+                    {},
+                    {"list": {"selected": 0}},
+                    {"all": {"selected": 1}, "list": {"selected": 1}},
+                    {"list": {"selected": 1}, "auto": {"selected": 1}},
+                    {"list": {"selected": 0}, "auto": {"selected": 1}},
+                    {"list": {"value": "List"}},
+                    {"list": {"selected": 2}},
+                    {"list": {"selected": 1.0}},
+                    {"list": {"selected": "true"}},
+                    {"list": {"selected": None}},
+                    {"list": 1},
+                    {"list": {"selected": 1}, "foreign": {"selected": 0}},
+                    {"foreign": {"selected": 1}},
+                    [{"list": {"selected": 1}}]):
+                with self.subTest(invalid_mode=options):
+                    native_plan = {**plan, "candidate": {
+                        **plan["candidate"], "hostlist": {"mode": options}}}
+                    plan_file.write_text(json.dumps(native_plan))
+                    with self.assertRaises(SharedOperationError):
+                        native_bound_prepare_gate(op)
+            plan_file.write_text(json.dumps(plan))
+            self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+            for patch_plan in ({"dependencies": "0" * 64}, {"found_intent": {}},
+                               {"candidate": {"general": {"enabled": "1"}, "hostlist": {"mode": "auto"}}},
+                               {"candidate": []}, {"page": "voice"}):
+                with self.subTest(plan=patch_plan):
+                    plan_file.write_text(json.dumps({**plan, **patch_plan}))
+                    with self.assertRaises(SharedOperationError):
+                        native_bound_prepare_gate(op)
+            plan_file.write_text(json.dumps(plan))
+            for bad in (old["id"], "invalid"):
+                with self.assertRaises(SharedOperationError):
+                    native_bound_prepare_gate(bad)
+            residue = candidate / "release"
+            residue.mkdir()
+            with self.assertRaises(SharedOperationError):
+                native_bound_prepare_gate(op)
+            residue.rmdir()
+            xml.unlink()
+            xml.symlink_to(plan_file)
+            with self.assertRaises(RuntimeError):
+                native_bound_prepare_gate(op)
+            xml.unlink()
+            xml.write_bytes(b"detached XML")
+            xml.chmod(0o600)
+            pins.side_effect = RuntimeError("foreign original pin")
+            with self.assertRaises(RuntimeError):
+                native_bound_prepare_gate(op)
+            pins.side_effect = None
+            for phase in ("activated", "restored"):
+                store._persist_record({**record, "phase": phase})
+                with self.assertRaises(SharedOperationError):
+                    native_bound_prepare_gate(op)
+            store._persist_record(record)
+            self.assertEqual((store.root / "operation.json").read_bytes(), original)
+            self.assertEqual(set(candidate.iterdir()), {xml, plan_file})
+            self.assertEqual(xml.read_bytes(), b"detached XML")
+            self.assertEqual(json.loads(plan_file.read_bytes()), plan)
+
+    def test_retired_gui_stage_requires_completed_original_p2a_no_repair(self):
+        import os
+        from types import SimpleNamespace
+        from unittest.mock import Mock, MagicMock
+        from shared_apply_operation import native_bound_stopped_gui_gate
+
+        old = detail()
+        record = {"schema": 1, "phase": "committed", "detail": old,
+                  "manifest": {"schema": 2, "generation": old["id"],
+                      "root_sha256": "c" * 64, "seal_sha256": "d" * 64,
+                      "candidate_sha256": old["candidate"]}}
+        proof = SimpleNamespace(operation_id=old["id"], generation=old["id"],
+                     owner_candidate_sha256=old["candidate"], owner=object())
+        stopped = {"state": "stopped", "source": "native-common",
+                   "config_digest": old["candidate"]}
+        store = Mock(read=Mock(return_value=record))
+        queue = MagicMock()
+        receipts = MagicMock()
+        receipts._generation.return_value = Path("/no-real-epoch")
+        with ExitStack() as stack:
+            def seam(name, **kw):
+                return stack.enter_context(patch(name, **kw))
+            seam("shared_apply_operation.sys.platform", new="freebsd15")
+            seam("shared_apply_operation.os.geteuid", return_value=0)
+            seam("shared_apply_operation.SharedApplyOperation", return_value=store)
+            seam("voice_ipfw_adapter.require_lifecycle_lock")
+            seam("neutral_root_stage.verify_original_operation_pins")
+            root = seam("neutral_root_stage._verify_original_pinned_root",
+                return_value=b'{"service":{"enabled":true,"target_mode":"auto"}}')
+            state = seam("voice_live_inspect.examine_shared", return_value=stopped)
+            seam("neutral_schema3_quiescent_preimage._zero_processes")
+            empty = seam("neutral_schema3_quiescent_preimage._safe_empty_directory")
+            seam("neutral_schema3_previous_physical._full_prior_tree", return_value="tree")
+            seam("neutral_schema3_quiescent_preimage._empty_kernel", return_value="kernel")
+            seam("pwd.getpwnam", return_value=SimpleNamespace(pw_gid=1001))
+            seam("auto_detect_queue.DurableInbox", return_value=queue)
+            seam("auto_detect_epoch_receipts.EpochReceipts", return_value=receipts)
+            seam("auto_detect_epoch_receipts._read", return_value=b"ready")
+            attest = seam("auto_detect_owner.attest_learning_stopped_generation", return_value=proof)
+            retirement = seam("auto_detect_learning_retirement.retired_learning_stopped", return_value=True)
+            seam("neutral_schema3_quiescent_preimage._verify_idle_producer", return_value=("idle",))
+            self.assertEqual(native_bound_stopped_gui_gate(), 2)
+            self.assertEqual(queue.exclusive.call_count, 2)
+            for call in queue.exclusive.call_args_list:
+                self.assertEqual(call.kwargs, {"existing_only": True})
+            for call in retirement.call_args_list:
+                self.assertIs(call.kwargs["repair"], False)
+            empty.assert_not_called()
+            retirement.reset_mock()
+            state.return_value = {**stopped, "state": "ready"}
+            with self.assertRaises(SharedOperationError):
+                native_bound_stopped_gui_gate()
+            retirement.assert_not_called()
+            state.return_value = stopped
+            retirement.return_value = False
+            with self.assertRaises(SharedOperationError):
+                native_bound_stopped_gui_gate()
+            retirement.return_value = True
+            attest.return_value = SimpleNamespace(**{**vars(proof), "generation": "0"*32})
+            with self.assertRaises(SharedOperationError):
+                native_bound_stopped_gui_gate()
+            attest.return_value = proof
+            root.return_value = b'{"service":{"enabled":false,"target_mode":"list"}}'
+            with self.assertRaises(SharedOperationError):
+                native_bound_stopped_gui_gate()
+            store._persist_record.assert_not_called()
+            # Reuse only the real previous pin after a terminal rollback;
+            # even a valid abandoned root cannot become the old owner.
+            from shared_apply_operation import restored_retired_found_owner
+            abandoned = {"id": "2"*32, "page": "strategies",
+                         "base": old["candidate"], "candidate": "e"*64,
+                         "changed_fields": ["general.enabled"]}
+            abandoned_pin = {**record["manifest"], "schema": 1,
+                             "generation": abandoned["id"],
+                             "candidate_sha256": abandoned["candidate"]}
+            restored = {"schema": 1, "phase": "restored", "detail": abandoned,
+                        "previous": old, "previous_manifest": record["manifest"],
+                        "manifest": abandoned_pin}
+            store.read.return_value = restored
+            root.return_value = b'{"service":{"enabled":true,"target_mode":"auto"}}'
+            self.assertTrue(restored_retired_found_owner(restored))
+            self.assertEqual(native_bound_stopped_gui_gate(), 2)
+            self.assertEqual(root.call_args.kwargs["detail"], old)
+            self.assertEqual(root.call_args.kwargs["binding"], record["manifest"])
+            self.assertEqual(attest.call_args.kwargs, {"restored_record": restored})
+            unbound = {k: v for k, v in restored.items() if k != "manifest"}
+            store.read.return_value = unbound
+            self.assertEqual(native_bound_stopped_gui_gate(), 2)
+            for forbidden in (old["id"], abandoned["id"]):
+                with self.assertRaises(SharedOperationError):
+                    native_bound_stopped_gui_gate(forbidden)
+            store.read.return_value = {**restored,
+                "detail": {**abandoned, "base": "f"*64}}
+            with self.assertRaises(SharedOperationError):
+                native_bound_stopped_gui_gate()
+            store._persist_record.assert_not_called()
+
     def test_native_gate_uses_only_trusted_shared_apply_owner(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)
@@ -819,10 +1081,12 @@ class TestJournal(unittest.TestCase):
                               "voice-cutover-legacy-whole-receipt"):
                 (root/abandoned).write_text("retired-old-evidence")
             self.assertTrue(native_lifecycle_gate(root=shared)["safe_to_mutate"])
+            self.assertFalse(native_lifecycle_gate("common-existing-unbound-auto",root=shared)["safe_to_mutate"])
             self.assertFalse(shared.exists())
             d1=detail()
             self.assertTrue(native_lifecycle_gate(root=shared)["safe_to_mutate"])
             j.advance("prepared",d1)
+            self.assertFalse(native_lifecycle_gate("common-existing-unbound-auto",root=shared)["safe_to_mutate"])
             self.assertFalse(native_lifecycle_gate("strategy-lab-native",root=shared)["safe_to_mutate"])
             self.assertFalse(native_lifecycle_gate(root=shared)["safe_to_mutate"])
             j.advance("activating",d1)
@@ -838,6 +1102,14 @@ class TestJournal(unittest.TestCase):
             self.assertFalse(native_lifecycle_gate(root=shared)["safe_to_mutate"])
             self.assertTrue(native_lifecycle_gate("common-apply",root=shared)["safe_to_mutate"])
             self.assertTrue(native_lifecycle_gate("strategy-lab-native",root=shared)["safe_to_mutate"])
+            self.assertTrue(native_lifecycle_gate("common-existing-unbound-auto",root=shared)["safe_to_mutate"])
+            unbound = j.read()
+            # Exact current immutable-root record must never use the old route.
+            pin = {"schema": 1, "generation": d1["id"], "root_sha256": "a"*64,
+                   "seal_sha256": "b"*64, "candidate_sha256": d1["candidate"]}
+            j._persist_record({**unbound, "manifest": pin})
+            self.assertFalse(native_lifecycle_gate("common-existing-unbound-auto",root=shared)["safe_to_mutate"])
+            j._persist_record(unbound)
             self.assertFalse(native_lifecycle_gate(root=shared)["safe_to_mutate"])
             with self.assertRaises(SharedOperationError):
                 native_lifecycle_gate("legacy-skip",root=shared)

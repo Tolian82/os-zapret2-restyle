@@ -29,9 +29,25 @@ fail()
 }
 common_error() { :; }
 common_pidfile_read() { printf '123\n'; }
-launcher_start_once() { printf 'launch\n' >> "$EVENTS"; return 0; }
+launcher_start_once()
+{
+    if [ "${CHECK_NO_QUEUE_LEAK:-0}" = 1 ] &&
+        ( : <&3 ) 2>/dev/null; then
+        fail "ENGINE_INHERITED_P2A"
+    fi
+    printf 'launch\n' >> "$EVENTS"
+    return 0
+}
 launcher_stop() { printf 'stop\n' >> "$EVENTS"; return 0; }
-supervisor_start() { printf 'supervisor\n' >> "$EVENTS"; return 0; }
+supervisor_start()
+{
+    if [ "${CHECK_NO_QUEUE_LEAK:-0}" = 1 ] &&
+        ( : <&3 ) 2>/dev/null; then
+        fail "SUPERVISOR_INHERITED_P2A"
+    fi
+    printf 'supervisor\n' >> "$EVENTS"
+    return 0
+}
 atomic_install_tree() { printf '%s\n' "$TEMP_DIR/old-tree"; }
 firewall_shared_runtime()
 {
@@ -193,7 +209,13 @@ case "$2" in
         printf '%s\n' original-fd9-learning-producer=prepared
         ;;
     capture-learning)
-        printf '%s\n' capture-learning >> "$EVENTS"
+        if [ "$#" -eq 4 ] && [ "$4" = --inherited-queue ]; then
+            ( : <&3 ) 2>/dev/null || exit 69
+            printf '%s\n' capture-learning-inherited >> "$EVENTS"
+        else
+            [ "$#" -eq 3 ] || exit 69
+            printf '%s\n' capture-learning >> "$EVENTS"
+        fi
         [ "${FAIL_LEARNING_WIRE:-0}" = 0 ] || {
             printf '%s\n' p2k8i3:ffffffffffffffffffffffffffffffff:1:fake:1
             exit 0
@@ -201,7 +223,13 @@ case "$2" in
         printf '%s\n' 'p2k8i3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:1:fake:1:2:1:3:4:1:5:6:1'
         ;;
     seal-learning-epoch)
-        printf '%s\n' seal-learning-epoch >> "$EVENTS"
+        if [ "$#" -eq 6 ] && [ "$6" = --inherited-queue ]; then
+            ( : <&3 ) 2>/dev/null || exit 69
+            printf '%s\n' seal-learning-epoch-inherited >> "$EVENTS"
+        else
+            [ "$#" -eq 5 ] || exit 69
+            printf '%s\n' seal-learning-epoch >> "$EVENTS"
+        fi
         [ "${FAIL_SEED:-0}" = 0 ] || exit 69
         printf '%s\n' original-fd9-learning-pretraffic=sealed
         ;;
@@ -303,6 +331,43 @@ expected=$(printf 'preflight\nprepare-learning\ncapture-learning\nseal-learning-
 [ "$(cat "$EVENTS")" = "$expected" ] ||
     fail "LEARNING_FD9_N_PRETRAFFIC_POSTDROP_ORDER"
 printf 'TZ6V4_ORIGINAL_FD9_LEARNING_LAUNCH_CHAIN=PASS\n'
+# Private borrowed P2a route uses the same launcher and no producer
+# initialization while FD4 is held. The real OFD proof is in Python.
+: > "$EVENTS"
+(
+    exec 3< /dev/null
+    CHECK_NO_QUEUE_LEAK=1
+    apply_runtime_original_launcher_once "$DVTWS_BIN" \
+        "$ACTIVE_DIR/dvtws.args" "$CHILD_PIDFILE" "$DVTWS_LOG" 5 \
+        "$generation" "$candidate" --inherited-queue ||
+        fail "BORROWED_P2A_LAUNCH_REFUSED"
+    ( : <&3 ) || fail "LAUNCHER_CLOSED_PARENT_P2A"
+)
+[ "$(cat "$EVENTS")" = "$(printf 'preflight\ncapture-learning-inherited\nseal-learning-epoch-inherited\nlaunch\nrestore-learning')" ] ||
+    fail "BORROWED_P2A_LAUNCH_ORDER_CHANGED"
+: > "$EVENTS"
+(
+    exec 3<&-
+    if apply_runtime_original_launcher_once "$DVTWS_BIN" \
+        "$ACTIVE_DIR/dvtws.args" "$CHILD_PIDFILE" "$DVTWS_LOG" 5 \
+        "$generation" "$candidate" --inherited-queue; then
+        fail "MISSING_BORROWED_P2A_STARTED_ENGINE"
+    fi
+)
+[ "$(cat "$EVENTS")" = preflight ] ||
+    fail "MISSING_BORROWED_P2A_TOUCHED_ENGINE"
+printf 'S10_FIRST_LEARNING_BORROWED_P2A_LAUNCH_ORDER_NO_LEAK=PASS\n'
+: > "$EVENTS"
+(
+    exec 3< /dev/null
+    CHECK_NO_QUEUE_LEAK=1
+    apply_runtime_activate "$ACTIVE_DIR" 1 "$generation" "$candidate" --inherited-queue ||
+        fail "BORROWED_P2A_ACTIVATION_REFUSED"
+    ( : <&3 ) || fail "ACTIVATION_CLOSED_PARENT_P2A"
+)
+[ "$(cat "$EVENTS")" = "$(printf 'preflight\ncapture-learning-inherited\nseal-learning-epoch-inherited\nlaunch\nrestore-learning\nfirewall:install\nfirewall:verify-staged\nsupervisor')" ] ||
+    fail "BORROWED_P2A_ACTIVATION_ORDER_CHANGED"
+printf 'S10_FIRST_LEARNING_CANONICAL_ACTIVATION_NO_ENGINE_OR_SUPERVISOR_QUEUE_LEAK=PASS\n'
 : > "$EVENTS"
 FAIL_LEARNING_WIRE=1
 export FAIL_LEARNING_WIRE

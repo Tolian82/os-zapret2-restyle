@@ -259,3 +259,363 @@ def attest_previous_physical_under_fd9(*, generation: str,
         enabled=enabled, parent=WORK, journal_root=DEFAULT_ROOT, owner_uid=0,
         active=COMMON_ACTIVE, child_pidfile=CHILD_PID,
         monitor_pidfile=MONITOR_PID)
+
+
+def _running_executable_identity(pid: int, expected_sha256: str, *,
+                                 executable: Path, runner) -> tuple:
+    """Bind FreeBSD's executable TEXT vnode to the exact installed bytes.
+
+    fstat -n -p PID FILE filters by device/inode, not by the process title.
+    Require the TEXT row (not merely an open descriptor or mmap), and check
+    its numeric vnode fields against an O_NOFOLLOW descriptor of FILE.
+    The caller brackets this read with its existing PID/birth/argv checks.
+    """
+    import re
+    import stat
+
+    if (type(pid) is not int or not 1 < pid < (1 << 31) or
+            type(expected_sha256) is not str or
+            re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None or
+            not executable.is_absolute() or executable.resolve() != executable):
+        raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_INPUT_INVALID")
+
+    def identity(info):
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or
+                info.st_nlink != 1 or info.st_mode & 0o022 or
+                not info.st_mode & 0o111 or not 0 < info.st_size <= 128 * 1024 * 1024):
+            raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_UNSAFE")
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid,
+                info.st_gid, info.st_nlink, info.st_size,
+                info.st_mtime_ns, info.st_ctime_ns)
+
+    fd = os.open(executable, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        before = identity(os.fstat(fd))
+        if identity(executable.lstat()) != before:
+            raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_PATH_CHANGED")
+
+        def text_vnode():
+            raw = _run(runner, ["/usr/bin/fstat", "-n", "-p", str(pid), str(executable)])
+            lines = raw.splitlines()
+            if not lines or lines[0].split() != [
+                    "USER", "CMD", "PID", "FD", "DEV", "INUM", "MODE", "SZ|DV", "R/W", "NAME"]:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_FSTAT_HEADER")
+            rows = [line.split() for line in lines[1:]]
+            matches = [row for row in rows if len(row) >= 4 and row[3] == "text"]
+            if len(matches) != 1:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_TEXT_REQUIRED")
+            row = matches[0]
+            if (len(row) not in (9, 10) or row[2] != str(pid) or
+                    row[-1] != str(executable) or
+                    (len(row) == 10 and row[8] != "r") or
+                    re.fullmatch(r"(?:0x[0-9a-f]+|0)", row[4]) is None or
+                    re.fullmatch(r"[0-9]+", row[5]) is None or
+                    re.fullmatch(r"[0-7]+", row[6]) is None or
+                    re.fullmatch(r"[0-9]+", row[7]) is None or
+                    (int(row[4], 16), int(row[5]), int(row[6], 8), int(row[7])) !=
+                    (before[0], before[1], before[2], before[6])):
+                raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_TEXT_CHANGED")
+            return tuple(row)
+
+        first = text_vnode()
+        digest = sha256()
+        count = 0
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            count += len(chunk)
+            if count > before[6]:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_SIZE_CHANGED")
+            digest.update(chunk)
+        if (count != before[6] or digest.hexdigest() != expected_sha256 or
+                text_vnode() != first or identity(os.fstat(fd)) != before or
+                identity(executable.lstat()) != before):
+            raise PreviousPhysicalRefused("BOUND_RUNNING_EXECUTABLE_CHANGED")
+        return (*before, expected_sha256)
+    finally:
+        os.close(fd)
+
+
+@dataclass(frozen=True)
+class LockedRunningPredecessor:
+    generation: str
+    previous_generation: str
+    previous_root_sha256: str
+    config_base_sha256: str
+    release_sha256: str
+    running: PriorRunningToken
+    epoch_sha256: str | None
+    authorization: str = "NONE"
+    physical_transition_allowed: bool = False
+    executable_identity: tuple | None = None
+    managed_preimages: tuple | None = None
+
+
+def attest_bound_running_predecessor_under_fd9(
+        record: dict, *, preimage: CompletePriorPreimage,
+        config_fd: int, config_digest: str) -> LockedRunningPredecessor:
+    """Recheck the earlier running preimage under the original Config lock.
+
+    Private ordinary PREPARED only. Never call the earlier PHP preflight
+    while holding Config; never acquire P2a or grant physical transition.
+    Legacy unpinned predecessors remain outside this qualified scope.
+    """
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_owner import attest_prepared_ordinary_learning_predecessor
+    from auto_detect_minute import inspect_inert_release
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+    from voice_ipfw_adapter import FreeBSDIPFWAdapter, shared_release_manifest
+    from voice_firewall_transaction import verify_prior_state
+
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(record) is not dict or type(preimage) is not CompletePriorPreimage or
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+            raise PreviousPhysicalRefused("BOUND_RUNNING_NATIVE_SCOPE_REQUIRED")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        if (store.read() != record or record.get("phase") != "prepared" or
+                "found" in record or type(record.get("manifest")) is not dict or
+                type(record.get("previous_manifest")) is not dict or
+                type(record.get("previous")) is not dict):
+            raise PreviousPhysicalRefused("BOUND_RUNNING_PREPARED_REQUIRED")
+        detail, prior = record["detail"], record["previous"]
+        pin, old_pin = record["manifest"], record["previous_manifest"]
+        if (pin["schema"] not in (1, 2) or old_pin["schema"] not in (1, 2) or
+                prior["id"] == detail["id"] or
+                config_digest != detail["base"] or config_digest != prior["candidate"] or
+                preimage.generation != detail["id"] or
+                preimage.previous_generation != prior["id"] or
+                preimage.root_sha256 != pin["root_sha256"] or
+                preimage.saved_config_base_sha256 != config_digest or
+                preimage.old_release_sha256 != preimage.active_release_sha256 or
+                preimage.authorization != "NONE" or preimage.physical_transition_allowed or
+                preimage.promotion_allowed or preimage.final_fd9_recheck_required is not True):
+            raise PreviousPhysicalRefused("BOUND_RUNNING_PREIMAGE_CHANGED")
+        expected = PriorRunningToken(
+            preimage.prior_pid, preimage.prior_birth, preimage.supervisor_pid,
+            preimage.supervisor_birth, preimage.original_kernel_argv_sha256)
+        work = WORK / prior["id"]
+        release = work / "release"
+
+        def observe():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_JOURNAL_CHANGED")
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            root = json.loads(_verify_original_pinned_root(
+                detail=prior, binding=old_pin, parent=WORK, owner_uid=0))
+            service = root["service"]
+            learning = old_pin["schema"] == 2
+            if (root["schema"] != old_pin["schema"] or root["generation"] != prior["id"] or
+                    service["enabled"] is not True or
+                    service["target_mode"] not in ("all", "list", "auto") or
+                    learning != (service["target_mode"] == "auto")):
+                raise PreviousPhysicalRefused("BOUND_RUNNING_PRIOR_MODE_CHANGED")
+            tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
+            running = _running_native(release, owner_uid=0,
+                                      child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+            if tree != preimage.active_release_sha256 or running != expected:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_PRIOR_PHYSICAL_CHANGED")
+            manifest = shared_release_manifest(release)
+            if manifest["rule_base"] != 19000 or manifest["rule_max"] not in (19010, 19099):
+                raise PreviousPhysicalRefused("BOUND_RUNNING_KERNEL_SCOPE_INVALID")
+            verify_prior_state(FreeBSDIPFWAdapter(19000, 19099), manifest, manifest)
+            epoch_sha = None
+            if learning:
+                proof, epoch_sha = attest_prepared_ordinary_learning_predecessor(record, config_fd)
+                if (proof.operation_id != prior["id"] or proof.generation != prior["id"] or
+                        proof.owner_candidate_sha256 != config_digest or
+                        (proof.owner.pid, proof.owner.started) != (running.pid, running.started) or
+                        type(epoch_sha) is not str or len(epoch_sha) != 64 or
+                        any(c not in "0123456789abcdef" for c in epoch_sha)):
+                    raise PreviousPhysicalRefused("BOUND_RUNNING_PRIOR_EPOCH_CHANGED")
+            elif inspect_inert_release(release, owner_uid=0) != "inactive":
+                raise PreviousPhysicalRefused("BOUND_RUNNING_PRIOR_INERT_REQUIRED")
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise PreviousPhysicalRefused("BOUND_RUNNING_JOURNAL_CHANGED")
+            return LockedRunningPredecessor(
+                detail["id"], prior["id"], old_pin["root_sha256"], config_digest,
+                tree, running, epoch_sha)
+
+        first = observe()
+        if observe() != first:
+            raise PreviousPhysicalRefused("BOUND_RUNNING_PRIOR_WITNESS_CHANGED")
+        return first
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError, AttributeError,
+            subprocess.SubprocessError):
+        raise PreviousPhysicalRefused("BOUND_RUNNING_PREDECESSOR_REFUSED") from None
+
+
+@dataclass(frozen=True)
+class FinalBoundRuntimeReceipt:
+    generation: str
+    root_sha256: str
+    config_sha256: str
+    release_sha256: str
+    running: PriorRunningToken | None
+    epoch_sha256: str | None
+    kernel_state: str
+    pretraffic_sha256: str | None = None
+    retired_ready_sha256: str | None = None
+    idle_producer: tuple | None = None
+    authorization: str = "NONE"
+    physical_transition_allowed: bool = False
+
+
+def attest_bound_candidate_final_under_fd9(record: dict, *, config_fd: int,
+                                           config_digest: str, enabled: bool,
+                                           runtime_mode: str,
+                                           retired_ready_sha256: str | None = None,
+                                           queue_fd: int | None = None,
+                                           expected_idle_producer: tuple | None = None) -> FinalBoundRuntimeReceipt:
+    """Final installed candidate proof, not a phase writer or activation permit.
+
+    The original Config owner supplies its fresh saved digest while holding
+    inherited FD4; no nested PHP or queue acquisition. FD9 excludes the
+    minute owner. Require the exact final kernel, never verify-cleanup or
+    a staged rollback state. Learning requires the real finalized epoch
+    and its current original producer inodes; appends do not change identity.
+    """
+    import pwd
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_epoch_receipts import EpochReceipts, _canonical
+    from auto_detect_owner import attest_learning_epoch_finalizing_generation
+    from auto_detect_storage import ROOT as PRODUCER, ENGINE_USER, FILE_MODE, _secure
+    from auto_detect_queue import DurableInbox
+    from auto_detect_minute import inspect_inert_release
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+    from neutral_schema3_quiescent_preimage import (
+        _zero_processes, _empty_kernel, _safe_empty_directory, DAEMON_PID,
+        _verify_retired_history, _verify_idle_producer)
+    from auto_detect_post_drop import _original_epoch_queue, _qualified_learning_sources
+    from voice_ipfw_adapter import FreeBSDIPFWAdapter, shared_release_manifest
+    from voice_firewall_transaction import verify_prior_state
+
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(record) is not dict or type(config_fd) is not int or
+                config_fd < 3 or config_fd == 9 or type(enabled) is not bool or
+                runtime_mode not in ("0", "1") or (runtime_mode == "1" and not enabled)):
+            raise PreviousPhysicalRefused("BOUND_FINAL_NATIVE_SCOPE_REQUIRED")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        if store.read() != record or type(record.get("manifest")) is not dict:
+            raise PreviousPhysicalRefused("BOUND_FINAL_OWNER_REQUIRED")
+        detail, pin = record["detail"], record["manifest"]
+        learning = pin["schema"] == 2
+        retired = record.get("previous_manifest", {}).get("schema") == 2
+        needs_queue = retired or expected_idle_producer is not None
+        if (retired != (retired_ready_sha256 is not None) or
+                (learning and expected_idle_producer is not None) or
+                (retired and not learning and expected_idle_producer is None) or
+                (needs_queue and (type(queue_fd) is not int or queue_fd < 3 or
+                                  queue_fd in (9, config_fd))) or
+                (not needs_queue and queue_fd is not None)):
+            raise PreviousPhysicalRefused("BOUND_FINAL_RETIRED_QUEUE_REQUIRED")
+        stopped_found = (
+            record["phase"] == "found-config-saved" and pin["schema"] == 1 and
+            record.get("previous_manifest", {}).get("schema") in (1, 2) and
+            record.get("found", {}).get("runtime_mode") == "0" and
+            not enabled and runtime_mode == "0")
+        if (pin["schema"] not in (1, 2) or config_digest != detail["candidate"] or
+                (not stopped_found and
+                 record["phase"] != ("epoch-finalizing" if learning else "config-saved")) or
+                (learning and runtime_mode != "1") or
+                ("found" in record and record["found"].get("runtime_mode") != runtime_mode) or
+                ("found" not in record and enabled != (runtime_mode == "1"))):
+            raise PreviousPhysicalRefused("BOUND_FINAL_PHASE_CONFIG_MISMATCH")
+        work = WORK / detail["id"]
+        release = work / "release"
+
+        def observe():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise PreviousPhysicalRefused("BOUND_FINAL_OWNER_CHANGED")
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            root = json.loads(_verify_original_pinned_root(
+                detail=detail, binding=pin, parent=WORK, owner_uid=0))
+            service = root["service"]
+            if (root["schema"] != pin["schema"] or root["generation"] != detail["id"] or
+                    service["enabled"] is not enabled or
+                    service["target_mode"] not in ("all", "list", "auto") or
+                    learning != (service["target_mode"] == "auto" and enabled)):
+                raise PreviousPhysicalRefused("BOUND_FINAL_ROOT_MODE_CHANGED")
+            tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
+            process = epoch_digest = pretraffic_digest = idle = None
+            if expected_idle_producer is not None:
+                queue, receipts = _original_epoch_queue()
+                with queue.inherited_exclusive(queue_fd):
+                    if retired:
+                        _verify_retired_history(record, queue, receipts, retired_ready_sha256)
+                    idle = _verify_idle_producer(queue, receipts)
+                    if idle != expected_idle_producer:
+                        raise PreviousPhysicalRefused("BOUND_FINAL_IDLE_PRODUCER_CHANGED")
+            elif not learning:
+                _safe_empty_directory(PRODUCER, 0)
+            if runtime_mode == "1":
+                process = _running_native(release, owner_uid=0,
+                                          child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+                manifest = shared_release_manifest(release)
+                if manifest["rule_base"] != 19000 or manifest["rule_max"] not in (19010, 19099):
+                    raise PreviousPhysicalRefused("BOUND_FINAL_KERNEL_SCOPE_INVALID")
+                # Even a sealed legacy-width release must have no residual
+                # rules anywhere in the existing allocated 19000..19099 scope.
+                verify_prior_state(FreeBSDIPFWAdapter(19000, 19099), manifest, manifest)
+                kernel = "native-managed-kernel-final"
+                if learning:
+                    proof = attest_learning_epoch_finalizing_generation(detail["id"])
+                    if (proof.operation_id != detail["id"] or proof.generation != detail["id"] or
+                            proof.owner_candidate_sha256 != config_digest or
+                            (proof.owner.pid, proof.owner.started) != (process.pid, process.started)):
+                        raise PreviousPhysicalRefused("BOUND_FINAL_LEARNING_OWNER_CHANGED")
+                    epoch = EpochReceipts(owner_uid=0).verify_learning_stopped_epoch(
+                        proof, workspace=work)
+                    if retired:
+                        _, names = _qualified_learning_sources(proof.learning, PRODUCER)
+                        queue, receipts = _original_epoch_queue(names)
+                        with queue.inherited_exclusive(queue_fd):
+                            _verify_retired_history(record, queue, receipts, retired_ready_sha256)
+                    gid = pwd.getpwnam(ENGINE_USER).pw_gid
+                    queue = DurableInbox(PRODUCER, owner_uid=0, writer_gid=gid)
+                    queue._verify()  # read-only, FD9 excludes original minute ingress
+                    _safe_empty_directory(queue.pending, 0)
+                    for row in epoch["files"]:
+                        info = _secure(PRODUCER / row["name"], directory=False,
+                                       uid=0, gid=gid, mode=FILE_MODE, links=1)
+                        if (info.st_dev, info.st_ino, info.st_nlink) != (
+                                row["device"], row["inode"], row["nlink"]):
+                            raise PreviousPhysicalRefused("BOUND_FINAL_LEARNING_INODE_CHANGED")
+                    epoch_digest = sha256(_canonical(epoch)).hexdigest()
+                    pretraffic_digest = epoch["pretraffic_sha256"]
+                elif inspect_inert_release(release, owner_uid=0) != "inactive":
+                    raise PreviousPhysicalRefused("BOUND_FINAL_INERT_RELEASE_REQUIRED")
+            else:
+                _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+                if inspect_inert_release(release, owner_uid=0) != "inactive":
+                    raise PreviousPhysicalRefused("BOUND_FINAL_INERT_RELEASE_REQUIRED")
+                kernel = _empty_kernel(release)
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise PreviousPhysicalRefused("BOUND_FINAL_OWNER_CHANGED")
+            return FinalBoundRuntimeReceipt(detail["id"], pin["root_sha256"], config_digest,
+                                            tree, process, epoch_digest, kernel, pretraffic_digest,
+                                            retired_ready_sha256, idle)
+
+        first = observe()
+        if observe() != first:
+            raise PreviousPhysicalRefused("BOUND_FINAL_PHYSICAL_WITNESS_CHANGED")
+        return first
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError, AttributeError,
+            subprocess.SubprocessError):
+        raise PreviousPhysicalRefused("BOUND_FINAL_PHYSICAL_ATTEST_REFUSED") from None

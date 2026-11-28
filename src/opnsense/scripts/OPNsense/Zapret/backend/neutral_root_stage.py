@@ -319,14 +319,35 @@ def verify_prepared_recovery_pin(*, record: dict, parent: Path,
     if (record.get("phase") != "prepared" or "found" in record or
             not ("manifest" in record or "previous_manifest" in record)):
         raise RootStageRefused("RECOVERY_NOT_PREPARED")
-    # Reuse the same exact root/seal/plan verification for both immutable
-    # generations. Never mistake the aborted new root for the old owner.
-    for key, detail_key in (("manifest", "detail"),
-                            ("previous_manifest", "previous")):
-        if key in record:
-            _verify_original_pinned_root(detail=record[detail_key],
-                                         binding=record[key], parent=parent,
-                                         owner_uid=owner_uid)
+    verify_original_operation_pins(record=record, parent=parent,
+                                   owner_uid=owner_uid)
+
+
+def verify_original_operation_pins(*, record: dict, parent: Path,
+                                   owner_uid: int) -> None:
+    """Check both immutable pins at an original WAL transition.
+
+    This verifies only the immutable plan, root and release seal. It cannot
+    replace the phase-specific physical/Config/P2 evidence or grant a
+    transition. A Found plan is additionally pinned by its original WAL.
+    """
+    from shared_apply_operation import _validate_record
+    try:
+        _validate_record(record)
+        if not ("manifest" in record or "previous_manifest" in record):
+            raise RootStageRefused("ORIGINAL_OPERATION_PIN_REQUIRED")
+        for key, detail_key in (("manifest", "detail"),
+                                ("previous_manifest", "previous")):
+            if key in record:
+                _verify_original_pinned_root(
+                    detail=record[detail_key], binding=record[key],
+                    parent=parent, owner_uid=owner_uid)
+        if "found" in record and not _original_plan_matches(
+                parent=parent, generation=record["detail"]["id"],
+                journal=record, owner_uid=owner_uid):
+            raise RootStageRefused("ORIGINAL_FOUND_OPERATION_PLAN_CHANGED")
+    except (SharedOperationError, OSError, ValueError, KeyError, TypeError):
+        raise RootStageRefused("ORIGINAL_OPERATION_PIN_REFUSED") from None
 
 
 def _verify_original_pinned_root(*, detail: dict, binding: dict,

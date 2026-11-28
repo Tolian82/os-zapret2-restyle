@@ -51,9 +51,9 @@ def _target(path: Path, uid: int, *, links: int = 1) -> tuple[bytes, os.stat_res
             b = os.fstat(fd)
         finally:
             os.close(fd)
-        identity = lambda x: (*_file_identity(x), x.st_mode, x.st_nlink)
-        if (identity(st) != identity(a) or identity(a) != identity(b) or
-                identity(b) != identity(path.lstat()) or len(data) != st.st_size):
+        identity = _target_identity(st)
+        if (identity != _target_identity(a) or identity != _target_identity(b) or
+                identity != _target_identity(path.lstat()) or len(data) != st.st_size):
             raise DestinationRefused("destination_changed_during_read")
         data.decode("utf-8")
         return data, st
@@ -89,6 +89,10 @@ def _file_identity(st: os.stat_result) -> tuple:
     return st.st_dev, st.st_ino, st.st_ctime_ns, st.st_mtime_ns, st.st_size
 
 
+def _target_identity(st: os.stat_result) -> tuple:
+    return (*_file_identity(st), st.st_mode, st.st_uid, st.st_gid, st.st_nlink)
+
+
 def _stage_pin(st: os.stat_result, data: bytes) -> dict:
     return {"device": st.st_dev, "inode": st.st_ino, "mtime_ns": st.st_mtime_ns,
             "size": st.st_size, "sha256": _sha(data)}
@@ -111,11 +115,13 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int, *,
     """One protected same-directory replace after read-side CAS under GUI lock."""
     now, st = _target(path, uid)
     if now != current or (expected_identity is not None and
-                          _file_identity(st) != expected_identity):
+                          expected_identity not in (_file_identity(st), _target_identity(st))):
         raise DestinationRefused("destination_conflict_with_gui")
     temp = path.parent / (".auto-detect-" + secrets.token_hex(16) + ".tmp")
     fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    created = None
     try:
+        created = os.fstat(fd)
         os.fchown(fd, st.st_uid, st.st_gid)
         os.fchmod(fd, stat.S_IMODE(st.st_mode))
         data = memoryview(expected)
@@ -125,46 +131,52 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int, *,
                 raise DestinationRefused("short_destination_write")
             data = data[n:]
         os.fsync(fd)
-    finally:
-        os.close(fd)
-    # The original FD9 WAL can persist the just-fsynced private inode
-    # BEFORE the first rename. Ordinary GUI/P2 writers pass no stage_fn.
-    # The stage callback must be INSIDE the cleanup scope: a refused journal
-    # fsync must never leave unowned private .auto-detect-* temp artifacts.
-    try:
+        written = os.fstat(fd)
+
         # Upstream v1.0.7 compares mtime+size, NOT inode or content SHA.
         # Check the actual fsynced staged inode, before its atomic rename.
         # A same-signature replacement is not proof of a native hot reload.
         staged_bytes, staged_stat = _target(temp, uid)
-        if staged_bytes != expected:
+        staged_identity = _target_identity(written)
+        if staged_bytes != expected or _target_identity(staged_stat) != staged_identity:
             raise DestinationRefused("original_staged_temp_changed")
         if (current != expected and
                 not _native_list_modification_visible(st, staged_stat)):
             raise DestinationRefused("native_list_reload_signature_unchanged")
         if stage_fn is not None:
-            stage_fn("ready", temp, expected)
-        # Writers that ignore the shared GUI lock are not trusted. Recheck
-        # before replace against the actual original inode identity.
-        again, check = _target(path, uid)
-        preimage = _file_identity(st)
-        observed = _file_identity(check)
-        if again != current or observed != preimage:
-            # The same inode and identical content can still be modified
-            # in place by a foreign writer during temporary inode creation.
-            # Never replace such a file or discard a new minute finding.
-            raise DestinationRefused("destination_conflict_with_gui")
-        if stage_fn is not None:
-            staged, _ = _target(temp, uid)
-            if staged != expected:
+            # Persist the inode observed through the writer's own descriptor.
+            stage_fn("ready", temp, expected, written)
+            staged_bytes, staged_stat = _target(temp, uid)
+            if staged_bytes != expected or _target_identity(staged_stat) != staged_identity:
                 raise DestinationRefused("original_staged_temp_changed")
+
+        # Recheck the destination at the rename boundary after stage fsync.
+        again, check = _target(path, uid)
+        if again != current or _target_identity(check) != _target_identity(st):
+            raise DestinationRefused("destination_conflict_with_gui")
+        if _target_identity(temp.lstat()) != staged_identity:
+            raise DestinationRefused("original_staged_temp_changed")
         os.replace(temp, path)
         _sync(path.parent)
         if stage_fn is not None:
-            stage_fn("installed", path, expected)
+            installed, installed_stat = _target(path, uid)
+            if installed != expected or not os.path.samestat(installed_stat, written):
+                raise DestinationRefused("original_staged_inode_changed_at_rename")
+            stage_fn("installed", path, installed, installed_stat)
     finally:
-        if temp.exists():
-            temp.unlink()
-            _sync(path.parent)
+        # Keep the original inode open until cleanup so its number cannot
+        # be recycled for another file at the temporary path.
+        try:
+            try:
+                current_temp = temp.lstat()
+            except FileNotFoundError:
+                pass
+            else:
+                if created is not None and os.path.samestat(created, current_temp):
+                    temp.unlink()
+                    _sync(path.parent)
+        finally:
+            os.close(fd)
 
 
 
@@ -1320,13 +1332,15 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
     own_written_inodes = {}
     ready_pins = {}
 
-    def file_stage(name: str, phase: str, target: Path, contents: bytes) -> None:
+    def file_stage(name: str, phase: str, target: Path, contents: bytes,
+                   observed_stat: os.stat_result | None = None) -> None:
         if stage_fn is None:
             return
-        observed, st = _target(target, uid)
-        if observed != contents:
-            raise DestinationRefused("original_staged_inode_content_changed")
-        pin = _stage_pin(st, contents)
+        if observed_stat is None:
+            observed, observed_stat = _target(target, uid)
+            if observed != contents:
+                raise DestinationRefused("original_staged_inode_content_changed")
+        pin = _stage_pin(observed_stat, contents)
         if phase == "ready":
             if name in ready_pins:
                 raise DestinationRefused("duplicate_original_staged_inode")
@@ -1374,8 +1388,8 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
                 if stage_fn is not None and replace_fn is None:
                     replace(path, before, after, uid,
                             expected_identity=batch[name][2],
-                            stage_fn=lambda phase, item, contents, n=name:
-                                file_stage(n, phase, item, contents))
+                            stage_fn=lambda phase, item, contents, info, n=name:
+                                file_stage(n, phase, item, contents, info))
                 else:
                     replace(path, before, after, uid)
             actual, st = _target(path, uid)
@@ -1499,7 +1513,7 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
 def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
                                        store, detail: dict, plan_bytes: bytes,
                                        uid: int, attest, replace_fn=None,
-                                       create_fn=None) -> dict:
+                                       create_fn=None, bound_attest=None) -> dict:
     """Original common WAL -> existing three-file CAS -> common WAL.
 
     Import-only. Caller MUST hold FD9 + original Config lock + original P2
@@ -1532,7 +1546,9 @@ def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
             before["detail"] != detail or "found" not in before or
             before["found"]["plan_sha256"] != _sha(plan_bytes)):
         raise DestinationRefused("shared_found_missing_original_prepared_intent")
-    store.advance_found_files("found-files-writing", detail, plan_bytes, attest)
+    bound_kwargs = {} if bound_attest is None else {"bound_attest": bound_attest}
+    store.advance_found_files("found-files-writing", detail, plan_bytes, attest,
+                              **bound_kwargs)
     # Original Config/P2 locks forbid any minute write interleaving.
     # A SIGKILL between renames leaves the journal in files-writing.
     def durable_file_stage(name: str, phase: str, pin: dict) -> None:
@@ -1540,7 +1556,8 @@ def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
             detail, plan_bytes, name, phase, pin,
             lambda stage, content, staged_name, staged_pin: (
                 staged_name == name and staged_pin == pin and
-                attest("found-stage-" + stage, content) is True))
+                attest("found-stage-" + stage, content) is True),
+            **bound_kwargs)
 
     result = _locked_shared_found_replace(
         rows, targets, uid=uid, replace_fn=replace_fn, create_fn=create_fn,
@@ -1562,7 +1579,7 @@ def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
             if observed != after or pin["status"] != "present" or identity != expected:
                 raise DestinationRefused("shared_found_writer_postimage_changed")
     store.advance_found_files("found-files-written", detail, plan_bytes,
-                              attest, post_images=post)
+                              attest, post_images=post, **bound_kwargs)
     return {**result, "journal_phase": "found-files-written",
             "config_committed": False, "commit_authorized": False}
 
@@ -1586,6 +1603,236 @@ def _found_temp(path: Path, pin: dict, uid: int, *, links: int = 1) -> Path | No
     if not _matches_stage(pin, data, info):
         raise DestinationRefused("foreign_found_temporary_inode")
     return temp
+
+
+def _managed_write_images(store, record: dict, name: str, parent: Path) -> tuple:
+    """Read both sealed originals and prove a one-file complete release delta."""
+    from neutral_effective_diff import _REF_FILE
+    from neutral_root_stage import verify_original_operation_pins
+    from shared_apply_seal import _release_hash, verify_seal
+
+    if store.read() != record or not _REF_FILE.fullmatch(name):
+        raise DestinationRefused("original_managed_owner_changed")
+    uid = store.owner
+    verify_original_operation_pins(record=record, parent=parent, owner_uid=uid)
+    old = parent / record["previous"]["id"]
+    new = parent / record["detail"]["id"]
+    relative = "managed/" + name
+    old_bytes, old_stat = _target(old / "release" / relative, uid)
+    new_bytes, new_stat = _target(new / "release" / relative, uid)
+    old_hash = verify_seal(old, owner=uid)["sha256"]["release"]
+    new_hash = verify_seal(new, owner=uid)["sha256"]["release"]
+    if (old_bytes == new_bytes or os.path.samestat(old_stat, new_stat) or
+            _release_hash(old / "release", uid, replacement=(
+                relative, _sha(old_bytes), _sha(new_bytes))) != new_hash):
+        raise DestinationRefused("original_managed_delta_requires_promotion")
+    return old_bytes, old_stat, new_bytes, new_stat, old_hash, new_hash
+
+
+def _write_bound_managed_file_locked(store, record: dict, preimage: tuple, *,
+                                     parent: Path, active: Path, attest,
+                                     running_sha256: str | None = None) -> dict:
+    """One original FD9/Config/P2 replacement. Keep the Config save fenced."""
+    from shared_apply_seal import _release_hash, _stat
+    from managed_inode_barrier import (ManagedBarrierRefused, seed as barrier_seed,
+                                       finish as barrier_finish)
+
+    if (record.get("phase") != "prepared" or "found" in record or
+            record.get("manifest", {}).get("schema") != 1 or
+            record.get("previous_manifest", {}).get("schema") != 1 or
+            record["detail"]["page"] != "strategies"):
+        raise DestinationRefused("original_managed_prepared_required")
+    name, old_sha, new_sha, old_identity, new_identity, live_identity = preimage
+    content, old_stat, desired, new_stat, old_hash, new_hash = _managed_write_images(
+        store, record, name, parent)
+    path = active / "managed" / name
+    uid = store.owner
+    _stat(active, uid, directory=True)
+    current, current_stat = _target(path, uid)
+    if (old_sha != _sha(content) or new_sha != _sha(desired) or current != content or
+            (old_identity, new_identity, live_identity) != tuple(map(_target_identity,
+                (old_stat, new_stat, current_stat))) or
+            len({identity[:2] for identity in (old_identity, new_identity, live_identity)}) != 3 or
+            _release_hash(active, uid) != old_hash):
+        raise DestinationRefused("original_managed_preimage_changed")
+    row = {"name": name, "before_sha256": old_sha, "after_sha256": new_sha,
+           "before_identity": list(live_identity)}
+    if running_sha256 is not None:
+        row["running_sha256"] = running_sha256
+    record = store._checkpoint_managed_write(record, row, attest, shared_work_parent=parent)
+
+    def stage(phase, item, data, info):
+        nonlocal record
+        if phase == "ready":
+            new_now, new_info = _target(parent / record["detail"]["id"] / "release" /
+                                       "managed" / name, uid)
+            if new_now != desired or _target_identity(new_info) != new_identity:
+                raise DestinationRefused("original_managed_candidate_changed")
+            record = store._checkpoint_managed_write(record, {
+                **record["managed"], "ready": {**_stage_pin(info, data), "temp": item.name}
+            }, attest, shared_work_parent=parent)
+            # Only the original durable ready.temp grants a scratch namespace.
+            # A crash between seed and pin persistence leaves unowned residue:
+            # cold recovery MUST refuse it, not guess deletion.
+            try:
+                pin = barrier_seed(active.parent, path.parent, item.name, uid)
+            except (ManagedBarrierRefused, OSError) as exc:
+                raise DestinationRefused("original_managed_barrier_seed_refused") from exc
+            record = store._checkpoint_managed_write(
+                record, {**record["managed"], "barrier": pin},
+                attest, shared_work_parent=parent)
+        else:
+            ready = record["managed"].get("ready")
+            barrier = record["managed"].get("barrier")
+            if not isinstance(ready, dict) or not isinstance(barrier, dict):
+                raise DestinationRefused("original_managed_barrier_wal_missing")
+            try:
+                barrier_finish(active.parent, path.parent, ready["temp"], uid, barrier)
+            except (ManagedBarrierRefused, OSError) as exc:
+                raise DestinationRefused("original_managed_barrier_finish_refused") from exc
+            # Barrier I/O must settle UFS ctime BEFORE the exact installed
+            # inode is pinned, on either UFS or ZFS WAL storage.
+            installed, installed_stat = _target(item, uid)
+            before_barrier = _target_identity(info)
+            after_barrier = _target_identity(installed_stat)
+            if (installed != desired or before_barrier[:2] != after_barrier[:2] or
+                    before_barrier[3:] != after_barrier[3:] or
+                    _release_hash(active, uid) != new_hash):
+                raise DestinationRefused("original_managed_after_release_changed")
+            record = store._checkpoint_managed_write(record, {
+                **record["managed"], "installed": list(after_barrier)
+            }, attest, shared_work_parent=parent)
+
+    _replace(path, content, desired, uid, stage_fn=stage, expected_identity=live_identity)
+    return record
+
+
+def _attest_bound_managed_installed_locked(store, record: dict, *, parent: Path,
+                                          active: Path) -> None:
+    from shared_apply_seal import _release_hash, _stat
+
+    row = record["managed"]
+    before, _, after, _, _, after_hash = _managed_write_images(store, record, row["name"], parent)
+    _stat(active, store.owner, directory=True)
+    current, info = _target(active / "managed" / row["name"], store.owner)
+    # Keep the original refusal and short-circuit order. Distinct source
+    # locations let the existing bounded M03 trace identify the failed proof
+    # without logging paths, bytes, digests, inode values or timestamps.
+    if current != after:
+        raise DestinationRefused("original_managed_installed_image_changed")
+    if (_sha(before), _sha(after)) != (row["before_sha256"], row["after_sha256"]):
+        raise DestinationRefused("original_managed_installed_image_changed")
+    identity = list(_target_identity(info))
+    installed = row["installed"]
+    if identity != installed:
+        if identity[:2] != installed[:2]:  # device / inode
+            raise DestinationRefused("original_managed_installed_image_changed")
+        if identity[2:3] != installed[2:3]:  # ctime_ns
+            raise DestinationRefused("original_managed_installed_image_changed")
+        if identity[3:4] != installed[3:4]:  # mtime_ns
+            raise DestinationRefused("original_managed_installed_image_changed")
+        if identity[4:5] != installed[4:5]:  # size
+            raise DestinationRefused("original_managed_installed_image_changed")
+        # Mode / uid / gid / links, or a noncanonical identity shape.
+        raise DestinationRefused("original_managed_installed_image_changed")
+    if _release_hash(active, store.owner) != after_hash:
+        raise DestinationRefused("original_managed_installed_image_changed")
+
+
+def _restore_bound_managed_file_locked(store, record: dict, *, parent: Path,
+                                       active: Path, attest, saved_base: str | None = None) -> dict:
+    """Restore one interrupted CAS with the previous Config established."""
+    from shared_apply_operation import MANAGED_WRITING, _managed_restore_has_base
+    from shared_apply_seal import _release_hash, _stat
+
+    allowed = (record.get("phase") == MANAGED_WRITING if saved_base is None
+               else _managed_restore_has_base(record, saved_base))
+    if not allowed or store.read() != record or attest() is not True:
+        raise DestinationRefused("original_managed_restore_owner_required")
+    row = record["managed"]
+    name = row["name"]
+    before, _, after, _, old_hash, new_hash = _managed_write_images(store, record, name, parent)
+    if (row["before_sha256"], row["after_sha256"]) != (_sha(before), _sha(after)):
+        raise DestinationRefused("original_managed_restore_sources_changed")
+    path = active / "managed" / name
+    uid = store.owner
+    _stat(active, uid, directory=True)
+
+    def observe():
+        raw, info = _target(path, uid)
+        identity = list(_target_identity(info))
+        if raw == before and (identity == row["before_identity"] or
+                "restore" in row and _matches_stage(row["restore"], raw, info) and
+                identity[5:] == row["before_identity"][5:]):
+            return "before", identity
+        if (raw == after and "ready" in row and _matches_stage(row["ready"], raw, info) and
+                identity[5:] == row["before_identity"][5:] and
+                ("installed" not in row or identity == row["installed"])):
+            return "after", identity
+        raise DestinationRefused("original_managed_restore_foreign_image")
+
+    # The scratch is outside the sealed active release and must be resolved
+    # under the original WAL owner before any managed-file rollback. Never
+    # remove a same-name object without its original durable inode pin.
+    from managed_inode_barrier import ManagedBarrierRefused, recover as barrier_recover
+
+    state, identity = observe()
+    if state == "after" and "installed" not in row:
+        # The original forward rename may have left a UFS deferred ctime
+        # update. Complete the exact installed vnode + directory fsync
+        # BEFORE writing the rollback "restore" WAL checkpoint. Never
+        # rebaseline an installed WAL ctime: that pin does not exist in
+        # this pre-installed interruption window.
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                if list(_target_identity(os.fstat(fd))) != identity:
+                    raise DestinationRefused("original_managed_restore_preimage_changed")
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            _sync(path.parent)
+        except OSError as exc:
+            raise DestinationRefused("original_managed_restore_presync_refused") from exc
+        checked_state, checked_identity = observe()
+        if (checked_state != state or checked_identity[:2] != identity[:2] or
+                checked_identity[3:] != identity[3:]):
+            raise DestinationRefused("original_managed_restore_preimage_changed")
+        state, identity = checked_state, checked_identity
+    try:
+        barrier_recover(active.parent, path.parent, row["ready"]["temp"], uid,
+                        row.get("barrier"))
+    except (ManagedBarrierRefused, OSError) as exc:
+        raise DestinationRefused("original_managed_barrier_recovery_refused") from exc
+    # UFS may finalize metadata while completing the file-system-local
+    # barrier. Do not retain a pre-cleanup ctime identity as rollback proof.
+    state, identity = observe()
+    temps = [_found_temp(path, row[k], uid) for k in ("ready", "restore") if k in row]
+    for temp in temps:
+        if temp is not None:
+            temp.unlink()
+            _sync(temp.parent)
+    if (observe() != (state, identity) or
+            _release_hash(active, uid) != (old_hash if state == "before" else new_hash)):
+        raise DestinationRefused("original_managed_restore_release_changed")
+    if state == "after":
+        def stage(phase, item, data, info):
+            nonlocal record, row
+            if phase == "ready":
+                row = {**row, "restore": {**_stage_pin(info, data), "temp": item.name}}
+                record = store._checkpoint_managed_write(record, row, attest,
+                    shared_work_parent=parent, saved_base=saved_base)
+
+        _replace(path, after, before, uid, stage_fn=stage, expected_identity=tuple(identity))
+
+    # Recovery may itself resume after rename but before directory fsync.
+    _sync(path.parent)
+
+    def restored():
+        return attest() is True and observe()[0] == "before" and _release_hash(active, uid) == old_hash
+
+    return store._checkpoint_managed_write(record, None, restored, shared_work_parent=parent,
+                                            saved_base=saved_base)
 
 
 def _observe_found_source(path: Path, name: str, row: tuple,
@@ -1633,7 +1880,8 @@ def _observe_found_source(path: Path, name: str, row: tuple,
 
 
 def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record: dict,
-                                   plan_bytes: bytes, uid: int, attest) -> dict:
+                                   plan_bytes: bytes, uid: int, attest,
+                                   bound_attest=None) -> dict:
     """Restore only journal-attributed writes with the original Config and P2 held."""
     from shared_apply_operation import FOUND_RESTORING, FOUND_ROLLBACK_FROM
 
@@ -1662,8 +1910,10 @@ def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record:
         return out
 
     observe_all()
+    store._attest_bound_found_checkpoint(record, bound_attest)
     if record["phase"] != FOUND_RESTORING:
-        record = store.record_found_rollback(record, plan_bytes)
+        record = store.record_found_rollback(
+            record, plan_bytes, bound_attest=bound_attest)
     for name in reversed(SHARED_FOUND_NAMES):
         path = targets[name]
         before, after, _, status = verified[name]
@@ -1671,9 +1921,11 @@ def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record:
         state, identity, linked_temp = observe_all()[name]
         if attest() is not True:
             raise DestinationRefused("original_found_rollback_witness_refused")
+        store._attest_bound_found_checkpoint(record, bound_attest)
         if state == "after":
             if status == "missing":
-                record = store.record_found_rollback(record, plan_bytes, source=name)
+                record = store.record_found_rollback(
+                    record, plan_bytes, source=name, bound_attest=bound_attest)
                 # Recheck the exact attributed inode immediately before unlink.
                 if _observe_found_source(path, name, verified[name], record["found"],
                                          uid) != (state, identity, linked_temp):
@@ -1689,15 +1941,15 @@ def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record:
                     temp.unlink()
                     _sync(path.parent)
 
-                def stage_restore(phase, item, content):
+                def stage_restore(phase, item, content, info):
                     nonlocal record
                     if phase == "ready":
-                        actual, st = _target(item, uid)
-                        if actual != before or content != before or attest() is not True:
+                        if content != before or attest() is not True:
                             raise DestinationRefused("original_found_restore_stage_refused")
-                        pin = {**_stage_pin(st, actual), "temp": item.name}
+                        pin = {**_stage_pin(info, content), "temp": item.name}
                         record = store.record_found_rollback(
-                            record, plan_bytes, source=name, pin=pin)
+                            record, plan_bytes, source=name, pin=pin,
+                            bound_attest=bound_attest)
 
                 _replace(path, after, before, uid, stage_fn=stage_restore,
                          expected_identity=identity)
@@ -1711,7 +1963,8 @@ def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record:
     if (any(state == "after" for state, _, _ in observe_all().values()) or
             attest() is not True):
         raise DestinationRefused("original_found_restore_not_attested")
-    return store.record_found_rollback(record, plan_bytes, complete=True)
+    return store.record_found_rollback(
+        record, plan_bytes, complete=True, bound_attest=bound_attest)
 
 
 def _native_found_wal_context(operation_id: str, config_fd: int):
@@ -1773,6 +2026,33 @@ def _native_found_wal_context(operation_id: str, config_fd: int):
     return store, record, raw, plan["found_batch"], targets, attest
 
 
+def _bound_found_native_witness(store, original: dict, attest):
+    """Same original FD4/FD9/P2 scope, exact immutable identity across phases.
+
+    The caller holds the existing destination lock continuously. The WAL
+    checks both roots itself; this witness additionally binds each phase to
+    the original native Config descriptor and sealed operation context.
+    No phase, caller-provided digest or semantic receipt grants lifecycle.
+    """
+    if "manifest" not in original and "previous_manifest" not in original:
+        return None
+    if "manifest" not in original or "found" not in original:
+        raise DestinationRefused("original_found_candidate_pin_required")
+    identity = tuple(original.get(key) for key in
+                     ("detail", "previous", "manifest", "previous_manifest"))
+    intent = tuple(original["found"].get(key) for key in
+                   ("schema", "kind", "plan_sha256", "sources", "runtime_mode"))
+
+    def witness(record):
+        return (type(record) is dict and "found" in record and
+                tuple(record.get(key) for key in
+                      ("detail", "previous", "manifest", "previous_manifest")) == identity and
+                tuple(record["found"].get(key) for key in
+                      ("schema", "kind", "plan_sha256", "sources", "runtime_mode")) == intent and
+                store.read() == record and attest() is True and store.read() == record)
+    return witness
+
+
 def _attest_found_after_locked(rows: dict, targets: dict, record: dict, *, uid: int) -> bool:
     """The recorded post-images belong to this Apply, including untouched sources."""
     batch = _qualified_shared_found_batch(rows)
@@ -1790,12 +2070,173 @@ def _attest_found_after_locked(rows: dict, targets: dict, record: dict, *, uid: 
     return True
 
 
+def _attest_bound_inert_found_predecessor(record: dict) -> tuple[str, str]:
+    """Original full stopped owner proof before bound file save or rollback.
+
+    No native Config or P2a queue acquisition here. The original caller
+    already holds FD9 -> Config -> P2. Retired learning needs its own
+    lock-order-correct retirement proof, so it remains explicitly refused.
+    """
+    from neutral_schema3_quiescent_preimage import (
+        _zero_processes, _safe_empty_directory, _empty_kernel,
+        CHILD_PID, MONITOR_PID, DAEMON_PID, PRODUCER_ROOT)
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from auto_detect_minute import inspect_inert_release
+    from shared_apply_seal import WORK
+    from voice_live_inspect import COMMON_ACTIVE
+
+    prior = record.get("previous")
+    if (type(prior) is not dict or
+            prior["candidate"] != record["detail"]["base"] or
+            record.get("previous_manifest", {}).get("schema") == 2):
+        raise DestinationRefused("bound_found_stopped_inert_owner_required")
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    old_work = WORK / prior["id"]
+    tree = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+    if inspect_inert_release(old_work / "release", owner_uid=0) != "inactive":
+        raise DestinationRefused("bound_found_inert_owner_required")
+    _safe_empty_directory(PRODUCER_ROOT, 0)
+    kernel = _empty_kernel(old_work / "release")
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    return tree, kernel
+
+
+@contextmanager
+def _bound_found_queue_scope(queue_fd: int | None):
+    """Borrow P2a from the original parent; never acquire it after Config."""
+    if queue_fd is None:
+        yield None
+        return
+    from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
+    from voice_ipfw_adapter import require_lifecycle_lock
+    import pwd
+
+    require_lifecycle_lock()
+    gid = pwd.getpwnam(ENGINE_USER).pw_gid
+    if gid <= 0:
+        raise DestinationRefused("bound_found_learning_gid_unqualified")
+    queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+    # No fresh Config lock on exit: the original PHP Config::save may
+    # already have released FD4 while the parent still owns P2a.
+    with queue.inherited_exclusive(queue_fd):
+        yield queue
+
+
+def _attest_bound_found_predecessor(record: dict, config_fd: int,
+                                    queue: DurableInbox | None):
+    """Full stopped original owner, inert or already terminal retired learning.
+
+    A running owner is never qualified for physical Found writes by this
+    function. Learning requires the original inherited P2a before Config,
+    immutable historical PID/epoch, terminal ACK/archive and all-PID P2b.
+    No retirement repair, queue acquisition, signal or Config save here.
+    """
+    if record.get("previous_manifest", {}).get("schema") != 2:
+        return _attest_bound_inert_found_predecessor(record)
+    if not isinstance(queue, DurableInbox) or not queue._held:
+        raise DestinationRefused("bound_found_original_queue_fd_required")
+
+    from auto_detect_owner import attest_bound_found_stopped_learning_predecessor
+    from auto_detect_learning_retirement import retired_learning_stopped, RETIRE_DIR, READY
+    from auto_detect_fd import _probe_original_inode
+    from neutral_schema3_quiescent_preimage import (
+        _zero_processes, _empty_kernel, CHILD_PID, MONITOR_PID, DAEMON_PID)
+    from neutral_schema3_previous_physical import _full_prior_tree
+    from neutral_root_stage import verify_original_operation_pins
+    from shared_apply_seal import WORK
+    from voice_live_inspect import COMMON_ACTIVE
+
+    prior = record["previous"]
+    def attest():
+        return attest_bound_found_stopped_learning_predecessor(record, config_fd)
+
+    def inspect(path, device, inode, *, owner, writer_gid):
+        return _probe_original_inode(
+            path, device, inode, owner=owner, writer_gid=writer_gid,
+            attest_owner=lambda: attest().owner == owner)
+
+    verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    proof = attest()
+    if (proof.operation_id != prior["id"] or proof.generation != prior["id"] or
+            proof.owner_candidate_sha256 != prior["candidate"]):
+        raise DestinationRefused("bound_found_retired_owner_changed")
+    old_work = WORK / prior["id"]
+    tree = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+    receipts = EpochReceipts(owner_uid=0, writer_gid=queue.writer_gid)
+    ready = receipts._generation(proof.generation, create=False) / RETIRE_DIR / READY
+    before = _read(ready, 0)
+    if not retired_learning_stopped(
+            receipts, queue, proof, old_work,
+            attest=attest, inspect=inspect, repair=False):
+        raise DestinationRefused("bound_found_learning_retirement_incomplete")
+    kernel = _empty_kernel(old_work / "release")
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    if (attest() != proof or _read(ready, 0) != before or
+            _full_prior_tree(old_work, COMMON_ACTIVE, 0) != tree):
+        raise DestinationRefused("bound_found_retired_owner_changed")
+    return tree, kernel, proof, _sha(before)
+
+
+def shared_apply_bound_found_files_original_fd9(operation_id: str, config_fd: int,
+                                               *, raw_pipe: bytes, config_digest: str,
+                                               before_save, queue_fd: int | None = None) -> dict:
+    """Private original PHP/FD9 file-save integration, not a lifecycle command.
+
+    Bind from the actual original source, then enter the existing three-file
+    CAS and Config-saving checkpoint while the same final semantic P2 scope
+    remains held. No alternate file or Config writer. The first supported
+    physical predecessor is stopped: inert or fully retired learning under
+    the original inherited P2a. A running predecessor remains fenced.
+    """
+    from neutral_shared_apply_source_gate import (
+        native_bind_found_prepared_fd9, _with_native_found_prepared_semantic)
+
+    if not callable(before_save):
+        raise DestinationRefused("bound_found_original_save_scope_required")
+    def write_locked(semantic, store, record, raw, rows, targets, attest):
+        prior = record.get("previous")
+        mode = record["found"].get("runtime_mode")
+        if (type(prior) is not dict or semantic.previous_state != "stopped" or
+                semantic.previous_generation != prior["id"] or
+                semantic.candidate_root_sha256 != record["manifest"]["root_sha256"] or
+                mode not in ("0", "1") or (mode == "1" and not semantic.candidate_enabled)):
+            raise DestinationRefused("bound_found_stopped_inert_owner_required")
+
+        physical = _attest_bound_found_predecessor(record, config_fd, queue)
+        if (_attest_bound_found_predecessor(record, config_fd, queue) != physical or
+                store.read() != record or attest() is not True):
+            raise DestinationRefused("bound_found_old_owner_changed")
+        native_witness = _bound_found_native_witness(store, record, attest)
+
+        def bound_attest(current):
+            # Recheck full old owner immediately before the first physical
+            # write and before Config::save. Between those two, original
+            # FD9+FD4+P2 and immutable pins guard every durable inode stage.
+            return (native_witness(current) and
+                    (current["phase"] not in ("prepared", "found-files-written") or
+                     _attest_bound_found_predecessor(current, config_fd, queue) == physical))
+
+        return _write_shared_found_files_locked(
+            store, record, raw, rows, targets, attest,
+            before_save=before_save, bound_attest=bound_attest)
+
+    with _bound_found_queue_scope(queue_fd) as queue:
+        _, pending, _, _, _, _ = _native_found_wal_context(operation_id, config_fd)
+        if pending.get("previous_manifest", {}).get("schema") == 2 and queue is None:
+            raise DestinationRefused("bound_found_original_queue_fd_required")
+        witness, _ = native_bind_found_prepared_fd9(
+            operation_id, raw_pipe, config_fd, config_digest=config_digest)
+        return _with_native_found_prepared_semantic(
+            witness, config_fd, config_digest=config_digest,
+            continue_locked=write_locked)
+
+
 def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int,
                                           *, before_save=None) -> dict:
     """Apply the P2 files under the original WAL and keep P2 through native save."""
-    from auto_detect_effective_known import _verify_planned_preimages_locked
     from auto_detect_gui_hostlist import AUTO_LOCK
-    from auto_detect_owned_sources import OWNED_ROOT, read_owned
 
     store, record, raw, rows, targets, attest = _native_found_wal_context(
         operation_id, config_fd)
@@ -1804,32 +2245,42 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int,
     # A verified OLD root is not a verified successor. Never enter P2 writes.
     if "previous_manifest" in record or "manifest" in record:
         raise DestinationRefused("original_found_dual_root_not_bound")
-    verified = _qualified_shared_found_batch(rows)
     with exclusive_destination_lock(AUTO_LOCK, 0):
-        _verify_planned_preimages_locked(verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+        return _write_shared_found_files_locked(
+            store, record, raw, rows, targets, attest, before_save=before_save)
 
-        def exact_original_witness(phase: str, content: bytes) -> bool:
-            if content != raw or not attest():
+
+def _write_shared_found_files_locked(store, record, raw, rows, targets, attest, *,
+                                    before_save, bound_attest=None) -> dict:
+    """One existing CAS/WAL path, already under original Config then P2."""
+    from auto_detect_effective_known import _verify_planned_preimages_locked
+    from auto_detect_owned_sources import OWNED_ROOT, read_owned
+    verified = _qualified_shared_found_batch(rows)
+    _verify_planned_preimages_locked(verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+
+    def exact_original_witness(phase: str, content: bytes) -> bool:
+        if content != raw or not attest():
+            return False
+        if phase == "found-files-writing":
+            _verify_planned_preimages_locked(
+                verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+        elif phase == "found-files-written":
+            owned = read_owned(OWNED_ROOT, owner_uid=0)
+            if (owned is None or any(owned[name].encode() != verified[name][1]
+                                      for name in ("youtube", "user"))):
                 return False
-            if phase == "found-files-writing":
-                _verify_planned_preimages_locked(
-                    verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
-            elif phase == "found-files-written":
-                owned = read_owned(OWNED_ROOT, owner_uid=0)
-                if (owned is None or any(owned[name].encode() != verified[name][1]
-                                          for name in ("youtube", "user"))):
-                    return False
-            return True
+        return True
 
-        result = _locked_shared_found_apply_journal(
-            rows, targets, store=store, detail=record["detail"],
-            plan_bytes=raw, uid=0, attest=exact_original_witness)
-        if before_save is not None:
-            store.advance_found_config(
-                "found-config-saving", record["detail"], raw,
-                lambda phase, content: attest() and _attest_found_after_locked(
-                    rows, targets, store.read(), uid=0))
-            # Config::save() can release FD4. The callback must only wait for
-            # the PHP parent's acknowledgement; never try to re-lock Config.
-            before_save()
-        return result
+    bound_kwargs = {} if bound_attest is None else {"bound_attest": bound_attest}
+    result = _locked_shared_found_apply_journal(
+        rows, targets, store=store, detail=record["detail"],
+        plan_bytes=raw, uid=0, attest=exact_original_witness, **bound_kwargs)
+    if before_save is not None:
+        store.advance_found_config(
+            "found-config-saving", record["detail"], raw,
+            lambda phase, content: attest() and _attest_found_after_locked(
+                rows, targets, store.read(), uid=0), **bound_kwargs)
+        # Config::save() can release FD4. The callback must only wait for
+        # the PHP parent's acknowledgement; never try to re-lock Config.
+        before_save()
+    return result

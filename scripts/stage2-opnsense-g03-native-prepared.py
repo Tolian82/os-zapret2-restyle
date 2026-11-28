@@ -7,7 +7,9 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 import sys
+import time
 import xml.etree.ElementTree as ET
 
 NATIVE = "/root/g03-native-prepared.php"
@@ -43,11 +45,22 @@ def call(argv, *, locked=False, timeout=180, expected_rc=0):
         allowed = {"stage", "stage-partial", "stage-config", "stage-ordinary", "durable",
                    "crash-partial", "crash-config-save", "shared-apply-prepare",
                    "found-cold", "found-recover", "found-recover-prepared",
-                   "attest", "bind"}
+                   "attest", "bind", "bootstrap-known", "durable-stopped", "stopped-presave"}
         if action not in allowed:
             action = "unknown"
-        reason = re.search(r"G03_[A-Z0-9_]+(?:=REFUSED:[A-Z0-9_]+)?",
-                           p.stderr or "")
+        diagnostics = re.findall(
+            r"^G03_(?:FIRST|MANAGED)_REPLY=rc:(?:-?[0-9]{1,3}|unknown);receipt:(?:invalid|empty|exact|mismatch);"
+            r"wal:(?:prepared|activating|activated|config-saved|managed-writing|managed-config-saving|committed|restored|requires-review|unknown);"
+            r"stderr:(?:save-uncertain|review|other|empty)$", p.stderr or "", re.MULTILINE)
+        for trace in re.findall(
+            r"^(?:G03_FIRST_TRACE=D(?:[012][0-9]|3[0-4])|G03_MANAGED_TRACE=(?:D(?:[012][0-9]|3[0-4])|(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4})|G03_MANAGED_STEP=(?:write|begin|confirm|recover))$",
+            p.stderr or "", re.MULTILINE)[:64]:
+            print(trace, flush=True)
+        if len(diagnostics) == 1:
+            print(diagnostics[0], flush=True)
+        reason = (re.search(r"^G03_BOUND_NATIVE_REFUSED_[A-Z0-9_]{1,100}$",
+                            p.stderr or "", re.MULTILINE) or
+                  re.search(r"G03_[A-Z0-9_]+(?:=REFUSED:[A-Z0-9_]+)?", p.stderr or ""))
         reason = reason.group(0) if reason else "NO_TEST_REASON"
         raise RuntimeError("G03_COLD_COMMAND_REFUSED_" + action + "_" +
                            str(p.returncode) + "_" + reason)
@@ -106,7 +119,73 @@ def snapshot():
                                      capture_output=True, timeout=10),
                   ]))
 
-def main():
+
+def verify_prepared_build(receipt, op, before, after, old_wal, new_wal):
+    """Test-only diagnostics: separate producer refusal from live drift.
+
+    Never print Config/list content, command stderr or arbitrary stage text.
+    The installed producer and its existing stage-status file stay unchanged.
+    """
+    refusals = [line for line in receipt.splitlines()
+                if re.fullmatch(r"preflight-rejected=[a-z-]{1,40}", line)]
+    drift = [name for name, old, new in zip(
+        ("config", "pid", "sources", "ipfw"), before, after) if old != new]
+    if old_wal != new_wal:
+        drift.append("wal")
+    if not refusals and not receipt.startswith("preflight-rejected=") and not drift:
+        return
+    allowed = {"render", "runtime-build", "seal"}
+    reason = (refusals[-1].split("=", 1)[1] if len(refusals) == 1 else "unknown")
+    reason = reason if reason in allowed else "unknown"
+    print("G03_BUILD_DIAGNOSTIC=receipt:" + reason +
+          ";drift:" + (",".join(drift) or "none"), flush=True)
+    if "sources" in drift:
+        for name, old, new in zip(("youtube", "user", "auto"), before[2], after[2]):
+            if old == new:
+                continue
+            fields = ("kind", "device", "inode", "uid", "links", "mode",
+                      "size", "mtime", "ctime", "bytes")
+            changed = ([field for field, x, y in zip(fields, old, new) if x != y]
+                       if len(old) == len(new) == len(fields) else ["shape"])
+            print("G03_BUILD_SOURCE_DRIFT=" + name + ":" + ",".join(changed),
+                  flush=True)
+            if len(old) == len(new) == len(fields) and "ctime" in changed:
+                print(f"G03_BUILD_SOURCE_CTIME_DELTA_NS={name}:{new[8] - old[8]}",
+                      flush=True)
+    try:
+        stage = Path("/var/run/zapret2-execution.status")
+        if stage.is_file() and not stage.is_symlink() and stage.stat().st_size <= 4096:
+            fields = stage.read_text(encoding="utf-8").strip().split("|", 5)
+            if len(fields) == 6:
+                index, total, name, state, _, message = fields
+                if (index in tuple(str(n) for n in range(1, 9)) and total == "8" and
+                        re.fullmatch(r"[a-z][a-z-]{0,30}", name) and
+                        state in ("running", "ok", "failed", "stopped")):
+                    # Only fixed machine-readable codes, never free-form text.
+                    fixed_codes = {
+                        "protected effective HOSTLIST composition unavailable": "P1_COMPOSITION_REFUSED",
+                        "managed Target validation failed": "MANAGED_TARGET_VALIDATION_FAILED",
+                        "configuration loading failed": "CONFIG_LOAD_FAILED",
+                        "native Voice ON requires the completed transactional runtime": "NATIVE_VOICE_PREFLIGHT_REFUSED",
+                    }
+                    code = (message if re.fullmatch(r"[A-Z][A-Z0-9_]{1,63}", message)
+                            else fixed_codes.get(message, "redacted"))
+                    print(f"G03_BUILD_STAGE={index}/{total}:{name}:{state}:{code}",
+                          flush=True)
+    except (OSError, UnicodeError):
+        print("G03_BUILD_STAGE=unavailable", flush=True)
+    work = Path("/var/db/zapret2/shared-work") / op
+    for name, path in (("template", work / "templates/usr/local/etc/zapret2/zapret.conf"),
+                       ("release", work / "release"),
+                       ("seal", work / "bundle-seal.json")):
+        print(f"G03_BUILD_ARTIFACT={name}:"
+              + ("present" if path.exists() and not path.is_symlink() else "absent"),
+              flush=True)
+    raise RuntimeError("G03_ORIGINAL_SEAL_BUILD_DIAGNOSED_REFUSAL")
+
+
+
+def main(*, bound_found=False):
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_G03_COLD_PREPARED") == "1" and
          sys.platform.startswith("freebsd") and os.geteuid() == 0 and
@@ -117,37 +196,52 @@ def main():
          previous.get("detail", {}).get("page") == "strategies" and
          subprocess.run([SERVICE, "status"], timeout=30).returncode == 0,
          "G03_COLD_PREVIOUS_RUNNING_OWNER_UNPROVEN")
+    old_pin = previous.get("manifest")
+    need((isinstance(old_pin, dict) and old_pin.get("schema") == 1)
+         if bound_found else old_pin is None,
+         "G03_FOUND_PREDECESSOR_PIN_SCOPE")
+    old_work = Path("/var/db/zapret2/shared-work") / previous["detail"]["id"]
+    def old_pins_intact():
+        if not bound_found:
+            return True
+        for name, key in (("manifest.json", "root_sha256"),
+                          ("bundle-seal.json", "seal_sha256")):
+            path = old_work / name
+            if (not path.is_file() or path.is_symlink() or
+                    hashlib.sha256(path.read_bytes()).hexdigest() != old_pin[key]):
+                return False
+        return True
     original = snapshot()
-    staged = call([PHP, NATIVE, "stage"], locked=True)
+    need(old_pins_intact(), "G03_FOUND_OLD_PIN_DRIFT")
+    staged = call([PHP, NATIVE, "stage-partial" if bound_found else "stage"], locked=True)
     need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
          snapshot() == original and json.loads(WAL.read_bytes()) == previous,
          "G03_COLD_STAGE_CHANGED_ORIGINAL_OWNER")
     op = staged.split("=",1)[1]
     prepared = call([SERVICE, "shared-apply-prepare", op])
-    need(not prepared.startswith("preflight-rejected=") and
-         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
-         "G03_COLD_BUILD_TOUCHED_OR_REFUSED_OWNER")
+    verify_prepared_build(prepared, op, original, snapshot(),
+                          previous, json.loads(WAL.read_bytes()))
     call([PHP, NATIVE, "durable", op], locked=True)
     pending = json.loads(WAL.read_bytes())
     need(pending.get("phase") == "prepared" and
          pending.get("detail", {}).get("id") == op and
          pending.get("previous") == previous["detail"] and
-         "found" in pending and snapshot() == original,
+         pending.get("previous_manifest") == old_pin and
+         "found" in pending and snapshot() == original and old_pins_intact(),
          "G03_COLD_PREPARED_NOT_DURABLE_OR_LIVE_OWNER_DRIFT")
-    # Same original FD9 and genuine PHP Config FD4. Read-only P2/CAS.
-    attested = call([PHP, NATIVE, "attest", op], locked=True)
-    need(attested == "original-found-prepared-source-cas-attested" and
-         json.loads(WAL.read_bytes()) == pending and snapshot() == original,
-         "G03_S10_FOUND_PREPARED_SOURCE_CAS_DRIFT")
-    print("G03_S10_FOUND_SOURCE_CAS=PASS_REAL_ORIGINAL_FD4_FD9_P2_SEAL_NO_WRITES",
-          flush=True)
-    # Real candidate sibling + single original WAL bind, in the actual
-    # inherited native Config FD4/FD9/P2 route. The old running owner is
-    # legacy (unbound); do not forge a committed old immutable manifest.
+    # The standalone source attestation deliberately refuses a previous
+    # immutable pin. Bound candidates use the original combined bind/CAS.
+    if not bound_found:
+        attested = call([PHP, NATIVE, "attest", op], locked=True)
+        need(attested == "original-found-prepared-source-cas-attested" and
+             json.loads(WAL.read_bytes()) == pending and snapshot() == original,
+             "G03_S10_FOUND_PREPARED_SOURCE_CAS_DRIFT")
+        print("G03_S10_FOUND_SOURCE_CAS=PASS_REAL_ORIGINAL_FD4_FD9_P2_SEAL_NO_WRITES",
+              flush=True)
     work = Path("/var/db/zapret2/shared-work") / op
     root = work / "manifest.json"
     seal = (work / "bundle-seal.json").read_bytes()
-    need("manifest" not in pending and "previous_manifest" not in pending
+    need("manifest" not in pending and pending.get("previous_manifest") == old_pin
          and not root.exists() and not root.is_symlink(),
          "G03_FOUND_BIND_INITIAL_PREIMAGE_REQUIRED")
     result = call([PHP, NATIVE, "bind", op], locked=True)
@@ -161,12 +255,15 @@ def main():
          pin.get("root_sha256") == hashlib.sha256(root.read_bytes()).hexdigest() and
          pin.get("seal_sha256") == hashlib.sha256(seal).hexdigest() and
          (work / "bundle-seal.json").read_bytes() == seal and
-         snapshot() == original,
+         snapshot() == original and old_pins_intact() and
+         (not bound_found or (pin["generation"] != old_pin["generation"] and
+                              pin["root_sha256"] != old_pin["root_sha256"])),
          "G03_FOUND_NATIVE_BOUND_OR_PHYSICAL_DRIFT")
-    print("G03_S10_FOUND_BIND=PASS_REAL_FD4_FD9_P2_LEGACY_PREDECESSOR_NO_WRITES",
-          flush=True)
-    print("G03_S10_FOUND_SEMANTIC=PASS_REAL_LEGACY_RESTART_REQUIRED_NO_ACTION",
-          flush=True)
+    if not bound_found:
+        print("G03_S10_FOUND_BIND=PASS_REAL_FD4_FD9_P2_LEGACY_PREDECESSOR_NO_WRITES",
+              flush=True)
+        print("G03_S10_FOUND_SEMANTIC=PASS_REAL_LEGACY_RESTART_REQUIRED_NO_ACTION",
+              flush=True)
     # Separate native PHP owner invocation after the binding child has
     # exited: recovery must rediscover the immutable candidate from disk.
     receipt = json.loads(call([
@@ -181,43 +278,274 @@ def main():
          } and restored.get("phase") == "restored" and
          restored.get("previous") == previous["detail"] and
          restored.get("manifest") == pin and
-         "previous_manifest" not in restored and
+         restored.get("previous_manifest") == old_pin and old_pins_intact() and
          pin["root_sha256"] == hashlib.sha256(root.read_bytes()).hexdigest() and
          (work / "bundle-seal.json").read_bytes() == seal and
          "found" not in restored and snapshot() == original and
          subprocess.run([SERVICE, "status"], timeout=30).returncode == 0,
          "G03_COLD_RESTORED_PREVIOUS_OWNER_UNPROVEN")
-    print("G03_COLD_PREPARED=PASS_ORIGINAL_FD9_CONFIG_FD4_P2_NO_WRITES",
-          flush=True)
-    print("G03_S10_FOUND_BIND_RECOVER=PASS_REAL_NATIVE_PREPARED_NO_PHYSICAL_TRANSITION",
-          flush=True)
+    if bound_found:
+        expected = {**bound, "phase": "restored"}
+        expected.pop("found")
+        need(restored == expected, "G03_BOUND_FOUND_EXACT_RESTORED_WAL_REQUIRED")
+        print("G03_S10_BOUND_FOUND_WRITER=PASS_RUNNING_OWNER_REJECTED_BEFORE_P1", flush=True)
+        print("G03_S10_BOUND_FOUND=PASS_REAL_DUAL_ROOT_CAS_FENCE_PREPARED_RESTORE_NO_WRITES",
+              flush=True)
+    else:
+        print("G03_COLD_PREPARED=PASS_ORIGINAL_FD9_CONFIG_FD4_P2_NO_WRITES",
+              flush=True)
+        print("G03_S10_FOUND_BIND_RECOVER=PASS_REAL_NATIVE_PREPARED_NO_PHYSICAL_TRANSITION",
+              flush=True)
 
 
-def bound_manifest_main(*, stopped=False, cold=False):
-    """One genuine original bound FD9 PREPARED proof for running/stopped owner.
+def verify_first_bound_commit(record, op, receipt, root, original, saved, status):
+    """Test-only readback: no success based solely on coordinator stdout."""
+    detail = record.get("detail", {})
+    pin = record.get("manifest", {})
+    need(record.get("phase") == "committed" and detail.get("id") == op and
+         detail.get("page") == "strategies" and detail.get("base") != detail.get("candidate") and
+         detail.get("changed_fields") == ["hostlist.mode"] and
+         "previous" not in record and "previous_manifest" not in record and "found" not in record and
+         pin.get("schema") == 1 and pin.get("generation") == op and
+         pin.get("candidate_sha256") == detail.get("candidate") and
+         re.fullmatch(r"[a-f0-9]{64}", record.get("first_running_sha256", "")) is not None and
+         root.is_file() and not root.is_symlink() and
+         receipt == "G03_BOUND_NATIVE_COMMIT=" + hashlib.sha256(root.read_bytes()).hexdigest() and
+         pin.get("root_sha256") == receipt.split("=", 1)[1],
+         "G03_FIRST_BOUND_COMMIT_WAL_OR_PIN_UNPROVEN")
+    need(saved == {"result": "committed", "snapshot": detail["candidate"], "enabled": "1"} and
+         status.returncode == 0 and status.stdout.strip() == "zapret is running" and
+         PIDFILE.is_file() and not PIDFILE.is_symlink() and
+         re.fullmatch(r"[1-9][0-9]*", PIDFILE.read_text().strip()) is not None and
+         snapshot()[2] == original[2],
+         "G03_FIRST_BOUND_COMMIT_NATIVE_READBACK_UNPROVEN")
 
-    The STOPPED branch runs only after an explicit service stop on the
-    disposable G03 guest. It does not grant product activation or mutation.
+
+def verify_successor_commit(record, previous, op, receipt, root, original,
+                            observed, saved, status, saved_list, expected_list):
+    """Independent terminal readback of one linked-list change."""
+    detail = record.get("detail", {})
+    pin = record.get("manifest", {})
+    need(record.get("phase") == "committed" and detail.get("id") == op and
+         op != previous["detail"]["id"] and detail.get("page") == "strategies" and
+         detail.get("base") == previous["detail"]["candidate"] and
+         detail.get("candidate") != detail.get("base") and
+         detail.get("changed_fields") == ["hostlist.youtubedomains"] and
+         record.get("previous") == previous["detail"] and
+         record.get("previous_manifest") == previous["manifest"] and
+         "managed" not in record and "found" not in record and
+         pin.get("schema") == 1 and pin.get("generation") == op and
+         pin.get("candidate_sha256") == detail["candidate"] and
+         pin.get("root_sha256") != previous["manifest"]["root_sha256"] and
+         root.is_file() and not root.is_symlink() and
+         receipt == "G03_BOUND_SUCCESSOR_COMMIT=" + hashlib.sha256(root.read_bytes()).hexdigest() and
+         pin.get("root_sha256") == receipt.split("=", 1)[1],
+         "G03_BOUND_SUCCESSOR_WAL_OR_PIN_UNPROVEN")
+    need(saved == {"result": "committed", "snapshot": detail["candidate"], "enabled": "1"} and
+         saved_list.splitlines() == expected_list.splitlines() and
+         status.returncode == 0 and status.stdout.strip() == "zapret is running" and
+         observed[1:] == original[1:] and observed[0] != original[0],
+         "G03_BOUND_SUCCESSOR_NATIVE_READBACK_UNPROVEN")
+
+
+
+def build_managed_uncertain_worker(folder: Path, source: Path, *,
+                                   native: bool = True, window: str = "post-save") -> Path:
+    """TEST ONLY: private original-PHP copy with one post-Config::save exception."""
+    import stat
+    fixed = Path("/usr/local/opnsense/scripts/OPNsense/Zapret")
+    expected_env = ("ZAPRET2_G03_MANAGED_UNCERTAIN" if window == "post-save"
+                    else "ZAPRET2_G03_MANAGED_PRE_SAVE")
+    opposite_env = ("ZAPRET2_G03_MANAGED_PRE_SAVE" if window == "post-save"
+                    else "ZAPRET2_G03_MANAGED_UNCERTAIN")
+    if (window not in ("post-save", "pre-save") or
+            (native and (os.environ.get(expected_env) != "1" or
+                         os.environ.get(opposite_env) == "1")) or
+            not folder.is_dir() or folder.is_symlink() or "'" in str(folder) or
+            "'" in str(source) or
+            (native and (source != fixed or not sys.platform.startswith("freebsd") or
+                         os.geteuid() != 0 or os.environ.get("GITHUB_ACTIONS") != "true" or
+                         os.environ.get("ZAPRET2_G03_PRISTINE_FIRST_COMMIT") != "1"))):
+        raise RuntimeError("G03_MANAGED_FAULT_DISPOSABLE_SCOPE_REQUIRED")
+
+    def read_exact(name):
+        path = source / name
+        before = path.lstat()
+        if (not stat.S_ISREG(before.st_mode) or path.is_symlink() or
+                (native and (before.st_uid != 0 or before.st_nlink != 1 or
+                             before.st_mode & 0o022))):
+            raise RuntimeError("G03_MANAGED_FAULT_ORIGINAL_SOURCE_UNTRUSTED")
+        data = path.read_bytes()
+        after = path.lstat()
+        identity = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns,
+                               st.st_ctime_ns, st.st_mode, st.st_uid, st.st_nlink)
+        if identity(before) != identity(after):
+            raise RuntimeError("G03_MANAGED_FAULT_ORIGINAL_SOURCE_DRIFT")
+        return data.decode("utf-8")
+
+    original_apply = read_exact("apply_settings.php")
+    original_worker = read_exact("shared_apply_config.php")
+    save = "self::saveNativeModel($config, $page);"
+    mvc = "__DIR__ . '/../../../mvc/"
+    own_apply = "__DIR__ . '/apply_settings.php'"
+    own_lock = "__DIR__ . '/shared_apply_lock.php'"
+    if (original_apply.count(save) != 1 or original_apply.count(mvc) != 3 or
+            original_worker.count(own_apply) != 1 or
+            original_worker.count(own_lock) != 1):
+        raise RuntimeError("G03_MANAGED_FAULT_SOURCE_ANCHOR_CHANGED")
+
+    changed_apply = original_apply.replace(
+        mvc, "'" + str(source.parents[2] / "mvc") + "/")
+    if window == "post-save":
+        changed_apply = changed_apply.replace(
+            save, save + "\n            throw new \\RuntimeException('G03_TEST_AFTER_REAL_CONFIG_SAVE');")
+    private_apply = folder / "g03-s10-fault-apply.php"
+    private_worker = folder / "g03-s10-fault-worker.php"
+    changed_worker = original_worker.replace(
+        own_apply, "'" + str(private_apply) + "'").replace(
+        own_lock, "'" + str(source / "shared_apply_lock.php") + "'")
+    if window == "pre-save":
+        # The existing ORIGINAL managed writer has already installed the
+        # protected HOSTLIST and pinned managed-writing at this exact seam.
+        # Refuse if the source ordering has changed; this copy never reaches
+        # the Config-saving WAL checkpoint or Config::save().
+        before_config = "                return self::originalLockedFileEvidence($config, $id, $mode, $digest) ==="
+        if (original_worker.count(before_config) != 1 or
+                original_worker.count("'write-managed-handoff-locked', $digest)") != 1):
+            raise RuntimeError("G03_MANAGED_PRESAVE_FAULT_ORDER_ANCHOR_CHANGED")
+        changed_worker = changed_worker.replace(
+            before_config,
+            "                if ($managedApply && $mode === 'begin-managed-config-save-locked') {\n"
+            "                    throw new \\RuntimeException('G03_TEST_AFTER_MANAGED_FILE_BEFORE_CONFIG_SAVE');\n"
+            "                }\n" + before_config)
+    for path, data in ((private_apply, changed_apply), (private_worker, changed_worker)):
+        with path.open("x", encoding="utf-8") as handle:
+            handle.write(data)
+        path.chmod(0o600)
+        if path.read_text(encoding="utf-8") != data:
+            raise RuntimeError("G03_MANAGED_FAULT_PRIVATE_COPY_DRIFT")
+    return private_worker
+
+
+def managed_fault_worker_self_test():
+    source = Path(__file__).resolve().parent.parent / "src/opnsense/scripts/OPNsense/Zapret"
+    for window in ("pre-save", "post-save"):
+        with tempfile.TemporaryDirectory(prefix="g03-managed-fault-selftest-") as scratch:
+            private = build_managed_uncertain_worker(Path(scratch), source,
+                                                      native=False, window=window)
+            worker = private.read_text()
+            apply = (Path(scratch) / "g03-s10-fault-apply.php").read_text()
+            post = "G03_TEST_AFTER_REAL_CONFIG_SAVE"
+            pre = "G03_TEST_AFTER_MANAGED_FILE_BEFORE_CONFIG_SAVE"
+            need((apply.count(post) == (window == "post-save") and
+                  worker.count(pre) == (window == "pre-save") and
+                  post not in worker and pre not in apply and
+                  private.is_file() and not private.is_symlink() and
+                  post not in (source / "apply_settings.php").read_text() and
+                  pre not in (source / "shared_apply_config.php").read_text()),
+                 "G03_MANAGED_FAULT_COPY_SELFTEST_REFUSED")
+            for path in (private, Path(scratch) / "g03-s10-fault-apply.php"):
+                checked = subprocess.run(["php", "-l", str(path)],
+                                         capture_output=True, text=True, timeout=15)
+                need(checked.returncode == 0, "G03_MANAGED_FAULT_PRIVATE_PHP_LINT_REFUSED")
+    # A second native Found batch must not alias the Config interval toggle.
+    # Check the actual PHP staging source before booting an expensive VM.
+    fixture = (Path(__file__).resolve().parent / "stage2-opnsense-g03-native-prepared.php").read_text()
+    stage = fixture.split("function stage(", 1)[1].split(
+        "\nfunction originalHttpFoundIntent(", 1)[0]
+    http = fixture.split("function originalHttpFoundIntent(", 1)[1].split(
+        "\nfunction durable(", 1)[0]
+    handler = (Path(__file__).resolve().parent / "stage2-opnsense-g03-native-upload.php").read_text()
+    need(handler.count("preflight-rejected=") == 1 and
+         handler.count("'service-preflight-'") == 1 and
+         handler.count("in_array($matches[1], $allowed, true)") == 1,
+         "G03_HTTP_BOUNDED_PREFLIGHT_TRACE_DRIFT")
+    need(handler.count("VoiceModelValues::text(") == 1 and
+         handler.count("uploadedMetadata($_FILES)") == 1 and
+         handler.count("SharedApplyEnvelope::encode(") == 1 and
+         "G03_HTTP_SAVED_MODEL_REFUSED" in handler,
+         "G03_HTTP_SELECTED_OPTION_NORMALIZER_DRIFT")
+    need(http.count("native-http-") == 1 and
+         http.count("SharedApplyFoundIntent::validateJson(") == 1 and
+         http.count("$nextInterval = $saved === 'off' ? 'hourly' : 'off';") == 1 and
+         http.count("'autorestart'=>$nextInterval") == 1 and
+         http.count("'youtube'") >= 1 and http.count("'user'") >= 1 and
+         http.count("'auto'") >= 1,
+         "G03_HTTP_ORIGINAL_FOUND_INTENT_DRIFT")
+    need(stage.count("bool $secondBatch = false") == 1 and
+         stage.count("string $gapMode = ''") == 1 and
+         re.search(r"\$secondBatch\s*=(?!=)", stage.split("): string {", 1)[1]) is None and
+         stage.count("$nextInterval = $saved === 'off' ? 'hourly' : 'off';") == 1 and
+         stage.count("'autorestart'=>$nextInterval") == 1 and
+         stage.count("if ($secondBatch)") == 1 and
+         stage.count("($secondBatch ? 'next-' : '')") == 1 and
+         stage.count("'gap-' . $gapMode . '-'") >= 1,
+         "G03_BOUND_FOUND_DISTINCT_BATCH_SELECTOR_DRIFT")
+    # The original G03 child is carried as a Python -c string: py_compile of
+    # the wrapper alone would NOT detect an invalid native child statement.
+    source_text = Path(__file__).read_text(encoding="utf-8")
+    marker = "    child = r" + "''" + "'"
+    if source_text.count(marker) != 1:
+        raise RuntimeError("G03_MANAGED_FAULT_NATIVE_CHILD_SOURCE_MISSING")
+    child = source_text.split(marker, 1)[1].split("\n" + "''" + "'", 1)[0]
+    compile(child, "<G03-original-FD9-native-child>", "exec")
+    # Regression: after pre-save RESTORED, the active seal must be checked
+    # against the previous committed root, not against the rejected candidate.
+    need(child.count("_full_prior_tree(old_work if pre_save else WORK / op, COMMON_ACTIVE, 0)") == 1 and
+         child.count("(old_tree if pre_save else new_tree)") == 1,
+         "G03_MANAGED_PRESAVE_WRONG_ACTIVE_SEAL_SELECTOR")
+    # Diagnostic helper must remain a pure success check on identical
+    # snapshots and must refuse a producer rejection even after other stdout.
+    synthetic = (("config",), ("pid",), (("missing",),) * 3, ("ipfw",))
+    verify_prepared_build("prepared-id=" + "1" * 32, "1" * 32,
+                          synthetic, synthetic, None, None)
+    try:
+        verify_prepared_build("builder-message\npreflight-rejected=runtime-build",
+                              "1" * 32, synthetic, synthetic, None, None)
+    except RuntimeError as exc:
+        need(str(exc) == "G03_ORIGINAL_SEAL_BUILD_DIAGNOSED_REFUSAL",
+             "G03_BUILD_DIAGNOSTIC_WRONG_REFUSAL")
+    else:
+        raise RuntimeError("G03_BUILD_DIAGNOSTIC_MISSED_REFUSAL")
+    print("G03_S10_MANAGED_FAULT_COPY=PASS_BOTH_PRIVATE_PHP_LINT_NO_INSTALLED_MUTATION")
+
+
+def bound_manifest_main(*, stopped=False, cold=False, first_commit=False, successor=False,
+                        fault_after_save=False, fault_pre_save=False):
+    """Existing PREPARED proofs, plus the disposable first/successor commits.
+
+    The STOPPED branch follows an explicit service stop on the guest.
+    Only the opt-in two-generation journey calls the original coordinator.
     """
+    need(not (fault_after_save and fault_pre_save) and
+         (not (fault_after_save or fault_pre_save) or successor),
+         "G03_MANAGED_FAULT_REQUIRES_EXCLUSIVE_SUCCESSOR")
     script = Path(SERVICE).parent
     backend = script / "backend"
     def journal():
         return (None if not WAL.exists() and not WAL.is_symlink()
                 else json.loads(WAL.read_bytes()))
 
+    first_disabled = os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1"
+    need(not first_disabled or (first_commit and cold and not successor and
+         os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1"),
+         "G03_FIRST_DISABLED_SCOPE_REQUIRED")
     previous = journal()
-    prior = None if previous is None else previous.get("previous")
+    prior = None if previous is None else previous.get("detail" if successor else "previous")
     expected_status = 1 if stopped or cold else 0
     native_status = subprocess.run([SERVICE, "status"], capture_output=True,
                                    text=True, timeout=30)
-    need(not (cold and stopped) and
+    need(not (cold and stopped) and (not first_commit or cold) and
+         (not successor or not (cold or stopped or first_commit)) and
          (previous is None if cold else (
-             isinstance(previous, dict) and previous.get("phase") == "restored"
-             and isinstance(prior, dict))) and
+             isinstance(previous, dict) and
+             previous.get("phase") == ("committed" if successor else "restored") and
+             isinstance(prior, dict))) and
          native_status.returncode == expected_status and
          (not cold or native_status.stdout.strip() == "zapret is not running"),
          "G03_BOUND_PREVIOUS_OWNER_STATE_UNPROVEN")
     original = snapshot()
+    expected_list = None
     if cold:
         # G03's existing native lo0 fixture, before the first ordinary Apply.
         # Use the actual original native request worker, not a fabricated XML.
@@ -230,20 +558,88 @@ def bound_manifest_main(*, stopped=False, cold=False):
         request = {"page": "strategies", "fields": {"hostlist": {"mode": "list"}},
                    "sync": {"telegramips_baseline":
                             model.findtext("hostlist/telegramips") or ""}}
+        if first_disabled:
+            request["fields"]["general"] = {"enabled": "0"}
         encoded = base64.urlsafe_b64encode(json.dumps(
             request, separators=(",", ":")).encode()).decode().rstrip("=")
         staged = call([PHP, str(script / "shared_apply_request.php"), "stage",
                        encoded], locked=True)
+    elif successor:
+        model = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
+        need(model is not None and model.findtext("general/enabled") == "1" and
+             model.findtext("hostlist/mode") == "list" and
+             model.findtext("general/waninterface") == "lo0",
+             "G03_BOUND_SUCCESSOR_SAVED_MODEL_UNPROVEN")
+        old_list = model.findtext("hostlist/youtubedomains") or ""
+        domain = "s10-g03-successor.example.org"
+        need(domain not in old_list.splitlines(), "G03_BOUND_SUCCESSOR_DOMAIN_PRESENT")
+        expected_list = old_list + ("" if not old_list or old_list.endswith("\n") else "\n") + domain
+        request = {"page": "strategies", "fields": {"hostlist": {"youtubedomains": expected_list}},
+                   "sync": {"telegramips_baseline": model.findtext("hostlist/telegramips") or ""}}
+        encoded = base64.urlsafe_b64encode(json.dumps(
+            request, separators=(",", ":")).encode()).decode().rstrip("=")
+        staged = call([PHP, str(script / "shared_apply_request.php"), "stage", encoded], locked=True)
     else:
         staged = call([PHP, NATIVE, "stage-ordinary"], locked=True)
     need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
          snapshot() == original and journal() == previous,
          "G03_BOUND_ORDINARY_STAGE_DRIFT")
     op = staged.split("=", 1)[1]
+    if first_commit and os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1":
+        # Follow the actual shared Apply prerequisite: materialize creates
+        # the protected /var/db/zapret2 parent BEFORE native owned bootstrap.
+        # Initialize before rendering/sealing so candidate evidence includes
+        # the genuine P1 baseline; never fabricate the parent or sources.
+        import stat
+        parent = Path("/var/db/zapret2")
+        info = parent.lstat()
+        need(stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and
+             stat.S_IMODE(info.st_mode) == 0o700,
+             "G03_BOUND_FOUND_ORIGINAL_WORK_PARENT_UNQUALIFIED")
+        print("G03_BOUND_FOUND_BOOTSTRAP=ORIGINAL_STAGE_PARENT_READY", flush=True)
+        boot = call([PHP, NATIVE, "bootstrap-known"], locked=True)
+        seeded = snapshot()
+        need(boot in ("original-known-bootstrap=created", "original-known-bootstrap=existing") and
+             seeded[:2] == original[:2] and seeded[3:] == original[3:] and
+             journal() is None and all(row[0] == "file" for row in seeded[2]) and
+             all(path.read_bytes() == b"" for path in TARGETS),
+             "G03_BOUND_FOUND_ORIGINAL_BOOTSTRAP_REFUSED")
+        original = seeded
+        print("G03_BOUND_FOUND_BOOTSTRAP=PASS_ORIGINAL_P1_EMPTY_BASELINE", flush=True)
+        # The first native bootstrap just created three P1 inodes. FreeBSD
+        # can expose their final ctime after the bootstrap subprocess returns.
+        # Establish the FIRST immutable test preimage only when the three
+        # exact created files have become quiescent. Never ignore ctime in
+        # later Build/FD9/Config/P2 or WAL CAS comparisons.
+        prev = original
+        stable = 0
+        ctime_settled = False
+        for _ in range(12):
+            time.sleep(0.75)
+            now = snapshot()
+            need(journal() is None and
+                 now[:2] == prev[:2] and now[3:] == prev[3:] and
+                 len(now[2]) == len(prev[2]) == 3,
+                 "G03_P1_BOOTSTRAP_IDLE_OWNER_OR_WAL_DRIFT")
+            for prior_row, current_row in zip(prev[2], now[2]):
+                need(len(prior_row) == len(current_row) == 10 and
+                     prior_row[0] == current_row[0] == "file" and
+                     prior_row[:8] == current_row[:8] and
+                     prior_row[9:] == current_row[9:] and
+                     current_row[8] >= prior_row[8],
+                     "G03_P1_BOOTSTRAP_IDLE_NON_CTIME_SOURCE_DRIFT")
+            stable = stable + 1 if now == prev else 0
+            prev = now
+            if stable >= 2:
+                ctime_settled = True
+                break
+        need(ctime_settled, "G03_P1_BOOTSTRAP_CTIME_QUIESCENCE_TIMEOUT")
+        # All further comparisons use this fully qualified exact native P1
+        # preimage, never the transient syscall-return bootstrap stat.
+        original = prev
+        print("G03_P1_BOOTSTRAP=PASS_STABLE_NATIVE_CTIME_AND_FULL_CAS", flush=True)
     prepared = call([SERVICE, "shared-apply-prepare", op])
-    need(not prepared.startswith("preflight-rejected=") and
-         snapshot() == original and journal() == previous,
-         "G03_BOUND_ORIGINAL_SEAL_BUILD_REFUSED")
+    verify_prepared_build(prepared, op, original, snapshot(), previous, journal())
     # The test uses the actual native rendered template / original loader
     # and exact NUL wire under the existing original FreeBSD FD9. The
     # installed backend, PHP Config, setup marker, Git/ELF, root and WAL
@@ -264,39 +660,268 @@ config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
 '''
     child = r'''
 import sys
+import json
+from hashlib import sha256
 from pathlib import Path
 sys.path.insert(0, "/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
 from shared_apply_operation import SharedApplyOperation, SharedOperationError
-from shared_apply_seal import WORK, verify_seal
+from shared_apply_seal import WORK, verify_seal, _release_hash
+from neutral_root_stage import verify_original_operation_pins
+from neutral_schema3_previous_physical import (
+    CompletePriorPreimage, _full_prior_tree, _running_native, COMMON_ACTIVE, CHILD_PID, MONITOR_PID)
 from neutral_schema3_saved_wan_preimage import _native_preflight
 from neutral_schema3_quiescent_preimage import QuiescentPreimage
 from neutral_shared_apply_source_gate import (
-    native_bind_original_prepared_fd9, native_plan_original_prepared_fd9, MAX_PIPE)
+    native_bind_original_prepared_fd9, native_plan_original_prepared_fd9,
+    native_coordinate_original_prepared_fd9, OriginalSourceGateRefused, MAX_PIPE)
 from voice_ipfw_adapter import require_lifecycle_lock
+def first_trace_lines(raw):
+    if type(raw) is not bytes or len(raw) > 16384:
+        return ()
+    allowed = {f"S10_FIRST_TRACE=D{i:02d}".encode() for i in range(35)}
+    return tuple(line for line in raw.split(b"\n")[:-1] if line in allowed)[:64]
+
+def managed_trace_lines(raw):
+    import re
+    if type(raw) is not bytes or len(raw) > 16384:
+        return ()
+    return tuple(line for line in raw.split(b"\n")[:-1] if re.fullmatch(
+        rb"(?:S10_FIRST_TRACE=D(?:[012][0-9]|3[0-4])|S10_MANAGED_(?:TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4}|STEP=(?:write|begin|confirm|recover)))",
+        line))[:64]
+
+
+def coordinate_managed_diagnosed(op, raw, store, detail, coordinate, private_worker=None):
+    # Observe the exact joined call once; never alter its reply or retry it.
+    import neutral_schema3_quiescent_preimage as quiescent
+    original_join = quiescent._run_bound_restore_joined
+
+    def diagnosed_join(command, **kwargs):
+        if list(command[-3:]) == ["managed-apply", op, "strategies"] and private_worker is not None:
+            if list(command[:2]) != [
+                    "/usr/local/bin/php",
+                    "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php"]:
+                raise RuntimeError("G03_MANAGED_FAULT_UNEXPECTED_ORIGINAL_WRITER")
+            command = [command[0], str(private_worker), *command[2:]]
+        reply = original_join(command, **kwargs)
+        if list(command[-3:]) == ["managed-apply", op, "strategies"]:
+            try:
+                observed = store.read()
+            except (OSError, RuntimeError, ValueError):
+                observed = None
+            for line in managed_trace_lines(reply.stderr):
+                if line.startswith(b"S10_FIRST_TRACE="):
+                    print("G03_MANAGED_TRACE=" + line[-3:].decode("ascii"), file=sys.stderr)
+                else:
+                    print("G03_" + line[4:].decode("ascii"), file=sys.stderr)
+            print(first_reply_diagnostic(reply, observed, detail).replace(
+                "G03_FIRST_REPLY=", "G03_MANAGED_REPLY=", 1), file=sys.stderr)
+        return reply
+
+    quiescent._run_bound_restore_joined = diagnosed_join
+    try:
+        return coordinate(op, raw)
+    finally:
+        quiescent._run_bound_restore_joined = original_join
+
+
+def first_reply_diagnostic(reply, record, detail):
+    # Never disclose Config, HOSTLIST, argv, digests or untrusted stderr.
+    phase = record.get("phase") if type(record) is dict else None
+    if phase not in ("prepared", "activating", "activated", "config-saved", "managed-writing", "managed-config-saving", "committed", "restored", "requires-review"):
+        phase = "unknown"
+    rc = reply.returncode
+    rc = str(rc) if type(rc) is int and -255 <= rc <= 255 else "unknown"
+    shape = "invalid"
+    raw = reply.stdout
+    if type(raw) is bytes and not raw:
+        shape = "empty"
+    elif (type(raw) is bytes and 0 < len(raw) <= 4096 and
+          raw.count(b"\n") == 1 and raw.endswith(b"\n")):
+        try:
+            value = json.loads(raw)
+            expected = {"result": "saved", "saved": True, "applied": False,
+                        "snapshot": detail["candidate"], "change_count": len(detail["changed_fields"])}
+            shape = "exact" if json.dumps(value, sort_keys=True) == json.dumps(expected, sort_keys=True) else "mismatch"
+        except (ValueError, TypeError, RecursionError):
+            pass
+    stderr = reply.stderr
+    if type(stderr) is bytes and len(stderr) <= 16384:
+        import re
+        stderr = re.sub(rb"(?m)^S10_FIRST_TRACE=D(?:[012][0-9]|3[0-4])\n", b"", stderr)
+        stderr = re.sub(rb"(?m)^S10_MANAGED_(?:TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4}|STEP=(?:write|begin|confirm|recover))\n", b"", stderr)
+    err = {b"ERROR: native shared Config save uncertain; retain recovery evidence\n": "save-uncertain",
+           b"ERROR: original managed Config outcome requires journal review\n": "review"}.get(stderr, "other")
+    if stderr == b"":
+        err = "empty"
+    return "G03_FIRST_REPLY=rc:" + rc + ";receipt:" + shape + ";wal:" + phase + ";stderr:" + err
+
 op, mode = sys.argv[1:]
 try:
     require_lifecycle_lock()
     store = SharedApplyOperation(owner=0)
     prior = store.read()
-    if mode not in ("running", "stopped", "cold"):
+    if mode not in ("running", "stopped", "cold", "first-commit", "first-disabled", "successor", "successor-uncertain", "successor-pre-save"):
         raise RuntimeError("mode")
-    if mode == "cold":
+    if mode in ("cold", "first-commit", "first-disabled"):
         if prior is not None:
             raise RuntimeError("G03_PRISTINE_COLD_WAL_ALREADY_PRESENT")
         old_owner = None
+    elif mode in ("successor", "successor-uncertain", "successor-pre-save"):
+        if (not isinstance(prior, dict) or prior["phase"] != "committed" or
+                prior.get("manifest", {}).get("schema") != 1 or
+                "previous" in prior or "previous_manifest" in prior or "found" in prior or
+                "first_running_sha256" not in prior or "failure" in prior):
+            raise RuntimeError("G03_BOUND_SUCCESSOR_PREDECESSOR_REQUIRED")
+        old_owner = prior["detail"]
+        verify_original_operation_pins(record=prior, parent=WORK, owner_uid=0)
+        old_work = WORK / old_owner["id"]
+        old_release = old_work / "release"
+        old_tree = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+        running = _running_native(old_release, owner_uid=0, child_pidfile=CHILD_PID,
+                                  monitor_pidfile=MONITOR_PID)
     else:
         if not isinstance(prior, dict) or prior["phase"] != "restored" or not prior.get("previous"):
             raise RuntimeError("previous")
         old_owner = prior["previous"]
-    verify_seal(WORK / op, owner=0)
+    seal = verify_seal(WORK / op, owner=0)
     native = _native_preflight(op, "strategies")
-    if native["enabled"] != "1" or native["result"] != "prepared":
+    if native["enabled"] != ("0" if mode == "first-disabled" else "1") or native["result"] != "prepared":
         raise RuntimeError("candidate")
     detail = {"id": op, "page": "strategies", "base": native["base"],
               "candidate": native["candidate"], "changed_fields": native["fields"]}
+    if mode in ("successor", "successor-uncertain", "successor-pre-save"):
+        if (detail["base"] != old_owner["candidate"] or detail["base"] == detail["candidate"] or
+                detail["changed_fields"] != ["hostlist.youtubedomains"] or store.read() != prior):
+            raise RuntimeError("G03_BOUND_SUCCESSOR_PLAN_CHANGED")
+        new_release = WORK / op / "release"
+        name = "managed/hostlist-youtube.txt"
+        before = (old_release / name).read_bytes()
+        after = (new_release / name).read_bytes()
+        new_tree = seal["sha256"]["release"]
+        # Refuse any other release change before invoking the physical writer.
+        marker = b"s10-g03-successor.example.org"
+        if (before == after or marker in before.splitlines() or marker not in after.splitlines() or
+                _release_hash(old_release, 0, replacement=(
+                    name, sha256(before).hexdigest(), sha256(after).hexdigest())) != new_tree):
+            raise RuntimeError("G03_BOUND_SUCCESSOR_NOT_SINGLE_FILE_DELTA")
     store.advance("prepared", detail)
-    source, bound = native_bind_original_prepared_fd9(
-        op, sys.stdin.buffer.read(MAX_PIPE + 1))
+    raw = sys.stdin.buffer.read(MAX_PIPE + 1)
+    if mode in ("successor", "successor-uncertain", "successor-pre-save"):
+        fault = mode in ("successor-uncertain", "successor-pre-save")
+        pre_save = mode == "successor-pre-save"
+        if fault:
+            import tempfile
+            from runpy import run_path
+            from auto_detect_destination_commit import _attest_bound_managed_installed_locked
+            from neutral_schema3_quiescent_preimage import native_finish_bound_cold_restore
+            with tempfile.TemporaryDirectory(prefix="g03-s10-managed-fault-", dir="/root") as scratch:
+                private = run_path("/root/g03-native-prepared.py")[
+                    "build_managed_uncertain_worker"](
+                    Path(scratch), Path("/usr/local/opnsense/scripts/OPNsense/Zapret"),
+                    window="pre-save" if pre_save else "post-save")
+                try:
+                    coordinate_managed_diagnosed(
+                        op, raw, store, detail, native_coordinate_original_prepared_fd9,
+                        private_worker=private)
+                except OriginalSourceGateRefused as exc:
+                    if str(exc) != "S10_MANAGED_HANDOFF_OUTCOME_UNCERTAIN":
+                        raise
+                else:
+                    raise RuntimeError("G03_MANAGED_FAULT_MUST_REFUSE_ORIGINAL_REPLY")
+            crashed = store.read()
+            managed = crashed.get("managed", {}) if type(crashed) is dict else {}
+            expected_phase = "managed-writing" if pre_save else "managed-config-saving"
+            if (type(crashed) is not dict or crashed.get("phase") != expected_phase or
+                    crashed.get("detail") != detail or crashed.get("previous") != old_owner or
+                    crashed.get("previous_manifest") != prior["manifest"] or
+                    not {"ready", "barrier", "installed", "running_sha256"} <= managed.keys() or
+                    "restore" in managed):
+                raise RuntimeError("G03_MANAGED_FAULT_REAL_WAL_CHECKPOINT_MISSING")
+            _attest_bound_managed_installed_locked(store, crashed, parent=WORK,
+                                                  active=COMMON_ACTIVE)
+            if (_running_native(new_release, owner_uid=0, child_pidfile=CHILD_PID,
+                                monitor_pidfile=MONITOR_PID) != running):
+                raise RuntimeError("G03_MANAGED_FAULT_ENGINE_CHANGED_BEFORE_RECOVERY")
+            result = native_finish_bound_cold_restore(crashed)
+            expected = {**crashed, "phase": "restored" if pre_save else "committed"}
+            expected.pop("managed")
+            if result != expected or store.read() != expected:
+                raise RuntimeError("G03_MANAGED_FAULT_ORIGINAL_CONFIG_RECOVERY_UNPROVEN")
+            committed = result
+        else:
+            route, committed, source, semantic = coordinate_managed_diagnosed(
+                op, raw, store, detail, native_coordinate_original_prepared_fd9)
+            if (route != "managed-committed" or store.read() != committed or
+                    committed.get("phase") != "committed" or committed.get("detail") != detail or
+                    committed.get("previous") != old_owner or
+                    committed.get("previous_manifest") != prior["manifest"] or
+                    source.mode != "list" or source.requested_enabled is not True or
+                    semantic.lifecycle_proposal != "RELOAD" or
+                    semantic.decision.kind != "RELOAD_SAFE_CANDIDATE" or
+                    semantic.decision.changed_active != ("hostlist-youtube.txt",) or
+                    semantic.decision.changed_inactive or
+                    type(semantic.previous_physical) is not CompletePriorPreimage or
+                    semantic.previous_generation != old_owner["id"] or
+                    semantic.previous_root_sha256 != prior["manifest"]["root_sha256"] or
+                    semantic.candidate_root_sha256 != committed["manifest"]["root_sha256"]):
+                raise RuntimeError("G03_BOUND_SUCCESSOR_COORDINATOR_OUTCOME_UNPROVEN")
+        verify_original_operation_pins(record=committed, parent=WORK, owner_uid=0)
+        if (_full_prior_tree(old_work if pre_save else WORK / op, COMMON_ACTIVE, 0) !=
+                (old_tree if pre_save else new_tree) or
+                verify_seal(old_work, owner=0)["sha256"]["release"] != old_tree or
+                _running_native(new_release, owner_uid=0, child_pidfile=CHILD_PID,
+                                monitor_pidfile=MONITOR_PID) != running or
+                store.read() != committed):
+            raise RuntimeError("G03_BOUND_SUCCESSOR_PHYSICAL_OWNER_CHANGED")
+        print(("G03_BOUND_SUCCESSOR_RESTORED=" if pre_save else
+               "G03_BOUND_SUCCESSOR_COMMIT=") + committed["manifest"]["root_sha256"])
+        raise SystemExit(0)
+    if mode in ("first-commit", "first-disabled"):
+        disabled = mode == "first-disabled"
+        # Test-only observer of the same joined PHP call; never replace its
+        # result, repeat the action, or mutate the original journal.
+        import neutral_schema3_quiescent_preimage as quiescent
+        import json
+        original_join = quiescent._run_bound_restore_joined
+        def diagnosed_join(command, **kwargs):
+            reply = original_join(command, **kwargs)
+            if list(command[-3:]) == [
+                    "first-disabled-apply" if disabled else "first-enabled-apply", op, "strategies"]:
+                try:
+                    observed = store.read()
+                except (OSError, RuntimeError, ValueError):
+                    observed = None
+                for line in first_trace_lines(reply.stderr):
+                    print("G03_FIRST_TRACE=" + line[-3:].decode("ascii"), file=sys.stderr)
+                print(first_reply_diagnostic(reply, observed, detail), file=sys.stderr)
+            return reply
+        quiescent._run_bound_restore_joined = diagnosed_join
+        try:
+            route, committed, source, semantic = native_coordinate_original_prepared_fd9(op, raw)
+        finally:
+            quiescent._run_bound_restore_joined = original_join
+        if (route != ("first-disabled-committed" if disabled else "first-enabled-committed") or
+                store.read() != committed or committed.get("phase") != "committed" or
+                committed.get("detail") != detail or source.mode != "list" or
+                source.requested_enabled is not (not disabled) or
+                semantic.lifecycle_proposal != ("SAVE_ONLY" if disabled else "START") or
+                type(semantic.previous_physical) is not QuiescentPreimage or
+                semantic.previous_physical.old_state != "first-install-empty" or
+                semantic.candidate_root_sha256 != committed["manifest"]["root_sha256"]):
+            raise RuntimeError("G03_FIRST_BOUND_COORDINATOR_OUTCOME_UNPROVEN")
+        if disabled:
+            from neutral_schema3_quiescent_preimage import (
+                _zero_processes, _empty_kernel, DAEMON_PID)
+            verify_original_operation_pins(record=committed, parent=WORK, owner_uid=0)
+            _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+            if (_full_prior_tree(WORK / op, COMMON_ACTIVE, 0) != seal["sha256"]["release"] or
+                    _empty_kernel(WORK / op / "release") not in (
+                        "native-kernel-absent", "native-managed-kernel-empty") or
+                    "first_running_sha256" in committed or store.read() != committed):
+                raise RuntimeError("G03_FIRST_DISABLED_PHYSICAL_OWNER_UNPROVEN")
+        print("G03_BOUND_NATIVE_COMMIT=" + committed["manifest"]["root_sha256"])
+        raise SystemExit(0)
+    source, bound = native_bind_original_prepared_fd9(op, raw)
     record = store.read()
     if (source.mode != "list" or source.requested_enabled is not True or
             record["phase"] != "prepared" or record.get("previous") != old_owner or
@@ -362,9 +987,68 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
     raise SystemExit(69)
 '''
     pinned = call(["/bin/sh", "-c", shell, "g03-bound-native", op,
-                   child, "cold" if cold else ("stopped" if stopped else "running")], locked=True)
+                   child, ("successor-pre-save" if fault_pre_save else ("successor-uncertain" if fault_after_save else "successor")) if successor else (("first-disabled" if first_disabled else "first-commit") if first_commit else (
+                       "cold" if cold else ("stopped" if stopped else "running")))],
+                  locked=True, timeout=300 if first_commit or successor else 180)
     record = json.loads(WAL.read_bytes())
     root = Path("/var/db/zapret2/shared-work") / op / "manifest.json"
+    if successor:
+        if fault_pre_save:
+            restored = record
+            status = subprocess.run([SERVICE, "status"], capture_output=True,
+                                    text=True, timeout=30)
+            need(restored.get("phase") == "restored" and
+                 restored.get("previous") == previous["detail"] and
+                 restored.get("previous_manifest") == previous["manifest"] and
+                 restored.get("detail", {}).get("id") == op and
+                 "managed" not in restored and "found" not in restored and
+                 root.is_file() and not root.is_symlink() and
+                 pinned == "G03_BOUND_SUCCESSOR_RESTORED=" + hashlib.sha256(root.read_bytes()).hexdigest() and
+                 restored.get("manifest", {}).get("root_sha256") == pinned.split("=", 1)[1] and
+                 snapshot() == original and
+                 status.returncode == 0 and status.stdout.strip() == "zapret is running",
+                 "G03_S10_MANAGED_PRESAVE_RESTORE_OWNER_CONFIG_PROCESS_IPFW_DRIFT")
+            print("G03_S10_MANAGED_PRESAVE=PASS_REAL_INSTALLED_FILE_ROLLBACK_BEFORE_CONFIG_SAVE_NO_RESTART",
+                  flush=True)
+            return
+        saved = json.loads(call([PHP, str(script / "shared_apply_config.php"), "saved",
+                                 op, "strategies"], locked=True))
+        status = subprocess.run([SERVICE, "status"], capture_output=True,
+                                text=True, timeout=30)
+        saved_list = ET.fromstring(CONFIG.read_bytes()).findtext("./OPNsense/Zapret/hostlist/youtubedomains") or ""
+        verify_successor_commit(record, previous, op, pinned, root, original,
+                                snapshot(), saved, status, saved_list, expected_list)
+        print(("G03_S10_MANAGED_UNCERTAIN=PASS_REAL_POST_SAVE_WAL_RECOVERY_NO_RESTART"
+               if fault_after_save else "G03_S10_SUCCESSOR=PASS_REAL_TWO_BOUND_COMMITS_WITHOUT_RESTART"),
+              flush=True)
+        return
+    if first_commit:
+        saved = json.loads(call([PHP, str(script / "shared_apply_config.php"), "saved",
+                                 op, "strategies"], locked=True))
+        status = subprocess.run([SERVICE, "status"], capture_output=True,
+                                text=True, timeout=30)
+        if first_disabled:
+            detail = record["detail"]
+            pin = record["manifest"]
+            need(record["phase"] == "committed" and detail["id"] == op and
+                 detail["base"] != detail["candidate"] and
+                 sorted(detail["changed_fields"]) == ["general.enabled", "hostlist.mode"] and
+                 not any(k in record for k in ("previous", "previous_manifest", "found",
+                                               "first_running_sha256", "failure")) and
+                 pin["schema"] == 1 and pin["generation"] == op and
+                 pin["candidate_sha256"] == detail["candidate"] and
+                 root.is_file() and not root.is_symlink() and
+                 pinned == "G03_BOUND_NATIVE_COMMIT=" + hashlib.sha256(root.read_bytes()).hexdigest() and
+                 pin["root_sha256"] == pinned.split("=", 1)[1] and
+                 saved == {"result": "committed", "snapshot": detail["candidate"], "enabled": "0"} and
+                 status.returncode == 1 and status.stdout.strip() == "zapret is not running" and
+                 snapshot()[1:] == original[1:],
+                 "G03_FIRST_DISABLED_CONFIG_PIN_PROCESS_KERNEL_DRIFT")
+            print("G03_S10_FIRST_DISABLED=PASS_REAL_STOPPED_BOUND_CONFIG_COMMITTED", flush=True)
+        else:
+            verify_first_bound_commit(record, op, pinned, root, original, saved, status)
+            print("G03_S10_FIRST_BOUND=PASS_REAL_CONFIG_ENGINE_IPFW_COMMITTED", flush=True)
+        return original[2]
     need(re.fullmatch(r"G03_BOUND_NATIVE_PIN=[a-f0-9]{64}", pinned) is not None and
          record.get("phase") == "prepared" and record.get("previous") == prior and
          record.get("manifest", {}).get("root_sha256") ==
@@ -396,14 +1080,15 @@ except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
 
 
 
-def pristine_cold_native_main():
-    """Test-only before first ordinary Apply: no fabricated cold owner."""
+def pristine_cold_native_main(*, first_commit=False):
+    """Disposable first bound commit or existing read-only PREPARED proof."""
     engine = Path("/usr/local/etc/zapret2/binaries/my/dvtws2")
     release = Path("/var/db/zapret2-restyle/runtime.release")
     work = Path("/var/db/zapret2/shared-work")
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_G03_COLD_PREPARED") == "1" and
          os.environ.get("ZAPRET2_G03_PRISTINE_COLD") == "1" and
+         (not first_commit or os.environ.get("ZAPRET2_G03_PRISTINE_FIRST_COMMIT") == "1") and
          sys.platform.startswith("freebsd") and os.geteuid() == 0 and
          Path(SERVICE).is_file() and engine.is_file() and
          not engine.is_symlink() and release.is_file() and
@@ -411,11 +1096,41 @@ def pristine_cold_native_main():
          not work.is_symlink() and
          (not work.exists() or (work.is_dir() and not any(work.iterdir()))),
          "G03_PRISTINE_COLD_DISPOSABLE_BASELINE_REQUIRED")
+    bound_found = os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1"
+    need(not bound_found or (first_commit and
+         os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") != "1" and
+         os.environ.get("ZAPRET2_G03_MANAGED_PRE_SAVE") != "1"),
+         "G03_BOUND_FOUND_REQUIRES_EXCLUSIVE_FIRST_COMMIT")
     original = snapshot()
     engine_sha = hashlib.sha256(engine.read_bytes()).hexdigest()
     release_bytes = release.read_bytes()
-    bound_manifest_main(cold=True)
+    first_sources = bound_manifest_main(cold=True, first_commit=first_commit)
     final = json.loads(WAL.read_bytes())
+    if first_commit:
+        need(final.get("phase") == "committed" and
+             "previous" not in final and "previous_manifest" not in final and
+             snapshot()[2] == first_sources and
+             (bound_found or first_sources == original[2]) and
+             hashlib.sha256(engine.read_bytes()).hexdigest() == engine_sha and
+             release.read_bytes() == release_bytes,
+             "G03_PRISTINE_FIRST_COMMIT_OWNER_DRIFT")
+        # Same disposable guest and genuine predecessor; no journal reset.
+        if os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1":
+            need(bound_found and snapshot()[1] == ("missing",) and
+                 subprocess.run([SERVICE, "status"], capture_output=True,
+                                timeout=30).returncode == 1,
+                 "G03_FIRST_DISABLED_STOPPED_BASELINE_LOST")
+            bound_stopped_found_save_main()
+        elif bound_found:
+            main(bound_found=True)
+        else:
+            bound_manifest_main(successor=True, fault_after_save=(
+                os.environ.get("ZAPRET2_G03_MANAGED_UNCERTAIN") == "1"),
+                fault_pre_save=(os.environ.get("ZAPRET2_G03_MANAGED_PRE_SAVE") == "1"))
+        need(hashlib.sha256(engine.read_bytes()).hexdigest() == engine_sha and
+             release.read_bytes() == release_bytes,
+             "G03_BOUND_SUCCESSOR_ENGINE_PROVENANCE_DRIFT")
+        return
     need(final.get("phase") == "restored" and "previous" not in final and
          "previous_manifest" not in final and isinstance(final.get("manifest"), dict) and
          snapshot() == original and
@@ -424,6 +1139,620 @@ def pristine_cold_native_main():
          "G03_PRISTINE_COLD_RESTORED_OWNER_DRIFT")
     print("G03_S10_PRISTINE_COLD=PASS_NATIVE_FIRST_INSTALL_START_PROPOSAL_NO_PHYSICAL_ACTION",
           flush=True)
+
+
+
+def bound_stopped_found_presave_main():
+    """Real three-source write on a first disabled immutable owner; abort before Config."""
+    need(os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1" and
+         os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1" and
+         os.environ.get("GITHUB_ACTIONS") == "true" and
+         sys.platform.startswith("freebsd") and os.geteuid() == 0,
+         "G03_BOUND_STOPPED_DISPOSABLE_ONLY")
+    previous = json.loads(WAL.read_bytes())
+    need(previous.get("phase") == "committed" and
+         previous.get("manifest", {}).get("schema") == 1 and
+         "first_running_sha256" not in previous and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 1,
+         "G03_BOUND_STOPPED_OWNER_REQUIRED")
+    original = snapshot()
+    names = ("youtube", "user", "auto")
+    before_bytes = [p.read_bytes() for p in TARGETS]
+    staged = call([PHP, NATIVE, "stage-config"], locked=True)
+    need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_STOPPED_STAGE_DRIFT")
+    op = staged.split("=", 1)[1]
+    work = Path("/var/db/zapret2/shared-work") / op
+    prepared = call([SERVICE, "shared-apply-prepare", op])
+    verify_prepared_build(prepared, op, original, snapshot(), previous,
+                          json.loads(WAL.read_bytes()))
+    raw = (work / "plan.json").read_bytes()
+    plan = json.loads(raw)
+    rows = plan["found_batch"]
+    need(plan["candidate"]["general"]["enabled"] == "0" and
+         plan["changed_fields"] == ["general.autorestart"] and
+         all(rows[n]["before"].encode() == v and rows[n]["before"] != rows[n]["after"]
+             for n, v in zip(names, before_bytes)),
+         "G03_BOUND_STOPPED_PLAN_REQUIRED")
+    print("G03_BOUND_STOPPED_DETACHED=PASS_DISABLED_FOUND_AFTERIMAGE_NO_WRITES", flush=True)
+    need(call([PHP, NATIVE, "durable-stopped", op], locked=True) ==
+         "original-found-prepared-durable", "G03_BOUND_STOPPED_PREPARE_REFUSED")
+    pending = json.loads(WAL.read_bytes())
+    need(pending["phase"] == "prepared" and pending["previous"] == previous["detail"] and
+         pending["previous_manifest"] == previous["manifest"] and
+         pending["detail"]["candidate"] != pending["detail"]["base"] and
+         pending["found"]["runtime_mode"] == "0" and snapshot() == original,
+         "G03_BOUND_STOPPED_PREPARED_DRIFT")
+    need(call([PHP, NATIVE, "stopped-presave", op], locked=True) ==
+         "original-bound-found-before-save-interrupted",
+         "G03_BOUND_STOPPED_REAL_WRITE_REFUSED")
+    crashed = json.loads(WAL.read_bytes())
+    written = snapshot()
+    pin = crashed["manifest"]
+    old = previous["manifest"]
+    found = crashed["found"]
+    need(crashed["phase"] == "found-config-saving" and
+         crashed["detail"] == pending["detail"] and crashed["previous"] == previous["detail"] and
+         crashed["previous_manifest"] == old and pin["generation"] == op and
+         pin["root_sha256"] != old["root_sha256"] and
+         pin["root_sha256"] == hashlib.sha256((work / "manifest.json").read_bytes()).hexdigest() and
+         pin["seal_sha256"] == hashlib.sha256((work / "bundle-seal.json").read_bytes()).hexdigest() and
+         found["plan_sha256"] == hashlib.sha256(raw).hexdigest() and
+         written[:2] == original[:2] and written[3] == original[3] and
+         all(p.read_bytes() == rows[n]["after"].encode() and
+             found["stages"][n]["state"] == "installed" and
+             found["post"][n]["sha256"] == image(p)[-1]
+             for n, p in zip(names, TARGETS)),
+         "G03_BOUND_STOPPED_WRITTEN_OR_PIN_DRIFT")
+    print("G03_S10_BOUND_STOPPED_P1=PASS_THREE_REAL_WRITES_BEFORE_CONFIG_SAVE", flush=True)
+    recovered = json.loads(call([
+        PHP, str(Path(SERVICE).parent / "shared_apply_config.php"),
+        "found-recover", op, "strategies"], locked=True))
+    final = json.loads(WAL.read_bytes())
+    expected = {**crashed, "phase": "restored"}
+    expected.pop("found")
+    restored = snapshot()
+    old_work = work.parent / old["generation"]
+    need(recovered == {"result": "restored"} and final == expected and
+         restored[:2] == original[:2] and restored[3] == original[3] and
+         [p.read_bytes() for p in TARGETS] == before_bytes and
+         all(row[0] == "file" and row[3] == 0 and row[4] == 1 for row in restored[2]) and
+         hashlib.sha256((old_work / "manifest.json").read_bytes()).hexdigest() == old["root_sha256"] and
+         hashlib.sha256((old_work / "bundle-seal.json").read_bytes()).hexdigest() == old["seal_sha256"] and
+         hashlib.sha256((work / "manifest.json").read_bytes()).hexdigest() == pin["root_sha256"] and
+         hashlib.sha256((work / "bundle-seal.json").read_bytes()).hexdigest() == pin["seal_sha256"] and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 1,
+         "G03_BOUND_STOPPED_RESTORE_DRIFT")
+    print("G03_S10_BOUND_STOPPED_PRESAVE=PASS_ORIGINAL_THREE_FILE_RESTORE_NO_CONFIG_SAVE", flush=True)
+
+
+
+def bound_original_http_upload_main():
+    """Real PHP multipart temporary file -> original service run -> COMMITTED.
+
+    This exercises the actual HTTP upload origin, the production
+    SharedApplyEnvelope, original FD9 staging/build/source snapshot,
+    native P1/Config writer and stopped atomic finisher. No fake PHP
+    $_FILES or fabricated uploaded-file inode is accepted.
+    """
+    import socket
+    import urllib.error
+    import urllib.request
+    need(os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1" and
+         os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1" and
+         os.environ.get("GITHUB_ACTIONS") == "true" and
+         sys.platform.startswith("freebsd") and os.geteuid() == 0,
+         "G03_HTTP_ORIGINAL_DISPOSABLE_ONLY")
+    handler = Path("/root/g03-native-upload.php")
+    upload_tmp = Path("/var/lib/php/tmp")
+    need(handler.is_file() and not handler.is_symlink() and
+         upload_tmp.is_dir() and not upload_tmp.is_symlink(),
+         "G03_HTTP_PHP_SERVER_NOT_QUALIFIED")
+    original = snapshot()
+    previous = json.loads(WAL.read_bytes())
+    need(previous["phase"] == "committed" and
+         previous["manifest"]["schema"] == 1 and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 1,
+         "G03_HTTP_STOPPED_BOUND_PREDECESSOR_REQUIRED")
+    intent_bytes = call([PHP, NATIVE, "http-found-intent"],
+                        locked=True).encode("utf-8")
+    intent = json.loads(intent_bytes)
+    need(intent["schema_version"] == 1 and
+         intent["kind"] == "tz6v2-found-form-intent" and
+         list(intent["sources"]) == ["youtube", "user", "auto"] and
+         all(intent["sources"][name]["base"]["content"].encode("utf-8") ==
+             p.read_bytes() and
+             intent["sources"][name]["draft"] != intent["sources"][name]["base"]["content"]
+             for name, p in zip(("youtube", "user", "auto"), TARGETS)) and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_HTTP_UPLOAD_NOT_ORIGINAL_CANDIDATE")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+    server = subprocess.Popen([
+        PHP, "-d", "upload_tmp_dir=/var/lib/php/tmp",
+        "-d", "file_uploads=1", "-S", "127.0.0.1:" + str(port),
+        "-t", "/root"], cwd="/usr/local/opnsense",
+        env={**os.environ, "GITHUB_ACTIONS":"true",
+             "ZAPRET2_G03_COLD_PREPARED":"1"},
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL)
+    try:
+        ready = False
+        for _ in range(50):
+            if server.poll() is not None:
+                break
+            try:
+                with socket.create_connection(("127.0.0.1", port), 0.15):
+                    ready = True
+                    break
+            except OSError:
+                time.sleep(0.1)
+        need(ready, "G03_HTTP_PHP_SERVER_NOT_LISTENING")
+        boundary = b"G03BOUNDSTOPPED" + hashlib.sha256(intent_bytes).hexdigest()[:16].encode()
+        body = (b"--" + boundary + b"\r\n" +
+                b'Content-Disposition: form-data; name="found_intent"; filename="found-intent.json"\r\n' +
+                b"Content-Type: application/json\r\n\r\n" +
+                intent_bytes + b"\r\n--" + boundary + b"--\r\n")
+        request = urllib.request.Request(
+            "http://127.0.0.1:" + str(port) + "/g03-native-upload.php",
+            data=body,
+            headers={"Content-Type": "multipart/form-data; boundary=" + boundary.decode(),
+                     "Content-Length": str(len(body))},
+            method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                receipt = response.read(256).decode("ascii").strip()
+                need(response.status == 200, "G03_HTTP_ORIGINAL_UNEXPECTED_STATUS")
+        except urllib.error.HTTPError as exc:
+            reply = exc.read(200).decode("ascii", errors="replace").strip()
+            known = re.fullmatch(
+                r"G03_HTTP_UPLOAD_REFUSED:"
+                r"(scope|multipart|model|envelope|service-launch|service-result|"
+                r"service-receipt|service-rc64|service-rc69|service-rc70|"
+                r"service-rc75|service-rcother|service-preflight-[a-z0-9-]{1,64}):"
+                r"(runtime|argument|php-error|other)", reply)
+            if known:
+                symbol = "G03_HTTP_ORIGINAL_" + "_".join(known.groups()).upper().replace("-", "_")
+                if symbol == "G03_HTTP_ORIGINAL_SERVICE_PREFLIGHT_RUNTIME_BUILD_RUNTIME":
+                    # Read ONLY the single original orchestrator stage/status,
+                    # never its potentially private Config/log message.
+                    stage_path = Path("/var/run/zapret2-execution.status")
+                    if stage_path.is_file() and not stage_path.is_symlink() and (
+                            stage_path.stat().st_size <= 512):
+                        stage_fields = stage_path.read_text(errors="replace").strip().split("|", 5)
+                        if (len(stage_fields) == 6 and
+                                stage_fields[0].isdigit() and stage_fields[1].isdigit() and
+                                stage_fields[2] in
+                                ("config", "parser", "targets", "blobs", "ports",
+                                 "generator", "validator", "source-gate", "release-modes") and
+                                stage_fields[3] in ("failed", "ok", "running")):
+                            symbol += "_" + stage_fields[2].upper().replace("-", "_")
+                            symbol += "_" + stage_fields[3].upper()
+                            if stage_fields[2] == "source-gate" and re.fullmatch(
+                                    r"[A-Z0-9_]{1,64}", stage_fields[5]):
+                                symbol += "_" + stage_fields[5]
+                            if stage_fields[2] == "blobs":
+                                # Test-only bounded branch provenance. Match
+                                # ONLY fixed source-defined error classes.
+                                # Never print arbitrary stage message, path,
+                                # IP, domain, native args or uploaded text.
+                                reason = stage_fields[5].lower()
+                                classes = (
+                                    ("BLOB_DIRECTORY_MISSING", "blob directory does not exist"),
+                                    ("BLOB_DECLARATION", "blob declaration"),
+                                    ("BLOB_NAME", "invalid blob name"),
+                                    ("BLOB_FILE_MISSING", "required file"),
+                                    ("BLOB_WRITE", "cannot write blob"),
+                                    ("NATIVE_VOICE", "native voice"),
+                                    ("VOICE_STAGE_COLLISION", "refusing to overwrite common candidate artifacts"),
+                                    ("VOICE_SOURCE_MISMATCH", "managed ipset changed"),
+                                    ("VOICE_WAN_MISMATCH", "wan does not match"),
+                                    ("VOICE_INTERFACE", "interface"),
+                                    ("VOICE_MISSING_FILE", "no such file or directory"),
+                                    ("VOICE_PERMISSION", "permission denied"),
+                                    ("VOICE_XML", "xml"),
+                                    ("VOICE_PROFILE", "profile"),
+                                    ("VOICE_SYNTAX", "syntax"),
+                                    ("VOICE_ARGUMENTS", "usage:"),
+                                )
+                                matched = [label for label, needle in classes if needle in reason]
+                                symbol += "_" + (matched[0] if matched else "UNCLASSIFIED")
+                                root = Path("/var/db/zapret2/shared-work")
+                                candidates = []
+                                if root.is_dir() and not root.is_symlink():
+                                    for work in root.iterdir():
+                                        if not re.fullmatch(r"[a-f0-9]{32}", work.name):
+                                            continue
+                                        if not work.is_dir() or work.is_symlink():
+                                            continue
+                                        file = work / "stage-error.log"
+                                        if not file.is_file() or file.is_symlink():
+                                            continue
+                                        info = file.stat()
+                                        if (info.st_uid != 0 or info.st_nlink != 1 or
+                                                not 0 <= info.st_size <= 16384):
+                                            continue
+                                        candidates.append((info.st_mtime_ns, file))
+                                if candidates:
+                                    file = max(candidates)[1]
+                                    raw = file.read_text(errors="replace").lower()
+                                    if len(raw) <= 16384:
+                                        matched = [label for label, needle in classes if needle in raw]
+                                        if "errno 2" in raw:
+                                            matched.append("ERRNO2")
+                                        if "errno 13" in raw:
+                                            matched.append("ERRNO13")
+                                        if "traceback" in raw:
+                                            matched.append("PYTHON_EXCEPTION")
+                                        # Never echo any untrusted token; the
+                                        # selected words are a *fixed* source
+                                        # vocabulary, not user filenames,
+                                        # hostnames, paths or profile args.
+                                        safe = {
+                                            "error", "blob", "file", "fake", "does", "not",
+                                            "exist", "missing", "required", "invalid",
+                                            "name", "directory", "cannot", "create",
+                                            "write", "read", "permission", "denied",
+                                            "refusing", "unsafe", "unexpected",
+                                            "voice", "source", "managed", "ipset",
+                                            "manifest", "xml", "stage", "staging",
+                                            "candidate", "configuration", "config",
+                                            "interface", "wan", "profile", "runtime",
+                                            "command", "args", "argument", "failed",
+                                            "resolve", "resolution", "shorthand",
+                                            "empty", "already", "exists", "no",
+                                            "such", "or", "invalid", "target",
+                                            "prepared", "must", "be", "regular",
+                                            "mismatch", "output", "input",
+                                            "compilation", "enabled", "upstream",
+                                            "stopped", "bound", "mode", "errno",
+                                            "traceback", "typeerror",
+                                        }
+                                        tokens = [v for v in re.findall(r"[a-z]+", raw)
+                                                  if v in safe][:14]
+                                        symbol += "_LOG_" + ("_".join(matched[:4]) if matched else "UNCLASSIFIED")
+                                        symbol += "_WORDS_" + ("_".join(tokens).upper() if tokens else "NONE")
+                                        symbol += "_BYTES_" + str(min(len(raw), 99999))
+                raise RuntimeError(symbol) from None
+            raise RuntimeError("G03_HTTP_ORIGINAL_STATUS_" + str(exc.code)) from None
+    finally:
+        server.terminate()
+        try:
+            server.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            server.kill()
+            server.wait(timeout=10)
+    need(re.fullmatch(r"applied-id=[a-f0-9]{32}", receipt) is not None,
+         "G03_HTTP_ORIGINAL_SERVICE_RECEIPT_REFUSED")
+    op = receipt.split("=", 1)[1]
+    final = json.loads(WAL.read_bytes())
+    after = snapshot()
+    saved = json.loads(call(
+        [PHP, str(Path(SERVICE).parent / "shared_apply_config.php"),
+         "saved", op, "strategies"], locked=True))
+    # The service has returned its positive applied-id. Keep every final
+    # physical invariant mandatory; classify each failure independently
+    # rather than obscuring WAL/Config/P1/kernel causes behind one assertion.
+    # These names and booleans contain no uploaded domains, native args,
+    # Config contents, paths, PID values or private journal bytes.
+    state = subprocess.run([SERVICE, "status"], capture_output=True, timeout=30)
+    # The five-editor P1 planner intentionally deduplicates and sorts the
+    # uploaded draft. The final file is NEVER required to retain the raw
+    # multipart text order: it must match the original immutable plan's
+    # exact, P2-CAS authorized after-image and retain the submitted addition.
+    work = Path("/var/db/zapret2/shared-work") / op
+    plan = json.loads((work / "plan.json").read_bytes())
+    rows = plan.get("found_batch", {}) if isinstance(plan, dict) else {}
+    detail = final.get("detail") if isinstance(final, dict) else None
+    manifest = final.get("manifest") if isinstance(final, dict) else None
+    detail = detail if isinstance(detail, dict) else {}
+    manifest = manifest if isinstance(manifest, dict) else {}
+    checks = {
+        "WAL_TERMINAL": final.get("phase") == "committed",
+        "WAL_IDENTITY": detail.get("id") == op,
+        "WAL_CONFIG_BASE": detail.get("base") == previous["detail"]["candidate"],
+        "ROOT_GENERATION": manifest.get("generation") == op,
+        "ROOT_SCHEMA": manifest.get("schema") == 1,
+        "ROOT_PREDECESSOR": final.get("previous_manifest") == previous["manifest"],
+        "WAL_PREDECESSOR": final.get("previous") == previous["detail"],
+        "WAL_NO_FOUND_PENDING": "found" not in final,
+        "NATIVE_SAVED": saved == {
+            "result":"committed", "snapshot":detail.get("candidate"), "enabled":"0"},
+        "CONFIG_PHYSICAL_SAVE": after[0] != original[0],
+        "PID_PHYSICAL_STABLE": after[1] == original[1],
+        "KERNEL_PHYSICAL_STABLE": after[3] == original[3],
+        "P1_PLAN_ORIGINAL": plan.get("page") == "strategies"
+            and plan.get("result") == "prepared"
+            and isinstance(rows, dict)
+            and set(rows) == {"youtube", "user", "auto"},
+        "SERVICE_STOPPED": state.returncode == 1,
+    }
+    for name, target in zip(("youtube", "user", "auto"), TARGETS):
+        record = rows.get(name)
+        source = intent["sources"][name]
+        suffix = name.upper()
+        checks["P1_" + suffix + "_PINNED_AFTER"] = (
+            isinstance(record, dict) and
+            isinstance(record.get("after"), str) and
+            target.read_bytes() == record["after"].encode("utf-8"))
+        checks["P1_" + suffix + "_PINNED_BEFORE"] = (
+            isinstance(record, dict) and
+            record.get("before") == source["base"]["content"])
+        checks["P1_" + suffix + "_ADDITION_RETAINED"] = (
+            isinstance(record, dict) and
+            isinstance(record.get("after"), str) and
+            "native-http-" + name + "-proof.org" in record["after"].splitlines() and
+            record.get("before") != record["after"])
+    failed = [name for name, ok in checks.items() if not ok]
+    need(not failed, "G03_HTTP_ORIGINAL_" + "_".join(failed[:4]) + "_DRIFT")
+    print("G03_S10_PUBLIC_HTTP_FOUND=PASS_REAL_MULTIPART_ORIGINAL_SERVICE_COMMITTED_STOPPED",
+          flush=True)
+
+
+def bound_stopped_found_save_main(*, uncertain=False, gap=None):
+    """Exercise normal, post-save crash and all exact atomic rename gaps."""
+    need(gap in (None, "staged", "parked", "backed-up"),
+         "G03_BOUND_STOPPED_GAP_MODE_INVALID")
+    need(os.environ.get("ZAPRET2_G03_FIRST_DISABLED") == "1" and
+         os.environ.get("ZAPRET2_G03_BOUND_FOUND") == "1" and
+         os.environ.get("GITHUB_ACTIONS") == "true" and
+         sys.platform.startswith("freebsd") and os.geteuid() == 0,
+         "G03_BOUND_STOPPED_SAVE_DISPOSABLE_ONLY")
+    previous = json.loads(WAL.read_bytes())
+    old = previous["manifest"]
+    need(previous["phase"] == "committed" and old["schema"] == 1 and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 1,
+         "G03_BOUND_STOPPED_SAVE_PREDECESSOR_REQUIRED")
+    original = snapshot()
+    old_model = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
+    need(old_model is not None and old_model.findtext("general/enabled") == "0",
+         "G03_BOUND_STOPPED_SAVE_ORIGINAL_MODEL_REQUIRED")
+    old_restart = old_model.findtext("general/autorestart") or "off"
+    admission = str(Path(SERVICE).parent / "backend/shared_apply_operation.py")
+    runtime = str(Path(SERVICE).parent / "python_runtime.sh")
+    call([runtime, admission, "native-gate", "common-bound-stopped-stage"],
+         locked=True)
+    need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_GUI_STAGE_GATE_MUTATED_OWNER")
+    staged = call([PHP, NATIVE, "stage-config-gap-" + gap if gap else
+                   "stage-config-next" if uncertain else "stage-config"], locked=True)
+    need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_STOPPED_SAVE_STAGE_DRIFT")
+    op = staged.split("=", 1)[1]
+    work = Path("/var/db/zapret2/shared-work") / op
+    prepared = call([SERVICE, "shared-apply-prepare", op])
+    call([runtime, admission, "native-gate", "common-bound-stopped-execute", op],
+         locked=True)
+    need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_GUI_EXEC_GATE_MUTATED_OWNER")
+    verify_prepared_build(prepared, op, original, snapshot(), previous,
+                          json.loads(WAL.read_bytes()))
+    raw = (work / "plan.json").read_bytes()
+    plan = json.loads(raw)
+    rows = plan["found_batch"]
+    names = ("youtube", "user", "auto")
+    need(plan["candidate"]["general"]["enabled"] == "0" and
+         plan["changed_fields"] == ["general.autorestart"] and
+         all(p.read_bytes() == rows[n]["before"].encode() and
+             rows[n]["before"] != rows[n]["after"] for n, p in zip(names, TARGETS)),
+         "G03_BOUND_STOPPED_SAVE_PLAN_REQUIRED")
+    # Retain the original source frame on stdin of the native PHP owner.
+    # PHP passes that same FIFO to Python as FD5, separate from save EOF.
+    command = r'''
+set -eu
+base=/usr/local/opnsense/scripts/OPNsense/Zapret
+work="/var/db/zapret2/shared-work/$1"
+. "$base/backend/config.sh"
+config_load "$work/templates/usr/local/etc/zapret2/zapret.conf"
+{
+    printf 'S10C2B1_ORIGINAL_INPUT_V1\0'
+    printf '%s\0' "${TRAFFIC_ARGS:-}" "${YOUTUBE_DOMAINS:-}" "${USER_DOMAINS:-}" \
+      "${TELEGRAM_IPS:-}" "${DISCORD_IPS:-}" "${X_IPS:-}" \
+      "${SIP_IPS:-}" "${CUSTOM_IPS:-}" "${EXCLUDE_DOMAINS:-}" \
+      "${EXCLUDE_IPSET:-}" "${HOSTLIST_MODE:-}" "${DIVERT_PORT:-}" "${WAN_IF:-}"
+} | /usr/local/bin/php "$base/shared_apply_config.php" found-bound-save "$1" strategies 0
+'''
+    worker = str(Path(SERVICE).parent / "shared_apply_config.php")
+    call(["/bin/sh", "-c", 'exec "$@" </dev/null', "g03-no-source",
+          PHP, worker, "found-bound-save", op, "strategies", "0"],
+         locked=True, expected_rc=69)
+    # No original P2a owner = no inherited queue capability. A fake fd3
+    # must not initialize the WAL, open Config for writing, or replace P1.
+    call([PHP, worker, "found-bound-save", op, "strategies", "0",
+          "--queue-fd=3"], locked=True, expected_rc=69)
+    call([PHP, worker, "found-bound-save", op, "strategies", "0",
+          "--queue-fd=bad"], locked=True, expected_rc=64)
+    # The private original P2a parent is not allowed to invent a retired
+    # schema2 epoch from this genuine STOPPED schema1 predecessor. It must
+    # refuse even with a real source pipe, before any Config/P1/WAL write.
+    call(["/bin/sh", "-c",
+          'printf "original-retired-source-probe" | "$1" "$2" bound-retired-save-original "$3"',
+          "g03-schema1-no-retired", str(Path(SERVICE).parent / "python_runtime.sh"),
+          str(Path(SERVICE).parent / "backend/auto_detect_effective_known.py"), op],
+         locked=True, expected_rc=69)
+    need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_STOPPED_SAVE_INVALID_FIFO_MUTATED")
+    print("G03_BOUND_STOPPED_SAVE_FIFO=PASS_REFUSED_NONPIPE_NO_WRITES", flush=True)
+    print("G03_S10_FOUND_P2A_FAKE=PASS_MISSING_OR_INVALID_QUEUE_FD_NO_WRITES",
+          flush=True)
+    print("G03_S10_RETIRED_PARENT_SCHEMA1=PASS_REAL_FIFO_REJECTED_BEFORE_MUTATION",
+          flush=True)
+    call([str(Path(SERVICE).parent / "python_runtime.sh"),
+          str(Path(SERVICE).parent / "backend/auto_detect_effective_known.py"),
+          "bound-retired-finish-original", op], locked=True, expected_rc=69)
+    need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_RETIRED_FINISH_SCHEMA1_MUTATED_OWNER")
+    print("G03_S10_RETIRED_FINISH_SCHEMA1=PASS_REFUSED_BEFORE_MUTATION",
+          flush=True)
+    call([str(Path(SERVICE).parent / "python_runtime.sh"),
+          str(Path(SERVICE).parent / "backend/shared_apply_operation.py"),
+          "native-gate", "common-bound-auto-stop", previous["detail"]["id"]],
+         locked=True, expected_rc=69)
+    need(snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_BOUND_AUTO_STOP_SCHEMA1_MUTATED_OWNER")
+    print("G03_S10_AUTO_STOP_SCHEMA1=PASS_ORIGINAL_STOP_GATE_NO_WRITES",
+          flush=True)
+    if uncertain:
+        # Use the existing real Config singleton crash adapter. Only the
+        # PHP invocation changes: the source FIFO, native P1 writer and
+        # save handshake are identical. No synthetic WAL or after-image.
+        needle = '/usr/local/bin/php "$base/shared_apply_config.php" found-bound-save "$1" strategies 0'
+        need(command.count(needle) == 1, "G03_BOUND_CONFIG_CRASH_COMMAND_CHANGED")
+        command = command.replace(needle,
+                                  '/usr/local/bin/php /root/g03-native-prepared.php crash-bound-config-save "$1"')
+        receipt = call(["/bin/sh", "-c", command, "g03-original-found-crash", op],
+                       locked=True, expected_rc=73)
+        need(receipt == "", "G03_BOUND_CONFIG_CRASH_FALSE_RECEIPT")
+    else:
+        receipt = json.loads(call(["/bin/sh", "-c", command, "g03-original-found-source", op],
+                                  locked=True))
+    saved = json.loads(WAL.read_bytes())
+    call([runtime, admission, "native-gate", "common-bound-stopped-execute", op],
+         locked=True, expected_rc=69)
+    pin = saved["manifest"]
+    found = saved["found"]
+    after = snapshot()
+    need((uncertain or receipt == {"result": "found-config-saved-nonterminal", "saved": True,
+                     "applied": False, "snapshot": saved["detail"]["candidate"],
+                     "change_count": 1, "requires_review": False,
+                     "commit_authorized": False}) and
+         saved["phase"] == ("found-config-saving" if uncertain else "found-config-saved") and
+         saved["detail"]["base"] == previous["detail"]["candidate"] and
+         saved["detail"]["candidate"] != saved["detail"]["base"] and
+         saved["previous"] == previous["detail"] and saved["previous_manifest"] == old and
+         pin["generation"] == op and pin["schema"] == 1 and
+         pin["root_sha256"] == hashlib.sha256((work / "manifest.json").read_bytes()).hexdigest() and
+         pin["seal_sha256"] == hashlib.sha256((work / "bundle-seal.json").read_bytes()).hexdigest() and
+         found["plan_sha256"] == hashlib.sha256(raw).hexdigest() and found["runtime_mode"] == "0" and
+         after[0] != original[0] and after[1] == original[1] and after[3] == original[3] and
+         all(p.read_bytes() == rows[n]["after"].encode() and
+             found["stages"][n]["state"] == "installed" and
+             found["post"][n]["sha256"] == image(p)[-1]
+             for n, p in zip(names, TARGETS)),
+         "G03_BOUND_STOPPED_CONFIG_SAVE_OR_READBACK_DRIFT")
+    model = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
+    need(model is not None and model.findtext("general/enabled") == "0" and
+         model.findtext("general/autorestart") == ("hourly" if old_restart == "off" else "off"),
+         "G03_BOUND_STOPPED_CONFIG_SCALAR_DRIFT")
+    if uncertain:
+        need(subprocess.run([SERVICE, "status"], capture_output=True,
+                            timeout=30).returncode == 2,
+             "G03_BOUND_CONFIG_CRASH_MUST_REMAIN_NONTERMINAL")
+        print("G03_S10_BOUND_STOPPED_CONFIG_UNCERTAIN=PASS_REAL_SAVE_RETURN_BEFORE_ACK",
+              flush=True)
+    else:
+        print("G03_S10_BOUND_STOPPED_SAVE=PASS_REAL_CONFIG_SAVE_READBACK_THREE_P1_NONTERMINAL",
+              flush=True)
+    # The old runtime executor must NOT advance a bound saved transaction.
+    call([PHP, worker, "found-recover", op, "strategies"], locked=True, expected_rc=69)
+    call([PHP, worker, "found-runtime-activating", op, "strategies"],
+         locked=True, expected_rc=69)
+    need(snapshot() == after and json.loads(WAL.read_bytes()) == saved,
+         "G03_BOUND_STOPPED_SAVED_RUNTIME_FENCE_DRIFT")
+    print("G03_S10_BOUND_STOPPED_SAVED_FENCE=PASS_NO_LEGACY_RUNTIME_PROMOTION",
+          flush=True)
+    if gap is not None:
+        # Test-only fault injection around the ORIGINAL atomic installer.
+        # Execute its unchanged copy/verify/rename sequence under original
+        # FD9. The selected mv is either not begun or has just succeeded.
+        # This is not a second production physical lifecycle implementation.
+        sys.path.insert(0, str(Path(SERVICE).parent / "backend"))
+        from shared_apply_seal import WORK, verify_seal, _release_hash
+        from voice_live_inspect import COMMON_ACTIVE
+        active = COMMON_ACTIVE
+        old_work = WORK / previous["detail"]["id"]
+        old_hash = verify_seal(old_work, owner=0)["sha256"]["release"]
+        new_hash = verify_seal(work, owner=0)["sha256"]["release"]
+        backup_root = active.with_name("runtime-v2-backups")
+        backup = backup_root / (active.name + "-" + op)
+        staged_path = active.parent / ("." + active.name + ".stage." + op)
+        park = active.parent / ("." + active.name + ".old." + op)
+        need(_release_hash(active, 0) == old_hash and old_hash != new_hash and
+             not staged_path.exists() and not staged_path.is_symlink() and
+             not park.exists() and not park.is_symlink() and
+             not backup.exists() and not backup.is_symlink(),
+             "G03_BOUND_ATOMIC_GAP_NATIVE_PREIMAGE_REQUIRED")
+        # A shell function shadows only mv inside the original installer
+        # on the disposable guest, without modifying installed sources.
+        # 1: stage completed, 2: old parked, 3: old backed up.
+        source = r"""
+set -eu
+. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/common.sh
+. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/atomic.sh
+g03_mode="$1"
+g03_count=0
+mv() {
+    g03_count=$((g03_count+1))
+    if [ "$g03_mode" = staged ] && [ "$g03_count" -eq 1 ]; then exit 73; fi
+    /bin/mv "$@" || return $?
+    if [ "$g03_mode" = parked ] && [ "$g03_count" -eq 1 ]; then exit 73; fi
+    if [ "$g03_mode" = backed-up ] && [ "$g03_count" -eq 2 ]; then exit 73; fi
+}
+atomic_install_tree "$2" "$3" "$4" "$5"
+"""
+        call(["/bin/sh", "-c", source, "g03-real-atomic-gap", gap,
+              str(work / "release"), str(active), str(backup_root), op],
+             locked=True, expected_rc=73)
+        def safe_hash(path):
+            return _release_hash(path, 0) if path.exists() or path.is_symlink() else None
+        native_trees = (safe_hash(active), safe_hash(staged_path),
+                        safe_hash(park), safe_hash(backup))
+        layouts = {
+            "staged": (old_hash, new_hash, None, None),
+            "parked": (None, new_hash, old_hash, None),
+            "backed-up": (None, new_hash, None, old_hash)}
+        need(native_trees == layouts[gap] and snapshot() == after and
+             json.loads(WAL.read_bytes()) == saved and
+             subprocess.run([SERVICE, "status"], capture_output=True,
+                            timeout=30).returncode == 2,
+             "G03_BOUND_ATOMIC_GAP_NATIVE_EVIDENCE_DRIFT")
+        print("G03_S10_ATOMIC_GAP_" + gap.upper().replace("-", "_") +
+              "=PASS_REAL_ORIGINAL_INSTALL_INTERRUPTED", flush=True)
+    terminal = json.loads(call([PHP, worker, "found-bound-finish", op, "strategies"],
+                               locked=True))
+    final = json.loads(WAL.read_bytes())
+    expected = {**saved, "phase": "committed"}
+    expected.pop("found")
+    native_saved = json.loads(call([PHP, worker, "saved", op, "strategies"], locked=True))
+    native_status = subprocess.run([SERVICE, "status"], capture_output=True,
+                                   text=True, timeout=30)
+    need(terminal == {"result": "committed", "mode": "0"} and final == expected and
+         native_saved == {"result": "committed", "snapshot": saved["detail"]["candidate"],
+                          "enabled": "0"} and
+         native_status.returncode == 1 and native_status.stdout.strip() == "zapret is not running" and
+         snapshot() == after and
+         hashlib.sha256((work / "manifest.json").read_bytes()).hexdigest() == pin["root_sha256"] and
+         hashlib.sha256((work / "bundle-seal.json").read_bytes()).hexdigest() == pin["seal_sha256"],
+         "G03_BOUND_STOPPED_FINAL_COMMIT_DRIFT")
+    call([PHP, worker, "found-bound-finish", op, "strategies"], locked=True, expected_rc=70)
+    need(snapshot() == after and json.loads(WAL.read_bytes()) == final,
+         "G03_BOUND_STOPPED_FINAL_REPLAY_DRIFT")
+    if gap:
+        print("G03_S10_BOUND_STOPPED_ATOMIC_" + gap.upper().replace("-", "_") +
+              "=PASS_NATIVE_RESUMED_COMMITTED_STOPPED", flush=True)
+        modes = ("staged", "parked", "backed-up")
+        pos = modes.index(gap)
+        if pos + 1 < len(modes):
+            bound_stopped_found_save_main(gap=modes[pos + 1])
+    elif uncertain:
+        print("G03_S10_BOUND_STOPPED_POSTSAVE=PASS_REAL_UNACKED_CONFIG_RECOVERED_COMMITTED",
+              flush=True)
+        bound_stopped_found_save_main(gap="staged")
+    else:
+        print("G03_S10_BOUND_STOPPED_COMMITTED=PASS_NATIVE_P1_CONFIG_TREE_STOPPED", flush=True)
+        # Exercise genuine multipart first, while the original stopped
+        # predecessor is already terminal and P1 files are idle. A failed
+        # HTTP test now stops before the remaining distinct crash scenarios;
+        # a success becomes the next actual COMMITTED predecessor for them.
+        bound_original_http_upload_main()
+        bound_stopped_found_save_main(uncertain=True)
 
 
 def stopped_native_main():
@@ -614,6 +1943,10 @@ if __name__ == "__main__":
             config_save_uncertain_main()
         elif sys.argv[1:] == ["pristine-cold"]:
             pristine_cold_native_main()
+        elif sys.argv[1:] == ["fault-worker-self-test"]:
+            managed_fault_worker_self_test()
+        elif sys.argv[1:] == ["pristine-first-commit"]:
+            pristine_cold_native_main(first_commit=True)
         elif sys.argv[1:] == ["stopped"]:
             # Only after the baseline has finished; Stage5 Guest D still
             # requires a genuinely RUNNING predecessor for partial/Config
@@ -628,7 +1961,7 @@ if __name__ == "__main__":
         label = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
         prefix = ("G03_COLD_PARTIAL" if sys.argv[1:] == ["partial"] else
                   "G03_COLD_CONFIG" if sys.argv[1:] == ["config-uncertain"] else
-                  "G03_PRISTINE_COLD" if sys.argv[1:] == ["pristine-cold"] else
+                  "G03_PRISTINE_COLD" if sys.argv[1:] in (["pristine-cold"], ["pristine-first-commit"]) else
                   "G03_COLD_STOPPED" if sys.argv[1:] == ["stopped"] else
                   "G03_COLD_PREPARED")
         print(prefix + "=REFUSED:" + label, file=sys.stderr)

@@ -324,6 +324,18 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 self.assertEqual(bound["manifest"]["root_sha256"], candidate.sha256)
                 self.assertEqual(recheck.root_sha256, candidate.sha256)
                 self.assertEqual(journal.read()["phase"], "prepared")
+                # Original source can be re-read only with its exact pinned
+                # sibling. The normal unbound source path still refuses it.
+                with self.assertRaises(OriginalSourceGateRefused):
+                    qualify_source_to_managed(
+                        **dict(kw, sealed=True, engine_version="v1.0.7"))
+                self.assertEqual(qualify_source_to_managed(
+                    **dict(kw, sealed=True, engine_version="v1.0.7",
+                           bound_root_sha256=bound["manifest"]["root_sha256"])), source)
+                with self.assertRaises(OriginalSourceGateRefused):
+                    qualify_source_to_managed(
+                        **dict(kw, sealed=True, engine_version="v1.0.7",
+                               bound_root_sha256="0" * 64))
                 with self.assertRaises(SharedOperationError):
                     journal.advance("activating", detail)
 
@@ -589,6 +601,10 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     finally:
                         traffic.write_bytes(original_traffic)
                     self.assertEqual(gate._read_pinned_effective(**pinned), old)
+                    # Original producer inputs are needed at creation,
+                    # not a durable second configuration for the old root.
+                    traffic.unlink()
+                    self.assertEqual(gate._read_pinned_effective(**pinned), old)
                     self.assertEqual(receipt.authorization, "NONE")
                     self.assertFalse(receipt.physical_transition_allowed)
                     with self.assertRaises(OriginalSourceGateRefused):
@@ -649,6 +665,520 @@ class OriginalFd9SourceGate(unittest.TestCase):
         # A failed read-only witness never changes the original native argv.
         self.assertIn(b"--port=19899", (fixture.release / "dvtws.args").read_bytes())
 
+
+    def test_s10_ordinary_reload_fences_unproven_multi_list_changes(self):
+        from neutral_effective_diff import EffectiveSnapshot, plan
+        links = (("hostlist-youtube.txt", "1" * 64),
+                 ("hostlist-user.txt", "2" * 64))
+        draft = (("hostlist-exclude.txt", "3" * 64),)
+        old = EffectiveSnapshot("4" * 64, "5" * 64, links, draft, 0)
+        single = replace(old, linked=((links[0][0], "6" * 64), links[1]))
+        multi = replace(single, linked=(single.linked[0], (links[1][0], "7" * 64)))
+        mixed = replace(single, unlinked=((draft[0][0], "8" * 64),))
+        inactive = replace(old, unlinked=mixed.unlinked)
+        self.assertEqual(plan(old, multi).kind, "RELOAD_SAFE_CANDIDATE")
+        for after, expected in ((old, "NO_CHANGE"), (single, "RELOAD_SAFE_CANDIDATE"),
+                                (multi, "RESTART_REQUIRED"), (mixed, "RESTART_REQUIRED"),
+                                (inactive, "SAVE_ONLY"),
+                                (replace(single, structural_sha256="9" * 64), "RESTART_REQUIRED")):
+            with self.subTest(expected=expected):
+                decision = gate._ordinary_effective_decision((old, True), (after, True))
+                self.assertEqual(decision.kind, expected)
+                self.assertEqual(decision.changed_active, plan(old, after).changed_active)
+                self.assertEqual(decision.changed_inactive, plan(old, after).changed_inactive)
+                self.assertFalse(decision.physical_transition_allowed)
+                self.assertEqual(gate._running_lifecycle_proposal(False, decision), "STOP")
+        self.assertEqual(gate._ordinary_effective_decision(None, (single, True)).kind,
+                         "RESTART_REQUIRED")
+
+    def test_s10_managed_change_preimages_pin_exact_old_and_new_bytes(self):
+        import hashlib
+        import tempfile
+        from neutral_effective_diff import EffectiveSnapshot, EffectiveDecision
+
+        sha = lambda data: hashlib.sha256(data).hexdigest()
+        name = "hostlist-youtube.txt"
+        before, after = b"old.example\n", b"new.example\n"
+        old = EffectiveSnapshot("1"*64, "2"*64, ((name, sha(before)),), (), 0)
+        new = replace(old, linked=((name, sha(after)),))
+        decision = gate._ordinary_effective_decision((old, True), (new, True))
+        with tempfile.TemporaryDirectory() as tmp:
+            previous, candidate, active = [Path(tmp) / n for n in ("old", "new", "active")]
+            for root in (previous, candidate, active):
+                (root / "managed").mkdir(parents=True)
+                (root / "managed" / name).write_bytes(after if root == candidate else before)
+            live = active / "managed" / name
+            args = dict(previous_release=previous, candidate_release=candidate,
+                        active=active, owner_uid=os.geteuid())
+
+            def observe():
+                return gate._managed_change_preimages(old, new, decision, **args)
+
+            first = observe()
+            self.assertEqual(first, observe())
+            self.assertEqual(first[0][:3], (name, sha(before), sha(after)))
+            self.assertEqual(first[0][-1][1], live.stat().st_ino)
+            temp = live.with_suffix(".temp")
+            temp.write_bytes(before)
+            os.replace(temp, live)
+            self.assertNotEqual(first, observe())
+            live.write_bytes(after)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                observe()
+            live.write_bytes(before)
+            (candidate / "managed" / name).write_bytes(before)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                observe()
+            (candidate / "managed" / name).write_bytes(after)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                gate._managed_change_preimages(old, new,
+                    EffectiveDecision("NO_CHANGE", (), ()), **args)
+            self.assertEqual(live.read_bytes(), before)
+
+    def test_s10_locked_running_recheck_uses_same_original_source_and_decision(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from neutral_effective_diff import EffectiveSnapshot
+        from neutral_schema3_previous_physical import (
+            CompletePriorPreimage, LockedRunningPredecessor, PriorRunningToken)
+        op, old_id = "a" * 32, "b" * 32
+        base, candidate, seal, root, old_root = (c * 64 for c in "cdef1")
+        old = EffectiveSnapshot("2" * 64, "3" * 64,
+                                (("hostlist-youtube.txt", "4" * 64),), (), 0)
+        new = replace(old, linked=(("hostlist-youtube.txt", "5" * 64),))
+        source = gate.SourceGateReceipt("list", "6" * 64, (),
+            generation=op, original_seal_sha256=seal, effective=new,
+            requested_enabled=True)
+        preimage = CompletePriorPreimage(op, root, old_id, "7" * 64, "7" * 64,
+            base, "tun0", 5432, "birth", 6543, "monitor-birth", "8" * 64)
+        semantic = gate.OriginalSemanticReceipt(op, old_id, root, old_root,
+            gate._ordinary_effective_decision((old, True), (new, True)), preimage,
+            lifecycle_proposal="RELOAD")
+        record = {"phase": "prepared", "detail": {"id": op, "base": base,
+                  "candidate": candidate}, "previous": {"id": old_id, "candidate": base},
+                  "manifest": {"root_sha256": root, "seal_sha256": seal},
+                  "previous_manifest": {"root_sha256": old_root}}
+        physical = LockedRunningPredecessor(op, old_id, old_root, base, "7" * 64,
+            PriorRunningToken(5432, "birth", 6543, "monitor-birth", "8" * 64), None)
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            store = stack.enter_context(patch("shared_apply_operation.SharedApplyOperation",
+                return_value=Mock(read=Mock(return_value=record))))
+            stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"list"}))
+            stack.enter_context(patch.object(gate, "_s10_native_bound_engine_readback",
+                return_value={"engine_version": "v1.0.7", "engine_sha256": "a" * 64}))
+            fresh = stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
+                return_value=source))
+            stack.enter_context(patch.object(gate, "_read_pinned_effective", side_effect=
+                lambda *, detail, **kw: (new if detail["id"] == op else old, True)))
+            attested = stack.enter_context(patch(
+                "neutral_schema3_previous_physical.attest_bound_running_predecessor_under_fd9",
+                return_value=physical))
+            nested = stack.enter_context(patch.object(gate, "native_plan_original_prepared_fd9"))
+            exe = stack.enter_context(patch(
+                "neutral_schema3_previous_physical._running_executable_identity",
+                return_value=(1, 2, "a" * 64)))
+            running = stack.enter_context(patch(
+                "neutral_schema3_previous_physical._running_native", return_value=physical.running))
+            managed = stack.enter_context(patch.object(gate, "_managed_change_preimages",
+                return_value=(("hostlist-youtube.txt", "old", "new", (1, 2), (1, 3), (1, 4)),)))
+
+            def run(**kw):
+                args = dict(source=source, semantic=semantic, config_fd=4, config_digest=base)
+                args.update(kw)
+                return gate.native_recheck_running_prepared_fd9(op, b"original", **args)
+
+            self.assertEqual(run(), replace(physical, executable_identity=(1, 2, "a" * 64),
+                                            managed_preimages=managed.return_value))
+            self.assertEqual(managed.call_count, 2)
+            self.assertEqual(exe.call_count, 2)
+            self.assertEqual(running.call_count, 2)
+            exe.side_effect = ((1, 2, "a" * 64), (1, 3, "a" * 64))
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                run()
+            exe.side_effect = None
+            self.assertEqual(fresh.call_count, 4)
+            fresh.assert_called_with(op, b"original", None, bound_record=record)
+            self.assertEqual(attested.call_count, 4)
+            managed.side_effect = (managed.return_value, (("changed-inode",),))
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                run()
+            managed.side_effect = None
+            nested.assert_not_called()
+            for bad in (dict(config_fd=9), dict(config_digest=candidate),
+                        dict(semantic=replace(semantic, lifecycle_proposal="RESTART")),
+                        dict(semantic=replace(semantic, promotion_allowed=True))):
+                with self.assertRaises(gate.OriginalSourceGateRefused):
+                    run(**bad)
+            fresh.side_effect = (source, replace(source, candidate_input_sha256="9" * 64))
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                run()
+            fresh.side_effect = None
+            attested.side_effect = (physical, replace(physical, epoch_sha256="a" * 64))
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                run()
+            attested.side_effect = None
+            store.return_value.read.return_value = {**record, "phase": "activating"}
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                run()
+            store.return_value._persist_record.assert_not_called()
+            store.return_value._advance_bound_ordinary.assert_not_called()
+            nested.assert_not_called()
+
+    def test_cli_entry_uses_canonical_module_for_exact_root_receipt_type(self):
+        import runpy
+        from unittest.mock import patch
+        from neutral_root_stage import attest_prepared_source_root
+
+        def cli():
+            from neutral_shared_apply_source_gate import SourceGateReceipt
+            # The compiler imports that exact class, not a structural lookalike.
+            self.assertIs(SourceGateReceipt, gate.SourceGateReceipt)
+            self.assertEqual(attest_prepared_source_root.__module__, "neutral_root_stage")
+            return 23
+
+        with patch.object(gate, "main", side_effect=cli) as entry:
+            with self.assertRaises(SystemExit) as exited:
+                runpy.run_path(str(Path(gate.__file__)), run_name="__main__")
+            self.assertEqual(exited.exception.code, 23)
+            entry.assert_called_once_with()
+
+    def test_first_auto_gui_only_dispatches_exact_first_enabled_owner(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        op, base, candidate = "a" * 32, "b" * 64, "c" * 64
+        record = {"phase": "prepared", "detail": {"id": op, "page": "strategies",
+                  "base": base, "candidate": candidate,
+                  "changed_fields": ["general.enabled", "hostlist.mode"]}}
+        source = gate.SourceGateReceipt("auto", "f" * 64, (), generation=op,
+            original_seal_sha256="e" * 64, requested_enabled=True)
+        committed = {**record, "phase": "committed", "manifest": {"schema": 2},
+                     "first_running_sha256": "1" * 64, "first_pretraffic_sha256": "2" * 64}
+        store = Mock(read=Mock(return_value=record))
+        def dispatch(*args):
+            store.read.return_value = committed
+            return "first-enabled-committed", committed, source, None
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            decode = stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"auto"}))
+            fresh = stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
+                return_value=source))
+            run = stack.enter_context(patch.object(gate, "native_coordinate_original_prepared_fd9",
+                side_effect=dispatch))
+            def call(digest=candidate):
+                return gate.native_first_auto_gui_handoff_fd9(op, b"original", digest)
+            for invalid in ({**record, "previous": {}}, {**record, "found": {}},
+                            {**record, "manifest": {}}, {**record, "phase": "committed"},
+                            {**record, "detail": {**record["detail"], "page": "voice"}},
+                            {**record, "detail": {**record["detail"], "changed_fields": ["hostlist.mode"]}}):
+                store.read.return_value = invalid
+                with self.assertRaises(OriginalSourceGateRefused):
+                    call()
+            store.read.return_value = record
+            with self.assertRaises(OriginalSourceGateRefused):
+                call("0" * 64)
+            decode.return_value = {"mode": b"list"}
+            with self.assertRaises(OriginalSourceGateRefused):
+                call()
+            decode.return_value = {"mode": b"auto"}
+            fresh.return_value = replace(source, requested_enabled=False)
+            with self.assertRaises(OriginalSourceGateRefused):
+                call()
+            run.assert_not_called()
+            fresh.return_value = source
+            self.assertIsNone(call())
+            run.assert_called_once_with(op, b"original")
+            store.read.return_value = record
+            run.reset_mock()
+            run.side_effect = RuntimeError("uncertain")
+            with self.assertRaisesRegex(RuntimeError, "uncertain"):
+                call()
+            run.assert_called_once()
+
+    def test_original_prepared_first_enabled_has_one_start_and_no_fallback(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from neutral_schema3_quiescent_preimage import QuiescentPreimage
+
+        op, base, candidate = "a" * 32, "b" * 64, "c" * 64
+        root, seal = "d" * 64, "e" * 64
+        before = {"phase": "prepared", "detail": {"id": op, "page": "strategies",
+                  "base": base, "candidate": candidate, "changed_fields": ["general.enabled"]},
+                  "manifest": {"schema": 1, "root_sha256": root, "seal_sha256": seal}}
+        committed = {**before, "phase": "committed", "first_running_sha256": "1" * 64}
+        preimage = QuiescentPreimage(op, root, None, None, base, candidate, "tun0",
+            "first-install-empty", "native-kernel-absent", "no-prior-data")
+        source = gate.SourceGateReceipt("list", "f" * 64, (), generation=op,
+            original_seal_sha256=seal, requested_enabled=True)
+        semantic = gate.OriginalSemanticReceipt(op, None, root, None,
+            gate.EffectiveDecision("RESTART_REQUIRED", (), ()), preimage,
+            lifecycle_proposal="START")
+        store = Mock(read=Mock(return_value=before))
+
+        def install(*args, **kw):
+            self.assertEqual(kw, {"source": source, "semantic": semantic})
+            store.read.return_value = committed
+            return committed
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"list"}))
+            stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
+                return_value=source))
+            stack.enter_context(patch.object(gate, "native_plan_original_prepared_fd9",
+                return_value=semantic))
+            managed = stack.enter_context(patch.object(gate, "native_run_managed_apply_fd9"))
+            disabled = stack.enter_context(patch.object(gate, "native_run_first_disabled_apply_fd9"))
+            enabled = stack.enter_context(patch.object(gate, "native_run_first_enabled_apply_fd9",
+                side_effect=install))
+            self.assertEqual(gate.native_coordinate_original_prepared_fd9(op, b"source"),
+                ("first-enabled-committed", committed, source, semantic))
+            enabled.assert_called_once()
+            disabled.assert_not_called()
+            managed.assert_not_called()
+            store.read.return_value = before
+            enabled.reset_mock()
+            enabled.side_effect = RuntimeError("uncertain")
+            with self.assertRaisesRegex(RuntimeError, "uncertain"):
+                gate.native_coordinate_original_prepared_fd9(op, b"source")
+            enabled.assert_called_once()
+            disabled.assert_not_called()
+            managed.assert_not_called()
+
+
+    def test_original_prepared_dispatch_uses_only_first_disabled_save_owner(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from neutral_schema3_quiescent_preimage import QuiescentPreimage
+
+        op, base, candidate = "a" * 32, "b" * 64, "c" * 64
+        root, seal = "d" * 64, "e" * 64
+        before = {"phase": "prepared", "detail": {"id": op, "page": "voice",
+                  "base": base, "candidate": candidate, "changed_fields": ["general.enabled"]},
+                  "manifest": {"schema": 1, "root_sha256": root, "seal_sha256": seal}}
+        committed = {**before, "phase": "committed"}
+        preimage = QuiescentPreimage(op, root, None, None, base, candidate, None,
+            "first-install-empty", "native-kernel-absent", "no-prior-data")
+        source = gate.SourceGateReceipt("list", "f" * 64, (), generation=op,
+            original_seal_sha256=seal, requested_enabled=False)
+        semantic = gate.OriginalSemanticReceipt(op, None, root, None,
+            gate.EffectiveDecision("RESTART_REQUIRED", (), ()), preimage,
+            lifecycle_proposal="SAVE_ONLY")
+        store = Mock(read=Mock(return_value=before))
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"list"}))
+            stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
+                return_value=source))
+            stack.enter_context(patch.object(gate, "native_plan_original_prepared_fd9",
+                return_value=semantic))
+            managed = stack.enter_context(patch.object(gate, "native_run_managed_apply_fd9"))
+            first = stack.enter_context(patch.object(gate, "native_run_first_disabled_apply_fd9",
+                side_effect=lambda *a, **kw: (setattr(store.read, "return_value", committed) or committed)))
+            self.assertEqual(gate.native_coordinate_original_prepared_fd9(op, b"source"),
+                ("first-disabled-committed", committed, source, semantic))
+            managed.assert_not_called()
+            first.assert_called_once()
+            first.reset_mock()
+            store.read.return_value = before
+            stack.enter_context(patch.object(gate, "native_run_first_disabled_apply_fd9",
+                side_effect=RuntimeError("uncertain")))
+            with self.assertRaisesRegex(RuntimeError, "uncertain"):
+                gate.native_coordinate_original_prepared_fd9(op, b"source")
+            managed.assert_not_called()
+
+
+    def test_s10_prepared_dispatch_joins_managed_route_without_lifecycle_fallback(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from neutral_effective_diff import EffectiveSnapshot
+        from neutral_schema3_previous_physical import CompletePriorPreimage
+        from neutral_schema3_quiescent_preimage import QuiescentPreimage
+
+        op, old_id = "a" * 32, "b" * 32
+        base, candidate, seal, root, old_root = (c * 64 for c in "cdef1")
+        old = EffectiveSnapshot("2" * 64, "3" * 64,
+                                (("hostlist-youtube.txt", "4" * 64),), (), 0)
+        new = replace(old, linked=(("hostlist-youtube.txt", "5" * 64),))
+        source = gate.SourceGateReceipt("list", "6" * 64, (),
+            generation=op, original_seal_sha256=seal, effective=new, requested_enabled=True)
+        physical = CompletePriorPreimage(op, root, old_id, "7" * 64, "7" * 64,
+            base, "tun0", 5432, "birth", 6543, "monitor-birth", "8" * 64)
+        semantic = gate.OriginalSemanticReceipt(op, old_id, root, old_root,
+            gate._ordinary_effective_decision((old, True), (new, True)), physical,
+            lifecycle_proposal="RELOAD")
+        bound = {"phase": "prepared", "detail": {"id": op, "base": base,
+                 "candidate": candidate, "page": "strategies",
+                 "changed_fields": ["hostlist.youtubedomains"]},
+                 "previous": {"id": old_id, "candidate": base},
+                 "manifest": {"schema": 1, "root_sha256": root, "seal_sha256": seal},
+                 "previous_manifest": {"schema": 1, "root_sha256": old_root}}
+        unbound = {k: v for k, v in bound.items() if k != "manifest"}
+        committed = {**bound, "phase": "committed"}
+        raw = b"original"
+        store = Mock(read=Mock(return_value=unbound))
+
+        def bind(*args):
+            store.read.return_value = bound
+            return source, None
+
+        def managed(*args, **kw):
+            self.assertEqual(store.read(), bound)
+            self.assertEqual(kw, {"source": source, "semantic": semantic})
+            store.read.return_value = committed
+            return committed
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"list"}))
+            binding = stack.enter_context(patch.object(gate, "native_bind_original_prepared_fd9",
+                side_effect=bind))
+            fresh = stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
+                return_value=source))
+            plan = stack.enter_context(patch.object(gate, "native_plan_original_prepared_fd9",
+                return_value=semantic))
+            run = stack.enter_context(patch.object(gate, "native_run_managed_apply_fd9",
+                side_effect=managed))
+            promote = stack.enter_context(patch.object(gate, "native_begin_quiescent_bound_promotion_fd9"))
+
+            def dispatch():
+                return gate.native_coordinate_original_prepared_fd9(op, raw)
+
+            self.assertEqual(dispatch(), ("managed-committed", committed, source, semantic))
+            binding.assert_called_once_with(op, raw)
+            fresh.assert_not_called()
+            store.read.return_value = bound
+            self.assertEqual(dispatch()[0], "managed-committed")
+            fresh.assert_called_once_with(op, raw, None, bound_record=bound)
+
+            store.read.return_value = bound
+            run.reset_mock()
+            plan.return_value = replace(semantic, lifecycle_proposal="RESTART")
+            self.assertEqual(dispatch()[0:2], ("lifecycle-executor-required", bound))
+            run.assert_not_called()
+            plan.return_value = replace(semantic, candidate_root_sha256="0" * 64)
+            with self.assertRaises(OriginalSourceGateRefused):
+                dispatch()
+            run.assert_not_called()
+            plan.return_value = semantic
+            run.side_effect = RuntimeError("uncertain")
+            with self.assertRaisesRegex(RuntimeError, "uncertain"):
+                dispatch()
+            run.assert_called_once()
+            promote.assert_not_called()
+            self.assertEqual(store.read(), bound)
+
+    def test_s10_managed_handoff_joins_original_config_owner_and_refuses_drift(self):
+        from contextlib import ExitStack
+        import io
+        import subprocess
+        import json
+        from unittest.mock import Mock
+        from neutral_effective_diff import EffectiveSnapshot
+        from neutral_schema3_previous_physical import CompletePriorPreimage
+        from shared_apply_operation import _config_save_witness
+
+        op, old_id = "a" * 32, "b" * 32
+        base, candidate, seal, root, old_root = (c * 64 for c in "cdef1")
+        old = EffectiveSnapshot("2" * 64, "3" * 64,
+                                (("hostlist-youtube.txt", "4" * 64),), (), 0)
+        new = replace(old, linked=(("hostlist-youtube.txt", "5" * 64),))
+        source = gate.SourceGateReceipt("list", "6" * 64, (),
+            generation=op, original_seal_sha256=seal, effective=new, requested_enabled=True)
+        physical = CompletePriorPreimage(op, root, old_id, "7" * 64, "7" * 64,
+            base, "tun0", 5432, "birth", 6543, "monitor-birth", "8" * 64)
+        semantic = gate.OriginalSemanticReceipt(op, old_id, root, old_root,
+            gate._ordinary_effective_decision((old, True), (new, True)), physical,
+            lifecycle_proposal="RELOAD")
+        record = {"phase": "prepared", "detail": {"id": op, "base": base,
+                  "candidate": candidate, "page": "strategies",
+                  "changed_fields": ["hostlist.youtubedomains"]},
+                  "previous": {"id": old_id, "candidate": base},
+                  "manifest": {"schema": 1, "root_sha256": root, "seal_sha256": seal},
+                  "previous_manifest": {"schema": 1, "root_sha256": old_root}}
+        raw = b"original"
+        wire = gate._managed_handoff_wire(source, semantic, raw)
+        plan_sha = "9" * 64
+        witness = _config_save_witness(record["detail"], plan_sha)
+        committed = {**record, "phase": "committed"}
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(gate.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(gate.os, "geteuid", return_value=0))
+            stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            stack.enter_context(patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            store = Mock(read=Mock(return_value=record))
+            stack.enter_context(patch("shared_apply_operation.SharedApplyOperation", return_value=store))
+            stack.enter_context(patch.object(gate, "verify_seal",
+                return_value={"sha256": {"plan.json": plan_sha}}))
+            stack.enter_context(patch.object(gate, "decode_pipe", return_value={"mode": b"list"}))
+            fresh = stack.enter_context(patch.object(gate, "native_original_bound_effective_fd9",
+                return_value=source))
+            stack.enter_context(patch.object(gate, "_s10_native_bound_engine_readback",
+                return_value={"engine_version": "v1.0.7"}))
+            stack.enter_context(patch.object(gate, "_read_pinned_effective", side_effect=
+                lambda *, detail, **kw: (new if detail["id"] == op else old, True)))
+            write = stack.enter_context(patch.object(gate, "native_write_running_managed_file_fd9",
+                return_value={**record, "phase": "managed-writing"}))
+            nested = stack.enter_context(patch.object(gate, "native_plan_original_prepared_fd9"))
+            joined = stack.enter_context(patch("neutral_schema3_quiescent_preimage._run_bound_restore_joined"))
+
+            def locked(value=wire, digest=witness, fd=4):
+                return gate.native_write_managed_handoff_locked(
+                    op, digest, io.BytesIO(value), config_fd=fd)
+
+            self.assertEqual(locked()["phase"], "managed-writing")
+            write.assert_called_once_with(op, raw, source=source, semantic=semantic,
+                                          config_fd=4, config_digest=base)
+            write.reset_mock()
+            for bad in (b" " + wire, b"{}\n" + raw, b"x" * 8194 + b"\n" + raw):
+                with self.assertRaises(gate.OriginalSourceGateRefused):
+                    locked(bad)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                locked(digest="0" * 64)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                locked(fd=9)
+            fresh.return_value = replace(source, candidate_input_sha256="0" * 64)
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                locked()
+            fresh.return_value = source
+            write.assert_not_called()
+            nested.assert_not_called()
+            store._persist_record.assert_not_called()
+
+            def php(command, **kw):
+                self.assertEqual(command[-3:], ["managed-apply", op, "strategies"])
+                self.assertEqual(kw["input_data"], wire)
+                self.assertEqual(kw["pass_fds"], (9,))
+                store.read.return_value = committed
+                return subprocess.CompletedProcess(command, 0, json.dumps({
+                    "result": "saved", "saved": True, "applied": False,
+                    "snapshot": candidate, "change_count": 1}).encode())
+
+            joined.side_effect = php
+            self.assertEqual(gate.native_run_managed_apply_fd9(op, raw,
+                source=source, semantic=semantic), committed)
+            store.read.return_value = record
+            joined.side_effect = None
+            joined.return_value = subprocess.CompletedProcess([], 0, b'{"result":"saved"}')
+            with self.assertRaises(gate.OriginalSourceGateRefused):
+                gate.native_run_managed_apply_fd9(op, raw, source=source, semantic=semantic)
+            self.assertEqual(joined.call_count, 2)
+            store._persist_record.assert_not_called()
 
     def test_s10_running_enabled_off_stop_overrides_legacy_restart_and_pinned_no_change(self):
         """Injected old running process: identical S08d can NEVER suppress STOP.
@@ -866,6 +1396,7 @@ class OriginalFd9SourceGate(unittest.TestCase):
             ("stopped-on", True, True, False, "START"),
             ("stopped-pinned-off", True, False, True, "SAVE_ONLY"),
             ("stopped-pinned-on", True, True, True, "START"),
+            ("stopped-pinned-idle", True, True, True, "START"),
             ("cold-off", False, False, False, "SAVE_ONLY"),
             ("cold-on", False, True, False, "START"),
         )
@@ -909,7 +1440,10 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     "tun0" if enabled else None,
                     "committed-stopped" if has_prior else "first-install-empty",
                     "native-managed-kernel-empty",
-                    "inert-no-producer-data" if has_prior else "no-prior-data")
+                    ("inert-idle-producer" if name == "stopped-pinned-idle" else
+                     "inert-no-producer-data" if has_prior else "no-prior-data"),
+                    idle_producer=((1, 2, 0, "a" * 64), (1, 3, 0, "a" * 64))
+                    if name == "stopped-pinned-idle" else None)
                 quiescent = stack.enter_context(patch(
                     "neutral_schema3_quiescent_preimage.attest_quiescent_under_fd9",
                     return_value=proof))
@@ -940,6 +1474,11 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     effective=effective, enabled=enabled)
                 running.assert_not_called()
                 self.assertEqual(store.read(), record)
+                if name == "stopped-pinned-idle":
+                    for idle in (None, (), ((1, 2), (1, 3))):
+                        quiescent.return_value = replace(proof, idle_producer=idle)
+                        with self.assertRaises(gate.OriginalSourceGateRefused):
+                            gate.native_plan_original_prepared_fd9(candidate)
 
     def test_s10_wrong_state_incomplete_owner_cannot_fall_through(self):
         """A READY failure never becomes STOPPED; bad cold cannot become START."""
@@ -1272,7 +1811,7 @@ class OriginalFd9SourceGate(unittest.TestCase):
         prior = {"id": old_id, "candidate": base}
         pin = {"schema": 1, "root_sha256": root_sha,
                "seal_sha256": seal, "candidate_sha256": digest}
-        old_pin = {"root_sha256": "e" * 64}
+        old_pin = {"schema": 1, "root_sha256": "e" * 64}
         links = (("hostlist-youtube.txt", "1" * 64),
                  ("hostlist-user.txt", "2" * 64))
         old_effective = EffectiveSnapshot("3" * 64, "4" * 64, links, (), 0)
@@ -1281,7 +1820,8 @@ class OriginalFd9SourceGate(unittest.TestCase):
         native = NativeParity("list", "4" * 64, "4" * 64, "absent",
                               0, 1, 0, (), (), "6" * 64, 19000, 19001)
         for case in ("legacy", "single", "multiple-active", "multiple-source",
-                     "stopped", "disabled", "bad-base", "cas-drift", "pid-drift"):
+                     "stopped", "disabled", "bad-base", "cas-drift", "pid-drift",
+                     "epoch", "epoch-drift", "epoch-refusal"):
             with self.subTest(case=case), ExitStack() as stack:
                 effective = (replace(candidate, linked=(changed[0],
                     ("hostlist-user.txt", "7" * 64)))
@@ -1299,7 +1839,8 @@ class OriginalFd9SourceGate(unittest.TestCase):
                     "found": {"plan_sha256": plan_sha}, "previous": prior,
                     "manifest": pin}
                 if case != "legacy":
-                    before["previous_manifest"] = old_pin
+                    before["previous_manifest"] = {
+                        **old_pin, "schema": 2 if case.startswith("epoch") else 1}
                 store = Mock(read=Mock(return_value=before))
                 store.root = Path("/disposable/journal")
                 verified = {"youtube": (b"old", b"new"), "auto": (
@@ -1350,19 +1891,33 @@ class OriginalFd9SourceGate(unittest.TestCase):
                 stack.enter_context(patch(
                     "neutral_schema3_previous_physical._full_prior_tree",
                     return_value="9" * 64))
+                from types import SimpleNamespace
+                runtime = SimpleNamespace(pid=1733, started="birth")
                 running = stack.enter_context(patch(
                     "neutral_schema3_previous_physical._running_native",
-                    side_effect=["pid-birth", "other-birth" if case == "pid-drift" else "pid-birth"]))
-                if case in ("bad-base", "cas-drift", "pid-drift"):
+                    side_effect=[runtime, SimpleNamespace(pid=1733, started="other-birth")
+                                 if case == "pid-drift" else runtime]))
+                learning = SimpleNamespace(operation_id=old_id, generation=old_id,
+                    owner_candidate_sha256=base, owner=runtime)
+                epoch = stack.enter_context(patch(
+                    "auto_detect_owner.attest_prepared_found_learning_predecessor",
+                    side_effect=(ValueError("epoch absent") if case == "epoch-refusal"
+                                 else [(learning, "1" * 64),
+                                       (learning, ("2" if case == "epoch-drift" else "1") * 64)])))
+                if case in ("bad-base", "cas-drift", "pid-drift",
+                            "epoch-drift", "epoch-refusal"):
                     with self.assertRaises(OriginalSourceGateRefused):
                         gate.native_plan_found_prepared_fd9(
                             witness, 4, config_digest="0" * 64 if case == "bad-base" else base)
                 else:
                     receipt = gate.native_plan_found_prepared_fd9(witness, 4, config_digest=base)
                     self.assertEqual(receipt.decision.kind,
-                        "RELOAD_SAFE_CANDIDATE" if case in ("single", "stopped")
+                        "RELOAD_SAFE_CANDIDATE" if case in ("single", "stopped", "epoch")
                         else "RESTART_REQUIRED")
-                    self.assertEqual(receipt.reload_candidate, case == "single")
+                    self.assertEqual(receipt.reload_candidate, case in ("single", "epoch"))
+                    self.assertEqual(receipt.previous_running_epoch_sha256,
+                                     "1" * 64 if case == "epoch" else None)
+                    self.assertEqual(epoch.call_count, 2 if case == "epoch" else 0)
                     self.assertEqual(receipt.authorization, "NONE")
                     self.assertFalse(receipt.physical_transition_allowed)
                     self.assertFalse(receipt.promotion_allowed)

@@ -8,13 +8,14 @@ FD9 owner must re-attest its seal, P1 and previous runtime at physical commit.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import sys
 
 from config_projection_opnsense import registered_ids, xml_snapshot
@@ -196,6 +197,18 @@ def decode_pipe(raw: bytes) -> dict[str, bytes]:
     return data
 
 
+def read_inherited_original_source(source_fd: int) -> bytes:
+    """Bounded original NUL frame; never read source data from argv or a path."""
+    if type(source_fd) is not int or source_fd < 3 or source_fd == 9:
+        raise OriginalSourceGateRefused("INVALID_ORIGINAL_PIPE")
+    if not stat.S_ISFIFO(os.fstat(source_fd).st_mode):
+        raise OriginalSourceGateRefused("INVALID_ORIGINAL_PIPE")
+    with os.fdopen(os.dup(source_fd), "rb") as stream:
+        raw = stream.read(MAX_PIPE + 1)
+    decode_pipe(raw)
+    return raw
+
+
 def _read(path: Path, uid: int, maximum: int, *, allow_empty: bool = False) -> bytes:
     """Read one existing owned single-link file with no symlink or replacement."""
     before = path.lstat()
@@ -222,6 +235,24 @@ def _read(path: Path, uid: int, maximum: int, *, allow_empty: bool = False) -> b
         os.close(fd)
 
 
+def _check_original_source_root(work: Path, owner_uid: int,
+                                bound_root_sha256: str | None) -> None:
+    """No root before binding; only the exact sibling pin afterwards."""
+    sibling = work / "manifest.json"
+    for root in (work / ".manifest.json.pending",
+                 work / "release/manifest.json",
+                 work / "release/.manifest.json.pending"):
+        if root.exists() or root.is_symlink():
+            raise OriginalSourceGateRefused("PREMATURE_OR_SECOND_ROOT_FORBIDDEN")
+    if bound_root_sha256 is None:
+        if sibling.exists() or sibling.is_symlink():
+            raise OriginalSourceGateRefused("PREMATURE_OR_SECOND_ROOT_FORBIDDEN")
+    elif (type(bound_root_sha256) is not str or
+            re.fullmatch(r"[a-f0-9]{64}", bound_root_sha256) is None or
+            hashlib.sha256(_read(sibling, owner_uid, 16384)).hexdigest() != bound_root_sha256):
+        raise OriginalSourceGateRefused("ORIGINAL_BOUND_SOURCE_ROOT_CHANGED")
+
+
 def qualify_source_to_managed(*, work: Path, sources: Path,
                               inputs: dict[str, bytes],
                               owned_known: dict[str, bytes] | None,
@@ -231,7 +262,8 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
                               active_managed: Path = Path(
                                   "/usr/local/etc/zapret2/runtime-v2/managed"),
                               sealed: bool = False,
-                              engine_version: str | None = None) -> SourceGateReceipt:
+                              engine_version: str | None = None,
+                              bound_root_sha256: str | None = None) -> SourceGateReceipt:
     """Pure observational witness of actual producer staged files.
 
     The original native wrapper supplies P2-qualified owned after-images.
@@ -244,6 +276,7 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
             not _ID.fullmatch(work.name) or type(owner_uid) is not int or
             owner_uid < 0 or type(sealed) is not bool or type(inputs) is not dict or
             set(inputs) != set(FIELDS) or
+            (bound_root_sha256 is not None and not sealed) or
             any(type(value) is not bytes for value in inputs.values())):
         raise OriginalSourceGateRefused("UNQUALIFIED_ORIGINAL_CONTEXT")
     inputs = decode_pipe(MARKER + b"\0" + b"\0".join(inputs[key] for key in FIELDS) + b"\0")
@@ -255,10 +288,7 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
     if sealed:
         original_seal = _read(work / "bundle-seal.json", owner_uid, 1024)
         initial_seal = verify_seal(work, owner=owner_uid)
-        for root in (work / "manifest.json", work / ".manifest.json.pending",
-                     release / "manifest.json", release / ".manifest.json.pending"):
-            if root.exists() or root.is_symlink():
-                raise OriginalSourceGateRefused("PREMATURE_OR_SECOND_ROOT_FORBIDDEN")
+        _check_original_source_root(work, owner_uid, bound_root_sha256)
     else:
         original_seal = None
         initial_seal = None
@@ -405,6 +435,7 @@ def qualify_source_to_managed(*, work: Path, sources: Path,
             managed_sha256={name: hashlib.sha256(raw).hexdigest()
                             for name, raw in observed.items()})
     if sealed:
+        _check_original_source_root(work, owner_uid, bound_root_sha256)
         if (verify_seal(work, owner=owner_uid) != initial_seal or
                 _read(work / "bundle-seal.json", owner_uid, 1024) != original_seal or
                 final_args != _read(release / "dvtws.args", owner_uid, 262144) or
@@ -477,7 +508,8 @@ def _owned_under_original_p2(work: Path, uid: int, *, mode: bytes) -> dict[str, 
 def native_original_fd9(operation: str, raw_pipe: bytes,
                         candidate_sha256: str | None = None,
                         *, sealed: bool = False,
-                        engine_version: str | None = None) -> SourceGateReceipt:
+                        engine_version: str | None = None,
+                        bound_record: dict | None = None) -> SourceGateReceipt:
     """Only the installed original FD9 wrapper can invoke this native action."""
     from voice_ipfw_adapter import require_lifecycle_lock
     from shared_apply_seal import WORK
@@ -487,6 +519,18 @@ def native_original_fd9(operation: str, raw_pipe: bytes,
     require_lifecycle_lock()
     inputs = decode_pipe(raw_pipe)
     work = WORK / operation
+    root_sha = None
+    if bound_record is not None:
+        from shared_apply_operation import SharedApplyOperation
+        from neutral_root_stage import verify_original_operation_pins
+        store = SharedApplyOperation(owner=0)
+        if (not sealed or type(bound_record) is not dict or
+                store.read() != bound_record or bound_record.get("phase") != "prepared" or
+                "found" in bound_record or "manifest" not in bound_record or
+                bound_record["detail"]["id"] != operation):
+            raise OriginalSourceGateRefused("ORIGINAL_BOUND_SOURCE_OWNER_REQUIRED")
+        verify_original_operation_pins(record=bound_record, parent=WORK, owner_uid=0)
+        root_sha = bound_record["manifest"]["root_sha256"]
     known = _owned_under_original_p2(work, 0, mode=inputs["mode"])
     auto_bytes = None
     # Shared Auto is a runtime provider, NOT a managed hostlist and never
@@ -498,8 +542,13 @@ def native_original_fd9(operation: str, raw_pipe: bytes,
         work=work, sources=Path(__file__).parent, inputs=inputs,
         owned_known=known, runtime_auto=auto_bytes,
         candidate_sha256=candidate_sha256, owner_uid=0, sealed=sealed,
-        engine_version=engine_version)
+        engine_version=engine_version,
+        **({"bound_root_sha256": root_sha} if root_sha is not None else {}))
     require_lifecycle_lock()
+    if bound_record is not None:
+        verify_original_operation_pins(record=bound_record, parent=WORK, owner_uid=0)
+        if store.read() != bound_record:
+            raise OriginalSourceGateRefused("ORIGINAL_BOUND_SOURCE_OWNER_CHANGED")
     return receipt
 
 
@@ -523,7 +572,8 @@ def _s10_native_bound_engine_readback() -> dict:
 
 def native_original_bound_effective_fd9(
         operation: str, raw_pipe: bytes,
-        candidate_sha256: str | None = None) -> SourceGateReceipt:
+        candidate_sha256: str | None = None, *,
+        bound_record: dict | None = None) -> SourceGateReceipt:
     """Strict opt-in S10 source → genuine bound engine → S08d, read-only.
 
     No original Apply path calls this automatically: current legacy Apply and
@@ -554,7 +604,8 @@ def native_original_bound_effective_fd9(
         raise OriginalSourceGateRefused("S10_BOUND_ENGINE_UNQUALIFIED")
     source = native_original_fd9(
         operation, raw_pipe, candidate_sha256, sealed=True,
-        engine_version=bound["engine_version"])
+        engine_version=bound["engine_version"],
+        **({"bound_record": bound_record} if bound_record is not None else {}))
     if (type(source) is not SourceGateReceipt or
             source.generation != operation or
             source.status != "ORIGINAL_SEALED_POSTPROMOTION_PARITY_ONLY" or
@@ -947,18 +998,23 @@ def _read_pinned_effective(*, detail: dict, binding: dict, parent: Path,
             service.get("target_mode") != mode or
             binding["schema"] != (2 if mode == "auto" and saved.enabled else 1)):
         raise OriginalSourceGateRefused("S10_PINNED_MODEL_MISMATCH")
-    # The original template's heredoc is loaded by shell command
-    # substitution; it strips trailing LF. The original builder then
-    # writes one LF. The portable original loader can preserve trailing LF.
-    # Permit ONLY that insignificant trailing-LF difference from the sealed
-    # model; never trust unsealed traffic.input as independent provenance.
+    # A committed predecessor must not depend on unsealed builder
+    # intermediates that can be removed after the original Apply. The
+    # exact pinned seal authenticates candidate.xml. Reproduce the original
+    # shell heredoc's trailing-LF normalization from that sealed model,
+    # then compare the resulting S08d identity to the immutable root below.
+    # If traffic.input still exists, it must agree; never use it as
+    # independent provenance or fall back from a mismatching input.
     strategy = model["strategy"].get("trafficargs")
     if type(strategy) is not str:
         raise OriginalSourceGateRefused("S10_PINNED_STRATEGY_MISSING")
-    traffic = _read(work / "traffic.input", owner_uid, 262145)
-    if (not traffic.endswith(b"\n") or
-            traffic.rstrip(b"\n") != strategy.encode("utf-8").rstrip(b"\n")):
-        raise OriginalSourceGateRefused("S10_PINNED_STRATEGY_MISMATCH")
+    traffic = strategy.encode("utf-8").rstrip(b"\n") + b"\n"
+    intermediate = work / "traffic.input"
+    if intermediate.exists() or intermediate.is_symlink():
+        observed_traffic = _read(intermediate, owner_uid, 262145)
+        if (not observed_traffic.endswith(b"\n") or
+                observed_traffic.rstrip(b"\n") != traffic.rstrip(b"\n")):
+            raise OriginalSourceGateRefused("S10_PINNED_STRATEGY_MISMATCH")
     targets = compile_target_profiles(saved, traffic, parse_original_policy(
         _read(sources / "target_mode.sh", owner_uid, 128 * 1024)))
     storage = parse_original_storage(
@@ -1020,6 +1076,7 @@ class FoundSemanticReceipt:
     candidate_enabled: bool
     decision: EffectiveDecision
     reload_candidate: bool
+    previous_running_epoch_sha256: str | None = None
     status: str = "ORIGINAL_FOUND_BOUND_SEMANTIC_PROPOSAL_ONLY"
     authorization: str = "NONE"
     physical_transition_allowed: bool = False
@@ -1043,15 +1100,28 @@ def _found_effective_decision(old, candidate, changed_sources: int) -> Effective
 def native_plan_found_prepared_fd9(witness: FoundPreparedSourceReceipt,
                                   config_fd: int, *,
                                   config_digest: str) -> FoundSemanticReceipt:
+    """Read-only native comparison, without a write continuation."""
+    return _with_native_found_prepared_semantic(
+        witness, config_fd, config_digest=config_digest)
+
+
+def _with_native_found_prepared_semantic(witness: FoundPreparedSourceReceipt,
+                                        config_fd: int, *, config_digest: str,
+                                        continue_locked=None):
     """Read bound Found source and old native owner under original FD9/FD4/P2.
 
     The original PHP Config owner supplies its current whole-model digest
     while retaining the inherited FD4. Do NOT invoke ordinary PHP preflight
-    again from this child. No stage/bind, new journal, Config/P1 write or
-    lifecycle action. Even a reload candidate needs final original-owner
-    proof, including the commit/rollback and live mutable-reference contract.
-    STOPPED is observational only, not full retired-epoch qualification.
+    again from this child. This comparison itself does not stage/bind,
+    create a journal, save Config or change P1/runtime. Even a reload
+    candidate needs the separate original commit/rollback contract.
+    A running pinned Auto predecessor also needs its original immutable
+    epoch. STOPPED remains observational, not full retired-epoch proof.
+    Never acquire the queue lock after Config FD4. The private original
+    file writer may continue inside this same P2 scope after all checks;
+    the public comparison never supplies that continuation.
     """
+    from auto_detect_owner import attest_prepared_found_learning_predecessor
     from auto_detect_destination_commit import (
         _native_found_wal_context, _qualified_shared_found_batch,
         exclusive_destination_lock)
@@ -1144,9 +1214,22 @@ def native_plan_found_prepared_fd9(witness: FoundPreparedSourceReceipt,
                 WORK / prior["id"] / "release", owner_uid=0,
                 child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
                 if observed["state"] == "ready" else None)
+            epoch_sha = None
+            if (old_pin is not None and old_pin["schema"] == 2 and
+                    observed["state"] == "ready"):
+                learning, epoch_sha = attest_prepared_found_learning_predecessor(
+                    before, config_fd)
+                if (learning.operation_id != prior["id"] or
+                        learning.generation != prior["id"] or
+                        learning.owner_candidate_sha256 != prior["candidate"] or
+                        (learning.owner.pid, learning.owner.started) !=
+                        (runtime.pid, runtime.started) or
+                        type(epoch_sha) is not str or
+                        not re.fullmatch(r"[a-f0-9]{64}", epoch_sha)):
+                    raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_EPOCH_CHANGED")
             if store.read() != before or attest() is not True:
                 raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_OWNER_CHANGED")
-            return root, old, candidate, observed, tree, runtime
+            return root, old, candidate, observed, tree, runtime, epoch_sha
 
         with exclusive_destination_lock(AUTO_LOCK, 0):
             first = observe_locked()
@@ -1154,14 +1237,20 @@ def native_plan_found_prepared_fd9(witness: FoundPreparedSourceReceipt,
                     _s10_native_bound_engine_readback() != engine or
                     store.read() != before or attest() is not True):
                 raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_OBSERVATION_CHANGED")
-            _, old, candidate, observed, _, _ = first
+            _, old, candidate, observed, _, _, epoch_sha = first
             decision = _found_effective_decision(old, candidate, changed_sources)
-            return FoundSemanticReceipt(
+            receipt = FoundSemanticReceipt(
                 generation, prior["id"], pin["root_sha256"],
                 None if old_pin is None else old_pin["root_sha256"],
                 plan_sha, observed["state"], source.requested_enabled, decision,
                 observed["state"] == "ready" and source.requested_enabled and
-                decision.kind == "RELOAD_SAFE_CANDIDATE")
+                decision.kind == "RELOAD_SAFE_CANDIDATE",
+                previous_running_epoch_sha256=epoch_sha)
+            if continue_locked is None:
+                return receipt
+            if not callable(continue_locked):
+                raise OriginalSourceGateRefused("S10_FOUND_CONTINUATION_INVALID")
+            return continue_locked(receipt, store, before, raw, rows, targets, attest)
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_FOUND_SEMANTIC_REFUSED") from None
 
@@ -1180,6 +1269,33 @@ class OriginalSemanticReceipt:
     physical_transition_allowed: bool = False
     promotion_allowed: bool = False
     final_original_fd9_reattest_required: bool = True
+
+
+def _ordinary_effective_decision(old, candidate) -> EffectiveDecision:
+    """S08d proposal plus original ordinary Apply's multi-list safety fence.
+
+    No atomic multi-file active update has been proved for this path. An
+    active list change together with any other managed list change must
+    therefore be classified before mutation, not upgraded to Restart
+    after a failed Reload. Inactive-only edits remain SAVE_ONLY.
+    """
+    if old is None:
+        return EffectiveDecision("RESTART_REQUIRED", (), ())
+    decision = plan(old[0], candidate[0])
+    if (decision.kind == "RELOAD_SAFE_CANDIDATE" and
+            len(decision.changed_active) + len(decision.changed_inactive) > 1):
+        return EffectiveDecision("RESTART_REQUIRED", decision.changed_active,
+                                 decision.changed_inactive)
+    return decision
+
+
+def _running_lifecycle_proposal(enabled: bool, decision: EffectiveDecision) -> str:
+    return ("STOP" if enabled is False else {
+        "NO_CHANGE": "NO_CHANGE",
+        "SAVE_ONLY": "SAVE_ONLY",
+        "RELOAD_SAFE_CANDIDATE": "RELOAD",
+        "RESTART_REQUIRED": "RESTART",
+    }[decision.kind])
 
 
 def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSemanticReceipt:
@@ -1296,7 +1412,15 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
                      (type(physical.previous_release_sha256) is not str or
                       physical.retirement_state not in (
                           "original-epoch-ack-retired",
-                          "inert-no-producer-data"))) or
+                          "inert-no-producer-data",
+                          "inert-idle-producer") or
+                      (physical.retirement_state == "inert-idle-producer" and
+                       (type(physical.idle_producer) is not tuple or
+                        len(physical.idle_producer) != 2 or
+                        any(type(row) is not tuple or len(row) != 4
+                            for row in physical.idle_producer))) or
+                      (physical.retirement_state == "inert-no-producer-data" and
+                       physical.idle_producer is not None))) or
                     physical.kernel_state not in (
                         "native-kernel-absent", "native-managed-kernel-empty") or
                     physical.config_base_sha256 != before["detail"]["base"] or
@@ -1310,16 +1434,10 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
             lifecycle = ("START" if source.requested_enabled else "SAVE_ONLY")
         # S08d remains the ONE pure structural classifier. Old unpinned
         # and true cold have no equality evidence, hence structural RESTART.
-        decision = (EffectiveDecision("RESTART_REQUIRED", (), ())
-                    if old is None else plan(old[0], candidate[0]))
+        decision = _ordinary_effective_decision(old, candidate)
         if lifecycle is None:
             # Physical state (RUNNING) dominates OFF even if equal S08d.
-            lifecycle = ("STOP" if source.requested_enabled is False else {
-                "NO_CHANGE": "NO_CHANGE",
-                "SAVE_ONLY": "SAVE_ONLY",
-                "RELOAD_SAFE_CANDIDATE": "RELOAD",
-                "RESTART_REQUIRED": "RESTART",
-            }[decision.kind])
+            lifecycle = _running_lifecycle_proposal(source.requested_enabled, decision)
         if (candidate != _read_pinned_effective(
                 detail=before["detail"], binding=current_pin, **read) or
                 (old is not None and old != _read_pinned_effective(
@@ -1336,8 +1454,892 @@ def native_plan_original_prepared_fd9(source: SourceGateReceipt) -> OriginalSema
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         raise OriginalSourceGateRefused("S10_SEMANTIC_PREPARED_REFUSED") from None
 
+def _managed_change_preimages(old: EffectiveSnapshot, candidate: EffectiveSnapshot,
+                              decision: EffectiveDecision, *, previous_release: Path,
+                              candidate_release: Path, active: Path, owner_uid: int) -> tuple:
+    """Read exact changed managed bytes and CAS identities, never replace them.
+
+    Only same-structure no-restart proposals qualify. The sealed old bytes
+    must equal the live old bytes; the sealed candidate must match S08d.
+    Return in-flight evidence, not a durable intent or a Reload permit.
+    """
+    from auto_detect_destination_commit import _target, _target_identity
+
+    if (decision != _ordinary_effective_decision((old, True), (candidate, True)) or
+            decision.kind not in ("NO_CHANGE", "SAVE_ONLY", "RELOAD_SAFE_CANDIDATE")):
+        raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_DECISION_INVALID")
+    old_hashes = dict(old.linked + old.unlinked)
+    new_hashes = dict(candidate.linked + candidate.unlinked)
+    names = tuple(sorted(decision.changed_active + decision.changed_inactive))
+    if (set(old_hashes) != set(new_hashes) or len(names) != len(set(names)) or
+            names != tuple(sorted(name for name in old_hashes
+                                  if old_hashes[name] != new_hashes[name]))):
+        raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_SCOPE_INVALID")
+    if not names:
+        return ()
+    roots = (previous_release, candidate_release, active)
+    if len(set(roots)) != 3:
+        raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_ROOT_ALIAS")
+    for root in roots:
+        _stat(root, owner_uid, directory=True)
+        _stat(root / "managed", owner_uid, directory=True)
+
+    def read(root, name, expected):
+        data, info = _target(root / "managed" / name, owner_uid)
+        if hashlib.sha256(data).hexdigest() != expected:
+            raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_BYTES_CHANGED")
+        return data, _target_identity(info)
+
+    rows = []
+    for name in names:
+        if re.fullmatch(r"(?:hostlist|ipset)-[a-z][a-z0-9-]{0,63}\.txt", name) is None:
+            raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_LOCATOR_INVALID")
+        former, former_id = read(previous_release, name, old_hashes[name])
+        wanted, wanted_id = read(candidate_release, name, new_hashes[name])
+        current, current_id = read(active, name, old_hashes[name])
+        if former != current or former == wanted or len({former_id[:2], wanted_id[:2], current_id[:2]}) != 3:
+            raise OriginalSourceGateRefused("S10_MANAGED_PREIMAGE_ALIAS_OR_DRIFT")
+        rows.append((name, old_hashes[name], new_hashes[name], former_id, wanted_id, current_id))
+    return tuple(rows)
+
+
+def native_recheck_running_prepared_fd9(
+        operation: str, raw_pipe: bytes, *, source: SourceGateReceipt,
+        semantic: OriginalSemanticReceipt, config_fd: int, config_digest: str):
+    """Join the ordinary PREPARED proposal to the original locked native owner.
+
+    The original coordinator must obtain source/semantic before Config lock,
+    then supply the same original input and the actual locked Config digest.
+    No nested PHP preflight, no P2a acquisition, no WAL advance or signal.
+    This is not a Reload permit: observe exact managed-list CAS preimages
+    and executable/argv, but mutation-bound CAS, atomic promotion and
+    recovery still belong to the original transaction coordinator.
+    """
+    from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
+    from shared_apply_seal import WORK
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_schema3_previous_physical import (
+        CompletePriorPreimage, LockedRunningPredecessor,
+        attest_bound_running_predecessor_under_fd9, _running_executable_identity,
+        _running_native, CHILD_EXEC, CHILD_PID, MONITOR_PID, COMMON_ACTIVE)
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(operation) is not str or not _ID.fullmatch(operation) or
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+                type(config_digest) is not str or not re.fullmatch(r"[a-f0-9]{64}", config_digest) or
+                type(source) is not SourceGateReceipt or source.generation != operation or
+                type(source.requested_enabled) is not bool or
+                type(semantic) is not OriginalSemanticReceipt or semantic.generation != operation or
+                type(semantic.previous_physical) is not CompletePriorPreimage or
+                semantic.status != "ORIGINAL_PREPARED_SEMANTIC_PROPOSAL_ONLY" or
+                semantic.authorization != "NONE" or semantic.physical_transition_allowed or
+                semantic.promotion_allowed or semantic.final_original_fd9_reattest_required is not True):
+            raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_SCOPE_REQUIRED")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        before = store.read()
+        if (type(before) is not dict or before.get("phase") != "prepared" or
+                "found" in before or type(before.get("manifest")) is not dict or
+                type(before.get("previous_manifest")) is not dict or
+                type(before.get("previous")) is not dict):
+            raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_BOUND_REQUIRED")
+        detail, prior = before["detail"], before["previous"]
+        pin, old_pin = before["manifest"], before["previous_manifest"]
+        if (detail["id"] != operation or prior["id"] == operation or
+                detail["base"] != config_digest or prior["candidate"] != config_digest or
+                semantic.previous_generation != prior["id"] or
+                semantic.candidate_root_sha256 != pin["root_sha256"] or
+                semantic.previous_root_sha256 != old_pin["root_sha256"] or
+                source.original_seal_sha256 != pin["seal_sha256"]):
+            raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_IDENTITY_CHANGED")
+        inputs = decode_pipe(raw_pipe)
+        digest = detail["candidate"] if inputs["mode"] == b"auto" else None
+
+        def observe():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != before:
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_JOURNAL_CHANGED")
+            engine = _s10_native_bound_engine_readback()
+            fresh = native_original_bound_effective_fd9(
+                operation, raw_pipe, digest, bound_record=before)
+            if fresh != source:
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_SOURCE_CHANGED")
+            read = dict(parent=WORK, sources=Path(__file__).parent, owner_uid=0,
+                        engine_version=engine["engine_version"])
+            candidate = _read_pinned_effective(detail=detail, binding=pin, **read)
+            old = _read_pinned_effective(detail=prior, binding=old_pin, **read)
+            if candidate != (fresh.effective, fresh.requested_enabled) or old[1] is not True:
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_EFFECTIVE_CHANGED")
+            decision = _ordinary_effective_decision(old, candidate)
+            if (decision != semantic.decision or
+                    _running_lifecycle_proposal(fresh.requested_enabled, decision) != semantic.lifecycle_proposal):
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_DECISION_CHANGED")
+            physical = attest_bound_running_predecessor_under_fd9(
+                before, preimage=semantic.previous_physical,
+                config_fd=config_fd, config_digest=config_digest)
+            if (type(physical) is not LockedRunningPredecessor or
+                    physical.generation != operation or physical.previous_generation != prior["id"] or
+                    physical.previous_root_sha256 != old_pin["root_sha256"] or
+                    physical.config_base_sha256 != config_digest or
+                    physical.authorization != "NONE" or physical.physical_transition_allowed or
+                    physical.executable_identity is not None or
+                    physical.managed_preimages is not None):
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_PHYSICAL_CHANGED")
+            executable = _running_executable_identity(
+                physical.running.pid, engine["engine_sha256"],
+                executable=Path(CHILD_EXEC), runner=subprocess.run)
+            managed = None
+            if fresh.requested_enabled and decision.kind in (
+                    "NO_CHANGE", "SAVE_ONLY", "RELOAD_SAFE_CANDIDATE"):
+                managed = _managed_change_preimages(
+                    old[0], candidate[0], decision,
+                    previous_release=WORK / prior["id"] / "release",
+                    candidate_release=WORK / detail["id"] / "release",
+                    active=COMMON_ACTIVE, owner_uid=0)
+            # Bracket TEXT and list observation with original PID/birth/argv census,
+            # and original installed-engine guard, not a second provenance.
+            if (_running_native(WORK / prior["id"] / "release", owner_uid=0,
+                                child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+                    != physical.running or engine != _s10_native_bound_engine_readback() or
+                    store.read() != before):
+                raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_EXECUTABLE_CHANGED")
+            physical = replace(physical, executable_identity=executable,
+                               managed_preimages=managed)
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            return fresh, candidate, old, decision, physical, engine
+
+        first = observe()
+        if observe() != first or store.read() != before:
+            raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_WITNESS_CHANGED")
+        # In-flight observation only. A caller must not manufacture an
+        # ACTIVATING or terminal record from this return value.
+        return first[4]
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError, AttributeError,
+            subprocess.SubprocessError):
+        raise OriginalSourceGateRefused("S10_LOCKED_RUNNING_PRECHECK_REFUSED") from None
+
+
+def _managed_running_digest(running, executable: tuple) -> str:
+    from dataclasses import astuple
+
+    return hashlib.sha256(json.dumps((astuple(running), executable),
+                                     separators=(",", ":")).encode("ascii")).hexdigest()
+
+
+def _native_managed_running_digest(prior_release: Path, config_fd: int) -> str:
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_schema3_previous_physical import (
+        _running_native, _running_executable_identity, CHILD_EXEC, CHILD_PID, MONITOR_PID,
+    )
+    from voice_firewall_transaction import verify_prior_state
+    from voice_ipfw_adapter import (
+        require_lifecycle_lock, FreeBSDIPFWAdapter, shared_release_manifest,
+    )
+
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    observed = _running_native(prior_release, owner_uid=0,
+                               child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+    engine = _s10_native_bound_engine_readback()
+    executable = _running_executable_identity(observed.pid, engine["engine_sha256"],
+                                               executable=Path(CHILD_EXEC), runner=subprocess.run)
+    capture = shared_release_manifest(prior_release)
+    if capture["rule_base"] != 19000 or capture["rule_max"] not in (19010, 19099):
+        raise OriginalSourceGateRefused("S10_MANAGED_KERNEL_SCOPE_INVALID")
+    verify_prior_state(FreeBSDIPFWAdapter(19000, 19099), capture, capture)
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return _managed_running_digest(observed, executable)
+
+
+def native_write_running_managed_file_fd9(
+        operation: str, raw_pipe: bytes, *, source: SourceGateReceipt,
+        semantic: OriginalSemanticReceipt, config_fd: int, config_digest: str) -> dict:
+    """Stage and replace one referenced list under the original three locks."""
+    from auto_detect_destination_commit import (
+        exclusive_destination_lock, _write_bound_managed_file_locked,
+        _restore_bound_managed_file_locked)
+    from auto_detect_gui_hostlist import AUTO_LOCK
+    from neutral_schema3_previous_physical import COMMON_ACTIVE
+    from shared_apply_operation import SharedApplyOperation, MANAGED_WRITING
+    from shared_apply_seal import WORK
+
+    physical = native_recheck_running_prepared_fd9(
+        operation, raw_pipe, source=source, semantic=semantic,
+        config_fd=config_fd, config_digest=config_digest)
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "prepared" or "found" in record or
+            record["detail"]["id"] != physical.generation or
+            record["detail"]["base"] != physical.config_base_sha256 or
+            physical.config_base_sha256 != config_digest or
+            record["manifest"]["root_sha256"] != semantic.candidate_root_sha256 or
+            record["previous"]["id"] != physical.previous_generation or
+            record["previous_manifest"]["root_sha256"] != physical.previous_root_sha256 or
+            record["manifest"]["schema"] != 1 or record["previous_manifest"]["schema"] != 1 or
+            physical.epoch_sha256 is not None or physical.executable_identity is None or
+            semantic.lifecycle_proposal != "RELOAD" or semantic.decision.kind != "RELOAD_SAFE_CANDIDATE" or
+            semantic.decision.changed_inactive or len(semantic.decision.changed_active) != 1 or
+            not physical.managed_preimages or len(physical.managed_preimages) != 1 or
+            physical.managed_preimages[0][0] != semantic.decision.changed_active[0]):
+        raise OriginalSourceGateRefused("S10_MANAGED_SINGLE_ACTIVE_SCOPE_REQUIRED")
+    prior_release = WORK / physical.previous_generation / "release"
+    running_sha256 = _managed_running_digest(physical.running, physical.executable_identity)
+
+    def attest():
+        return _native_managed_running_digest(prior_release, config_fd) == running_sha256
+
+    with exclusive_destination_lock(AUTO_LOCK, 0):
+        try:
+            return _write_bound_managed_file_locked(
+                store, record, physical.managed_preimages[0], parent=WORK,
+                active=COMMON_ACTIVE, attest=attest, running_sha256=running_sha256)
+        except (OSError, ValueError, RuntimeError):
+            pending = store.read()
+            if (pending is not None and pending["phase"] == MANAGED_WRITING and
+                    all(pending.get(key) == value for key, value in record.items()
+                        if key != "phase")):
+                try:
+                    _restore_bound_managed_file_locked(store, pending, parent=WORK,
+                                                       active=COMMON_ACTIVE, attest=attest)
+                except (OSError, ValueError, RuntimeError):
+                    raise OriginalSourceGateRefused("S10_MANAGED_RESTORE_UNCERTAIN") from None
+            raise
+
+
+def _managed_handoff_json(value) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=True, allow_nan=False).encode("ascii")
+
+
+def _managed_handoff_digest(value) -> str:
+    from dataclasses import asdict
+    return hashlib.sha256(_managed_handoff_json(asdict(value))).hexdigest()
+
+
+def _managed_handoff_scope(record, operation: str) -> dict:
+    if (type(record) is not dict or record.get("phase") != "prepared" or
+            "found" in record or record.get("manifest", {}).get("schema") != 1 or
+            record.get("previous_manifest", {}).get("schema") != 1 or
+            record["detail"]["id"] != operation or
+            record["detail"]["page"] != "strategies" or
+            record["detail"]["base"] == record["detail"]["candidate"] or
+            not record["detail"]["changed_fields"] or
+            record["previous"]["candidate"] != record["detail"]["base"]):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_SCOPE_REQUIRED")
+    return record["detail"]
+
+
+def _managed_handoff_wire(source: SourceGateReceipt, semantic: OriginalSemanticReceipt,
+                          raw_pipe: bytes) -> bytes:
+    from dataclasses import asdict
+    from neutral_schema3_previous_physical import CompletePriorPreimage
+
+    if (type(source) is not SourceGateReceipt or type(semantic) is not OriginalSemanticReceipt or
+            type(semantic.previous_physical) is not CompletePriorPreimage or
+            semantic.lifecycle_proposal != "RELOAD" or
+            semantic.decision.kind != "RELOAD_SAFE_CANDIDATE" or
+            len(semantic.decision.changed_active) != 1 or semantic.decision.changed_inactive or
+            source.requested_enabled is not True or source.generation != semantic.generation or
+            type(raw_pipe) is not bytes or len(raw_pipe) > MAX_PIPE):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_PROPOSAL_REQUIRED")
+    header = _managed_handoff_json({"source": _managed_handoff_digest(source),
+        "semantic": _managed_handoff_digest(semantic),
+        "physical": asdict(semantic.previous_physical)})
+    if len(header) > 8192:
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_HEADER_TOO_LARGE")
+    return header + b"\n" + raw_pipe
+
+
+def native_write_managed_handoff_locked(operation: str, witness: str, stream, *, config_fd: int) -> dict:
+    """Private stdin from original FD9 parent, re-attested under native FD4.
+
+    The transport carries observations only, never a phase grant. Rebuild
+    the typed source and decision from the original pinned seal, and reuse
+    the complete existing locked physical/CAS writer. No nested PHP call.
+    """
+    from dataclasses import asdict
+    from neutral_schema3_previous_physical import CompletePriorPreimage
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import SharedApplyOperation, _config_save_witness
+    from shared_apply_seal import WORK
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    detail = _managed_handoff_scope(before, operation)
+    if witness != _config_save_witness(detail, verify_seal(WORK / operation, owner=0)["sha256"]["plan.json"]):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_CONFIG_CHANGED")
+    line = stream.readline(8194)
+    if not line.endswith(b"\n") or len(line) > 8193:
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_HEADER_INVALID")
+    header = json.loads(line)
+    if (type(header) is not dict or set(header) != {"source", "semantic", "physical"} or
+            _managed_handoff_json(header) + b"\n" != line or
+            any(type(header[k]) is not str or not re.fullmatch(r"[a-f0-9]{64}", header[k])
+                for k in ("source", "semantic")) or type(header["physical"]) is not dict):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_HEADER_INVALID")
+    data = header["physical"]
+    fields = ("generation", "root_sha256", "previous_generation", "old_release_sha256",
+              "active_release_sha256", "saved_config_base_sha256", "resolved_wan_device",
+              "prior_pid", "prior_birth", "supervisor_pid", "supervisor_birth",
+              "original_kernel_argv_sha256")
+    physical = CompletePriorPreimage(**{key: data[key] for key in fields})
+    if (_managed_handoff_json(asdict(physical)) != _managed_handoff_json(data) or
+            any(type(data[k]) is not int or data[k] <= 0 for k in ("prior_pid", "supervisor_pid")) or
+            any(type(data[k]) is not str or not 0 < len(data[k]) <= 256 for k in fields
+                if k not in ("prior_pid", "supervisor_pid"))):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_PHYSICAL_INVALID")
+    raw = stream.read(MAX_PIPE + 1)
+    if len(raw) > MAX_PIPE or decode_pipe(raw)["mode"] not in (b"all", b"list"):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_SOURCE_INVALID")
+    source = native_original_bound_effective_fd9(operation, raw, bound_record=before)
+    if _managed_handoff_digest(source) != header["source"]:
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_SOURCE_CHANGED")
+    pin, old_pin = before["manifest"], before["previous_manifest"]
+    engine = _s10_native_bound_engine_readback()
+    read = dict(parent=WORK, sources=Path(__file__).parent, owner_uid=0,
+                engine_version=engine["engine_version"])
+    old = _read_pinned_effective(detail=before["previous"], binding=old_pin, **read)
+    candidate = _read_pinned_effective(detail=detail, binding=pin, **read)
+    decision = _ordinary_effective_decision(old, candidate)
+    semantic = OriginalSemanticReceipt(operation, before["previous"]["id"],
+        pin["root_sha256"], old_pin["root_sha256"], decision, physical,
+        lifecycle_proposal=_running_lifecycle_proposal(source.requested_enabled, decision))
+    if (_managed_handoff_digest(semantic) != header["semantic"] or
+            _managed_handoff_wire(source, semantic, raw) != line + raw or store.read() != before):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_SEMANTIC_CHANGED")
+    return native_write_running_managed_file_fd9(operation, raw, source=source,
+        semantic=semantic, config_fd=config_fd, config_digest=detail["base"])
+
+
+def native_run_managed_apply_fd9(operation: str, raw_pipe: bytes, *,
+                                 source: SourceGateReceipt, semantic: OriginalSemanticReceipt) -> dict:
+    """Original prepared owner -> existing PHP writer -> exact terminal WAL.
+
+    Private coordinator only; the public Apply switch is still gated on
+    integrated first-bound promotion/recovery. Never retry an uncertain save.
+    """
+    from neutral_schema3_quiescent_preimage import _run_bound_restore_joined
+    from shared_apply_operation import SharedApplyOperation
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    detail = _managed_handoff_scope(before, operation)
+    wire = _managed_handoff_wire(source, semantic, raw_pipe)
+    if (source.generation != operation or semantic.candidate_root_sha256 != before["manifest"]["root_sha256"] or
+            semantic.previous_root_sha256 != before["previous_manifest"]["root_sha256"] or
+            store.read() != before):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_OWNER_CHANGED")
+    command = ["/usr/local/bin/php", str(Path(__file__).parent.parent / "shared_apply_config.php"),
+               "managed-apply", operation, "strategies"]
+    reply = _run_bound_restore_joined(command, budget=90, capture_output=True,
+                                      pass_fds=(9,), input_data=wire)
+    expected = {**before, "phase": "committed"}
+    receipt = {"result": "saved", "saved": True, "applied": False,
+               "snapshot": detail["candidate"], "change_count": len(detail["changed_fields"])}
+    require_lifecycle_lock()
+    if (reply.returncode != 0 or not 0 < len(reply.stdout) <= 16384 or
+            _managed_handoff_json(json.loads(reply.stdout)) != _managed_handoff_json(receipt) or
+            store.read() != expected):
+        raise OriginalSourceGateRefused("S10_MANAGED_HANDOFF_OUTCOME_UNCERTAIN")
+    return expected
+
+
+def native_checkpoint_managed_config_fd9(operation: str, witness_sha256: str, *,
+                                         config_fd: int, saved: bool) -> dict:
+    """Original PHP owner: durable intent before save, exact commit after relock."""
+    from auto_detect_destination_commit import (
+        exclusive_destination_lock, _attest_bound_managed_installed_locked,
+    )
+    from auto_detect_gui_hostlist import AUTO_LOCK
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_schema3_previous_physical import COMMON_ACTIVE
+    from shared_apply_operation import (
+        SharedApplyOperation, MANAGED_WRITING, MANAGED_CONFIG_SAVING, DIGEST, _config_save_witness,
+    )
+    from shared_apply_seal import WORK, verify_seal
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation) or
+            type(witness_sha256) is not str or not DIGEST.fullmatch(witness_sha256) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9 or type(saved) is not bool):
+        raise OriginalSourceGateRefused("S10_MANAGED_CONFIG_NATIVE_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    phase = MANAGED_CONFIG_SAVING if saved else MANAGED_WRITING
+    if (record is None or record["phase"] != phase or record["detail"]["id"] != operation or
+            not {"running_sha256", "installed"} <= record["managed"].keys() or
+            "restore" in record["managed"]):
+        raise OriginalSourceGateRefused("S10_MANAGED_CONFIG_OWNER_REQUIRED")
+    prior_release = WORK / record["previous"]["id"] / "release"
+
+    def attest():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        seal = verify_seal(WORK / operation, owner=0)
+        if _config_save_witness(record["detail"], seal["sha256"]["plan.json"]) != witness_sha256:
+            raise OriginalSourceGateRefused("S10_MANAGED_CONFIG_PLAN_CHANGED")
+        _attest_bound_managed_installed_locked(store, record, parent=WORK, active=COMMON_ACTIVE)
+        if saved:
+            os.fsync(config_fd)
+        return _native_managed_running_digest(prior_release, config_fd) == record["managed"]["running_sha256"]
+
+    with exclusive_destination_lock(AUTO_LOCK, 0):
+        return store._checkpoint_managed_config(record, saved=saved, attest=attest,
+                                                shared_work_parent=WORK)
+
+
+def native_begin_quiescent_bound_promotion_fd9(
+        operation: str, raw_pipe: bytes) -> tuple[dict, "QuiescentPreimage"]:
+    """Durable first ordinary bound checkpoint, under the existing FD9.
+
+    Internal coordinator only: no new command or lifecycle action. A
+    running predecessor (including one requiring retirement) is refused
+    here. Both passes derive source and the native quiescent proof from
+    the original readers, not a caller-supplied semantic receipt. Retain
+    the exact preimage alongside the resulting record in the SAME in-flight
+    FD9 coordinator; never reconstruct it after an interrupted promotion.
+    The original physical coordinator must still implement final pre-action
+    reattestation, actual promotion and recovery before calling this.
+    """
+    from shared_apply_operation import SharedApplyOperation
+    from neutral_schema3_quiescent_preimage import QuiescentPreimage
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation)):
+        raise OriginalSourceGateRefused("NATIVE_ORIGINAL_FD9_REQUIRED")
+    try:
+        require_lifecycle_lock()
+        inputs = decode_pipe(raw_pipe)
+        store = SharedApplyOperation(owner=0)
+        before = store.read()
+        if (type(before) is not dict or before["phase"] != "prepared" or
+                "found" in before or "manifest" not in before or
+                before["detail"]["id"] != operation):
+            raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_PREPARED_REQUIRED")
+        digest = before["detail"]["candidate"] if inputs["mode"] == b"auto" else None
+
+        def observe():
+            if store.read() != before:
+                raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_OWNER_CHANGED")
+            source = native_original_bound_effective_fd9(
+                operation, raw_pipe, digest, bound_record=before)
+            semantic = native_plan_original_prepared_fd9(source)
+            if (type(semantic) is not OriginalSemanticReceipt or
+                    type(semantic.previous_physical) is not QuiescentPreimage or
+                    semantic.generation != operation or
+                    semantic.candidate_root_sha256 != before["manifest"]["root_sha256"] or
+                    semantic.lifecycle_proposal != ("START" if source.requested_enabled
+                                                   else "SAVE_ONLY") or
+                    semantic.previous_physical.old_state not in (
+                        "first-install-empty", "committed-stopped") or
+                    semantic.authorization != "NONE" or
+                    semantic.physical_transition_allowed or semantic.promotion_allowed or
+                    store.read() != before):
+                raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_QUIESCENT_REQUIRED")
+            return source, semantic
+
+        first = observe()
+        record = store._advance_bound_ordinary(
+            "activating", before, lambda: observe() == first)
+        return record, first[1].previous_physical
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError):
+        raise OriginalSourceGateRefused("S10_BOUND_PROMOTION_PRECHECK_REFUSED") from None
+
+
+def native_run_first_enabled_apply_fd9(operation: str, raw_pipe: bytes, *,
+                                       source: SourceGateReceipt,
+                                       semantic: OriginalSemanticReceipt) -> dict:
+    """Private first enabled Start with the original FD9/P2a/PHP Config owner."""
+    from dataclasses import asdict
+    from neutral_schema3_quiescent_preimage import (
+        QuiescentPreimage, _run_bound_restore_joined)
+    from shared_apply_operation import SharedApplyOperation, DIGEST
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    if (type(before) is not dict or before.get("phase") != "prepared" or
+            before["detail"]["id"] != operation or "previous" in before or
+            "previous_manifest" in before or "found" in before or
+            before.get("manifest", {}).get("schema") not in (1, 2) or
+            before["detail"]["base"] == before["detail"]["candidate"] or
+            not before["detail"]["changed_fields"] or
+            type(source) is not SourceGateReceipt or source.generation != operation or
+            source.mode not in ("all", "list", "auto") or source.requested_enabled is not True or
+            before["manifest"]["schema"] != (2 if source.mode == "auto" else 1) or
+            source.original_seal_sha256 != before["manifest"]["seal_sha256"] or
+            type(semantic) is not OriginalSemanticReceipt or
+            type(semantic.previous_physical) is not QuiescentPreimage or
+            semantic.previous_physical.old_state != "first-install-empty" or
+            not semantic.previous_physical.verified_wan_device or
+            semantic.previous_generation is not None or
+            semantic.lifecycle_proposal != "START" or
+            semantic.candidate_root_sha256 != before["manifest"]["root_sha256"] or
+            semantic.authorization != "NONE" or semantic.physical_transition_allowed or
+            semantic.promotion_allowed or not semantic.final_original_fd9_reattest_required or
+            store.read() != before):
+        raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_SCOPE_REQUIRED")
+    activating, physical = native_begin_quiescent_bound_promotion_fd9(operation, raw_pipe)
+    if (physical != semantic.previous_physical or
+            activating != {**before, "phase": "activating"} or store.read() != activating):
+        raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_PREIMAGE_CHANGED")
+    wire = (json.dumps(asdict(physical), sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=True, allow_nan=False) + "\n").encode("ascii")
+    if len(wire) > 4096:
+        raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_WIRE_TOO_LARGE")
+    command = ["/usr/local/bin/php", str(Path(__file__).parent.parent / "shared_apply_config.php"),
+               "first-enabled-apply", operation, before["detail"]["page"]]
+    learning = before["manifest"]["schema"] == 2
+    if learning:
+        from auto_detect_post_drop import (_learning_release_sources, _qualified_learning_sources,
+            native_prepare_learning_producer, _original_epoch_queue, _capture,
+            _learning_pretraffic_owner)
+        from auto_detect_storage import ROOT, ENGINE_USER
+        from neutral_schema3_quiescent_preimage import _safe_empty_directory, EPOCH_ROOT
+        import pwd
+        from shared_apply_seal import WORK
+        from neutral_root_stage import verify_original_operation_pins
+        work = WORK / operation
+        release = work / "release"
+        workspace, candidate, sources = _learning_release_sources(release)
+        if (workspace != work or candidate != before["detail"]["candidate"] or
+                store.read() != activating):
+            raise OriginalSourceGateRefused("S10_FIRST_LEARNING_SOURCE_CHANGED")
+        verify_original_operation_pins(record=activating, parent=WORK, owner_uid=0)
+        _safe_empty_directory(ROOT, 0)
+        _safe_empty_directory(EPOCH_ROOT, 0)
+        # Durable ACTIVATING precedes producer creation; no Config lock yet.
+        native_prepare_learning_producer(release)
+        _, names = _qualified_learning_sources(sources, ROOT)
+        queue, _ = _original_epoch_queue(names)
+        identity = pwd.getpwnam(ENGINE_USER)
+        # The first lock may need creation. Keep the one real OFD held
+        # continuously across the joined PHP/physical/confirmation children.
+        with queue.exclusive():
+            fd = queue.locked_fd
+            if (_learning_pretraffic_owner(work, candidate, fd) != activating or
+                    _learning_release_sources(release) != (workspace, candidate, sources)):
+                raise OriginalSourceGateRefused("S10_FIRST_LEARNING_QUEUE_OWNER_CHANGED")
+            _capture(ROOT, root_uid=0, root_gid=0, engine_uid=identity.pw_uid,
+                     engine_gid=identity.pw_gid, learning_names=names, queue_fd=fd)
+            _safe_empty_directory(EPOCH_ROOT, 0)
+            reply = _run_bound_restore_joined(command + [f"--queue-fd={fd}"],
+                pass_fds=(9, fd), budget=120, capture_output=True, input_data=wire)
+    else:
+        reply = _run_bound_restore_joined(command, pass_fds=(9,), budget=120,
+                                          capture_output=True, input_data=wire)
+    receipt = {"result": "saved", "saved": True, "applied": False,
+               "snapshot": before["detail"]["candidate"],
+               "change_count": len(before["detail"]["changed_fields"])}
+    require_lifecycle_lock()
+    committed = {**activating, "phase": "committed"}
+    saved = store.read()
+    pins = {"first_running_sha256", "first_pretraffic_sha256"} if learning else {"first_running_sha256"}
+    if (reply.returncode != 0 or type(reply.stdout) is not bytes or
+            not 0 < len(reply.stdout) <= 4096 or reply.stdout.count(b"\n") != 1 or
+            not reply.stdout.endswith(b"\n") or
+            _managed_handoff_json(json.loads(reply.stdout)) != _managed_handoff_json(receipt) or
+            type(saved) is not dict or
+            {k: v for k, v in saved.items() if k not in pins} != committed or
+            any(type(saved.get(pin)) is not str or not DIGEST.fullmatch(saved[pin])
+                for pin in pins)):
+        raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN")
+    return saved
+
+
+def native_run_first_disabled_apply_fd9(operation: str, raw_pipe: bytes, *,
+                                        source: SourceGateReceipt,
+                                        semantic: OriginalSemanticReceipt) -> dict:
+    """Private original FD9 coordinator; Config writer remains original PHP."""
+    from dataclasses import asdict
+    from neutral_schema3_quiescent_preimage import (
+        QuiescentPreimage, _run_bound_restore_joined)
+    from shared_apply_operation import SharedApplyOperation
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    if (type(before) is not dict or before.get("phase") != "prepared" or
+            before["detail"]["id"] != operation or "previous" in before or
+            "previous_manifest" in before or "found" in before or
+            before.get("manifest", {}).get("schema") != 1 or
+            before["detail"]["base"] == before["detail"]["candidate"] or
+            not before["detail"]["changed_fields"] or
+            type(source) is not SourceGateReceipt or source.generation != operation or
+            source.mode not in ("all", "list") or source.requested_enabled is not False or
+            source.original_seal_sha256 != before["manifest"]["seal_sha256"] or
+            type(semantic) is not OriginalSemanticReceipt or
+            type(semantic.previous_physical) is not QuiescentPreimage or
+            semantic.previous_physical.old_state != "first-install-empty" or
+            semantic.previous_generation is not None or
+            semantic.lifecycle_proposal != "SAVE_ONLY" or
+            semantic.candidate_root_sha256 != before["manifest"]["root_sha256"] or
+            semantic.authorization != "NONE" or semantic.physical_transition_allowed or
+            semantic.promotion_allowed or not semantic.final_original_fd9_reattest_required or
+            store.read() != before):
+        raise OriginalSourceGateRefused("S10_FIRST_DISABLED_APPLY_SCOPE_REQUIRED")
+    activated, physical = native_begin_quiescent_bound_promotion_fd9(operation, raw_pipe)
+    if (physical != semantic.previous_physical or
+            activated != {**before, "phase": "activating"} or store.read() != activated):
+        raise OriginalSourceGateRefused("S10_FIRST_DISABLED_APPLY_PREIMAGE_CHANGED")
+    wire = (json.dumps(asdict(physical), sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=True, allow_nan=False) + "\n").encode("ascii")
+    if len(wire) > 4096:
+        raise OriginalSourceGateRefused("S10_FIRST_DISABLED_APPLY_WIRE_TOO_LARGE")
+    command = ["/usr/local/bin/php", str(Path(__file__).parent.parent / "shared_apply_config.php"),
+               "first-disabled-apply", operation, before["detail"]["page"]]
+    reply = _run_bound_restore_joined(command, pass_fds=(9,), budget=90,
+                                      capture_output=True, input_data=wire)
+    receipt = {"result": "saved", "saved": True, "applied": False,
+               "snapshot": before["detail"]["candidate"],
+               "change_count": len(before["detail"]["changed_fields"])}
+    require_lifecycle_lock()
+    committed = {**activated, "phase": "committed"}
+    if (reply.returncode != 0 or type(reply.stdout) is not bytes or
+            not 0 < len(reply.stdout) <= 4096 or reply.stdout.count(b"\n") != 1 or
+            not reply.stdout.endswith(b"\n") or
+            _managed_handoff_json(json.loads(reply.stdout)) != _managed_handoff_json(receipt) or
+            store.read() != committed):
+        raise OriginalSourceGateRefused("S10_FIRST_DISABLED_APPLY_OUTCOME_UNCERTAIN")
+    return committed
+
+
+def native_coordinate_original_prepared_fd9(operation: str, raw_pipe: bytes) -> tuple:
+    """One original PREPARED selection; only the qualified managed route acts.
+
+    Retain the actual source and semantic witnesses for the in-flight caller.
+    Unsupported paths remain bound PREPARED, never fall through to legacy or
+    advance ACTIVATING before the physical executor is available.
+    """
+    from shared_apply_operation import SharedApplyOperation
+    from neutral_schema3_previous_physical import CompletePriorPreimage
+    from neutral_schema3_quiescent_preimage import QuiescentPreimage
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation)):
+        raise OriginalSourceGateRefused("NATIVE_ORIGINAL_FD9_REQUIRED")
+    require_lifecycle_lock()
+    inputs = decode_pipe(raw_pipe)
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    if (type(before) is not dict or before.get("phase") != "prepared" or
+            "found" in before or before["detail"]["id"] != operation):
+        raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_OWNER_REQUIRED")
+    if "manifest" not in before:
+        source, _ = native_bind_original_prepared_fd9(operation, raw_pipe)
+        bound = store.read()
+        if (type(bound) is not dict or "manifest" not in bound or
+                {k: v for k, v in bound.items() if k != "manifest"} != before):
+            raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_BIND_CHANGED")
+    else:
+        bound = before
+        digest = bound["detail"]["candidate"] if inputs["mode"] == b"auto" else None
+        source = native_original_bound_effective_fd9(operation, raw_pipe, digest,
+                                                     bound_record=bound)
+    semantic = native_plan_original_prepared_fd9(source)
+    if (type(source) is not SourceGateReceipt or type(semantic) is not OriginalSemanticReceipt or
+            source.generation != operation or semantic.generation != operation or
+            source.original_seal_sha256 != bound["manifest"]["seal_sha256"] or
+            source.mode != inputs["mode"].decode("ascii") or
+            type(semantic.previous_physical) not in (CompletePriorPreimage, QuiescentPreimage) or
+            semantic.candidate_root_sha256 != bound["manifest"]["root_sha256"] or
+            semantic.previous_generation != bound.get("previous", {}).get("id") or
+            semantic.previous_root_sha256 != bound.get("previous_manifest", {}).get("root_sha256") or
+            semantic.authorization != "NONE" or semantic.physical_transition_allowed or
+            semantic.promotion_allowed or not semantic.final_original_fd9_reattest_required or
+            store.read() != bound):
+        raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_WITNESS_CHANGED")
+    if (type(semantic.previous_physical) is CompletePriorPreimage and
+            semantic.lifecycle_proposal == "RELOAD" and
+            semantic.decision.kind == "RELOAD_SAFE_CANDIDATE" and
+            len(semantic.decision.changed_active) == 1 and not semantic.decision.changed_inactive and
+            source.requested_enabled is True and inputs["mode"] in (b"all", b"list") and
+            bound["manifest"]["schema"] == 1 and bound.get("previous_manifest", {}).get("schema") == 1 and
+            bound["detail"]["page"] == "strategies" and
+            bound["detail"]["base"] != bound["detail"]["candidate"] and bound["detail"]["changed_fields"]):
+        # No catch/retry/fallback: an uncertain Config save belongs to the
+        # original managed WAL recovery, not to another lifecycle proposal.
+        result = native_run_managed_apply_fd9(operation, raw_pipe, source=source, semantic=semantic)
+        require_lifecycle_lock()
+        if result != {**bound, "phase": "committed"} or store.read() != result:
+            raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_OUTCOME_UNCERTAIN")
+        return "managed-committed", result, source, semantic
+    if (type(semantic.previous_physical) is QuiescentPreimage and
+            semantic.previous_physical.old_state == "first-install-empty" and
+            semantic.lifecycle_proposal == "START" and source.requested_enabled is True and
+            inputs["mode"] in (b"all", b"list", b"auto") and
+            bound["manifest"]["schema"] == (2 if inputs["mode"] == b"auto" else 1) and
+            "previous" not in bound and "previous_manifest" not in bound and
+            bound["detail"]["base"] != bound["detail"]["candidate"] and
+            bound["detail"]["changed_fields"]):
+        result = native_run_first_enabled_apply_fd9(operation, raw_pipe,
+                                                    source=source, semantic=semantic)
+        expected = {**bound, "phase": "committed"}
+        pins = ({"first_running_sha256", "first_pretraffic_sha256"}
+                if inputs["mode"] == b"auto" else {"first_running_sha256"})
+        if (type(result) is not dict or
+                {k: v for k, v in result.items() if k not in pins} != expected or
+                any(type(result.get(pin)) is not str or
+                    not re.fullmatch(r"[a-f0-9]{64}", result[pin]) for pin in pins) or
+                store.read() != result):
+            raise OriginalSourceGateRefused("S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN")
+        return "first-enabled-committed", result, source, semantic
+    if (type(semantic.previous_physical) is QuiescentPreimage and
+            semantic.previous_physical.old_state == "first-install-empty" and
+            semantic.lifecycle_proposal == "SAVE_ONLY" and source.requested_enabled is False and
+            inputs["mode"] in (b"all", b"list") and bound["manifest"]["schema"] == 1 and
+            "previous" not in bound and "previous_manifest" not in bound and
+            bound["detail"]["base"] != bound["detail"]["candidate"] and
+            bound["detail"]["changed_fields"]):
+        result = native_run_first_disabled_apply_fd9(operation, raw_pipe,
+                                                     source=source, semantic=semantic)
+        if result != {**bound, "phase": "committed"} or store.read() != result:
+            raise OriginalSourceGateRefused("S10_FIRST_DISABLED_APPLY_OUTCOME_UNCERTAIN")
+        return "first-disabled-committed", result, source, semantic
+    route = ("quiescent-executor-required" if type(semantic.previous_physical) is QuiescentPreimage
+             else "lifecycle-executor-required")
+    require_lifecycle_lock()
+    if store.read() != bound:
+        raise OriginalSourceGateRefused("S10_PREPARED_DISPATCH_WITNESS_CHANGED")
+    return route, bound, source, semantic
+
+
+def native_first_auto_gui_handoff_fd9(operation: str, raw_pipe: bytes,
+                                      candidate: str) -> None:
+    """Narrow original combined Apply child: first enabled Auto only.
+
+    The shell has durably prepared the ONE original journal. Re-attest
+    the exact source and scope before binding; no generic CLI dispatch,
+    no fallback and no new lock or Config writer.
+    """
+    from shared_apply_operation import SharedApplyOperation, DIGEST
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not _ID.fullmatch(operation) or
+            type(candidate) is not str or not DIGEST.fullmatch(candidate)):
+        raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    if decode_pipe(raw_pipe)["mode"] != b"auto":
+        raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_SCOPE_REQUIRED")
+    store = SharedApplyOperation(owner=0)
+    before = store.read()
+    from shared_apply_operation import restored_first_learning
+    if restored_first_learning(before):
+        source = native_original_bound_effective_fd9(operation, raw_pipe, candidate)
+        if (type(source) is not SourceGateReceipt or source.mode != "auto" or
+                source.requested_enabled is not True or source.generation != operation or
+                store.read() != before):
+            raise OriginalSourceGateRefused("S10_FIRST_RETRY_PREPARE_REFUSED")
+        try:
+            from auto_detect_aborted_first import native_prepare_first_retry
+            before = native_prepare_first_retry(operation, candidate)
+        except (ValueError, RuntimeError, OSError, TypeError, KeyError):
+            raise OriginalSourceGateRefused("S10_FIRST_RETRY_PREPARE_REFUSED") from None
+        if store.read() != before:
+            raise OriginalSourceGateRefused("S10_FIRST_RETRY_PREPARE_REFUSED")
+    if (type(before) is not dict or before.get("phase") != "prepared" or
+            any(key in before for key in ("previous", "previous_manifest", "manifest", "found")) or
+            before["detail"]["id"] != operation or before["detail"]["page"] != "strategies" or
+            before["detail"]["candidate"] != candidate or before["detail"]["base"] == candidate or
+            "general.enabled" not in before["detail"]["changed_fields"]):
+        raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_SCOPE_REQUIRED")
+    source = native_original_bound_effective_fd9(operation, raw_pipe, candidate)
+    if (type(source) is not SourceGateReceipt or source.mode != "auto" or
+            source.requested_enabled is not True or source.generation != operation or
+            store.read() != before):
+        raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_SCOPE_REQUIRED")
+    route, result, actual, semantic = native_coordinate_original_prepared_fd9(operation, raw_pipe)
+    require_lifecycle_lock()
+    if (route != "first-enabled-committed" or actual != source or
+            type(result) is not dict or result.get("phase") != "committed" or
+            result.get("manifest", {}).get("schema") != 2 or
+            result.get("detail") != before["detail"] or
+            any(type(result.get(key)) is not str or not DIGEST.fullmatch(result[key])
+                for key in ("first_running_sha256", "first_pretraffic_sha256")) or
+            store.read() != result):
+        raise OriginalSourceGateRefused("S10_FIRST_AUTO_GUI_OUTCOME_UNCERTAIN")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+    if "--first-auto-apply" in args:
+        if len(args) != 3 or args[-1] != "--first-auto-apply":
+            return 64
+        try:
+            raw = sys.stdin.buffer.read(MAX_PIPE + 1)
+            native_first_auto_gui_handoff_fd9(args[0], raw, args[1])
+            return 0
+        except (ValueError, RuntimeError, OSError, TypeError, KeyError, IndexError) as error:
+            # The original PREPARED or later WAL remains the authority.
+            # Never expose arbitrary exception text or return a preflight
+            # refusal after recording the original intent.
+            reason = str(error) if type(error) is OriginalSourceGateRefused else ""
+            safe = {
+                "S10_FIRST_RETRY_PREPARE_REFUSED",
+                "S10_FIRST_AUTO_GUI_NATIVE_REQUIRED",
+                "S10_FIRST_AUTO_GUI_SCOPE_REQUIRED",
+                "S10_FIRST_AUTO_GUI_OUTCOME_UNCERTAIN",
+                "S10_FIRST_ENABLED_APPLY_SCOPE_REQUIRED",
+                "S10_FIRST_ENABLED_APPLY_PREIMAGE_CHANGED",
+                "S10_FIRST_ENABLED_APPLY_OUTCOME_UNCERTAIN",
+                "S10_FIRST_LEARNING_SOURCE_CHANGED",
+                "S10_FIRST_LEARNING_QUEUE_OWNER_CHANGED",
+                "S10_BOUND_ENGINE_UNQUALIFIED",
+                "S10_BOUND_ENGINE_CHANGED",
+                "S10_EFFECTIVE_SOURCE_UNQUALIFIED",
+                "S10_ORIGINAL_PREPARED_REQUIRED",
+                "S10_BOUND_PROMOTION_PRECHECK_REFUSED",
+                "S10_PREPARED_DISPATCH_WITNESS_CHANGED",
+                "S10_PREPARED_DISPATCH_BIND_CHANGED",
+            }
+            # Narrow finite diagnostics for the actual root-binding path.
+            # All other exceptions remain classified by their fixed type.
+            from neutral_root_stage import RootStageRefused
+            from neutral_schema3_physical_refs import PhysicalSchema3Refused
+            from neutral_root_bound_preflight import BoundRootRefused
+            from neutral_schema3_saved_wan_preimage import SavedWanPreimageRefused
+            from neutral_schema3_quiescent_preimage import QuiescentPreimageRefused
+            fixed = {
+                RootStageRefused: {"ORIGINAL_TYPED_SEALED_SOURCE_REQUIRED",
+                    "ORIGINAL_PREPARED_SOURCE_IDENTITY_MISMATCH",
+                    "ORIGINAL_AUTO_CANDIDATE_IDENTITY_MISMATCH",
+                    "ORIGINAL_PREPARED_SOURCE_ROOT_UNQUALIFIED",
+                    "ORIGINAL_SEALED_REFS_UNQUALIFIED", "STAGED_ROOT_UNQUALIFIED",
+                    "ORIGINAL_STAGE_FILESYSTEM_REFUSED"},
+                PhysicalSchema3Refused: {"ORIGINAL_SCHEMA3_PHYSICAL_UNQUALIFIED"},
+                BoundRootRefused: {"ORIGINAL_BOUND_ROOT_UNQUALIFIED"},
+                SavedWanPreimageRefused: {"ORIGINAL_CONFIG_PREIMAGE_MISMATCH",
+                    "NATIVE_ORIGINAL_PROBE_REFUSED", "NATIVE_ORIGINAL_PROBE_UNAVAILABLE"},
+                QuiescentPreimageRefused: {"ORIGINAL_QUIESCENT_PREIMAGE_REFUSED",
+                    "FIRST_LEARNING_WAN_SOURCE_CHANGED", "FIRST_LEARNING_WAN_RESOLVER_REFUSED"},
+            }
+            if reason not in safe:
+                reason = (str(error) if str(error) in fixed.get(type(error), set())
+                          else _fixed_unclassified_reason(error))
+            print("ORIGINAL_SOURCE_GATE_REFUSAL=" + reason, file=sys.stderr)
+            return 70
     # Legacy original parity requests retain their exact old protocol.
     # Explicit S10 accepts only an exact sealed source, never a free-form
     # version argument or an unsealed/legacy-effective fallback.
@@ -1492,4 +2494,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # The original root compiler imports SourceGateReceipt from this
+    # canonical module. Executing its classes as __main__ would create a
+    # distinct Python type and fail the deliberately exact type check.
+    # Run the existing CLI in the canonical module namespace instead.
+    from neutral_shared_apply_source_gate import main as _canonical_main
+    raise SystemExit(_canonical_main())

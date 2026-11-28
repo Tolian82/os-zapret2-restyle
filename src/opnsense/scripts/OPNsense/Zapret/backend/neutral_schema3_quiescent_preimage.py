@@ -26,7 +26,10 @@ from neutral_schema3_saved_wan_preimage import (
     _qualified_config, SavedWanPreimageReceipt, SavedWanPreimageRefused,
     _DEVICE, _WAN_STATE_MARKERS,
 )
-from shared_apply_operation import SharedApplyOperation, SharedOperationError, DEFAULT_ROOT
+from shared_apply_operation import (
+    SharedApplyOperation, SharedOperationError, DEFAULT_ROOT, MANAGED_WRITING,
+    MANAGED_CONFIG_SAVING,
+)
 from shared_apply_seal import WORK, SharedBundleError
 from voice_ipfw_adapter import (
     FreeBSDIPFWAdapter, shared_release_manifest, require_lifecycle_lock,
@@ -61,6 +64,8 @@ class QuiescentPreimage:
     physical_transition_allowed: bool = False
     promotion_allowed: bool = False
     original_executor_recheck_required: bool = True
+    retired_ready_sha256: str | None = None
+    idle_producer: tuple | None = None
 
 
 def _present(path: Path) -> bool:
@@ -103,7 +108,8 @@ def _zero_processes(pidfiles: tuple[Path, ...], *, runner=subprocess.run) -> Non
                 (command[0] in ("daemon:", "daemon", "/usr/sbin/daemon") and
                  any(token in (CHILD_EXEC, MONITOR_EXEC, "dvtws2",
                                "supervisor_loop.sh") or
-                     token.startswith(("dvtws2[", "supervisor_loop.sh["))
+                     token.startswith(("dvtws2[", "supervisor_loop.sh[",
+                                       CHILD_EXEC + "[", MONITOR_EXEC + "["))
                      for token in command[1:]))):
             raise QuiescentPreimageRefused("QUIESCENT_ORPHAN_PROCESS")
     if not seen or any(_present(path) for path in pidfiles):
@@ -160,6 +166,134 @@ def _retired_ready(producer: Path, uid: int) -> None:
         raise QuiescentPreimageRefused("QUIESCENT_ORIGINAL_RETIREMENT_INCOMPLETE")
 
 
+def _retired_ready_digest(epochs: Path, generation: str, uid: int) -> str:
+    from hashlib import sha256
+    from auto_detect_epoch_receipts import EpochReceipts, _directory, _read
+    from auto_detect_learning_retirement import RETIRE_DIR, READY
+
+    archive = EpochReceipts(epochs, owner_uid=uid)._generation(
+        generation, create=False) / RETIRE_DIR
+    _directory(archive, uid)
+    return sha256(_read(archive / READY, uid)).hexdigest()
+
+
+def _verify_retired_history(record: dict, queue, receipts, expected: str) -> None:
+    """Reuse the original historical ACK/archive verifier after promotion."""
+    from auto_detect_learning_gc import qualified_completed_learning
+    from shared_apply_operation import DIGEST
+    if (record.get("previous_manifest", {}).get("schema") != 2 or
+            type(expected) is not str or not DIGEST.fullmatch(expected)):
+        raise QuiescentPreimageRefused("BOUND_RETIRED_HISTORY_REQUIRED")
+    prior = record["previous"]
+    qualified_completed_learning(
+        receipts, queue, prior["id"], expected_candidate=prior["candidate"],
+        expected_ready_sha256=expected)
+
+
+def _verify_idle_producer(queue, receipts) -> tuple:
+    """Exact idle original root after retirement or with an inert owner.
+
+    Caller already holds P2a, has qualified the inert or retired owner.
+    No new files, no read of mutable archive paths.
+    """
+    from auto_detect_learning_retirement import _image
+    queue._verify()
+    if (not queue._held or queue.segments() or
+            set(os.listdir(queue.root)) != {"pending", "worker.lock", "inbox.txt", "debug.log"}):
+        raise QuiescentPreimageRefused("BOUND_RETIRED_IDLE_LAYOUT_CHANGED")
+    rows = []
+    for path in (queue.inbox, queue.root / "debug.log"):
+        image, _, data = _image(path, receipts, queue)
+        if data:
+            raise QuiescentPreimageRefused("BOUND_RETIRED_IDLE_DATA_CHANGED")
+        rows.append(tuple(image))
+    return tuple(rows)
+
+
+def _observe_idle_producer(producer: Path, uid: int) -> tuple | None:
+    """Before Config locking only: allow absent or exact idle original root."""
+    if not _present(producer):
+        return None
+    info = producer.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != uid or
+            info.st_mode & 0o022):
+        raise QuiescentPreimageRefused("BOUND_IDLE_PRODUCER_UNTRUSTED")
+    if not any(producer.iterdir()):
+        _safe_empty_directory(producer, uid)
+        return None
+    from auto_detect_post_drop import _original_epoch_queue
+    queue, receipts = _original_epoch_queue()
+    if queue.root != producer or queue.uid != uid:
+        raise QuiescentPreimageRefused("BOUND_IDLE_ORIGINAL_SCOPE_REQUIRED")
+    with queue.exclusive(existing_only=True):
+        return _verify_idle_producer(queue, receipts)
+
+
+def _verify_prior_idle_inode_identity(queue, expected: tuple) -> None:
+    """A later learning launch may append, never replace original idle inodes."""
+    for path, row in zip((queue.inbox, queue.root / "debug.log"), expected):
+        info = path.lstat()
+        if (info.st_dev, info.st_ino) != tuple(row[:2]):
+            raise QuiescentPreimageRefused("BOUND_PRIOR_IDLE_INODE_CHANGED")
+
+
+def _first_learning_candidate_wan(record: dict, *, parent: Path, owner_uid: int,
+                                  config_fd: int | None = None) -> str:
+    """First enabled Auto uses its sealed candidate WAN, not the OFF base.
+
+    The original PHP preflight/FD4 witness attests the logical Config
+    candidate. This only reuses the original physical interface resolver
+    against that exact sealed XML, with no second Config lock or save.
+    """
+    import hashlib
+    from config_projection_opnsense import xml_snapshot
+    from auto_detect_owner import _secure_bytes
+    from shared_apply_seal import verify_seal, FILES, ID
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+
+    if (type(record) is not dict or record.get("phase") not in ("prepared", "activating") or
+            any(key in record for key in ("previous", "previous_manifest", "found")) or
+            record.get("manifest", {}).get("schema") != 2 or
+            not ID.fullmatch(record["detail"]["id"]) or
+            record["detail"]["base"] == record["detail"]["candidate"]):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_WAN_SCOPE_REQUIRED")
+    work = parent / record["detail"]["id"]
+
+    def observe():
+        require_lifecycle_lock()
+        if config_fd is not None:
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        seal = verify_seal(work, owner=owner_uid)
+        raw = _secure_bytes(work / "candidate.xml", FILES["candidate.xml"], owner_uid)
+        if hashlib.sha256(raw).hexdigest() != seal["sha256"]["candidate.xml"]:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_WAN_SOURCE_CHANGED")
+        nodes = xml_snapshot(raw)
+        logical = nodes["general"].get("waninterface", "").strip()
+        if (nodes["general"].get("enabled") != "1" or
+                nodes["hostlist"].get("mode") != "auto" or
+                not logical or not _DEVICE.fullmatch(logical) or len(logical) > 32 or
+                logical in _WAN_STATE_MARKERS):
+            raise QuiescentPreimageRefused("FIRST_LEARNING_WAN_CANDIDATE_REQUIRED")
+        return seal, logical
+
+    first = observe()
+    reply = subprocess.run(("/bin/sh", "-c",
+        '. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/common.sh; '
+        '. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/config.sh; '
+        'config_resolve_interface "$1"', "s10-first-candidate-wan", first[1]),
+        stdin=subprocess.DEVNULL, capture_output=True, timeout=12, check=False,
+        close_fds=True, pass_fds=(),
+        env={"LC_ALL": "C", "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"})
+    if (reply.returncode != 0 or type(reply.stdout) is not bytes or
+            not 0 < len(reply.stdout) <= 65 or not reply.stdout.endswith(b"\n")):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_WAN_RESOLVER_REFUSED")
+    device = reply.stdout[:-1].decode("ascii")
+    if (not _DEVICE.fullmatch(device) or device in _WAN_STATE_MARKERS or
+            observe() != first):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_WAN_SOURCE_CHANGED")
+    return device
+
+
 def _attest_quiescent(*, generation: str, native: NativeParity,
                       effective: EffectiveSnapshot, enabled: bool,
                       parent: Path, journal_root: Path, owner_uid: int,
@@ -187,6 +321,7 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                     enabled=enabled, parent=parent, journal_root=journal_root,
                     owner_uid=owner_uid)
         def observe():
+            retired_digest = idle_producer = None
             _zero_processes(pidfiles, runner=runner)
             if old is None:
                 root = _attest_bound_candidate(**args, mode=native.mode, schema3=schema3)
@@ -195,7 +330,8 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                     raise QuiescentPreimageRefused("QUIESCENT_OLD_WORK_RESIDUE")
                 config = _qualified_config(
                     _native_preflight(generation, detail["page"]), detail, enabled)
-                wan = _native_wan() if enabled else None
+                wan = (_first_learning_candidate_wan(before, parent=parent, owner_uid=owner_uid)
+                       if schema3 else _native_wan() if enabled else None)
                 old_hash = None
                 old_state, retirement = "first-install-empty", "no-prior-data"
             else:
@@ -214,7 +350,15 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                 wan = saved.verified_wan_device
                 old_hash = _full_prior_tree(parent / old["id"], active, owner_uid)
                 if _present(active / MAP_NAME):
+                    bound_learning = before.get("previous_manifest", {}).get("schema") == 2
+                    if bound_learning:
+                        retired_digest = _retired_ready_digest(epochs, old["id"], owner_uid)
                     _retired_ready(producer, owner_uid)
+                    if bound_learning:
+                        idle_producer = _observe_idle_producer(producer, owner_uid)
+                        if (idle_producer is None or _retired_ready_digest(
+                                epochs, old["id"], owner_uid) != retired_digest):
+                            raise QuiescentPreimageRefused("QUIESCENT_RETIREMENT_READY_CHANGED")
                     retirement = "original-epoch-ack-retired"
                 else:
                     # Original inert classifier rejects native auto flags
@@ -222,8 +366,9 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                     # from List mode: require no unexplained producer bytes.
                     if inspect_inert_release(active, owner_uid=owner_uid) != "inactive":
                         raise QuiescentPreimageRefused("QUIESCENT_INERT_OWNER_INVALID")
-                    _safe_empty_directory(producer, owner_uid)
-                    retirement = "inert-no-producer-data"
+                    idle_producer = _observe_idle_producer(producer, owner_uid)
+                    retirement = ("inert-no-producer-data" if idle_producer is None else
+                                  "inert-idle-producer")
                 old_state = "committed-stopped"
             kernel = _empty_kernel(parent / generation / "release")
             _zero_processes(pidfiles, runner=runner)
@@ -243,7 +388,8 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
                 raise QuiescentPreimageRefused("QUIESCENT_ORIGINAL_PROOF_CHANGED")
             return QuiescentPreimage(generation, root.root_sha256,
                 None if old is None else old["id"], old_hash,
-                config[0], config[1], wan, old_state, kernel, retirement)
+                config[0], config[1], wan, old_state, kernel, retirement,
+                retired_ready_sha256=retired_digest, idle_producer=idle_producer)
         first = observe()
         if (observe() != first or
                 _attest_bound_candidate(**args, mode=native.mode, schema3=schema3).root_sha256 !=
@@ -253,9 +399,2120 @@ def _attest_quiescent(*, generation: str, native: NativeParity,
     except (QuiescentPreimageRefused, SavedWanPreimageRefused,
             BoundRootRefused, PreviousPhysicalRefused, SharedOperationError,
             SharedBundleError, VoiceFirewallError, GenerationRefused,
-            MinuteRefused, OSError, TypeError, KeyError, ValueError,
+            MinuteRefused, OSError, TypeError, KeyError, ValueError, RuntimeError,
             subprocess.SubprocessError):
         raise QuiescentPreimageRefused("ORIGINAL_QUIESCENT_PREIMAGE_REFUSED") from None
+
+
+@dataclass(frozen=True)
+class StagedBoundRuntimeReceipt:
+    generation: str
+    root_sha256: str
+    config_base_sha256: str
+    release_sha256: str
+    backup_sha256: str | None
+    running: object
+    kernel_state: str
+    observed_config_sha256: str | None = None
+    pretraffic_sha256: str | None = None
+    retired_ready_sha256: str | None = None
+    idle_producer: tuple | None = None
+
+
+def attest_bound_quiescent_staged_under_fd9(record: dict, *, preimage: QuiescentPreimage,
+                                            config_fd: int, config_digest: str,
+                                            queue_fd: int | None = None,
+                                            saved: bool = False) -> StagedBoundRuntimeReceipt:
+    """Reversible ordinary cutover before Config::save, not cold recovery.
+
+    Use the original in-flight quiescent preimage, not a reconstruction
+    of the old state after installation. Inert and learning candidates
+    from an empty or stopped predecessor qualify here, including an exact
+    bound retired learning predecessor. Learning or retired history borrows
+    the original queue acquired BEFORE Config, not a second flock.
+    No PHP calls, process signals, IPFW writes or journal mutations.
+    """
+    import sys
+    import json
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import (
+        verify_original_operation_pins, _verify_original_pinned_root, _original_plan_matches)
+    from neutral_schema3_previous_physical import _running_native
+    from voice_firewall_transaction import verify_staged_state
+    from shared_apply_seal import _stat
+    from auto_detect_owner import attest_bound_learning_staged_generation
+    from auto_detect_post_drop import _original_epoch_queue, _qualified_learning_sources
+
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(record) is not dict or type(preimage) is not QuiescentPreimage or
+                type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+                type(saved) is not bool):
+            raise QuiescentPreimageRefused("BOUND_STAGED_NATIVE_SCOPE_REQUIRED")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        if (store.read() != record or record["phase"] not in ("activating", "activated") or
+                "found" in record or record.get("manifest", {}).get("schema") not in (1, 2) or
+                record.get("previous_manifest", {}).get("schema", 1) not in (1, 2) or
+                (saved and record["phase"] != "activated")):
+            raise QuiescentPreimageRefused("BOUND_STAGED_ORDINARY_REQUIRED")
+        detail, pin = record["detail"], record["manifest"]
+        learning = pin["schema"] == 2
+        retired = record.get("previous_manifest", {}).get("schema") == 2
+        prior_idle = preimage.idle_producer
+        needs_queue = learning or retired or prior_idle is not None
+        if ((needs_queue and (type(queue_fd) is not int or queue_fd < 3 or
+                              queue_fd in (9, config_fd))) or
+                (not needs_queue and queue_fd is not None)):
+            raise QuiescentPreimageRefused("BOUND_STAGED_ORIGINAL_QUEUE_SCOPE_REQUIRED")
+        prior = record.get("previous")
+        old_id = None if prior is None else prior["id"]
+        if (preimage.generation != detail["id"] or preimage.root_sha256 != pin["root_sha256"] or
+                preimage.config_base_sha256 != detail["base"] or
+                config_digest != detail["candidate" if saved else "base"] or
+                preimage.config_candidate_sha256 != detail["candidate"] or
+                preimage.previous_generation != old_id or preimage.authorization != "NONE" or
+                preimage.physical_transition_allowed or preimage.promotion_allowed or
+                preimage.original_executor_recheck_required is not True or
+                preimage.kernel_state not in ("native-kernel-absent", "native-managed-kernel-empty") or
+                (prior is None and (preimage.old_state != "first-install-empty" or
+                                    preimage.retirement_state != "no-prior-data" or
+                                    preimage.previous_release_sha256 is not None or
+                                    prior_idle is not None)) or
+                (prior is not None and (preimage.old_state != "committed-stopped" or
+                                        preimage.retirement_state != (
+                                            "original-epoch-ack-retired" if retired else
+                                            ("inert-idle-producer" if prior_idle is not None else
+                                             "inert-no-producer-data")) or
+                                        prior["candidate"] != detail["base"])) or
+                (retired != (preimage.retired_ready_sha256 is not None)) or
+                (retired and prior_idle is None) or
+                (prior_idle is not None and (type(prior_idle) is not tuple or
+                                             len(prior_idle) != 2 or
+                                             any(type(row) is not tuple or len(row) != 4
+                                                 for row in prior_idle)))):
+            raise QuiescentPreimageRefused("BOUND_STAGED_PREIMAGE_CHANGED")
+        work = WORK / detail["id"]
+        release = work / "release"
+        name = COMMON_ACTIVE.name
+        backup = COMMON_ACTIVE.with_name("runtime-v2-backups") / f"{name}-{detail['id']}"
+        stage = COMMON_ACTIVE.parent / f".{name}.stage.{detail['id']}"
+        parked = COMMON_ACTIVE.parent / f".{name}.old.{detail['id']}"
+
+        def observe():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise QuiescentPreimageRefused("BOUND_STAGED_OWNER_CHANGED")
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            root = json.loads(_verify_original_pinned_root(
+                detail=detail, binding=pin, parent=WORK, owner_uid=0))
+            service = root["service"]
+            enabled = preimage.verified_wan_device is not None
+            if (root["schema"] != pin["schema"] or root["generation"] != detail["id"] or
+                    service["enabled"] is not enabled or
+                    service["target_mode"] not in ("all", "list", "auto") or
+                    learning != (enabled and service["target_mode"] == "auto") or
+                    (not learning and inspect_inert_release(release, owner_uid=0) != "inactive")):
+                raise QuiescentPreimageRefused("BOUND_STAGED_ROOT_MODE_CHANGED")
+            _stat(COMMON_ACTIVE.parent, 0, directory=True)
+            _stat(backup.parent, 0, directory=True)
+            tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
+            if _present(stage) or _present(parked):
+                raise QuiescentPreimageRefused("BOUND_STAGED_ATOMIC_RESIDUE")
+            old_tree = None
+            if prior is None:
+                # The pristine gate also allows an empty active directory.
+                _safe_empty_directory(backup, 0)
+            else:
+                old_work = WORK / prior["id"]
+                if (not _original_plan_matches(parent=WORK, generation=prior["id"],
+                                               journal={"detail": prior}, owner_uid=0) or
+                        (not retired and
+                         inspect_inert_release(old_work / "release", owner_uid=0) != "inactive")):
+                    raise QuiescentPreimageRefused("BOUND_STAGED_PREVIOUS_SOURCE_CHANGED")
+                old_tree = _full_prior_tree(old_work, backup, 0)
+                if old_tree != preimage.previous_release_sha256:
+                    raise QuiescentPreimageRefused("BOUND_STAGED_BACKUP_CHANGED")
+            idle = None
+            if not learning:
+                if prior_idle is not None:
+                    queue, receipts = _original_epoch_queue()
+                    with queue.inherited_exclusive(queue_fd):
+                        if retired:
+                            _verify_retired_history(record, queue, receipts, preimage.retired_ready_sha256)
+                        idle = _verify_idle_producer(queue, receipts)
+                        if idle != prior_idle:
+                            raise QuiescentPreimageRefused("BOUND_STAGED_IDLE_PRODUCER_CHANGED")
+                else:
+                    _safe_empty_directory(PRODUCER_ROOT, 0)
+            process = pretraffic = None
+            if enabled:
+                process = _running_native(release, owner_uid=0,
+                                          child_pidfile=CHILD_PID, monitor_pidfile=MONITOR_PID)
+                desired = shared_release_manifest(release)
+                if desired["rule_base"] != 19000 or desired["rule_max"] not in (19010, 19099):
+                    raise QuiescentPreimageRefused("BOUND_STAGED_KERNEL_SCOPE_INVALID")
+                empty = {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}
+                # Stopped prior has an empty physical kernel, even when its
+                # sealed manifest describes previously enabled Voice rules.
+                verify_staged_state(FreeBSDIPFWAdapter(19000, 19099), empty, desired)
+                kernel = "native-managed-kernel-staged"
+                if learning:
+                    def attest():
+                        return attest_bound_learning_staged_generation(record, config_fd)
+
+                    proof = attest()
+                    if (proof.generation != detail["id"] or proof.operation_id != detail["id"] or
+                            proof.owner_candidate_sha256 != detail["candidate"] or
+                            (proof.owner.pid, proof.owner.started) != (process.pid, process.started)):
+                        raise QuiescentPreimageRefused("BOUND_STAGED_LEARNING_OWNER_CHANGED")
+                    _, names = _qualified_learning_sources(proof.learning, PRODUCER_ROOT)
+                    queue, receipts = _original_epoch_queue(names)
+                    with queue.inherited_exclusive(queue_fd):
+                        if retired:
+                            _verify_retired_history(
+                                record, queue, receipts, preimage.retired_ready_sha256)
+                        pretraffic = receipts.verify_learning_running_pretraffic(
+                            proof, queue, workspace=work, attest=attest)
+                        if prior_idle is not None:
+                            _verify_prior_idle_inode_identity(queue, prior_idle)
+            else:
+                _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+                kernel = _empty_kernel(release)
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != record:
+                raise QuiescentPreimageRefused("BOUND_STAGED_OWNER_CHANGED")
+            return StagedBoundRuntimeReceipt(detail["id"], pin["root_sha256"], detail["base"],
+                                             tree, old_tree, process, kernel,
+                                             config_digest, pretraffic,
+                                             preimage.retired_ready_sha256, idle)
+
+        first = observe()
+        if observe() != first:
+            raise QuiescentPreimageRefused("BOUND_STAGED_WITNESS_CHANGED")
+        return first
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError, AttributeError,
+            subprocess.SubprocessError):
+        raise QuiescentPreimageRefused("BOUND_STAGED_PHYSICAL_ATTEST_REFUSED") from None
+
+
+def _cold_recovery_trees(active: Path, generation: str, old_hash: str,
+                         new_hash: str, *, phase: str, restored: bool,
+                         owner_uid: int) -> tuple:
+    """Read the existing atomic transaction paths before any recovery mutation.
+
+    Both original seals have already qualified. Permit only an exact old
+    or new active tree, a complete new stage and at most one exact old
+    hold/backup. Never create, rename or remove anything here.
+    """
+    from shared_apply_seal import _stat, _release_hash
+
+    _stat(active.parent, owner_uid, directory=True)
+    name = active.name
+    backup_root = active.with_name("runtime-v2-backups")
+    if _present(backup_root):
+        _stat(backup_root, owner_uid, directory=True)
+    stage = active.parent / f".{name}.stage.{generation}"
+    parked = active.parent / f".{name}.old.{generation}"
+    backup = backup_root / f"{name}-{generation}"
+
+    def read(path, allowed):
+        if not _present(path):
+            return None
+        digest = _release_hash(path, owner_uid)
+        if digest not in allowed:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_ARTIFACT_CHANGED")
+        return digest
+
+    active_sha = read(active, (old_hash, new_hash))
+    stage_sha = read(stage, (new_hash,))
+    parked_sha = read(parked, (old_hash,))
+    backup_sha = read(backup, (old_hash,))
+    if parked_sha is not None and backup_sha is not None:
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_DUPLICATE_PRIOR")
+    if restored:
+        if active_sha != old_hash:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_OLD_TREE_REQUIRED")
+    elif active_sha is None:
+        if (phase != "activating" or stage_sha is None or
+                (parked_sha is None and backup_sha is None)):
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_RENAME_GAP_INVALID")
+    elif active_sha != old_hash:
+        if backup_sha is None or stage_sha is not None or parked_sha is not None:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_INSTALLED_TREE_INVALID")
+    return active_sha, stage_sha, parked_sha, backup_sha
+
+
+def _observe_cold_retired_predecessor(record: dict) -> tuple:
+    """Read-only cold recovery proof for an already retired learning owner.
+
+    Called before any Config lock is retained. Borrow only the existing
+    P2a lock; never create a queue, finalize an epoch or reclaim history.
+    The original historical verifier checks the sealed prior generation,
+    full terminal ACK chain and every archived source inode and byte.
+    """
+    from auto_detect_post_drop import _original_epoch_queue
+
+    prior = record["previous"]
+    queue, receipts = _original_epoch_queue()
+    if queue.root != PRODUCER_ROOT or queue.uid != 0 or receipts.root != EPOCH_ROOT:
+        raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_SCOPE_REQUIRED")
+    with queue.exclusive(existing_only=True):
+        ready = _retired_ready_digest(EPOCH_ROOT, prior["id"], 0)
+        _verify_retired_history(record, queue, receipts, ready)
+        idle = _verify_idle_producer(queue, receipts)
+        if _retired_ready_digest(EPOCH_ROOT, prior["id"], 0) != ready:
+            raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_READY_CHANGED")
+        return ready, idle
+
+
+def _cold_rollback_config_image(record: dict, saved: dict) -> tuple:
+    """Bind the old saved-model receipt to the sealed successor plan.
+
+    The enclosing original FD9 recovery observes the complete physical
+    state twice. Each read uses the same existing PHP Config owner, with
+    no retained FD4 and no additional writer. An equal-image ACTIVATED
+    is ambiguous: it must not enter automatic pre-save rollback.
+    """
+    import json
+    from neutral_schema3_saved_wan_preimage import _qualify_ordinary_cold_config
+
+    detail = record["detail"]
+    raw = _native_call((
+        "/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
+        "ordinary-cold", detail["id"], detail["page"]))
+    if not raw.endswith(b"\n") or raw.count(b"\n") != 1:
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_RECEIPT_INVALID")
+    image, digest, enabled = _qualify_ordinary_cold_config(json.loads(raw), record)
+    if (digest != saved["snapshot"] or enabled != saved["enabled"] or
+            image not in ("base-image", "base-equals-candidate") or
+            (image == "base-equals-candidate" and record["phase"] != "activating")):
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_OUTCOME_UNCERTAIN")
+    return image, digest, enabled
+
+
+def _cold_locked_producer(record: dict, queue_fd: int | None) -> tuple:
+    """Observe the original producer without acquiring P2a after Config."""
+    from auto_detect_post_drop import _original_epoch_queue
+
+    retired = record.get("previous_manifest", {}).get("schema") == 2
+    if queue_fd is None:
+        if retired:
+            raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_QUEUE_REQUIRED")
+        _safe_empty_directory(PRODUCER_ROOT, 0)
+        return None, None
+    queue, receipts = _original_epoch_queue()
+    if queue.root != PRODUCER_ROOT or queue.uid != 0 or receipts.root != EPOCH_ROOT:
+        raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_SCOPE_REQUIRED")
+    with queue.inherited_exclusive(queue_fd):
+        ready = None
+        if retired:
+            ready = _retired_ready_digest(EPOCH_ROOT, record["previous"]["id"], 0)
+            _verify_retired_history(record, queue, receipts, ready)
+        idle = _verify_idle_producer(queue, receipts)
+        if retired and _retired_ready_digest(EPOCH_ROOT, record["previous"]["id"], 0) != ready:
+            raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_READY_CHANGED")
+        return (ready, idle) if retired else None, idle
+
+
+def attest_inert_bound_cold_recovery(record: dict, *, restored: bool,
+                                     config_fd: int | None = None,
+                                     config_digest: str | None = None,
+                                     queue_fd: int | None = None) -> None:
+    """Qualify only the existing original ordinary cold rollback route.
+
+    Before the shell's existing parked/pristine/installed recovery, require
+    exact pinned work, saved predecessor Config and no live process.
+    An inert candidate may follow a pinned, fully retired learning owner
+    only with the original archived ACK and empty producer proof. The
+    original shell alone restores native staged IPFW and rename artifacts.
+    Before terminal WAL restore require the whole old tree and empty
+    kernel. Bind the old saved model to the candidate's original plan;
+    an ambiguous equal-image ACTIVATED remains fenced. Learning
+    candidates and Found remain outside this route.
+    """
+    from neutral_root_stage import (
+        verify_original_operation_pins, _original_plan_matches)
+    from shared_apply_seal import verify_seal
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    import json
+    import sys
+
+    require_lifecycle_lock()
+    locked = config_fd is not None
+    if ((locked and (not sys.platform.startswith("freebsd") or
+                     os.geteuid() != 0 or type(config_fd) is not int or
+                     config_fd < 3 or config_fd == 9 or
+                     (queue_fd is not None and (type(queue_fd) is not int or
+                      queue_fd < 3 or queue_fd in (9, config_fd))))) or
+            (not locked and (config_digest is not None or queue_fd is not None))):
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_LOCK_SCOPE_INVALID")
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    if (type(restored) is not bool or type(record) is not dict or
+            store.read() != record or record.get("phase") not in (
+                "activating", "activated") or "found" in record or
+            record.get("manifest", {}).get("schema") != 1 or
+            ("previous_manifest" in record and
+             record["previous_manifest"]["schema"] not in (1, 2)) or
+            type(record.get("previous")) is not dict or
+            record["previous"]["candidate"] != record["detail"]["base"]):
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_OWNER_REQUIRED")
+
+    def check_config_lock():
+        if locked:
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            detail = record["detail"]
+            if (config_digest != detail["base"] or
+                    (detail["base"] == detail["candidate"] and record["phase"] != "activating")):
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_OUTCOME_UNCERTAIN")
+
+    check_config_lock()
+
+    def observe():
+        require_lifecycle_lock()
+        check_config_lock()
+        if store.read() != record:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        old, new = record["previous"], record["detail"]
+        old_work, new_work = WORK / old["id"], WORK / new["id"]
+        seals = []
+        retired = record.get("previous_manifest", {}).get("schema") == 2
+        for detail, work in ((old, old_work), (new, new_work)):
+            seals.append(verify_seal(work, owner=0))
+            if not _original_plan_matches(
+                    parent=WORK, generation=detail["id"],
+                    journal={"detail": detail}, owner_uid=0):
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_SOURCE_CHANGED")
+            if detail == old and retired:
+                # The full historical verifier below qualifies the exact
+                # schema3 map/epoch against this already pinned release.
+                continue
+            if inspect_inert_release(work / "release", owner_uid=0) != "inactive":
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_SOURCE_CHANGED")
+        saved_raw = saved = None
+        if not locked:
+            saved_raw = _native_call((
+                "/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
+                "saved", old["id"], old["page"]))
+            saved = json.loads(saved_raw)
+            if (type(saved) is not dict or set(saved) != {"result", "snapshot", "enabled"} or
+                    saved["result"] != "committed" or saved["snapshot"] != old["candidate"] or
+                    saved["enabled"] not in ("0", "1")):
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_CONFIG_CHANGED")
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        if locked:
+            retired_receipt, idle = _cold_locked_producer(record, queue_fd)
+        else:
+            retired_receipt = _observe_cold_retired_predecessor(record) if retired else None
+            idle = (retired_receipt[1] if retired else
+                    _observe_idle_producer(PRODUCER_ROOT, 0))
+        # Refuse damaged/foreign stage, hold, backup and active trees before
+        # the existing shell may mutate IPFW or rename anything. Repeat the
+        # same read at terminal completion, not a separate recovery ledger.
+        trees = _cold_recovery_trees(
+            COMMON_ACTIVE, new["id"], seals[0]["sha256"]["release"],
+            seals[1]["sha256"]["release"], phase=record["phase"],
+            restored=restored, owner_uid=0)
+        kernel = active_hash = None
+        if restored:
+            active_hash = _full_prior_tree(old_work, COMMON_ACTIVE, 0)
+            if active_hash != trees[0]:
+                raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_ACTIVE_TREE_CHANGED")
+            kernel = _empty_kernel(old_work / "release")
+        config_image = (config_digest if locked else _cold_rollback_config_image(record, saved))
+        check_config_lock()
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        if store.read() != record:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
+        return seals, saved_raw, active_hash, kernel, idle, trees, retired_receipt, config_image
+
+    if observe() != observe():
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_PREIMAGE_CHANGED")
+
+
+def _run_bound_restore_joined(command, *, budget: float, capture_output: bool = False,
+                              pass_fds: tuple[int, ...], input_data: bytes | None = None) -> subprocess.CompletedProcess:
+    """Deadline refuses success but cannot kill a physical shell/PHP parent.
+
+    Both commands are synchronous, with no detached descendants. Wait for
+    their completion even after timeout or interrupted receipt; never use
+    subprocess.run(timeout=...), which kills only the direct child. This
+    protects the original parent-owned P2a/Config lock on managed failures.
+    """
+    import time
+
+    started = time.monotonic()
+    output = subprocess.PIPE if capture_output else subprocess.DEVNULL
+    with subprocess.Popen(command, stdin=subprocess.PIPE if input_data is not None else subprocess.DEVNULL, stdout=output,
+                          stderr=output, pass_fds=pass_fds, close_fds=True) as child:
+        try:
+            stdout, stderr = child.communicate(input=input_data, timeout=budget)
+        except BaseException:
+            # communicate(timeout) does NOT kill the child. Do not close
+            # descriptors or unwind the original lock before joining it.
+            child.communicate()
+            raise
+        if time.monotonic() - started >= budget:
+            raise subprocess.TimeoutExpired(command, budget)
+        return subprocess.CompletedProcess(command, child.returncode, stdout, stderr)
+
+
+def _reject_cold_recovery_residue(active: Path) -> None:
+    """A PID-scoped interrupted recovery is not an original operation-ID gap."""
+    import re
+
+    name = re.escape(active.name)
+    if any(re.fullmatch(r"\." + name + r"\.(?:stage|old)\.[0-9]{1,10}|" +
+                        name + r"\.rollback-old\.[0-9]+", item.name)
+           for item in active.parent.iterdir()):
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_RESIDUE")
+
+
+def _restore_bound_parked_cold_locked(record: dict, *, config_fd: int,
+                                      config_digest: str, queue_fd: int | None) -> bool:
+    """Original ACTIVATING rename gap, with retained exact old and new trees.
+
+    Only a missing active tree, complete new stage, exactly one old
+    hold/backup and an empty physical kernel qualify. Copy the old sealed
+    release using the existing atomic installer; consume neither artifact.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_seal import verify_seal
+
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if _present(COMMON_ACTIVE):
+        return False
+    if record["phase"] != "activating":
+        raise QuiescentPreimageRefused("BOUND_COLD_PARKED_PHASE_INVALID")
+    old, new = record["previous"], record["detail"]
+    old_work, new_work = WORK / old["id"], WORK / new["id"]
+    old_hash = verify_seal(old_work, owner=0)["sha256"]["release"]
+    new_hash = verify_seal(new_work, owner=0)["sha256"]["release"]
+
+    def exact():
+        attest_inert_bound_cold_recovery(
+            record, restored=False, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=queue_fd)
+        _reject_cold_recovery_residue(COMMON_ACTIVE)
+        trees = _cold_recovery_trees(
+            COMMON_ACTIVE, new["id"], old_hash, new_hash, phase="activating",
+            restored=False, owner_uid=0)
+        if trees not in ((None, new_hash, old_hash, None),
+                         (None, new_hash, None, old_hash)):
+            raise QuiescentPreimageRefused("BOUND_COLD_PARKED_ARTIFACTS_INVALID")
+        kernel = _empty_kernel(old_work / "release")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return trees, kernel
+
+    before = exact()
+    if exact() != before:
+        raise QuiescentPreimageRefused("BOUND_COLD_PARKED_PREIMAGE_CHANGED")
+    inherited = (9, config_fd) if queue_fd is None else (9, config_fd, queue_fd)
+    try:
+        result = _run_bound_restore_joined(
+            ("/bin/sh", "-c", '. "$1"; . "$2"; atomic_install_tree "$3" "$4" "$5"',
+             "zapret-bound-parked", str(SCRIPT / "backend/common.sh"),
+             str(SCRIPT / "backend/atomic.sh"), str(old_work / "release"),
+             str(COMMON_ACTIVE), str(COMMON_ACTIVE.with_name("runtime-v2-backups"))),
+            pass_fds=inherited, budget=20)
+    except (OSError, subprocess.SubprocessError):
+        raise QuiescentPreimageRefused("BOUND_COLD_PARKED_RESTORE_OUTCOME_UNCERTAIN") from None
+    if result.returncode != 0:
+        raise QuiescentPreimageRefused("BOUND_COLD_PARKED_RESTORE_FAILED")
+    attest_inert_bound_cold_recovery(
+        record, restored=True, config_fd=config_fd,
+        config_digest=config_digest, queue_fd=queue_fd)
+    _reject_cold_recovery_residue(COMMON_ACTIVE)
+    after = _cold_recovery_trees(
+        COMMON_ACTIVE, new["id"], old_hash, new_hash, phase="activating",
+        restored=True, owner_uid=0)
+    if after != (old_hash, *before[0][1:]):
+        raise QuiescentPreimageRefused("BOUND_COLD_PARKED_EVIDENCE_CHANGED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return True
+
+
+def _restore_bound_installed_cold_locked(record: dict, *, config_fd: int,
+                                         config_digest: str, queue_fd: int | None) -> bool:
+    """Restore an exact installed inert candidate over a cold predecessor.
+
+    Only an empty kernel or the exact staged candidate from EMPTY qualifies.
+    A stopped prior's sealed rule manifest is not its physical kernel image.
+    Reuse the original IPFW rollback and atomic installer; retain backups.
+    Unknown/running-prior staged images and rename gaps remain fenced here.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import _verify_original_pinned_root
+    from shared_apply_seal import verify_seal, _release_hash
+    from voice_firewall_transaction import verify_staged_state, rollback_uncommitted
+    import json
+
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if not _present(COMMON_ACTIVE):
+        return False
+    old, new = record["previous"], record["detail"]
+    old_work, new_work = WORK / old["id"], WORK / new["id"]
+    old_hash = verify_seal(old_work, owner=0)["sha256"]["release"]
+    new_hash = verify_seal(new_work, owner=0)["sha256"]["release"]
+    active_hash = _release_hash(COMMON_ACTIVE, 0)
+    if active_hash == old_hash:
+        return False
+    if active_hash != new_hash:
+        raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_TREE_CHANGED")
+
+    def exact():
+        attest_inert_bound_cold_recovery(
+            record, restored=False, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=queue_fd)
+        if _cold_recovery_trees(
+                COMMON_ACTIVE, new["id"], old_hash, new_hash, phase=record["phase"],
+                restored=False, owner_uid=0) != (new_hash, None, None, old_hash):
+            raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_BACKUP_REQUIRED")
+        # Do not retry across an unexplained PID-named recovery rename gap.
+        _reject_cold_recovery_residue(COMMON_ACTIVE)
+
+    exact()
+    release = new_work / "release"
+    root = json.loads(_verify_original_pinned_root(
+        detail=new, binding=record["manifest"], parent=WORK, owner_uid=0))
+    desired = shared_release_manifest(release)
+    if desired["rule_base"] != 19000 or desired["rule_max"] not in (19010, 19099):
+        raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_KERNEL_SCOPE_INVALID")
+    empty = {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}
+    if not _ipfw_kernel_confirmed_absent():
+        reader = FreeBSDIPFWAdapter(19000, 19099)
+        try:
+            verify_prior_state(reader, empty, desired)
+        except VoiceFirewallError:
+            if root["service"]["enabled"] is not True:
+                raise QuiescentPreimageRefused("BOUND_COLD_DISABLED_STAGED_KERNEL")
+            verify_staged_state(reader, empty, desired)
+            exact()
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            # The original rollback rechecks exact staged rules/tables
+            # itself before its first mutation, then verifies EMPTY.
+            rollback_uncommitted(
+                FreeBSDIPFWAdapter(19000, 19099, allow_mutations=True), empty, desired)
+    _empty_kernel(release)
+    exact()
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    inherited = (9, config_fd) if queue_fd is None else (9, config_fd, queue_fd)
+    try:
+        result = _run_bound_restore_joined(
+            ("/bin/sh", "-c", '. "$1"; . "$2"; atomic_install_tree "$3" "$4" "$5"',
+             "zapret-bound-installed", str(SCRIPT / "backend/common.sh"),
+             str(SCRIPT / "backend/atomic.sh"), str(old_work / "release"),
+             str(COMMON_ACTIVE), str(COMMON_ACTIVE.with_name("runtime-v2-backups"))),
+            pass_fds=inherited, budget=20)
+    except (OSError, subprocess.SubprocessError):
+        raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_RESTORE_OUTCOME_UNCERTAIN") from None
+    if result.returncode != 0:
+        raise QuiescentPreimageRefused("BOUND_COLD_INSTALLED_RESTORE_FAILED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return True
+
+
+def _remove_bound_pristine_stage_locked(record: dict, *, config_fd: int,
+                                       queue_fd: int | None) -> bool:
+    """Remove only the exact uninstalled stage, under original FD9/FD4.
+
+    Caller already proved the fully restored old tree and empty kernel
+    twice. Parked/backup recovery artifacts are deliberately preserved.
+    Reuse the original atomic shell helper, never a new tree installer.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_seal import verify_seal
+
+    if record["phase"] != "activating":
+        return False
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    generation = record["detail"]["id"]
+    name = COMMON_ACTIVE.name
+    stage = COMMON_ACTIVE.parent / f".{name}.stage.{generation}"
+    parked = COMMON_ACTIVE.parent / f".{name}.old.{generation}"
+    backup = COMMON_ACTIVE.with_name("runtime-v2-backups") / f"{name}-{generation}"
+    if not _present(stage) or _present(parked) or _present(backup):
+        return False
+    old_work = WORK / record["previous"]["id"]
+    new_work = WORK / generation
+    old_hash = verify_seal(old_work, owner=0)["sha256"]["release"]
+    new_hash = verify_seal(new_work, owner=0)["sha256"]["release"]
+    trees = _cold_recovery_trees(COMMON_ACTIVE, generation, old_hash, new_hash,
+                                 phase="activating", restored=True, owner_uid=0)
+    if trees != (old_hash, new_hash, None, None):
+        raise QuiescentPreimageRefused("BOUND_COLD_PRISTINE_STAGE_CHANGED")
+    if SharedApplyOperation(DEFAULT_ROOT, owner=0).read() != record:
+        raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    inherited = (9, config_fd) if queue_fd is None else (9, config_fd, queue_fd)
+    try:
+        result = _run_bound_restore_joined(
+            ("/bin/sh", "-c", '. "$1"; atomic_remove_tree "$2"',
+             "zapret-bound-pristine", str(SCRIPT / "backend/atomic.sh"), str(stage)),
+            pass_fds=inherited, budget=20)
+    except (OSError, subprocess.SubprocessError):
+        raise QuiescentPreimageRefused("BOUND_COLD_PRISTINE_STAGE_OUTCOME_UNCERTAIN") from None
+    if result.returncode != 0 or _present(stage):
+        raise QuiescentPreimageRefused("BOUND_COLD_PRISTINE_STAGE_REMOVE_FAILED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return True
+
+
+def _finish_managed_recovery_locked(store, record: dict, *, config_fd: int,
+                                    queue_fd: int | None, saved_image: str | None = None) -> dict:
+    """Reconcile one managed file with the original Config and producer locked."""
+    from auto_detect_destination_commit import (
+        exclusive_destination_lock, _restore_bound_managed_file_locked,
+        _attest_bound_managed_installed_locked,
+    )
+    from auto_detect_gui_hostlist import AUTO_LOCK
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_shared_apply_source_gate import _native_managed_running_digest
+    from shared_apply_seal import _stat
+
+    previous = WORK / record["previous"]["id"] / "release"
+    candidate = WORK / record["detail"]["id"] / "release"
+    active = COMMON_ACTIVE
+    prefix = active.name
+    backup = active.with_name("runtime-v2-backups") / f"{prefix}-{record['detail']['id']}"
+    pidfiles = (CHILD_PID, MONITOR_PID, DAEMON_PID)
+    # A pre-save interruption can leave the exact original engine running.
+    # Select the physical witness from the process state, not the Config phase.
+    running = any(_present(path) for path in pidfiles)
+    expected_running = record["managed"].get("running_sha256")
+    if running and expected_running is None:
+        raise QuiescentPreimageRefused("MANAGED_RECOVERY_RUNNING_OWNER_REQUIRED")
+
+    def observe():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        _stat(active.parent, 0, directory=True)
+        if _present(backup.parent):
+            _stat(backup.parent, 0, directory=True)
+        # A managed CAS owns no directory staging or atomic tree backups.
+        if (_present(backup) or any(item.name.startswith((
+                f".{prefix}.stage.", f".{prefix}.old.", f"{prefix}.rollback-old."))
+                for item in active.parent.iterdir())):
+            raise QuiescentPreimageRefused("MANAGED_COLD_TREE_TRANSACTION_PRESENT")
+        if any(inspect_inert_release(path, owner_uid=0) != "inactive"
+               for path in (previous, candidate)):
+            raise QuiescentPreimageRefused("MANAGED_COLD_INERT_OWNER_REQUIRED")
+        producer = _cold_locked_producer(record, queue_fd)
+        if running:
+            runtime = _native_managed_running_digest(previous, config_fd)
+            if runtime != expected_running:
+                raise QuiescentPreimageRefused("MANAGED_RECOVERY_RUNNING_OWNER_CHANGED")
+        else:
+            _zero_processes(pidfiles)
+            runtime = _empty_kernel(previous)
+            _zero_processes(pidfiles)
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return runtime, producer
+
+    first = observe()
+
+    def attest():
+        return observe() == first
+
+    with exclusive_destination_lock(AUTO_LOCK, 0):
+        if saved_image is not None:
+            # Persist the observed XML while its original lock is still held.
+            os.fsync(config_fd)
+        if saved_image == record["detail"]["candidate"]:
+            def installed():
+                _attest_bound_managed_installed_locked(store, record, parent=WORK, active=active)
+                return attest()
+
+            return store._checkpoint_managed_config(record, saved=True, attest=installed,
+                                                    shared_work_parent=WORK)
+        return _restore_bound_managed_file_locked(store, record, parent=WORK,
+            active=active, attest=attest, saved_base=saved_image)
+
+
+def _first_running_digest(release: Path, running, *, config_fd: int) -> str:
+    """Pin the observed original process and TEXT vnode, not merely its argv."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_schema3_previous_physical import (
+        PriorRunningToken, _running_native, _running_executable_identity)
+    from neutral_shared_apply_source_gate import (
+        _s10_native_bound_engine_readback, _managed_running_digest)
+
+    if type(running) is not PriorRunningToken:
+        raise QuiescentPreimageRefused("FIRST_BOUND_RUNNING_TOKEN_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+
+    def process():
+        return _running_native(release, owner_uid=0, child_pidfile=CHILD_PID,
+                               monitor_pidfile=MONITOR_PID)
+
+    if process() != running:
+        raise QuiescentPreimageRefused("FIRST_BOUND_RUNNING_OWNER_CHANGED")
+    engine = _s10_native_bound_engine_readback()
+    executable = _running_executable_identity(running.pid, engine["engine_sha256"],
+        executable=Path(CHILD_EXEC), runner=subprocess.run)
+    if process() != running or _s10_native_bound_engine_readback() != engine:
+        raise QuiescentPreimageRefused("FIRST_BOUND_RUNNING_OWNER_CHANGED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    require_lifecycle_lock()
+    return _managed_running_digest(running, executable)
+
+
+def _first_inert_staged_manifests(record: dict, release: Path) -> tuple:
+    """The only admitted nonempty kernel is the original reversible candidate."""
+    import json
+    from neutral_root_stage import _verify_original_pinned_root
+
+    root = json.loads(_verify_original_pinned_root(
+        detail=record["detail"], binding=record["manifest"], parent=WORK, owner_uid=0))
+    if root["service"]["enabled"] is not True:
+        raise QuiescentPreimageRefused("FIRST_BOUND_DISABLED_STAGED_KERNEL")
+    desired = shared_release_manifest(release)
+    if desired["rule_base"] != 19000 or desired["rule_max"] not in (19010, 19099):
+        raise QuiescentPreimageRefused("FIRST_BOUND_KERNEL_SCOPE_INVALID")
+    return {"rule_base": 19000, "rule_max": 19099, "rules": {}, "tables": {}}, desired
+
+
+def _first_inert_kernel_state(record: dict, release: Path, *, installed: bool) -> str:
+    from voice_firewall_transaction import verify_staged_state
+
+    try:
+        return _empty_kernel(release)
+    except VoiceFirewallError:
+        if not installed:
+            raise
+        empty, desired = _first_inert_staged_manifests(record, release)
+        verify_staged_state(FreeBSDIPFWAdapter(19000, 19099), empty, desired)
+        return "native-managed-kernel-staged"
+
+
+def _rollback_first_inert_kernel(record: dict, release: Path, *, config_fd: int,
+                                 first: tuple, observe) -> tuple:
+    """Reuse the original reversible rollback before removing any tree."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from voice_firewall_transaction import rollback_uncommitted
+
+    live, stage, kernel = first[:3]
+    if (kernel != "native-managed-kernel-staged" or live is None or
+            live[0] != "candidate" or stage is not None):
+        raise QuiescentPreimageRefused("FIRST_BOUND_STAGED_LAYOUT_REQUIRED")
+    empty, desired = _first_inert_staged_manifests(record, release)
+    if observe() != first:
+        raise QuiescentPreimageRefused("FIRST_BOUND_STAGED_KERNEL_CHANGED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    rollback_uncommitted(
+        FreeBSDIPFWAdapter(19000, 19099, allow_mutations=True), empty, desired)
+    restored = observe()
+    if (restored[:2] != first[:2] or restored[3:] != first[3:] or restored[2] not in
+            ("native-kernel-absent", "native-managed-kernel-empty")):
+        raise QuiescentPreimageRefused("FIRST_BOUND_KERNEL_RESTORE_UNCERTAIN")
+    return restored
+
+
+def _first_enabled_queue_scope(record: dict, queue_fd: int | None, config_fd: int) -> bool:
+    schema = record.get("manifest", {}).get("schema")
+    return ((schema == 1 and queue_fd is None) or
+            (schema == 2 and type(queue_fd) is int and queue_fd >= 3 and
+             queue_fd not in (9, config_fd)))
+
+
+def _first_learning_base_zero_locked(store, record: dict, *, config_fd: int,
+                                     config_digest: str, queue_fd: int,
+                                     stopped: bool) -> tuple:
+    """WAL-pinned zero cut, including every original N inode and pending queue."""
+    import hashlib
+    import json
+    import pwd
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_post_drop import (_capture, _learning_release_sources,
+        _qualified_learning_sources, _original_epoch_queue, match_zero_cut, _zero_cut_provenance)
+    from auto_detect_storage import ENGINE_USER
+    from auto_detect_epoch_receipts import _read
+    from auto_detect_fd import FDState, _probe_attested_original_inode
+    from neutral_root_stage import verify_original_operation_pins, _verify_original_pinned_root
+
+    detail = record["detail"]
+    if (record["phase"] != "activated" or record.get("manifest", {}).get("schema") != 2 or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            config_digest != detail["base"] or detail["base"] == detail["candidate"] or
+            not _first_enabled_queue_scope(record, queue_fd, config_fd) or
+            type(stopped) is not bool):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_SCOPE_REQUIRED")
+    work = WORK / detail["id"]
+    release = work / "release"
+    workspace, candidate, sources = _learning_release_sources(release)
+    if workspace != work or candidate != detail["candidate"]:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_SOURCE_CHANGED")
+    _, names = _qualified_learning_sources(sources, PRODUCER_ROOT)
+    queue, receipts = _original_epoch_queue(names)
+    identity = pwd.getpwnam(ENGINE_USER)
+    if queue.root != PRODUCER_ROOT or receipts.root != EPOCH_ROOT:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_ROOT_CHANGED")
+
+    def locked_scope():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if store.read() != record:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_OWNER_CHANGED")
+        if stopped:
+            _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        return True
+
+    def scope():
+        locked_scope()
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=record["manifest"], parent=WORK, owner_uid=0))
+        if (root["service"]["enabled"] is not True or root["service"]["target_mode"] != "auto" or
+                _learning_release_sources(release) != (workspace, candidate, sources)):
+            raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_ROOT_CHANGED")
+        return locked_scope()
+
+    def capture():
+        scope()
+        paths = tuple(PRODUCER_ROOT / name for name in ("inbox.txt", "debug.log", *names))
+        def source_pins():
+            return tuple((st.st_dev, st.st_ino, st.st_nlink, st.st_size,
+                          st.st_mtime_ns, st.st_ctime_ns, st.st_mode, st.st_uid, st.st_gid)
+                         for st in (path.lstat() for path in paths))
+        before = source_pins()
+        with queue.inherited_exclusive(queue_fd):
+            folder = receipts._generation(detail["id"], create=False)
+            if (set(os.listdir(EPOCH_ROOT)) != {detail["id"]} or
+                    set(os.listdir(folder)) != {"pretraffic.json"} or queue.segments()):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_EPOCH_CHANGED")
+            path = folder / "pretraffic.json"
+            a = path.lstat()
+            raw = _read(path, 0)
+            b = path.lstat()
+            def pin(st):
+                return (st.st_dev, st.st_ino, st.st_nlink, st.st_size,
+                        st.st_mtime_ns, st.st_ctime_ns, st.st_uid, st.st_mode)
+            if pin(a) != pin(b) or hashlib.sha256(raw).hexdigest() != record.get("first_pretraffic_sha256"):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_SEED_CHANGED")
+        producer = _capture(PRODUCER_ROOT, root_uid=0, root_gid=0,
+            engine_uid=identity.pw_uid, engine_gid=identity.pw_gid,
+            learning_names=names, queue_fd=queue_fd)
+        match_zero_cut(record, sources, producer, raw,
+            _zero_cut_provenance(workspace, sources, producer))
+        after = source_pins()
+        if (before != after or any(row[3] != 0 for row in after) or
+                tuple(row[:3] for row in after) != producer.identities):
+            raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_SOURCE_CHANGED")
+        scope()
+        return producer, pin(a), raw, after
+
+    first = capture()
+    if stopped:
+        # No ACK, no deletion, no forged historical epoch.  The existing
+        # global P2b inspector runs with the exact original zero-cut scope.
+        # The individual original P2b scan pins the target inode and size/mtime.
+        # Reattest the original locks/WAL and stopped census around each scan;
+        # full zero data, seed and all source metadata are compared across
+        # the entire sweep, rather than rehashing all N files for each of N scans.
+        for name, (dev, ino, _) in zip(("inbox.txt", "debug.log", *names), first[0].identities):
+            if _probe_attested_original_inode(PRODUCER_ROOT / name, dev, ino,
+                    writer_gid=identity.pw_gid, attest_owner=locked_scope) is not FDState.DRAINED:
+                raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_FD_NOT_DRAINED")
+    if capture() != first:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_CHANGED")
+    return first
+
+
+def _first_inert_recovery_layout(record: dict, *, config_fd: int,
+                                 config_digest: str, queue_fd: int | None, store,
+                                 saved: bool = False, running_base: bool = False,
+                                 first_learning_launch: bool = False,
+                                 first_learning_base: bool = False) -> tuple:
+    """Observe first inert recovery or strictly prelaunch first learning layout.
+
+    The latter is NOT a recovery authorization: only empty runtime/epoch,
+    the prepared zero-cut producer under the borrowed P2a and ACTIVATING.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import verify_original_operation_pins, _original_plan_matches
+    from shared_apply_seal import verify_seal, _release_hash, _stat
+
+    detail = record["detail"]
+    if (type(saved) is not bool or type(running_base) is not bool or
+            type(first_learning_launch) is not bool or type(first_learning_base) is not bool or
+            (first_learning_base and (saved or first_learning_launch or
+                record["phase"] != "activated" or
+                not _first_enabled_queue_scope(record, queue_fd, config_fd))) or
+            (first_learning_launch and (saved or running_base or
+                record["phase"] != "activating" or detail["base"] == detail["candidate"] or
+                not _first_enabled_queue_scope(record, queue_fd, config_fd))) or
+            (running_base and (saved or record["phase"] != "activated" or
+                              "first_running_sha256" not in record)) or
+            record["phase"] not in (("activated", "config-saved") if saved else ("activating", "activated")) or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != (2 if first_learning_launch or first_learning_base else 1) or
+            config_digest != detail["candidate" if saved else "base"] or
+            (not (first_learning_launch or first_learning_base) and queue_fd is not None) or
+            ((saved or record["phase"] == "activated") and detail["base"] == detail["candidate"])):
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_OWNER_CHANGED")
+    work = WORK / detail["id"]
+    release = work / "release"
+    verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+    if (not _original_plan_matches(parent=WORK, generation=detail["id"],
+            journal={"detail": detail}, owner_uid=0) or
+            (not (first_learning_launch or first_learning_base) and
+             inspect_inert_release(release, owner_uid=0) != "inactive")):
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_SOURCE_CHANGED")
+    producer = None
+    if first_learning_launch:
+        import json
+        import pwd
+        from neutral_root_stage import _verify_original_pinned_root
+        from auto_detect_post_drop import (_learning_release_sources, _qualified_learning_sources,
+            _learning_pretraffic_owner, _capture)
+        from auto_detect_storage import ENGINE_USER
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=record["manifest"], parent=WORK, owner_uid=0))
+        if root["service"]["enabled"] is not True or root["service"]["target_mode"] != "auto":
+            raise QuiescentPreimageRefused("FIRST_LEARNING_LAUNCH_MODE_REQUIRED")
+        workspace, candidate, sources = _learning_release_sources(release)
+        if (workspace != work or candidate != detail["candidate"] or
+                _learning_pretraffic_owner(workspace, candidate, queue_fd) != record):
+            raise QuiescentPreimageRefused("FIRST_LEARNING_LAUNCH_OWNER_REQUIRED")
+        _, names = _qualified_learning_sources(sources, PRODUCER_ROOT)
+        identity = pwd.getpwnam(ENGINE_USER)
+
+        def capture():
+            return _capture(PRODUCER_ROOT, root_uid=0, root_gid=0,
+                engine_uid=identity.pw_uid, engine_gid=identity.pw_gid,
+                learning_names=names, queue_fd=queue_fd)
+
+        producer = capture()
+    if first_learning_base:
+        def zero():
+            return _first_learning_base_zero_locked(store, record, config_fd=config_fd,
+                config_digest=config_digest, queue_fd=queue_fd, stopped=not running_base)
+        producer = zero()
+    running = False
+    if saved or running_base:
+        import json
+        from neutral_root_stage import _verify_original_pinned_root
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=record["manifest"], parent=WORK, owner_uid=0))
+        enabled = root["service"]["enabled"]
+        if (type(enabled) is not bool or enabled != ("first_running_sha256" in record) or
+                (running_base and not enabled)):
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_PIN_REQUIRED")
+        if enabled and root["service"]["target_mode"] not in (("auto",) if first_learning_base else ("all", "list")):
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_INERT_MODE_REQUIRED")
+        running = enabled
+    wanted = verify_seal(work, owner=0)["sha256"]["release"]
+    active = COMMON_ACTIVE
+    parent, name = active.parent, active.name
+    stage = parent / f".{name}.stage.{detail['id']}"
+    _stat(parent, 0, directory=True)
+    _safe_empty_directory(active.with_name("runtime-v2-backups"), 0)
+    if not first_learning_base:
+        _safe_empty_directory(EPOCH_ROOT, 0)
+    if not (first_learning_launch or first_learning_base):
+        _safe_empty_directory(PRODUCER_ROOT, 0)
+    if (any(item.name != detail["id"] for item in WORK.iterdir()) or
+            any(item != stage and item.name.startswith((f".{name}.stage.", f".{name}.old."))
+                for item in parent.iterdir())):
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_WORK_RESIDUE")
+    _reject_cold_recovery_residue(active)
+
+    def image(path):
+        if not _present(path):
+            return None
+        info = _stat(path, 0, directory=True)
+        if path == active and not any(path.iterdir()):
+            return ("empty", info.st_dev, info.st_ino)
+        if _release_hash(path, 0) != wanted:
+            raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
+        return ("candidate", info.st_dev, info.st_ino)
+
+    pidfiles = (CHILD_PID, MONITOR_PID, DAEMON_PID)
+    if not running:
+        _zero_processes(pidfiles)
+    first = image(active), image(stage)
+    live, staged = first
+    if (first_learning_launch and (staged is not None or
+            (live is not None and live[0] != "empty"))):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_LAUNCH_NOT_PRISTINE")
+    if (staged is not None and (record["phase"] != "activating" or
+            (live is not None and live[0] != "empty"))):
+        raise QuiescentPreimageRefused("FIRST_BOUND_TREE_LAYOUT_REFUSED")
+    if saved or running_base:
+        if live is None or live[0] != "candidate" or staged is not None:
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_INSTALLED_REQUIRED")
+        kernel = (_first_saved_running_kernel(record, release, config_fd=config_fd)
+                  if running else _empty_kernel(release))
+    else:
+        kernel = _first_inert_kernel_state(record, release,
+            installed=live is not None and live[0] == "candidate" and staged is None)
+    if not running:
+        _zero_processes(pidfiles)
+    if (image(active), image(stage)) != first:
+        raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_OWNER_CHANGED")
+    if first_learning_launch:
+        if (capture() != producer or _learning_release_sources(release) !=
+                (workspace, candidate, sources) or
+                _learning_pretraffic_owner(workspace, candidate, queue_fd) != record):
+            raise QuiescentPreimageRefused("FIRST_LEARNING_LAUNCH_PRODUCER_CHANGED")
+        _safe_empty_directory(EPOCH_ROOT, 0)
+        return live, staged, kernel, producer
+    if first_learning_base:
+        if zero() != producer:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_BASE_ZERO_CHANGED")
+        return live, staged, kernel, producer
+    return live, staged, kernel
+
+
+def _attest_first_running_base_locked(store, record: dict, *, config_fd: int,
+                                      config_digest: str, queue_fd: int | None = None) -> tuple:
+    """Read-only base-image proof; never grants permission to signal a PID."""
+    def observe():
+        return _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=queue_fd, store=store, running_base=True,
+            first_learning_base=queue_fd is not None)
+
+    first = observe()
+    if observe() != first or store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_BOUND_RUNNING_BASE_CHANGED")
+    return first
+
+
+def _first_running_base_scope_locked(operation: str, base: str, *, config_fd: int, queue_fd: int | None = None):
+    """One original, pinned ACTIVATED owner and inherited native locks."""
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import OP_ID, DIGEST
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(base) is not str or not DIGEST.fullmatch(base) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "activated" or
+            record["detail"]["id"] != operation or
+            record["detail"]["base"] != base or base == record["detail"]["candidate"] or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            not _first_enabled_queue_scope(record, queue_fd, config_fd) or
+            (queue_fd is not None and not DIGEST.fullmatch(str(record.get("first_pretraffic_sha256", "")))) or
+            (type(record.get("first_running_sha256")) is not str or
+             not DIGEST.fullmatch(record["first_running_sha256"]))):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_OWNER_REQUIRED")
+    return store, record
+
+
+def native_guard_first_running_base_shell_locked(operation: str, base: str, *,
+                                                 config_fd: int = 4, queue_fd: int | None = None) -> tuple[int, int]:
+    """Read-only owner/PID birth and reversible IPFW preflight before Stop."""
+    from neutral_schema3_previous_physical import _running_native
+
+    store, record = _first_running_base_scope_locked(operation, base, config_fd=config_fd, queue_fd=queue_fd)
+    first = _attest_first_running_base_locked(store, record,
+        config_fd=config_fd, config_digest=base, queue_fd=queue_fd)
+    if (first[0] is None or first[0][0] != "candidate" or first[1] is not None or
+            type(first[2]) is not tuple or first[2][0] not in
+            ("native-managed-kernel-staged", "native-managed-kernel-final")):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_PHYSICAL_SCOPE_REQUIRED")
+    release = WORK / operation / "release"
+    running = _running_native(release, owner_uid=0, child_pidfile=CHILD_PID,
+                              monitor_pidfile=MONITOR_PID)
+    if (_first_running_digest(release, running, config_fd=config_fd) !=
+            record["first_running_sha256"] or store.read() != record):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_PROCESS_CHANGED")
+    return running.pid, running.monitor_pid
+
+
+def _first_running_base_stopped_kernel(record: dict, kernel: str) -> bool:
+    """Accept empty IPFW only if the sealed first candidate requests no IPFW."""
+    if kernel == "native-managed-kernel-staged":
+        return True
+    if kernel not in ("native-kernel-absent", "native-managed-kernel-empty"):
+        return False
+    _, desired = _first_inert_staged_manifests(
+        record, WORK / record["detail"]["id"] / "release")
+    return desired["rules"] == {} and desired["tables"] == {}
+
+
+def native_guard_first_running_base_stopped_shell_locked(operation: str, base: str, *,
+                                                         config_fd: int = 4, queue_fd: int | None = None) -> None:
+    """Post-Stop process census and original staged-kernel evidence, no WAL."""
+    store, record = _first_running_base_scope_locked(operation, base, config_fd=config_fd, queue_fd=queue_fd)
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+
+    def observe():
+        return _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=base, queue_fd=queue_fd, store=store,
+            first_learning_base=queue_fd is not None)
+
+    first = observe()
+    if (first[0] is None or first[0][0] != "candidate" or first[1] is not None or
+            not _first_running_base_stopped_kernel(record, first[2]) or
+            observe() != first or store.read() != record):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOPPED_CHANGED")
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+
+
+def _stop_first_running_base_joined_locked(store, record: dict, *,
+                                           config_fd: int, config_digest: str,
+                                           queue_fd: int | None = None) -> None:
+    """Join original Stop before any IPFW/tree/WAL rollback under FD9/FD4."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+
+    first = _attest_first_running_base_locked(store, record,
+        config_fd=config_fd, config_digest=config_digest, queue_fd=queue_fd)
+    if (first[0] is None or first[0][0] != "candidate" or first[1] is not None or
+            type(first[2]) is not tuple or first[2][0] not in
+            ("native-managed-kernel-staged", "native-managed-kernel-final")):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOP_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_JOURNAL_CHANGED")
+    try:
+        command = (str(SCRIPT / "zapret_service.sh"),
+            "shared-apply-first-running-base-physical", record["detail"]["id"], config_digest)
+        descriptors = (9, config_fd)
+        if queue_fd is not None:
+            if queue_fd != 3:
+                raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_QUEUE_FD_REQUIRED")
+            command += ("--inherited-queue",)
+            descriptors += (queue_fd,)
+        reply = _run_bound_restore_joined(command, pass_fds=descriptors,
+            budget=60, capture_output=True)
+    except (OSError, subprocess.SubprocessError):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOP_UNCERTAIN") from None
+    if (reply.returncode != 0 or type(reply.stdout) is not bytes or
+            reply.stdout != b"first-running-base-physical=stopped\n"):
+        _relay_first_recovery_trace(reply.stderr)
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_STOP_UNCONFIRMED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+    observed = _first_inert_recovery_layout(record, config_fd=config_fd,
+        config_digest=config_digest, queue_fd=queue_fd, store=store,
+        first_learning_base=queue_fd is not None)
+    if (observed[:2] != first[:2] or observed[3:] != first[3:] or
+            not _first_running_base_stopped_kernel(record, observed[2]) or
+            store.read() != record):
+        raise QuiescentPreimageRefused("FIRST_RUNNING_BASE_POST_STOP_CHANGED")
+
+def _relay_first_recovery_trace(raw: bytes) -> None:
+    """Relay only existing finite source-location markers from joined children."""
+    import re
+    import sys
+    if type(raw) is not bytes or len(raw) > 8192:
+        return
+    for line in raw.split(b"\n")[:-1][:64]:
+        if re.fullmatch(rb"S10_MANAGED_TRACE=(?:M(?:0[1-9]|1[0-4])|P0[1-3]):[1-9][0-9]{0,4}", line):
+            try:
+                print(line.decode("ascii"), file=sys.stderr, flush=True)
+            except (OSError, ValueError):
+                return
+
+
+def _first_enabled_checkpoint(stage: str) -> None:
+    """Finite non-authorizing diagnostics; never print native data."""
+    import sys
+    if stage not in {f"D{i:02d}" for i in range(3, 31)}:
+        return
+    try:
+        print("S10_FIRST_TRACE=" + stage, file=sys.stderr, flush=True)
+    except (OSError, ValueError):
+        pass
+
+
+def _relay_first_enabled_trace(raw: bytes) -> None:
+    if type(raw) is not bytes or len(raw) > 8192:
+        return
+    # Incomplete lines, raw stderr, argv and exception messages are not forwarded.
+    for line in raw.split(b"\n")[:-1][:64]:
+        if line in {f"S10_FIRST_TRACE=D{i:02d}".encode() for i in range(3, 31)}:
+            _first_enabled_checkpoint(line[-3:].decode("ascii"))
+
+
+def native_guard_first_enabled_shell_locked(operation: str, candidate: str,
+                                            wan: str, *, config_fd: int = 4,
+                                            queue_fd: int | None = None) -> None:
+    """Read-only FD9/FD4 gate before the single original shell actuator."""
+    import json
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import _verify_original_pinned_root
+    from neutral_schema3_saved_wan_preimage import _native_wan_locked, _DEVICE
+    from shared_apply_operation import OP_ID, DIGEST
+
+    _first_enabled_checkpoint("D27")
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(candidate) is not str or not DIGEST.fullmatch(candidate) or
+            type(wan) is not str or not _DEVICE.fullmatch(wan) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _first_enabled_checkpoint("D28")
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "activating" or
+            record["detail"]["id"] != operation or record["detail"]["candidate"] != candidate or
+            record["detail"]["base"] == candidate or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            not _first_enabled_queue_scope(record, queue_fd, config_fd)):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_OWNER_REQUIRED")
+    learning = record["manifest"]["schema"] == 2
+    root = json.loads(_verify_original_pinned_root(
+        detail=record["detail"], binding=record["manifest"], parent=WORK, owner_uid=0))
+    if (root["service"]["enabled"] is not True or
+            root["service"]["target_mode"] not in (("auto",) if learning else ("all", "list"))):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_MODE_REQUIRED")
+
+    def observe():
+        result = _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=record["detail"]["base"], queue_fd=queue_fd, store=store,
+            first_learning_launch=learning)
+        _first_enabled_checkpoint("D29")
+        if (result[0] is not None or result[1] is not None or
+                result[2] not in ("native-kernel-absent", "native-managed-kernel-empty") or
+                (_first_learning_candidate_wan(record, parent=WORK, owner_uid=0,
+                    config_fd=config_fd) if learning else _native_wan_locked(config_fd)) != wan):
+            raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_PREIMAGE_CHANGED")
+        _first_enabled_checkpoint("D30")
+        return result
+
+    first = observe()
+    if observe() != first or store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_ENABLED_SHELL_PREIMAGE_CHANGED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    require_lifecycle_lock()
+
+
+def native_install_first_enabled_bound_locked(record: dict, *, preimage: QuiescentPreimage,
+                                              config_fd: int, config_digest: str,
+                                              queue_fd: int | None = None) -> tuple:
+    """Invoke original apply_runtime_activate exactly once, then attest ACTIVATED."""
+    import json
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import _verify_original_pinned_root
+    from neutral_schema3_saved_wan_preimage import _native_wan_locked, _DEVICE
+    from shared_apply_seal import _stat
+
+    _first_enabled_checkpoint("D06")
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or record.get("phase") != "activating" or
+            type(preimage) is not QuiescentPreimage or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            not _first_enabled_queue_scope(record, queue_fd, config_fd) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_SCOPE_REQUIRED")
+    detail, pin = record["detail"], record["manifest"]
+    learning = pin["schema"] == 2
+    wan = preimage.verified_wan_device
+    if (config_digest != detail["base"] or detail["base"] == detail["candidate"] or
+            type(wan) is not str or not _DEVICE.fullmatch(wan) or
+            preimage != QuiescentPreimage(detail["id"], pin["root_sha256"], None, None,
+                detail["base"], detail["candidate"], wan, "first-install-empty",
+                preimage.kernel_state, "no-prior-data") or
+            preimage.kernel_state not in ("native-kernel-absent", "native-managed-kernel-empty")):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_PREIMAGE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _first_enabled_checkpoint("D07")
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    active = COMMON_ACTIVE
+    work = WORK / detail["id"]
+
+    def observe():
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=pin, parent=WORK, owner_uid=0))
+        _first_enabled_checkpoint("D08")
+        if (root["service"]["enabled"] is not True or
+                root["service"]["target_mode"] not in (("auto",) if learning else ("all", "list")) or
+                (_first_learning_candidate_wan(record, parent=WORK, owner_uid=0,
+                    config_fd=config_fd) if learning else _native_wan_locked(config_fd)) != wan):
+            raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_MODE_CHANGED")
+        _first_enabled_checkpoint("D09")
+        layout = _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=queue_fd, store=store,
+            first_learning_launch=learning)
+        _first_enabled_checkpoint("D10")
+        return layout
+
+    first = observe()
+    live, stage, kernel = first[:3]
+    if (kernel != preimage.kernel_state or stage is not None or
+            (live is not None and live[0] != "empty") or observe() != first):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_LAYOUT_CHANGED")
+    if live is not None:
+        info = _stat(active, 0, directory=True)
+        if ("empty", info.st_dev, info.st_ino) != live or observe() != first:
+            raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_EMPTY_CHANGED")
+        os.rmdir(active)
+        parentfd = os.open(active.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(parentfd)
+        finally:
+            os.close(parentfd)
+    if observe() != (None, None, kernel, *first[3:]):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_LAYOUT_CHANGED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _first_enabled_checkpoint("D11")
+    command = ("/bin/sh", str(SCRIPT / "zapret_service.sh"),
+               "shared-apply-first-enabled-physical", detail["id"], detail["candidate"], wan)
+    if learning:
+        # PHP maps the same borrowed original OFD to FD3; never substitute
+        # a new lock or allow a different descriptor number into the shell.
+        if queue_fd != 3:
+            raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_QUEUE_FD_REQUIRED")
+        command += ("--inherited-queue",)
+    reply = _run_bound_restore_joined(command,
+        pass_fds=(9, config_fd, queue_fd) if learning else (9, config_fd),
+        budget=120, capture_output=True)
+    _relay_first_enabled_trace(reply.stderr)
+    if (reply.returncode != 0 or
+            reply.stdout != b"first-enabled-physical=activated\n"):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_OUTCOME_UNCERTAIN")
+    _first_enabled_checkpoint("D21")
+    # No optimistic success. The original writer independently verifies the
+    # full active tree, one engine/supervisor and reversible staged IPFW.
+    _first_enabled_checkpoint("D22")
+    result, receipt = store._record_native_bound_activated(
+        record, preimage=preimage, config_fd=config_fd, config_digest=config_digest,
+        queue_fd=queue_fd)
+    if (result["phase"] != "activated" or store.read() != result or
+            "first_running_sha256" not in result or receipt.running is None or
+            learning != (receipt.pretraffic_sha256 is not None) or
+            (learning and result.get("first_pretraffic_sha256") != receipt.pretraffic_sha256) or
+            receipt.kernel_state != "native-managed-kernel-staged"):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_INSTALL_READBACK_CHANGED")
+    _first_enabled_checkpoint("D23")
+    return result, receipt
+
+
+def native_install_first_disabled_bound_locked(record: dict, *, preimage: QuiescentPreimage,
+                                               config_fd: int, config_digest: str) -> tuple:
+    """Install only a first disabled bound release under the original locks.
+
+    Reuse atomic_install_tree. No launcher, firewall operation, Config save,
+    new WAL or fallback. Retain the original ACTIVATING on uncertain install.
+    """
+    import json
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from neutral_root_stage import _verify_original_pinned_root
+    from shared_apply_seal import _stat
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or record.get("phase") != "activating" or
+            type(preimage) is not QuiescentPreimage or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 1 or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_SCOPE_REQUIRED")
+    detail, pin = record["detail"], record["manifest"]
+    if (config_digest != detail["base"] or detail["base"] == detail["candidate"] or
+            preimage != QuiescentPreimage(detail["id"], pin["root_sha256"], None, None,
+                detail["base"], detail["candidate"], None, "first-install-empty",
+                preimage.kernel_state, "no-prior-data") or
+            preimage.kernel_state not in ("native-kernel-absent", "native-managed-kernel-empty")):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_PREIMAGE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    work = WORK / detail["id"]
+    active = COMMON_ACTIVE
+    backup = active.with_name("runtime-v2-backups")
+
+    def observe():
+        root = json.loads(_verify_original_pinned_root(
+            detail=detail, binding=pin, parent=WORK, owner_uid=0))
+        if root["service"]["enabled"] is not False:
+            raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_MODE_REQUIRED")
+        observed = _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=None, store=store)
+        if observed[2] != preimage.kernel_state:
+            raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_KERNEL_CHANGED")
+        return observed
+
+    first = observe()
+    live, stage, kernel = first
+    if (stage is not None or (live is not None and live[0] != "empty") or
+            observe() != first):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_LAYOUT_CHANGED")
+    if live is not None:
+        # Empty and absent are the admitted first-install preimages. Avoid
+        # producing a fictitious predecessor backup from an empty directory.
+        info = _stat(active, 0, directory=True)
+        if ("empty", info.st_dev, info.st_ino) != live or observe() != first:
+            raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_EMPTY_CHANGED")
+        os.rmdir(active)  # never recursively delete even one unexpected file
+        directory = os.open(active.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    if observe() != (None, None, kernel):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_LAYOUT_CHANGED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    reply = _run_bound_restore_joined(
+        ("/bin/sh", "-c", '. "$1"; . "$2"; atomic_install_tree "$3" "$4" "$5" "$6"',
+         "zapret-first-disabled", str(SCRIPT / "backend/common.sh"),
+         str(SCRIPT / "backend/atomic.sh"), str(work / "release"), str(active), str(backup), detail["id"]),
+        pass_fds=(9, config_fd), budget=60, capture_output=True)
+    if reply.returncode != 0 or reply.stdout != b"\n":
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_OUTCOME_UNCERTAIN")
+    installed = observe()
+    if (installed[0] is None or installed[0][0] != "candidate" or installed[1] is not None or
+            observe() != installed):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_READBACK_CHANGED")
+    # Original writer independently attests the same installed tree and
+    # process/kernel state before advancing the existing WAL.
+    result, receipt = store._record_native_bound_activated(record, preimage=preimage,
+        config_fd=config_fd, config_digest=config_digest)
+    if result != {**record, "phase": "activated"} or store.read() != result:
+        raise QuiescentPreimageRefused("FIRST_DISABLED_INSTALL_READBACK_CHANGED")
+    return result, receipt
+
+
+def native_write_first_enabled_handoff_locked(operation: str, witness: str, stream, *,
+                                              config_fd: int,
+                                              queue_fd: int | None = None) -> dict:
+    """Consume one original first-enabled PREPARED witness under PHP FD4."""
+    import json
+    import sys
+    from dataclasses import asdict, fields
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import DIGEST, OP_ID, _config_save_witness, _first_running_pin_matches
+    from shared_apply_seal import verify_seal
+
+    _first_enabled_checkpoint("D03")
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(witness) is not str or not DIGEST.fullmatch(witness) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _first_enabled_checkpoint("D04")
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "activating" or
+            record["detail"]["id"] != operation or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            not _first_enabled_queue_scope(record, queue_fd, config_fd)):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_OWNER_REQUIRED")
+    learning = record["manifest"]["schema"] == 2
+    detail = record["detail"]
+    plan = verify_seal(WORK / operation, owner=0)["sha256"]["plan.json"]
+    if (witness != _config_save_witness(detail, plan) or
+            detail["base"] == detail["candidate"]):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_CONFIG_CHANGED")
+    raw = stream.read(4097)
+    if (len(raw) > 4096 or not raw.endswith(b"\n") or raw.count(b"\n") != 1):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_WIRE_INVALID")
+    parsed = json.loads(raw)
+    if (type(parsed) is not dict or
+            set(parsed) != {field.name for field in fields(QuiescentPreimage)}):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_WIRE_INVALID")
+    preimage = QuiescentPreimage(**parsed)
+    exact = (json.dumps(asdict(preimage), sort_keys=True, separators=(",", ":"),
+                        ensure_ascii=True, allow_nan=False) + "\n").encode("ascii")
+    if exact != raw or store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_WIRE_CHANGED")
+    _first_enabled_checkpoint("D05")
+    result, receipt = native_install_first_enabled_bound_locked(
+        record, preimage=preimage, config_fd=config_fd, config_digest=detail["base"],
+        queue_fd=queue_fd)
+    pinned = result.get("first_running_sha256") if type(result) is dict else None
+    expected = {**record, "phase": "activated", "first_running_sha256": pinned}
+    if learning and type(result) is dict:
+        seed = result.get("first_pretraffic_sha256")
+        if type(seed) is not str or not DIGEST.fullmatch(seed):
+            raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_PRETRAFFIC_REQUIRED")
+        expected["first_pretraffic_sha256"] = seed
+    if (type(pinned) is not str or not DIGEST.fullmatch(pinned) or
+            result != expected or
+            store.read() != result or type(receipt) is not StagedBoundRuntimeReceipt or
+            receipt.running is None or learning != (receipt.pretraffic_sha256 is not None) or
+            receipt.kernel_state != "native-managed-kernel-staged" or
+            not _first_running_pin_matches(result, receipt.running, config_fd,
+                                           pretraffic_sha256=receipt.pretraffic_sha256)):
+        raise QuiescentPreimageRefused("FIRST_ENABLED_HANDOFF_READBACK_REQUIRED")
+    _first_enabled_checkpoint("D24")
+    return {"result": "first-enabled-activated", "id": operation}
+
+
+def native_write_first_disabled_handoff_locked(operation: str, witness: str, stream, *,
+                                               config_fd: int) -> dict:
+    """Original FD4 child consumes its FD9 parent's exact first cold proof."""
+    import json
+    import sys
+    from dataclasses import asdict, fields
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import DIGEST, OP_ID, _config_save_witness
+    from shared_apply_seal import verify_seal
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(witness) is not str or not DIGEST.fullmatch(witness) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record.get("phase") != "activating" or
+            record["detail"]["id"] != operation or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 1):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_OWNER_REQUIRED")
+    detail = record["detail"]
+    plan = verify_seal(WORK / operation, owner=0)["sha256"]["plan.json"]
+    if (witness != _config_save_witness(detail, plan) or
+            detail["base"] == detail["candidate"]):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_CONFIG_CHANGED")
+    raw = stream.read(4097)
+    if (len(raw) > 4096 or not raw.endswith(b"\n") or raw.count(b"\n") != 1):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_WIRE_INVALID")
+    parsed = json.loads(raw)
+    if (type(parsed) is not dict or
+            set(parsed) != {field.name for field in fields(QuiescentPreimage)}):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_WIRE_INVALID")
+    preimage = QuiescentPreimage(**parsed)
+    exact = (json.dumps(asdict(preimage), sort_keys=True, separators=(",", ":"),
+                        ensure_ascii=True, allow_nan=False) + "\n").encode("ascii")
+    if exact != raw or store.read() != record:
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_WIRE_CHANGED")
+    result, receipt = native_install_first_disabled_bound_locked(
+        record, preimage=preimage, config_fd=config_fd, config_digest=detail["base"])
+    if (result != {**record, "phase": "activated"} or
+            store.read() != result or type(receipt) is not StagedBoundRuntimeReceipt or
+            receipt.running is not None or receipt.pretraffic_sha256 is not None):
+        raise QuiescentPreimageRefused("FIRST_DISABLED_HANDOFF_READBACK_REQUIRED")
+    return {"result": "first-disabled-activated", "id": operation}
+
+
+def _finish_first_pristine_locked(store, record: dict, *, config_fd: int,
+                                  config_digest: str, queue_fd: int | None) -> dict:
+    """Restore first cold tree with exact base and reversible kernel."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+
+    def observe():
+        return _first_inert_recovery_layout(record, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=queue_fd, store=store,
+            first_learning_base=queue_fd is not None)
+
+    first = observe()
+    if observe() != first:
+        raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
+    if first[2] == "native-managed-kernel-staged":
+        first = _rollback_first_inert_kernel(record,
+            WORK / record["detail"]["id"] / "release", config_fd=config_fd,
+            first=first, observe=observe)
+    live, staged, kernel = first[:3]
+    target = None
+    if staged is not None:
+        target = COMMON_ACTIVE.parent / f".{COMMON_ACTIVE.name}.stage.{record['detail']['id']}"
+    elif live is not None and live[0] == "candidate":
+        target = COMMON_ACTIVE
+    if target is not None:
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if observe() != first:
+            raise QuiescentPreimageRefused("FIRST_BOUND_TREE_CHANGED")
+        try:
+            reply = _run_bound_restore_joined(
+                ("/bin/sh", "-c", '. "$1"; atomic_remove_tree "$2"',
+                 "zapret-first-cold", str(SCRIPT / "backend/atomic.sh"), str(target)),
+                pass_fds=(9, config_fd), budget=20)
+        except (OSError, subprocess.SubprocessError):
+            raise QuiescentPreimageRefused("FIRST_BOUND_TREE_REMOVE_UNCERTAIN") from None
+        if reply.returncode != 0 or _present(target):
+            raise QuiescentPreimageRefused("FIRST_BOUND_TREE_REMOVE_FAILED")
+
+    # Persist the removal (including a resumed already-absent tree) before WAL.
+    directory_fd = os.open(COMMON_ACTIVE.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+    def exact():
+        observed = observe()
+        expected_live = None if target == COMMON_ACTIVE else live
+        return observed == (expected_live, None, kernel, *first[3:]) and observe() == observed
+
+    result = store._advance_bound_ordinary("restored", record, exact)
+    if result != {**record, "phase": "restored"} or store.read() != result:
+        raise QuiescentPreimageRefused("FIRST_BOUND_PRISTINE_READBACK_REQUIRED")
+    return result
+
+
+def _first_saved_running_kernel(record: dict, release: Path, *, config_fd: int) -> tuple:
+    """Observe the pinned running candidate and only its known IPFW stages."""
+    from neutral_schema3_previous_physical import _running_native
+    from voice_firewall_transaction import plan_postcommit_cleanup
+
+    pinned = record.get("first_running_sha256")
+    if pinned is None:
+        raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_PIN_REQUIRED")
+    running = _running_native(release, owner_uid=0, child_pidfile=CHILD_PID,
+                              monitor_pidfile=MONITOR_PID)
+    if _first_running_digest(release, running, config_fd=config_fd) != pinned:
+        raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_CHANGED")
+    empty, desired = _first_inert_staged_manifests(record, release)
+    reader = FreeBSDIPFWAdapter(19000, 19099)
+    # Even if ALL stages vanished, ACTIVATED still needs rollback evidence.
+    steps = plan_postcommit_cleanup(reader, empty, desired,
+                                    require_rollback=record["phase"] == "activated")
+    if not steps:
+        verify_prior_state(reader, desired, desired)
+    if _first_running_digest(release, running, config_fd=config_fd) != pinned:
+        raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_RUNNING_CHANGED")
+    return ("native-managed-kernel-staged" if steps else "native-managed-kernel-final",
+            pinned, tuple((kind, name, tuple(sorted(entries))) for kind, name, entries in steps))
+
+
+def _finish_first_saved_locked(store, record: dict, *, config_fd: int,
+                               config_digest: str) -> dict:
+    """Recover a distinct saved first inert candidate, without engine actions."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from voice_firewall_transaction import cleanup_committed
+
+    def observe(current):
+        return _first_inert_recovery_layout(current, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=None, store=store, saved=True)
+
+    first = observe(record)
+    if observe(record) != first:
+        raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_IMAGE_CHANGED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    os.fsync(config_fd)
+    current = record
+    if current["phase"] == "activated":
+        current = store._advance_bound_ordinary("config-saved", current,
+            lambda: observe(record) == first and observe(record) == first)
+        if current != {**record, "phase": "config-saved"} or store.read() != current:
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_READBACK_REQUIRED")
+    kernel = first[2]
+    if type(kernel) is tuple and kernel[0] == "native-managed-kernel-staged":
+        if current["phase"] != "config-saved" or observe(current) != first:
+            raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_IMAGE_CHANGED")
+        empty, desired = _first_inert_staged_manifests(current,
+            WORK / current["detail"]["id"] / "release")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        cleanup_committed(FreeBSDIPFWAdapter(19000, 19099, allow_mutations=True), empty, desired)
+        final = (first[0], first[1], ("native-managed-kernel-final", kernel[1], ()))
+    else:
+        final = first
+    result = store._advance_bound_ordinary("committed", current,
+        lambda: observe(current) == final and observe(current) == final)
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if result != {**record, "phase": "committed"} or store.read() != result:
+        raise QuiescentPreimageRefused("FIRST_BOUND_SAVED_READBACK_REQUIRED")
+    return result
+
+
+def _finish_first_learning_saved_locked(store, record: dict, *, config_fd: int,
+                                        config_digest: str, queue_fd: int) -> dict:
+    """Resume the original first Auto saved image without restarting its owner."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_owner import (attest_bound_learning_staged_generation,
+                                  attest_learning_epoch_finalizing_generation)
+    from auto_detect_post_drop import (_learning_release_sources, _qualified_learning_sources,
+                                      _original_epoch_queue,
+                                      native_finish_first_bound_learning_epoch_locked)
+    from neutral_root_stage import verify_original_operation_pins
+    from shared_apply_seal import _stat
+    from voice_firewall_transaction import cleanup_committed, verify_staged_state
+
+    detail = record["detail"]
+    if (record["phase"] not in ("activated", "epoch-finalizing") or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") != 2 or
+            config_digest != detail["candidate"] or detail["base"] == config_digest):
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    work = WORK / detail["id"]
+    release = work / "release"
+    workspace, candidate, sources = _learning_release_sources(COMMON_ACTIVE)
+    if workspace != work or candidate != config_digest:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SOURCE_CHANGED")
+    _, names = _qualified_learning_sources(sources, PRODUCER_ROOT)
+    queue, receipts = _original_epoch_queue(names)
+
+    def observe(current):
+        def attest():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != current:
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_OWNER_CHANGED")
+            verify_original_operation_pins(record=current, parent=WORK, owner_uid=0)
+            _stat(COMMON_ACTIVE.parent, 0, directory=True)
+            _safe_empty_directory(COMMON_ACTIVE.with_name("runtime-v2-backups"), 0)
+            _stat(EPOCH_ROOT, 0, directory=True)
+            _reject_cold_recovery_residue(COMMON_ACTIVE)
+            if (any(item.name != detail["id"] for item in WORK.iterdir()) or
+                    set(item.name for item in EPOCH_ROOT.iterdir()) != {detail["id"]} or
+                    any(item.name.startswith((f".{COMMON_ACTIVE.name}.stage.",
+                        f".{COMMON_ACTIVE.name}.old.")) for item in COMMON_ACTIVE.parent.iterdir())):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_RESIDUE")
+            if _learning_release_sources(COMMON_ACTIVE) != (work, candidate, sources):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SOURCE_CHANGED")
+            proof = (attest_bound_learning_staged_generation(current, config_fd)
+                     if current["phase"] == "activated" else
+                     attest_learning_epoch_finalizing_generation(detail["id"]))
+            if (proof.operation_id != detail["id"] or proof.generation != detail["id"] or
+                    proof.owner_candidate_sha256 != config_digest or proof.learning != sources):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_PROOF_CHANGED")
+            return proof
+
+        proof = attest()
+        tree = _full_prior_tree(work, COMMON_ACTIVE, 0)
+        kernel = _first_saved_running_kernel(current, release, config_fd=config_fd)
+        if current["phase"] == "activated":
+            empty, desired = _first_inert_staged_manifests(current, release)
+            verify_staged_state(FreeBSDIPFWAdapter(19000, 19099), empty, desired)
+        with queue.inherited_exclusive(queue_fd):
+            _, data = receipts._attest_learning_running_seed(proof, queue, workspace=work,
+                attest=attest, unfinished=current["phase"] == "activated")
+            if data["pretraffic_sha256"] != current.get("first_pretraffic_sha256"):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SEED_CHANGED")
+            if (current["phase"] == "epoch-finalizing" and
+                    _present(EPOCH_ROOT / detail["id"] / "epoch.json") and
+                    (kernel[0] != "native-managed-kernel-final" or
+                     receipts.verify_learning_stopped_epoch(proof, workspace=work) != data)):
+                raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_EPOCH_CHANGED")
+        if (_full_prior_tree(work, COMMON_ACTIVE, 0) != tree or attest() != proof or
+                _first_saved_running_kernel(current, release, config_fd=config_fd) != kernel):
+            raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_WITNESS_CHANGED")
+        return tree, kernel, data
+
+    first = observe(record)
+    if observe(record) != first:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_WITNESS_CHANGED")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    os.fsync(config_fd)
+    current = record
+    if current["phase"] == "activated":
+        current = store._advance_bound_ordinary("epoch-finalizing", record,
+            lambda: observe(record) == first)
+        if current != {**record, "phase": "epoch-finalizing"} or store.read() != current:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_READBACK_REQUIRED")
+    if observe(current) != first:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_WITNESS_CHANGED")
+    tree, kernel, data = first
+    if kernel[0] == "native-managed-kernel-staged":
+        empty, desired = _first_inert_staged_manifests(current, release)
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        cleanup_committed(FreeBSDIPFWAdapter(19000, 19099, allow_mutations=True), empty, desired)
+    final = (tree, ("native-managed-kernel-final", kernel[1], ()), data)
+    if observe(current) != final:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_FINAL_CHANGED")
+    epoch = native_finish_first_bound_learning_epoch_locked(current, config_fd=config_fd,
+        config_digest=config_digest, queue_fd=queue_fd)
+    if epoch != data:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_EPOCH_CHANGED")
+    result = store._advance_bound_ordinary("committed", current,
+        lambda: observe(current) == final and observe(current) == final)
+    if result != {**record, "phase": "committed"} or store.read() != result:
+        raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_READBACK_REQUIRED")
+    return result
+
+
+def finish_first_config_recovery_locked(operation: str, witness_sha256: str, *,
+                                         config_fd: int, queue_fd: int | None = None) -> dict:
+    """Classify the exact sealed plan and saved image under original FD4."""
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import DIGEST, OP_ID, _config_observation_witness
+    from shared_apply_seal import verify_seal
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(witness_sha256) is not str or not DIGEST.fullmatch(witness_sha256) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+            (queue_fd is not None and (type(queue_fd) is not int or queue_fd < 3 or
+                                       queue_fd in (9, config_fd)))):
+        raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_NATIVE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record["detail"]["id"] != operation or
+            "previous" in record or "previous_manifest" in record or "found" in record or
+            record.get("manifest", {}).get("schema") not in (1, 2)):
+        raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_OWNER_REQUIRED")
+    learning = record["manifest"]["schema"] == 2
+    if (record["phase"] not in (("activated", "epoch-finalizing") if learning else
+                               ("activated", "config-saved")) or
+            learning != (queue_fd is not None)):
+        raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_OWNER_REQUIRED")
+    detail = record["detail"]
+    base, candidate = detail["base"], detail["candidate"]
+    if base == candidate:
+        raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_AMBIGUOUS_IMAGE")
+    plan_sha = verify_seal(WORK / operation, owner=0)["sha256"]["plan.json"]
+    if witness_sha256 == _config_observation_witness(detail, plan_sha, candidate):
+        if learning:
+            _finish_first_learning_saved_locked(store, record, config_fd=config_fd,
+                config_digest=candidate, queue_fd=queue_fd)
+        else:
+            _finish_first_saved_locked(store, record, config_fd=config_fd, config_digest=candidate)
+        return {"result": "original-first-config-committed", "id": operation}
+    if (record["phase"] == "activated" and
+            witness_sha256 == _config_observation_witness(detail, plan_sha, base)):
+        if "first_running_sha256" in record:
+            # A previous interrupted Stop can already be process-free; never
+            # send another signal in that case. Otherwise qualify the exact
+            # original running owner and join its physical Stop under FD9/FD4.
+            try:
+                _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+            except QuiescentPreimageRefused:
+                if learning:
+                    _stop_first_running_base_joined_locked(store, record,
+                        config_fd=config_fd, config_digest=base, queue_fd=queue_fd)
+                else:
+                    _stop_first_running_base_joined_locked(store, record,
+                        config_fd=config_fd, config_digest=base)
+        if learning:
+            _finish_first_pristine_locked(store, record, config_fd=config_fd,
+                config_digest=base, queue_fd=queue_fd)
+            return {"result": "original-bound-cold-restored", "id": operation}
+        return finish_bound_cold_restore_locked(operation, base, config_fd=config_fd)
+    raise QuiescentPreimageRefused("FIRST_BOUND_CONFIG_IMAGE_REFUSED")
+
+
+def finish_bound_cold_restore_locked(operation: str, config_digest: str, *,
+                                     config_fd: int, queue_fd: int | None = None) -> dict:
+    """Original PHP owns the native Config lock through the restored fsync."""
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import DIGEST, OP_ID
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(config_digest) is not str or not DIGEST.fullmatch(config_digest) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+            (queue_fd is not None and (type(queue_fd) is not int or queue_fd < 3 or
+                                       queue_fd in (9, config_fd)))):
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (type(record) is not dict or record["detail"]["id"] != operation or
+            record["phase"] not in ("activating", "activated", MANAGED_WRITING) or
+            "found" in record or record.get("manifest", {}).get("schema") != 1 or
+            record["detail"]["base"] != config_digest):
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
+    if "previous" not in record:
+        _finish_first_pristine_locked(store, record, config_fd=config_fd,
+                                     config_digest=config_digest, queue_fd=queue_fd)
+        return {"result": "original-bound-cold-restored", "id": operation}
+    if record["previous"]["candidate"] != config_digest:
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
+
+    def exact():
+        _reject_cold_recovery_residue(COMMON_ACTIVE)
+        if not _restore_bound_parked_cold_locked(
+                record, config_fd=config_fd, config_digest=config_digest, queue_fd=queue_fd):
+            _restore_bound_installed_cold_locked(
+                record, config_fd=config_fd, config_digest=config_digest, queue_fd=queue_fd)
+        attest_inert_bound_cold_recovery(
+            record, restored=True, config_fd=config_fd,
+            config_digest=config_digest, queue_fd=queue_fd)
+        if _remove_bound_pristine_stage_locked(record, config_fd=config_fd, queue_fd=queue_fd):
+            # The exact stage removal is the only physical mutation here.
+            # Prove the old tree, Config, producer and kernel again before WAL.
+            attest_inert_bound_cold_recovery(
+                record, restored=True, config_fd=config_fd,
+                config_digest=config_digest, queue_fd=queue_fd)
+        _reject_cold_recovery_residue(COMMON_ACTIVE)
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return True
+
+    expected = {**record, "phase": "restored"}
+    if record["phase"] == MANAGED_WRITING:
+        expected.pop("managed")
+        result = _finish_managed_recovery_locked(store, record, config_fd=config_fd,
+                                                queue_fd=queue_fd)
+    else:
+        result = store._advance_bound_ordinary("restored", record, exact)
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if result != expected or store.read() != result:
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_READBACK_REQUIRED")
+    return {"result": "original-bound-cold-restored", "id": operation}
+
+
+def finish_managed_config_recovery_locked(operation: str, witness_sha256: str, *,
+                                           config_fd: int, queue_fd: int | None = None) -> dict:
+    """Recover only from the exact persisted Model observed by the FD4 owner."""
+    import sys
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_operation import DIGEST, OP_ID, _config_observation_witness
+    from shared_apply_seal import verify_seal
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation) or
+            type(witness_sha256) is not str or not DIGEST.fullmatch(witness_sha256) or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9 or
+            (queue_fd is not None and (type(queue_fd) is not int or queue_fd < 3 or
+                                       queue_fd in (9, config_fd)))):
+        raise QuiescentPreimageRefused("MANAGED_CONFIG_RECOVERY_NATIVE_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    record = store.read()
+    if (record is None or record["phase"] != MANAGED_CONFIG_SAVING or
+            record["detail"]["id"] != operation):
+        raise QuiescentPreimageRefused("MANAGED_CONFIG_RECOVERY_OWNER_REQUIRED")
+    detail = record["detail"]
+    base, candidate = detail["base"], detail["candidate"]
+    if base == candidate:
+        raise QuiescentPreimageRefused("MANAGED_CONFIG_RECOVERY_AMBIGUOUS_IMAGE")
+    plan_sha = verify_seal(WORK / operation, owner=0)["sha256"]["plan.json"]
+    images = {_config_observation_witness(detail, plan_sha, image): image
+              for image in (base, candidate)}
+    image = images.get(witness_sha256)
+    if image is None or (image == candidate and "restore" in record["managed"]):
+        raise QuiescentPreimageRefused("MANAGED_CONFIG_RECOVERY_IMAGE_REFUSED")
+
+    phase = "committed" if image == candidate else "restored"
+    result = _finish_managed_recovery_locked(store, record, config_fd=config_fd,
+                                            queue_fd=queue_fd, saved_image=image)
+    expected = {**record, "phase": phase}
+    expected.pop("managed")
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    if result != expected or store.read() != result:
+        raise QuiescentPreimageRefused("MANAGED_CONFIG_RECOVERY_READBACK_REQUIRED")
+    return {"result": "original-managed-config-" + phase, "id": operation}
+
+
+def native_finish_bound_cold_restore(record: dict) -> dict:
+    """Existing FD9 caller -> original P2a if present -> PHP Config -> WAL."""
+    import json
+    import sys
+    from auto_detect_post_drop import (_original_epoch_queue, _learning_release_sources,
+                                      _qualified_learning_sources)
+
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_SCOPE_REQUIRED")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+    first_learning = (type(record) is dict and record.get("manifest", {}).get("schema") == 2 and
+        record.get("phase") in ("activated", "epoch-finalizing") and
+        "previous" not in record and "previous_manifest" not in record and "found" not in record and
+        "first_running_sha256" in record and "first_pretraffic_sha256" in record)
+    if (type(record) is not dict or store.read() != record or
+            (not first_learning and (
+            record.get("phase") not in ("activating", "activated", "config-saved", MANAGED_WRITING, MANAGED_CONFIG_SAVING) or
+            "found" in record or record.get("manifest", {}).get("schema") != 1 or
+            (record["phase"] == "config-saved" and "previous" in record) or
+            ("previous" in record and record["previous"]["candidate"] != record["detail"]["base"]) or
+            ("previous" not in record and (record["phase"] not in ("activating", "activated", "config-saved") or
+                                           "previous_manifest" in record))))):
+        raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_ORIGINAL_OWNER_REQUIRED")
+    detail = record["detail"]
+    recover_save = record["phase"] == MANAGED_CONFIG_SAVING
+    first_save = first_learning or ("previous" not in record and
+                                    record["phase"] in ("activated", "config-saved"))
+    action = ("ordinary-first-recover" if first_save else
+              "managed-save-recover" if recover_save else "ordinary-restore-finish")
+    command = ["/usr/local/bin/php", str(SCRIPT / "shared_apply_config.php"),
+               action, detail["id"], detail["page"]]
+
+    def invoke(fd=None):
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise QuiescentPreimageRefused("BOUND_COLD_RECOVERY_JOURNAL_CHANGED")
+        args = command if fd is None else command + ["--queue-fd=" + str(fd)]
+        try:
+            reply = _run_bound_restore_joined(args, capture_output=True,
+                                                pass_fds=(9,) if fd is None else (fd, 9),
+                                                budget=90)
+        except subprocess.SubprocessError:
+            # Child may already have fsynced restored. Do not retry or
+            # guess a terminal outcome from missing transport evidence.
+            raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_OUTCOME_UNCERTAIN") from None
+        if (reply.returncode != 0 or type(reply.stdout) is not bytes or
+                len(reply.stdout) > 4096 or reply.stdout.count(b"\n") != 1 or
+                not reply.stdout.endswith(b"\n")):
+            if first_save:
+                _relay_first_recovery_trace(reply.stderr)
+            raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_RECEIPT_REQUIRED")
+        receipt = json.loads(reply.stdout)
+        phase = "restored"
+        if ((recover_save and receipt == {"result": "original-managed-config-committed", "id": detail["id"]}) or
+                (first_save and receipt == {"result": "original-first-config-committed", "id": detail["id"]})):
+            phase = "committed"
+        else:
+            restored = "original-managed-config-restored" if recover_save else "original-bound-cold-restored"
+            if (receipt != {"result": restored, "id": detail["id"]} or
+                    record["phase"] in ("config-saved", "epoch-finalizing")):
+                raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_NATIVE_RECEIPT_REQUIRED")
+        result = store.read()
+        expected = {**record, "phase": phase}
+        expected.pop("managed", None)
+        if result != expected:
+            raise QuiescentPreimageRefused("BOUND_COLD_RESTORE_READBACK_REQUIRED")
+        return result
+
+    if first_learning:
+        work, candidate, sources = _learning_release_sources(WORK / detail["id"] / "release")
+        if work != WORK / detail["id"] or candidate != detail["candidate"]:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_SOURCE_CHANGED")
+        _, names = _qualified_learning_sources(sources, PRODUCER_ROOT)
+        queue, receipts = _original_epoch_queue(names)
+        if queue.root != PRODUCER_ROOT or queue.uid != 0 or receipts.root != EPOCH_ROOT:
+            raise QuiescentPreimageRefused("FIRST_LEARNING_SAVED_QUEUE_CHANGED")
+        with queue.exclusive(existing_only=True):
+            return invoke(queue.locked_fd)
+    retired = record.get("previous_manifest", {}).get("schema") == 2
+    if "previous" not in record:
+        _safe_empty_directory(PRODUCER_ROOT, 0)
+        return invoke()
+    if _present(PRODUCER_ROOT):
+        info = PRODUCER_ROOT.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022):
+            raise QuiescentPreimageRefused("BOUND_IDLE_PRODUCER_UNTRUSTED")
+    if retired or (_present(PRODUCER_ROOT) and any(PRODUCER_ROOT.iterdir())):
+        queue, receipts = _original_epoch_queue()
+        if queue.root != PRODUCER_ROOT or queue.uid != 0 or receipts.root != EPOCH_ROOT:
+            raise QuiescentPreimageRefused("BOUND_COLD_RETIRED_SCOPE_REQUIRED")
+        with queue.exclusive(existing_only=True):
+            return invoke(queue.locked_fd)
+    _safe_empty_directory(PRODUCER_ROOT, 0)
+    return invoke()
 
 
 def attest_quiescent_under_fd9(*, generation: str, native: NativeParity,

@@ -3,7 +3,7 @@
 /**
  * LC-05: one-time initial configuration after the very first plugin install.
  *
- * Store two user-approved values through the normal native model and
+ * Store three user-approved values through the normal native model and
  * Config::save(), exactly as a form save would. NEVER synthesize values in
  * a model getter or a page renderer, and never alter an existing Zapret root,
  * including empty previously saved fields and ordinary pkg reinstall.
@@ -71,6 +71,7 @@ STRATEGY;
             foreach ([
                 'strategy.trafficargs' => self::TRAFFIC_STRATEGY,
                 'hostlist.youtubedomains' => self::YOUTUBE_DOMAINS,
+                'hostlist.mode' => 'list',
             ] as $reference => $value) {
                 if ($model->setNodeByReference($reference, $value) !== true) {
                     throw new \RuntimeException('Native first-install model refused field');
@@ -85,7 +86,7 @@ STRATEGY;
 
             $saveAttempted = true;
             $config->save([
-                'description' => 'Initialized clean Zapret2 Traffic Strategy and YouTube Domains',
+                'description' => 'Initialized clean Zapret2 Traffic Strategy, YouTube Domains and List target mode',
             ]);
             return 'initialized';
         } catch (\Throwable $error) {

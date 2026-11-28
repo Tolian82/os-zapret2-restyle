@@ -116,8 +116,9 @@ def _drained(path, row, proof, queue, inspect):
     raise LearningRetirementRefused("stopped_learning_source_fd_unknown")
 
 
-def _tip(receipts, queue, proof, workspace):
-    tip = CursorChain(receipts, queue).learning_tip(proof, workspace)
+def _tip(receipts, queue, proof, workspace, *, repair):
+    tip = CursorChain(receipts, queue).learning_tip(
+        proof, workspace, reclaim_unsealed=repair)
     if (tip["slot"] is not None or tip["intent"] is not None or
             tip.get("debug_cut_pending") is not None or
             queue.segments()):
@@ -338,7 +339,7 @@ def retired_learning_stopped(receipts: EpochReceipts, queue: DurableInbox,
     creates a directory, receipt, archive, or replacement inode.
     """
     _require_owner(receipts, queue, proof, workspace, attest)
-    tip = _tip(receipts, queue, proof, workspace)
+    tip = _tip(receipts, queue, proof, workspace, repair=repair)
     epoch = receipts._generation(proof.generation, create=False)
     folder = epoch / RETIRE_DIR
     if not _entry(folder):

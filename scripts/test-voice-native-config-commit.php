@@ -100,6 +100,61 @@ namespace {
     $strategyPlan = SettingsApply::prepareStrategies($prior, [
         'strategy'=>['trafficargs'=>'--filter-tcp=80'],
     ], '91.108.0.0/16');
+    $guarded = new FakeConfig($prior);
+    foreach ([$strategyPlan, SettingsApply::prepareStrategies($prior, [], '91.108.0.0/16')] as $guardedPlan) {
+        $calls = 0;
+        try {
+            SharedConfigCommit::persist($guardedPlan, 'strategies', $guarded, static fn()=>new FakeModel(),
+                static function (string $base, string $candidate) use ($guarded, $guardedPlan, &$calls): bool {
+                    $calls++;
+                    verify($guarded->locks === 1 && $guarded->saves === 0,
+                        'ordinary journal witness must precede save under Config lock');
+                    verify($base === VoiceSettingsSnapshot::digest($guarded->disk) &&
+                        $candidate === VoiceSettingsSnapshot::digest($guardedPlan['candidate']),
+                        'ordinary journal witness did not receive exact locked model digests');
+                    return false;
+                }
+            );
+            verify(false, 'ordinary Config writer bypassed a refused journal witness');
+        } catch (\RuntimeException $error) {
+            verify(get_class($error) === \RuntimeException::class &&
+                str_contains($error->getMessage(), 'witness refused'), 'refusal wrongly classified as post-save');
+        }
+        verify($calls === 1 && $guarded->saves === 0 && $guarded->locks === 0 &&
+            $guarded->disk === $prior && FakeModel::$state === $prior,
+            'refused ordinary journal witness mutated original Config');
+    }
+    foreach ([true, false] as $confirmSucceeds) {
+        $managedConfig = new FakeConfig($prior);
+        $checkpoints = [];
+        try {
+            SharedConfigCommit::persist($strategyPlan, 'strategies', $managedConfig,
+                static fn()=>new FakeModel(),
+                static function (string $base, string $candidate) use ($managedConfig, $strategyPlan, &$checkpoints): bool {
+                    verify($managedConfig->locks === 1 && $managedConfig->saves === 0,
+                        'managed intent must precede native Config save');
+                    verify($base === VoiceSettingsSnapshot::digest($managedConfig->disk) &&
+                        $candidate === VoiceSettingsSnapshot::digest($strategyPlan['candidate']),
+                        'managed save intent digests changed');
+                    $checkpoints[] = 'saving';
+                    return true;
+                },
+                static function (string $snapshot) use ($managedConfig, $confirmSucceeds, &$checkpoints): bool {
+                    verify($managedConfig->locks === 1 && $managedConfig->saves === 1 &&
+                        $snapshot === VoiceSettingsSnapshot::digest($managedConfig->disk),
+                        'managed publication requires fresh locked Config readback');
+                    $checkpoints[] = 'confirmed';
+                    return $confirmSucceeds;
+                }
+            );
+            verify($confirmSucceeds, 'managed Config confirmation refusal returned success');
+        } catch (\OPNsense\Zapret\Native\SharedConfigSaveUncertain $error) {
+            verify(!$confirmSucceeds, 'unexpected managed Config uncertainty');
+        }
+        verify($checkpoints === ['saving', 'confirmed'] &&
+            $managedConfig->saves === 1 && $managedConfig->locks === 0,
+            'managed Config checkpoints must share the original single writer');
+    }
     $config->disk['strategylab']['enablequic'] = '0';
     $result = SharedConfigCommit::persist(
         $strategyPlan,'strategies',$config,static fn()=>new FakeModel()
@@ -212,7 +267,14 @@ namespace {
     $orig = new FakeConfig($config->disk);
     $sequence = [];
     $p2Held = false;
-    $withP2 = static function (callable $scope) use (&$sequence, &$p2Held, $orig): string {
+    $observedDigests = [];
+    $originalBase = VoiceSettingsSnapshot::digest($orig->disk);
+    $withP2 = static function (callable $scope, string $observedDigest) use (
+        &$sequence, &$p2Held, &$observedDigests, $orig
+    ): string {
+        verify(hash_equals(VoiceSettingsSnapshot::digest($orig->disk), $observedDigest),
+               'Found transport did not pass fresh locked Config digest');
+        $observedDigests[] = $observedDigest;
         verify($orig->locks === 1 && !$p2Held,
                'P2 attempted before Config lock or still held at relock');
         $p2Held = true;
@@ -249,6 +311,9 @@ namespace {
         'p2-lock','before-config-save','found-config-saving','p2-unlock',
         'p2-lock','after-config-save','found-config-saved','p2-unlock'
     ], 'original Config->P2 lock order or durable phase order changed');
+    verify($observedDigests === [$originalBase, VoiceSettingsSnapshot::digest($orig->disk)] &&
+        $observedDigests[0] !== $observedDigests[1],
+        'Found pre-save and readback Config identities were conflated');
 
     // Found-only edit must still pass through one sealed nonterminal WAL,
     // but it must not manufacture a new native XML revision.

@@ -32,6 +32,20 @@ class DurableInboxTests(unittest.TestCase):
         self.root = root
         self.queue = queue.DurableInbox(root, owner_uid=os.geteuid())
 
+    def test_existing_only_queue_lock_never_creates_or_replaces(self):
+        with self.assertRaises(FileNotFoundError):
+            with self.queue.exclusive(existing_only=True):
+                self.fail("missing original lock accepted")
+        self.assertFalse(self.queue.lock.exists())
+        with self.queue.exclusive():
+            pin = self.queue.lock.stat()
+        with self.queue.exclusive(existing_only=True):
+            self.assertEqual(os.fstat(self.queue.locked_fd).st_ino, pin.st_ino)
+            with self.assertRaises(queue.QueueSafetyError):
+                with self.queue.exclusive(existing_only=True):
+                    self.fail("second queue lock accepted")
+        self.assertEqual(self.queue.lock.stat().st_ino, pin.st_ino)
+
     def test_original_native_rotation_retains_open_fd_and_new_append(self):
         import hashlib
         generation = "a" * 32

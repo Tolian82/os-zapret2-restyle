@@ -17,22 +17,36 @@ preflight_shared_apply_journal() {
 }
 shared_apply_build_service() {
     echo "build:$1" >> "$LOG"
+    _shared_build_receipt=
     [ "$BUILD_OK" = 1 ] || return 69
     if [ "${BUILD_REFUSED:-0}" = 1 ]; then
-        echo 'preflight-rejected=candidate'
+        _shared_build_receipt=preflight-rejected=candidate
+        echo "$_shared_build_receipt"
         return 0
     fi
+    # These are the original in-memory generator scalars. A subshell
+    # build would lose them, even though its prepared-id is correct.
+    TRAFFIC_ARGS="--filter-tcp=443
+--lua-desync=fake"
+    HOSTLIST_MODE=list
+    _shared_build_receipt="prepared-id=$ID"
+    _shared_prepare_receipt="prepared-id=$ID"
     echo 'native template and runtime generated'
-    echo "prepared-id=$ID"
+    echo "$_shared_build_receipt"
 }
 shared_apply_execute_service() {
     echo "execute:$1:$2" >> "$LOG"
+    [ "${TRAFFIC_ARGS:-}" = "--filter-tcp=443
+--lua-desync=fake" ] && [ "${HOSTLIST_MODE:-}" = list ] &&
+    [ "${_shared_prepare_receipt:-}" = "prepared-id=$1" ] ||
+        fail "execute lost original in-memory producer input"
     [ "$EXECUTE_OK" = 1 ] || return 70
     echo "applied-id=$1"
 }
 check() {
     expected="$1"; shift
     : > "$LOG"
+    unset TRAFFIC_ARGS HOSTLIST_MODE _shared_prepare_receipt
     set +e
     shared_apply_run_service "$@" > "$TMP/response"
     code=$?
@@ -47,6 +61,8 @@ check 0 voice c2FmZQ
 [ "$(tr '\n' ' ' < "$LOG")" = "guard:common-apply build:c2FmZQ execute:$ID:voice " ] ||
     fail "build and execute not dispatched under one owner"
 grep -Fqx "applied-id=$ID" "$TMP/response" || fail "Apply receipt missing"
+[ "$(cat "$TMP/response")" = "applied-id=$ID" ] ||
+    fail "internal producer output leaked into Apply receipt"
 check 0 strategies c2FmZQ
 [ "$(tr '\n' ' ' < "$LOG")" = "guard:common-apply build:c2FmZQ execute:$ID:strategies " ] ||
     fail "Strategies used foreign page"

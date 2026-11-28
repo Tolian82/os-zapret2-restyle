@@ -65,7 +65,9 @@ def _proof(receipts: EpochReceipts, generation: str) -> LearningGenerationProof:
 
 
 def qualified_completed_learning(receipts: EpochReceipts, queue: DurableInbox,
-                                 generation: str) -> int:
+                                 generation: str, *,
+                                 expected_candidate: str | None = None,
+                                 expected_ready_sha256: str | None = None) -> int:
     """Return ordering timestamp only for an exact completed schema3 source.
 
     This does not attest a *running* historical PID. The original epoch
@@ -85,9 +87,12 @@ def qualified_completed_learning(receipts: EpochReceipts, queue: DurableInbox,
                 RECEIPTS | {"cursor-chain-v2", RETIRE_DIR})):
         raise ReceiptRefused("historical_learning_unfinished_rollover")
     proof = _proof(receipts, generation)
+    if expected_candidate is not None and proof.owner_candidate_sha256 != expected_candidate:
+        raise ReceiptRefused("historical_learning_candidate_changed")
     # This uses the same historical sealed release/zero cut and original
     # receipt parser as the current source, without an old live PID.
-    tip = CursorChain(receipts, queue).learning_tip(proof, WORK / generation)
+    tip = CursorChain(receipts, queue).learning_tip(
+        proof, WORK / generation, reclaim_unsealed=False)
     if (tip["slot"] is not None or tip["intent"] is not None or
             tip.get("debug_cut_pending") is not None or
             tip["root"].parent != folder or
@@ -141,6 +146,11 @@ def qualified_completed_learning(receipts: EpochReceipts, queue: DurableInbox,
                expected=source["image"])
     if set(os.listdir(archive)) != expected_names:
         raise ReceiptRefused("historical_learning_foreign_archive")
+    if (_read(archive / INTENT, receipts.uid) != raw or
+            _read(archive / READY, receipts.uid) != ready_raw or
+            (expected_ready_sha256 is not None and
+             hashlib.sha256(ready_raw).hexdigest() != expected_ready_sha256)):
+        raise ReceiptRefused("historical_learning_terminal_receipts_changed")
     return folder.stat().st_mtime_ns
 
 

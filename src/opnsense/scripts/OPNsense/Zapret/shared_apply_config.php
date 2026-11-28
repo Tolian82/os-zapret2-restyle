@@ -37,8 +37,9 @@ final class SharedApplyConfigWorker
         }
     }
 
-    public static function readPlan(string $id, string $root = self::ROOT, ?int $owner = null): array
-    {
+    public static function readPlan(
+        string $id, string $root = self::ROOT, ?int $owner = null, ?string &$sha256 = null
+    ): array {
         if (!preg_match('/^[a-f0-9]{32}$/D', $id)) {
             throw new \InvalidArgumentException('Invalid common Apply ID');
         }
@@ -80,6 +81,7 @@ final class SharedApplyConfigWorker
         // The Config and full release must have been staged together; a
         // symlinked/missing XML is not authority to persist its plan.
         self::secureFile($dir . '/candidate.xml', false, $owner);
+        $sha256 = hash('sha256', $json);
         return $plan;
     }
 
@@ -316,23 +318,179 @@ final class SharedApplyConfigWorker
         ];
     }
 
+    private static function openOriginalFoundQueue(int $fd, string $path = '/var/db/zapret2-auto-detect/worker.lock')
+    {
+        if ($fd < 3 || $fd > 1024 || $fd === 9) {
+            throw new \RuntimeException('Invalid original Found queue descriptor');
+        }
+        $stream = @fopen('php://fd/' . $fd, 'r+b');
+        if (!is_resource($stream)) {
+            throw new \RuntimeException('Original Found queue descriptor unavailable');
+        }
+        $held = @fstat($stream);
+        $named = @lstat($path);
+        if (!is_array($held) || !is_array($named) ||
+            $held['dev'] !== $named['dev'] || $held['ino'] !== $named['ino'] ||
+            $held['uid'] !== 0 || $held['gid'] !== 0 || $held['nlink'] !== 1 ||
+            $named['nlink'] !== 1 || ($held['mode'] & 0177777) !== 0100600 ||
+            ($named['mode'] & 0177777) !== 0100600) {
+            fclose($stream);
+            throw new \RuntimeException('Foreign original Found queue descriptor');
+        }
+        // Python independently verifies the same locked open description.
+        return $stream;
+    }
+
     /**
      * Real cold inspection uses the ONE original PHP Config::lock and the
      * child inherited descriptors 4 + 9. No new lock owner and NO mutation.
      * It remains an unregistered internal FD9-only CLI, not a GUI Apply.
      */
-    private static function originalFoundLockedFileEvidence(
+    /**
+     * Mutation child: a deadline refuses the receipt, never kills the child.
+     * Drain bounded output (discard excess) and join before Config::unlock.
+     * No extra writer, detached worker or second lock. The child must join
+     * its synchronous physical commands before returning.
+     */
+    private static function joinOrdinaryRestoreChild($proc, array &$pipes, float $budget = 40.0): array
+    {
+        $output = '';
+        $failed = false;
+        $deadline = hrtime(true) + (int)($budget * 1000000000);
+        try {
+            if (!stream_set_blocking($pipes[1], false)) {
+                $failed = true;
+            }
+            while (!feof($pipes[1])) {
+                if (hrtime(true) >= $deadline) {
+                    $failed = true;
+                }
+                $read = [$pipes[1]];
+                $write = [];
+                $except = [];
+                $ready = @stream_select($read, $write, $except, 1);
+                if ($ready === false) {
+                    // An interrupted read is not permission to terminate
+                    // the child. Fall back to a blocking drain and join.
+                    $failed = true;
+                    stream_set_blocking($pipes[1], true);
+                } elseif ($ready === 0) {
+                    continue;
+                }
+                $piece = @fread($pipes[1], 4096);
+                if ($piece === false) {
+                    $failed = true;
+                    break;
+                }
+                if (!$failed && strlen($output) + strlen($piece) <= 16384) {
+                    $output .= $piece;
+                } else {
+                    $failed = true;
+                }
+            }
+        } finally {
+            // Closing a broken receipt pipe is safe only because the
+            // original child writes its result AFTER physical commands.
+            foreach ($pipes as $key => $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+                unset($pipes[$key]);
+            }
+        }
+        $code = proc_close($proc);
+        return [$output, $failed || hrtime(true) >= $deadline, $code];
+    }
+
+    private static function openFirstEnabledTrace()
+    {
+        // No extra journal and no named log: use an unlinked private stream.
+        $trace = @tmpfile();
+        if (!is_resource($trace)) {
+            return false;
+        }
+        $meta = stream_get_meta_data($trace);
+        if (!isset($meta['uri']) || !@unlink($meta['uri'])) {
+            @fclose($trace);
+            return false;
+        }
+        return $trace;
+    }
+
+    private static function firstEnabledTrace($trace): string
+    {
+        if (!is_resource($trace) || !@rewind($trace)) {
+            return '';
+        }
+        $raw = @stream_get_contents($trace, 8193);
+        if (!is_string($raw) || strlen($raw) > 8192) {
+            return '';
+        }
+        $lines = explode("\n", $raw);
+        array_pop($lines); // Only complete, newline-terminated fixed markers.
+        $safe = '';
+        foreach (array_slice($lines, 0, 64) as $line) {
+            if (preg_match('/\AS10_FIRST_TRACE=D(?:0[3-9]|[12][0-9]|30)\z/D', $line) ||
+                preg_match('/\AS10_MANAGED_TRACE=M(?:0[1-9]|1[0-4]):[1-9][0-9]{0,4}\z/D', $line)) {
+                $safe .= $line . "\n";
+            }
+        }
+        return $safe;
+    }
+
+    private static function managedPhpRefusalTrace(\Throwable $error): void
+    {
+        $files = ['shared_apply_config.php'=>'P01', 'apply_settings.php'=>'P02',
+            'shared_apply_lock.php'=>'P03'];
+        for ($i = 0; $error !== null && $i < 8; ++$i) {
+            $code = $files[basename($error->getFile())] ?? null;
+            $line = $error->getLine();
+            if ($code !== null && $line > 0 && $line <= 99999) {
+                @fwrite(STDERR, "S10_MANAGED_TRACE=$code:$line\n");
+            }
+            $error = $error->getPrevious();
+        }
+    }
+
+    private static function originalLockedFileEvidence(
         object $config, string $id, string $mode = 'classify-locked',
         ?string $configDigest = null, ?string $runtimeMode = null,
-        ?callable $whileP2Held = null
+        ?callable $whileP2Held = null, $queueStream = null, ?string $baseDigest = null
     ): array {
-        $begin = $mode === 'begin-found-save-locked';
+        $managedStep = ['write-managed-handoff-locked'=>'write',
+            'begin-managed-config-save-locked'=>'begin', 'confirm-managed-config-save-locked'=>'confirm',
+            'recover-managed-config-locked'=>'recover'][$mode] ?? null;
+        $firstTrace = in_array($mode, ['write-first-enabled-handoff-locked', 'recover-first-config-locked', 'archive-first-restored-locked', 'prepare-first-retry-locked', 'recover-first-retry-prepared-locked'], true) || $managedStep !== null;
+        if ($managedStep !== null) { @fwrite(STDERR, "S10_MANAGED_STEP=$managedStep\n"); }
+        if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D01\n"); }
+        $boundBegin = $mode === 'begin-bound-found-save-locked';
+        $begin = $mode === 'begin-found-save-locked' || $boundBegin;
+        $managedWrite = in_array($mode, ['write-managed-handoff-locked',
+            'write-first-disabled-handoff-locked', 'write-first-enabled-handoff-locked'], true);
+        $joined = in_array($mode, ['recover-bound-found-locked', 'finish-bound-found-locked', 'finish-ordinary-restore-locked', 'recover-managed-config-locked',
+            'begin-managed-config-save-locked', 'confirm-managed-config-save-locked',
+            'write-managed-handoff-locked', 'write-first-disabled-handoff-locked',
+            'write-first-enabled-handoff-locked', 'recover-first-config-locked', 'archive-first-restored-locked', 'prepare-first-retry-locked', 'recover-first-retry-prepared-locked'], true);
         if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
                  !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
-            ($begin ? (!in_array($runtimeMode, ['0', '1'], true) || $whileP2Held === null)
-                    : ($runtimeMode !== null || $whileP2Held !== null))) {
+            ($begin ? (!in_array($runtimeMode, ['0', '1'], true) || $whileP2Held === null ||
+                        $baseDigest === null || !preg_match('/^[a-f0-9]{64}$/D', $baseDigest))
+                    : ($runtimeMode !== null || $whileP2Held !== null || $baseDigest !== null)) ||
+            ($queueStream !== null && (!is_resource($queueStream) ||
+                !in_array($mode, ['begin-bound-found-save-locked',
+                    'finish-bound-found-locked', 'recover-bound-found-locked', 'recover-found-locked',
+                    'confirm-found-save-locked',
+                    'finish-ordinary-restore-locked', 'recover-managed-config-locked',
+                    'recover-first-config-locked', 'archive-first-restored-locked', 'prepare-first-retry-locked', 'recover-first-retry-prepared-locked', 'write-first-enabled-handoff-locked'], true)))) {
             throw new \RuntimeException('Unqualified original cold native mode');
+        }
+        if ($boundBegin) {
+            $source = @fstat(STDIN);
+            if ($runtimeMode !== '0' || !is_array($source) ||
+                ($source['mode'] & 0170000) !== 0010000) {
+                throw new \RuntimeException('Original bound Found FIFO required');
+            }
         }
         SharedApplyLifecycleLock::assertHeld();
         $reflection = new \ReflectionObject($config);
@@ -353,7 +511,9 @@ final class SharedApplyConfigWorker
         if (!is_resource($fd9)) {
             throw new \RuntimeException('Original FD9 descriptor missing');
         }
+        $trace = false;
         try {
+            if ($firstTrace) { $trace = self::openFirstEnabledTrace(); }
             $pipes = [];
             $command = [
                 '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
@@ -365,57 +525,88 @@ final class SharedApplyConfigWorker
             }
             if ($begin) {
                 $command[] = $runtimeMode;
+                $command[] = $baseDigest;
+            }
+            $descriptors = [0 => $managedWrite ? STDIN : ($begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r']),
+                1 => ['pipe', 'w'], 2 => is_resource($trace) ? $trace : ['file', '/dev/null', 'a'],
+                4 => $handle, 9 => $fd9];
+            if ($boundBegin) {
+                // Keep source FIFO separate from the existing ready/save stdin.
+                $descriptors[5] = STDIN;
+            }
+            if ($queueStream !== null) {
+                $descriptors[3] = $queueStream;
+                $command[] = '--inherited-queue';
             }
             $proc = @proc_open(
-                $command,
-                [0 => $begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r'],
-                 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a'],
-                 4 => $handle, 9 => $fd9],
+                $command, $descriptors,
                 $pipes, null, ['LC_ALL' => 'C', 'PATH' => '/usr/bin:/bin:/usr/local/bin']
             );
             if (!is_resource($proc)) {
+                if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D34\n"); }
                 throw new \RuntimeException('Original cold native child unavailable');
             }
+            if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D02\n"); }
             try {
-                stream_set_blocking($pipes[1], false);
-                $output = '';
-                $deadline = microtime(true) + 40;
-                while (!feof($pipes[1])) {
-                    if (microtime(true) >= $deadline || strlen($output) > 16384) {
-                        throw new \RuntimeException('Original cold native child timeout');
-                    }
-                    $read = [$pipes[1]];
-                    $write = [];
-                    $except = [];
-                    $ready = @stream_select($read, $write, $except, 1);
-                    if ($ready === false) {
-                        throw new \RuntimeException('Original cold native child read failed');
-                    }
-                    if ($ready > 0) {
-                        $piece = @fread($pipes[1], 16385 - strlen($output));
-                        if ($piece === false) {
-                            throw new \RuntimeException('Original cold native child interrupted');
+                if ($joined) {
+                    [$output, $failed, $code] = self::joinOrdinaryRestoreChild($proc, $pipes,
+                        in_array($mode, ['archive-first-restored-locked', 'prepare-first-retry-locked', 'recover-first-retry-prepared-locked'], true) ? 150.0 : 40.0);
+                    $proc = null;
+                    if ($firstTrace) {
+                        if (is_resource($trace)) {
+                            @fwrite(STDERR, self::firstEnabledTrace($trace));
+                            @fclose($trace);
+                            $trace = false;
                         }
-                        $output .= $piece;
-                        if ($begin && $output === "ready\n" && isset($pipes[0])) {
-                            // The original Python child keeps P2 held from
-                            // physical writes through the only native save.
-                            // Even a throwing save releases this scope.
-                            try {
-                                $whileP2Held();
-                            } finally {
-                                fclose($pipes[0]);
-                                unset($pipes[0]);
+                        @fwrite(STDERR, "S10_FIRST_TRACE=D25\n");
+                        if ($code !== 0) { @fwrite(STDERR, "S10_FIRST_TRACE=D31\n"); }
+                        if ($failed) { @fwrite(STDERR, "S10_FIRST_TRACE=D32\n"); }
+                        if ($output === '') { @fwrite(STDERR, "S10_FIRST_TRACE=D33\n"); }
+                    }
+                    if ($failed || $code !== 0 || $output === '') {
+                        throw new \RuntimeException('Original locked operation outcome uncertain after join');
+                    }
+                } else {
+                    stream_set_blocking($pipes[1], false);
+                    $output = '';
+                    $deadline = microtime(true) + 40;
+                    while (!feof($pipes[1])) {
+                        if (microtime(true) >= $deadline || strlen($output) > 16384) {
+                            throw new \RuntimeException('Original cold native child timeout');
+                        }
+                        $read = [$pipes[1]];
+                        $write = [];
+                        $except = [];
+                        $ready = @stream_select($read, $write, $except, 1);
+                        if ($ready === false) {
+                            throw new \RuntimeException('Original cold native child read failed');
+                        }
+                        if ($ready > 0) {
+                            $piece = @fread($pipes[1], 16385 - strlen($output));
+                            if ($piece === false) {
+                                throw new \RuntimeException('Original cold native child interrupted');
+                            }
+                            $output .= $piece;
+                            if ($begin && $output === "ready\n" && isset($pipes[0])) {
+                                // The original Python child keeps P2 held from
+                                // physical writes through the only native save.
+                                // Even a throwing save releases this scope.
+                                try {
+                                    $whileP2Held();
+                                } finally {
+                                    fclose($pipes[0]);
+                                    unset($pipes[0]);
+                                }
                             }
                         }
                     }
-                }
-                fclose($pipes[1]);
-                unset($pipes[1]);
-                $code = proc_close($proc);
-                $proc = null;
-                if ($code !== 0 || strlen($output) > 16384 || $output === '') {
-                    throw new \RuntimeException('Original FD9/P2 staged image unknown');
+                    fclose($pipes[1]);
+                    unset($pipes[1]);
+                    $code = proc_close($proc);
+                    $proc = null;
+                    if ($code !== 0 || strlen($output) > 16384 || $output === '') {
+                        throw new \RuntimeException('Original FD9/P2 staged image unknown');
+                    }
                 }
                 $reply = $begin && $output === "ready\n" && !isset($pipes[0])
                     ? ['result' => 'ready']
@@ -433,47 +624,69 @@ final class SharedApplyConfigWorker
                     throw new \RuntimeException('Native Config replaced during cold files proof');
                 }
                 SharedApplyLifecycleLock::assertHeld();
+                if ($firstTrace) { @fwrite(STDERR, "S10_FIRST_TRACE=D26\n"); }
                 return $reply;
             } finally {
                 foreach ($pipes as $pipe) {
                     if (is_resource($pipe)) { fclose($pipe); }
                 }
                 if (is_resource($proc)) {
-                    @proc_terminate($proc);
+                    if (!$joined) {
+                        @proc_terminate($proc);
+                    }
+                    // Never release Config while a synchronous ordinary
+                    // physical child is still running, even on read error.
                     @proc_close($proc);
                 }
             }
         } finally {
+            if (is_resource($trace)) {
+                @fwrite(STDERR, self::firstEnabledTrace($trace));
+                @fclose($trace);
+            }
             fclose($fd9);
         }
     }
 
     private static function saveFoundNative(
-        array $plan, string $id, string $mode, object $config, callable $factory
+        array $plan, string $id, string $mode, object $config, callable $factory,
+        bool $bound = false, $queueStream = null
     ): array {
+        if ($queueStream !== null && (!$bound || !is_resource($queueStream))) {
+            throw new \InvalidArgumentException('Original bound Found queue scope required');
+        }
         $scopes = 0;
         $candidate = VoiceSettingsSnapshot::digest($plan['candidate']);
         try {
             return SharedConfigCommit::persistFoundUnderOriginalOwner(
                 $plan, 'strategies', $config, $factory,
-                static function (callable $saveScope) use (
-                    &$scopes, $config, $mode, $id, $candidate
+                static function (callable $saveScope, string $observedDigest) use (
+                    &$scopes, $config, $mode, $id, $candidate, $plan, $bound,
+                    $queueStream
                 ): string {
                     if (++$scopes === 1) {
+                        if (!hash_equals($plan['dependencies'], $observedDigest)) {
+                            throw new \RuntimeException('Original Found base Config changed');
+                        }
                         $status = null;
-                        $ready = self::originalFoundLockedFileEvidence(
-                            $config, $id, 'begin-found-save-locked', $candidate, $mode,
+                        $ready = self::originalLockedFileEvidence(
+                            $config, $id, $bound ? 'begin-bound-found-save-locked' :
+                                'begin-found-save-locked', $candidate, $mode,
                             static function () use ($saveScope, &$status): void {
                                 $status = $saveScope();
-                            }
+                            }, $queueStream, $observedDigest
                         );
                         if (($ready['result'] ?? null) !== 'ready' || !is_string($status)) {
                             throw new \RuntimeException('Original found save scope unavailable');
                         }
                         return $status;
                     }
-                    $receipt = self::originalFoundLockedFileEvidence(
-                        $config, $id, 'confirm-found-save-locked', $candidate
+                    if ($scopes !== 2 || !hash_equals($candidate, $observedDigest)) {
+                        throw new \RuntimeException('Original Found saved Config changed');
+                    }
+                    $receipt = self::originalLockedFileEvidence(
+                        $config, $id, 'confirm-found-save-locked', $observedDigest,
+                        null, null, $queueStream
                     );
                     if ($receipt !== ['result' => 'found-config-saved', 'mode' => $mode]) {
                         throw new \RuntimeException('Original found save readback unavailable');
@@ -498,14 +711,16 @@ final class SharedApplyConfigWorker
     }
 
     private static function foundPhaseNative(
-        string $action, string $id, object $config, callable $factory
+        string $action, string $id, object $config, callable $factory, $queueStream = null
     ): array {
         $config->lock();
         try {
             $digest = VoiceSettingsSnapshot::digest($factory()->getNodes());
-            return self::originalFoundLockedFileEvidence(
-                $config, $id, $action === 'found-recover' ? 'recover-found-locked' : $action,
-                $digest
+            return self::originalLockedFileEvidence(
+                $config, $id, $action === 'found-recover' ? 'recover-found-locked' :
+                    ($action === 'found-bound-finish' ? 'finish-bound-found-locked' :
+                        ($action === 'found-bound-recover' ? 'recover-bound-found-locked' : $action)),
+                $digest, null, null, $queueStream
             );
         } finally {
             $config->unlock();
@@ -530,7 +745,7 @@ final class SharedApplyConfigWorker
         $config->lock();
         try {
             $before = $factory()->getNodes();
-            $files = self::originalFoundLockedFileEvidence($config, $id);
+            $files = self::originalLockedFileEvidence($config, $id);
             $after = $factory()->getNodes();
             if (!is_array($before) || !is_array($after) ||
                 VoiceSettingsSnapshot::digest($before) !==
@@ -575,7 +790,7 @@ final class SharedApplyConfigWorker
             // original FD9, same sealed plan and PREPARED WAL, three exact
             // BEFORE files and same physical previous runtime/IPFW TWICE.
             // Its ONLY write is original operation.json restored fsync.
-            $receipt = self::originalFoundLockedFileEvidence(
+            $receipt = self::originalLockedFileEvidence(
                 $config, $id, 'recover-prepared-locked', $base);
             $keys = array_keys($receipt);
             sort($keys);
@@ -605,6 +820,50 @@ final class SharedApplyConfigWorker
         }
     }
 
+    /**
+     * Classify only the original ordinary shared model image after interruption.
+     * Equal base/candidate is deliberately ambiguous. Matching bytes are not
+     * proof of a Config::save call, runtime ownership or permission to recover.
+     */
+    public static function classifyOrdinaryConfigImage(array $plan, array $current): array
+    {
+        if (($plan['result'] ?? null) !== 'prepared' ||
+            !in_array($plan['page'] ?? null, ['strategies', 'voice'], true) ||
+            !is_array($plan['candidate'] ?? null) ||
+            !is_array($plan['changed_fields'] ?? null) ||
+            !is_string($plan['dependencies'] ?? null) ||
+            !preg_match('/^[a-f0-9]{64}$/D', $plan['dependencies']) ||
+            array_key_exists('found_intent', $plan) ||
+            array_key_exists('found_batch', $plan)) {
+            throw new \RuntimeException('Unqualified ordinary cold Config plan');
+        }
+        $base = $plan['dependencies'];
+        $candidate = VoiceSettingsSnapshot::digest($plan['candidate']);
+        $observed = VoiceSettingsSnapshot::digest($current);
+        $enabled = $current['general']['enabled'] ?? null;
+        if (!in_array($enabled, ['0', '1'], true)) {
+            throw new \RuntimeException('Unqualified ordinary cold enabled image');
+        }
+        $isBase = hash_equals($base, $observed);
+        $isCandidate = hash_equals($candidate, $observed);
+        if (!$isBase && !$isCandidate) {
+            throw new \RuntimeException('Foreign ordinary cold Config image');
+        }
+        return [
+            'result' => 'read-only-ordinary-config-classification',
+            'image' => $isBase && $isCandidate ? 'base-equals-candidate'
+                : ($isCandidate ? 'candidate-image' : 'base-image'),
+            'base' => $base,
+            'candidate' => $candidate,
+            'snapshot' => $observed,
+            'enabled' => $enabled,
+            'commit_authorized' => false,
+            'restore_authorized' => false,
+            'save_attested' => false,
+            'runtime_attested' => false,
+        ];
+    }
+
     public static function saved(array $plan, array $current): array
     {
         $expected = VoiceSettingsSnapshot::digest($plan['candidate']);
@@ -617,6 +876,14 @@ final class SharedApplyConfigWorker
             throw new \RuntimeException('Invalid saved native runtime mode');
         }
         return ['result'=>'committed','snapshot'=>$actual,'enabled'=>$enabled];
+    }
+
+    private static function configSaveWitness(array $plan, string $planSha,
+                                              string $base, string $candidate): string
+    {
+        return hash('sha256', implode("\0", [
+            $plan['page'], $base, $candidate, $planSha, implode(',', $plan['changed_fields']),
+        ]));
     }
 
     /** The saved Config cannot be labelled pre-save if output encoding fails. */
@@ -682,39 +949,109 @@ final class SharedApplyConfigWorker
             }
         }
         $action = $argv[1] ?? '';
-        $foundActions = ['found-cold', 'found-recover-prepared', 'found-save', 'found-recover',
+        $foundActions = ['found-cold', 'found-recover-prepared', 'found-save', 'found-bound-save', 'found-bound-finish', 'found-bound-recover', 'found-recover',
             'found-runtime-activating', 'found-runtime-activated', 'found-runtime-config-saved',
             'found-runtime-epoch-finalizing', 'found-runtime-committed'];
         $found = in_array($action, $foundActions, true);
-        if (count($argv) !== ($action === 'found-save' ? 5 : 4) ||
-            !in_array($action, ['preflight', 'save', 'saved', ...$foundActions], true) ||
-            !in_array($argv[3], $found ? ['strategies'] : ['voice', 'strategies'], true)) {
+        $queueFd = null;
+        $queueSave = ($action === 'found-bound-save' && count($argv) === 6 &&
+            preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D',
+                (string)$argv[5], $matches) === 1);
+        $queueOther = (in_array($action, ['found-recover', 'found-bound-finish', 'found-bound-recover',
+                'ordinary-restore-finish', 'managed-save-recover',
+                'ordinary-first-recover', 'ordinary-first-archive', 'first-enabled-apply'], true) &&
+            count($argv) === 5 &&
+            preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D',
+                (string)$argv[4], $matches) === 1);
+        $retryRecover = $action === 'ordinary-first-retry-recover';
+        $retry = $action === 'ordinary-first-retry' || $retryRecover;
+        $queueRetry = $retry && count($argv) === 6 &&
+            preg_match('/^--queue-fd=([1-9][0-9]{0,3})$/D', (string)$argv[4], $matches) === 1 &&
+            preg_match('/^[a-f0-9]{32}$/D', (string)$argv[5]) === 1 && $argv[5] !== $argv[2];
+        if ($queueSave || $queueOther || $queueRetry) {
+            $queueFd = (int)$matches[1];
+        }
+        $expectedCount = ($queueSave || $queueRetry) ? 6 :
+            ((in_array($action, ['found-save', 'found-bound-save'], true) ||
+                $queueOther) ? 5 : 4);
+        if (($retry && (!$queueRetry || $argv[3] !== 'strategies')) || count($argv) !== $expectedCount ||
+            !in_array($action, ['preflight', 'save', 'saved', 'managed-save', 'managed-apply', 'first-disabled-apply', 'first-enabled-apply',
+                'ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover', 'ordinary-first-archive', 'ordinary-first-retry', 'ordinary-first-retry-recover', 'managed-save-recover', ...$foundActions], true) ||
+            !in_array($argv[3], $found || in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply'], true)
+                ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
         }
+        $queueStream = null;
         try {
             if (PHP_OS_FAMILY !== 'BSD' || SharedApplyLifecycleLock::effectiveUid() !== 0) {
                 throw new \RuntimeException('Root OPNsense native Config required');
             }
             SharedApplyLifecycleLock::assertHeld();
-            if ($found) {
+            $planRoot = self::ROOT;
+            $archive = $action === 'ordinary-first-archive';
+            if ($retry) {
+                $queueStream = self::openOriginalFoundQueue($queueFd,
+                    '/var/db/zapret2/shared-aborted-first/' . $argv[5] . '/producer-parent/producer/worker.lock');
+                if ($retryRecover && @lstat(self::ROOT . '/' . $argv[2]) === false) {
+                    $planRoot = '/var/db/zapret2/shared-aborted-first/' . $argv[2] . '/work';
+                }
+            } elseif ($archive) {
+                if ($queueFd === null || !preg_match('/^[a-f0-9]{32}$/D', $argv[2])) {
+                    throw new \RuntimeException('Original archive scope required');
+                }
+                $historical = '/var/db/zapret2/shared-aborted-first/' . $argv[2];
+                // Select only the fixed original/archive paths. The FD4
+                // child independently proves the unique prefix and full WAL.
+                $planRoot = @lstat(self::ROOT . '/' . $argv[2]) !== false
+                    ? self::ROOT : $historical . '/work';
+                $lockPath = @lstat('/var/db/zapret2-auto-detect') !== false
+                    ? '/var/db/zapret2-auto-detect/worker.lock'
+                    : $historical . '/producer-parent/producer/worker.lock';
+                $queueStream = self::openOriginalFoundQueue($queueFd, $lockPath);
+            } elseif ($queueFd !== null) {
+                $queueStream = self::openOriginalFoundQueue($queueFd);
+            }
+            if ($retry || $archive || $found || in_array($action, ['ordinary-cold', 'ordinary-restore-finish', 'ordinary-first-recover',
+                'save', 'saved', 'managed-save', 'managed-save-recover', 'managed-apply',
+                'first-disabled-apply', 'first-enabled-apply'], true)) {
+                // Core may repair unreadable Config from a backup on load.
+                // A recovery reader must not trigger such implicit mutation.
                 self::requireReadableConfig();
             }
             require_once('script/load_phalcon.php');
-            $plan = self::readPlan($argv[2], self::ROOT, 0);
+            $planSha = null;
+            $plan = self::readPlan($argv[2], $planRoot, 0, $planSha);
             if ($plan['page'] !== $argv[3]) {
                 throw new \InvalidArgumentException('Stored native Apply page differs from request');
             }
             $config = \OPNsense\Core\Config::getInstance();
             $factory = static fn() => new \OPNsense\Zapret\Zapret();
-            if ($action === 'found-save') {
+            if (in_array($action, ['found-save', 'found-bound-save'], true)) {
+                $bound = $action === 'found-bound-save';
+                if ($bound) {
+                    // Internal FD9-only checkpoint, not configd/GUI or
+                    // terminal promotion. An optional inherited P2a comes
+                    // ONLY from original outer FD9 BEFORE native Config.
+                    $source = @fstat(STDIN);
+                    if ($argv[4] !== '0' ||
+                        ($plan['candidate']['general']['enabled'] ?? null) !== '0' ||
+                        !is_array($source) || ($source['mode'] & 0170000) !== 0010000) {
+                        throw new \RuntimeException('Original stopped bound Found scope refused');
+                    }
+                }
                 if (!in_array($argv[4], ['0', '1'], true) ||
                     ($argv[4] === '1' &&
                      (string)($plan['candidate']['general']['enabled'] ?? '') !== '1')) {
                     throw new \InvalidArgumentException('Invalid planned found runtime mode');
                 }
-                $result = self::saveFoundNative($plan, $argv[2], $argv[4], $config, $factory);
-                echo self::postSaveReceipt($result);
+                $result = self::saveFoundNative(
+                    $plan, $argv[2], $argv[4], $config, $factory,
+                    $bound, $queueStream);
+                $receipt = self::postSaveReceipt($result);
+                if (fwrite(STDOUT, $receipt) !== strlen($receipt)) {
+                    throw new SharedConfigSaveUncertain('Original Found save receipt unavailable');
+                }
                 return 0;
             }
             if ($argv[1] === 'found-cold') {
@@ -731,8 +1068,144 @@ final class SharedApplyConfigWorker
             }
             if ($found) {
                 echo self::postSaveReceipt(self::foundPhaseNative(
-                    $action, $argv[2], $config, $factory
+                    $action, $argv[2], $config, $factory, $queueStream
                 ));
+                return 0;
+            }
+            if ($retry) {
+                $config->lock();
+                try {
+                    self::requireReadableConfig();
+                    $model = $factory();
+                    $fresh = $model->getNodes();
+                    $image = self::classifyOrdinaryConfigImage($plan, $fresh);
+                    $preview = self::preflight($plan, $fresh, 'strategies', $model);
+                    $sha = null;
+                    if ($image['image'] !== 'base-image' || $image['enabled'] !== '0' ||
+                        $preview['enabled'] !== '1' || $preview['snapshot'] !== $image['candidate'] ||
+                        !in_array('general.enabled', $plan['changed_fields'], true) ||
+                        self::readPlan($argv[2], $planRoot, 0, $sha) !== $plan || $sha !== $planSha ||
+                        self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
+                        throw new \RuntimeException('Original retry Config image changed');
+                    }
+                    $digest = self::configSaveWitness($plan, $planSha, $image['base'], $image['candidate']);
+                    $reply = self::originalLockedFileEvidence($config, $argv[2],
+                        $retryRecover ? 'recover-first-retry-prepared-locked' : 'prepare-first-retry-locked',
+                        hash('sha256', $digest . "\0" . $image['snapshot']),
+                        null, null, $queueStream);
+                    $sha = null;
+                    $result = $retryRecover ? 'original-first-retry-restored' : 'original-first-retry-prepared';
+                    $afterRoot = $retryRecover ? '/var/db/zapret2/shared-aborted-first/' . $argv[2] . '/work' : self::ROOT;
+                    if ($reply !== ['result'=>$result, 'id'=>$argv[2]] ||
+                        self::readPlan($argv[2], $afterRoot, 0, $sha) !== $plan || $sha !== $planSha ||
+                        self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
+                        throw new \RuntimeException('Original retry PREPARED receipt changed');
+                    }
+                    self::requireReadableConfig();
+                } finally {
+                    $config->unlock();
+                }
+                echo json_encode($reply, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+                return 0;
+            }
+            if ($archive) {
+                // Preserve the saved base under the only native Config lock.
+                // The joined original FD9/P2a child moves only the canceled
+                // zero-cut artifacts. No Config::save and no WAL advance.
+                $config->lock();
+                try {
+                    self::requireReadableConfig();
+                    $image = self::classifyOrdinaryConfigImage($plan, $factory()->getNodes());
+                    $sha = null;
+                    if ($image['image'] !== 'base-image' || $image['enabled'] !== '0' ||
+                        self::readPlan($argv[2], $planRoot, 0, $sha) !== $plan || $sha !== $planSha ||
+                        self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
+                        throw new \RuntimeException('Original archive base image changed');
+                    }
+                    $planWitness = self::configSaveWitness($plan, $planSha, $image['base'], $image['candidate']);
+                    $witness = hash('sha256', $planWitness . "\0" . $image['snapshot']);
+                    $reply = self::originalLockedFileEvidence($config, $argv[2],
+                        'archive-first-restored-locked', $witness, null, null, $queueStream);
+                    $sha = null;
+                    if ($reply !== ['result'=>'original-first-restored-archived', 'id'=>$argv[2]] ||
+                        self::readPlan($argv[2], $historical . '/work', 0, $sha) !== $plan || $sha !== $planSha ||
+                        self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
+                        throw new \RuntimeException('Original archive receipt changed');
+                    }
+                    self::requireReadableConfig();
+                } finally {
+                    $config->unlock();
+                }
+                echo json_encode($reply, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+                return 0;
+            }
+            if (in_array($action, ['ordinary-restore-finish', 'managed-save-recover', 'ordinary-first-recover'], true)) {
+                // The outer original FD9 caller borrowed P2a first if
+                // necessary. Keep Config locked during the SAME WAL fsync.
+                $recoverManaged = $action === 'managed-save-recover';
+                $recoverFirst = $action === 'ordinary-first-recover';
+                $config->lock();
+                try {
+                    self::requireReadableConfig();
+                    $image = self::classifyOrdinaryConfigImage($plan, $factory()->getNodes());
+                    $admitted = ($recoverManaged || $recoverFirst) ? ['base-image', 'candidate-image']
+                        : ['base-image', 'base-equals-candidate'];
+                    $recoverySha = null;
+                    if (!in_array($image['image'], $admitted, true) ||
+                        self::readPlan($argv[2], self::ROOT, 0, $recoverySha) !== $plan ||
+                        (($recoverManaged || $recoverFirst) && $recoverySha !== $planSha) ||
+                        self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
+                        throw new \RuntimeException('Original ordinary restore Config changed');
+                    }
+                    $witness = $image['snapshot'];
+                    $expected = 'original-bound-cold-restored';
+                    if ($recoverManaged) {
+                        $planWitness = self::configSaveWitness($plan, $planSha, $image['base'], $image['candidate']);
+                        $witness = hash('sha256', $planWitness . "\0" . $image['snapshot']);
+                        $expected = $image['image'] === 'candidate-image'
+                            ? 'original-managed-config-committed' : 'original-managed-config-restored';
+                    }
+                    if ($recoverFirst) {
+                        // The original FD4 child checks the pinned running owner
+                        // and exact native kernel before any publication.
+                        $planWitness = self::configSaveWitness($plan, $planSha, $image['base'], $image['candidate']);
+                        $witness = hash('sha256', $planWitness . "\0" . $image['snapshot']);
+                        if ($image['image'] === 'candidate-image') {
+                            $expected = 'original-first-config-committed';
+                        }
+                    }
+                    $reply = self::originalLockedFileEvidence(
+                        $config, $argv[2], $recoverFirst ? 'recover-first-config-locked'
+                            : ($recoverManaged ? 'recover-managed-config-locked'
+                                : 'finish-ordinary-restore-locked'), $witness, null, null, $queueStream);
+                    if ($reply !== ['result'=>$expected, 'id'=>$argv[2]] ||
+                        self::classifyOrdinaryConfigImage($plan, $factory()->getNodes()) !== $image) {
+                        throw new \RuntimeException('Original ordinary restore receipt changed');
+                    }
+                    self::requireReadableConfig();
+                } finally {
+                    $config->unlock();
+                }
+                echo json_encode($reply, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+                return 0;
+            }
+            if ($action === 'ordinary-cold') {
+                // Internal original FD9 reader, not a configd action. The
+                // caller checks the exact bound journal and both root pins.
+                $config->lock();
+                try {
+                    self::requireReadableConfig();
+                    $result = self::classifyOrdinaryConfigImage($plan, $factory()->getNodes());
+                    $again = self::classifyOrdinaryConfigImage($plan, $factory()->getNodes());
+                    if ($again !== $result || self::readPlan($argv[2], self::ROOT, 0) !== $plan) {
+                        throw new \RuntimeException('Original ordinary cold Config changed');
+                    }
+                    self::requireReadableConfig();
+                    SharedApplyLifecycleLock::assertHeld();
+                } finally {
+                    $config->unlock();
+                }
+                echo json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
                 return 0;
             }
             if ($argv[1] === 'preflight' || $argv[1] === 'saved') {
@@ -749,7 +1222,51 @@ final class SharedApplyConfigWorker
                 echo json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
                 return 0;
             }
-            $result = SharedConfigCommit::persist($plan, $argv[3], $config, $factory);
+            $id = $argv[2];
+            $page = $argv[3];
+            $managedApply = $action === 'managed-apply';
+            $firstDisabled = $action === 'first-disabled-apply';
+            $firstEnabled = $action === 'first-enabled-apply';
+            $attest = static function (string $mode, string $base, string $candidate, string $phase)
+                use ($config, $id, $plan, $planSha, $managedApply, $firstDisabled, $firstEnabled, $queueStream): bool {
+                // Hash the same parsed plan bytes and native Model snapshots on both sides of FD4.
+                if ($mode === 'confirm-managed-config-save-locked') {
+                    self::requireReadableConfig();
+                }
+                $digest = self::configSaveWitness($plan, $planSha, $base, $candidate);
+                if (($firstDisabled || $firstEnabled) && $mode === 'begin-managed-config-save-locked') {
+                    return self::originalLockedFileEvidence(
+                        $config, $id, $firstEnabled ? 'write-first-enabled-handoff-locked'
+                            : 'write-first-disabled-handoff-locked', $digest, null, null, $queueStream)
+                        === ['result'=>($firstEnabled ? 'first-enabled-activated'
+                            : 'first-disabled-activated'), 'id'=>$id];
+                }
+                if (($firstDisabled || $firstEnabled) && $mode === 'confirm-managed-config-save-locked') {
+                    self::requireReadableConfig();
+                    return self::originalLockedFileEvidence(
+                        $config, $id, 'recover-first-config-locked',
+                        hash('sha256', $digest . "\0" . $candidate), null, null, $queueStream)
+                        === ['result'=>'original-first-config-committed', 'id'=>$id];
+                }
+                if ($managedApply && $mode === 'begin-managed-config-save-locked' &&
+                    self::originalLockedFileEvidence($config, $id, 'write-managed-handoff-locked', $digest)
+                        !== ['result'=>'managed-writing', 'id'=>$id]) {
+                    throw new \RuntimeException('Original managed write outcome uncertain');
+                }
+                return self::originalLockedFileEvidence($config, $id, $mode, $digest) ===
+                    ['result'=>$phase, 'id'=>$id];
+            };
+            $managed = $action === 'managed-save' || $managedApply || $firstDisabled || $firstEnabled;
+            if ($firstEnabled) { @fwrite(STDERR, "S10_FIRST_TRACE=D00\n"); }
+            $result = SharedConfigCommit::persist($plan, $page, $config, $factory,
+                $managed
+                    ? static fn(string $base, string $candidate): bool => $attest(
+                        'begin-managed-config-save-locked', $base, $candidate, 'managed-config-saving')
+                    : static fn(string $base, string $candidate): bool => $attest(
+                        'attest-ordinary-save-locked', $base, $candidate, 'original-ordinary-save-verified'),
+                $managed ? static fn(string $snapshot): bool => $attest(
+                    'confirm-managed-config-save-locked', $plan['dependencies'], $snapshot, 'committed') : null
+            );
             $receipt = self::postSaveReceipt($result);
             // Even a short response write is uncertain to the caller:
             // Config is already persisted and runtime must not be rolled back.
@@ -760,12 +1277,28 @@ final class SharedApplyConfigWorker
             }
             return 0;
         } catch (SharedConfigSaveUncertain $error) {
+            if (in_array($action, ['managed-apply', 'managed-save-recover'], true)) {
+                self::managedPhpRefusalTrace($error);
+            }
             fwrite(STDERR, "ERROR: native shared Config save uncertain; retain recovery evidence\n");
             return 70;
         } catch (\Throwable $error) {
+            if (in_array($action, ['managed-apply', 'managed-save-recover', 'ordinary-first-recover', 'ordinary-first-archive', 'ordinary-first-retry', 'ordinary-first-retry-recover'], true)) {
+                self::managedPhpRefusalTrace($error);
+            }
+            if (in_array($action, ['managed-save', 'managed-save-recover', 'managed-apply',
+                    'first-disabled-apply', 'first-enabled-apply', 'ordinary-first-recover', 'ordinary-first-archive', 'ordinary-first-retry', 'ordinary-first-retry-recover', 'found-bound-finish', 'found-bound-recover'], true)) {
+                // A joined child may have fsynced its phase before losing the receipt.
+                fwrite(STDERR, "ERROR: original managed Config outcome requires journal review\n");
+                return 70;
+            }
             fwrite(STDERR, "ERROR: native shared Config refused before save: " .
                 $error->getMessage() . "\n");
             return 69;
+        } finally {
+            if (is_resource($queueStream)) {
+                fclose($queueStream);
+            }
         }
     }
 }

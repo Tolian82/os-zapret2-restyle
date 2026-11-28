@@ -482,6 +482,9 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
                  runner, owner_uid: int,
                  epoch_finalizing_operation: str | None = None,
                  reviewed_operation: str | None = None,
+                 pending_found_record: dict | None = None,
+                 pending_ordinary_record: dict | None = None,
+                 bound_staged_record: dict | None = None,
                  argv_reader=None,
                  learning_schema3: bool = False) -> GenerationProof | LearningGenerationProof:
     if argv_reader is None:
@@ -490,7 +493,42 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
             learning_schema3 and reviewed_operation is not None):
         raise GenerationRefused("unsupported_learning_reviewed_owner")
     record = SharedApplyOperation(journal, owner=owner_uid).read()
-    if reviewed_operation is not None:
+    if pending_ordinary_record is not None:
+        # Separate private scope: ordinary Apply, never Found or a public worker.
+        if (pending_found_record is not None or bound_staged_record is not None or
+                reviewed_operation is not None or epoch_finalizing_operation is not None or
+                not learning_schema3 or type(pending_ordinary_record) is not dict or
+                record != pending_ordinary_record or record["phase"] != "prepared" or
+                "found" in record or record.get("manifest", {}).get("schema") not in (1, 2) or
+                record.get("previous_manifest", {}).get("schema") != 2 or
+                type(record.get("previous")) is not dict or
+                record["previous"]["id"] == record["detail"]["id"] or
+                record["previous"]["candidate"] != record["detail"]["base"]):
+            raise GenerationRefused("unqualified_prepared_ordinary_predecessor")
+        owner = record["previous"]
+    elif bound_staged_record is not None:
+        # Private read-only candidate inspection, never a terminal/ACK owner.
+        if (pending_found_record is not None or reviewed_operation is not None or
+                epoch_finalizing_operation is not None or not learning_schema3 or
+                type(bound_staged_record) is not dict or record != bound_staged_record or
+                record["phase"] not in ("activating", "activated") or
+                "found" in record or record.get("manifest", {}).get("schema") != 2):
+            raise GenerationRefused("unqualified_bound_staged_learning_candidate")
+        owner = record["detail"]
+    elif pending_found_record is not None:
+        # Only the private, original-FD9/FD4 Found comparison can inspect
+        # a running PREPARED predecessor. Never make it a worker/ACK owner.
+        if (reviewed_operation is not None or epoch_finalizing_operation is not None or
+                not learning_schema3 or type(pending_found_record) is not dict or
+                record != pending_found_record or record["phase"] != "prepared" or
+                "found" not in record or "manifest" not in record or
+                record.get("previous_manifest", {}).get("schema") != 2 or
+                type(record.get("previous")) is not dict or
+                record["previous"]["id"] == record["detail"]["id"] or
+                record["previous"]["candidate"] != record["detail"]["base"]):
+            raise GenerationRefused("unqualified_prepared_found_predecessor")
+        owner = record["previous"]
+    elif reviewed_operation is not None:
         # Only the explicit original-FD9 rescue may inspect a reviewed
         # generation. Minute/ACK must still reject every unfinished journal.
         if (epoch_finalizing_operation is not None or
@@ -683,6 +721,102 @@ def attest_learning_running_generation(*,
         raise GenerationRefused("learning_running_owner_not_attested") from exc
 
 
+def attest_prepared_found_learning_predecessor(record: dict, config_fd: int) -> tuple[LearningGenerationProof, str]:
+    """Read-only original Found scope; never authorizes ordinary Apply."""
+    return _attest_prepared_learning_predecessor(record, config_fd, ordinary=False)
+
+
+def attest_prepared_ordinary_learning_predecessor(record: dict, config_fd: int) -> tuple[LearningGenerationProof, str]:
+    """Private ordinary PREPARED scope; no public worker/ACK or phase grant."""
+    return _attest_prepared_learning_predecessor(record, config_fd, ordinary=True)
+
+
+def _attest_prepared_learning_predecessor(record: dict, config_fd: int, *,
+                                          ordinary: bool) -> tuple[LearningGenerationProof, str]:
+    """Read original PREPARED's running learning predecessor and immutable epoch.
+
+    The caller has native FD9 and inherited Config FD4; no P2a queue lock,
+    source mutation, retirement, cursor/ACK or worker authorization here.
+    The caller separately verifies both pinned roots, P1 CAS and native
+    physical ownership. Reuse the strict immutable epoch verifier, which
+    deliberately never opens mutable producer files.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused, _canonical
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or type(config_fd) is not int or config_fd < 3 or
+            config_fd == 9 or type(ordinary) is not bool or
+            ordinary == ("found" in record)):
+        raise GenerationRefused("native_prepared_ordinary_fd9_fd4_required" if ordinary else
+                                "native_prepared_found_fd9_fd4_required")
+    try:
+        def attest():
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if ordinary:
+                from neutral_root_stage import verify_original_operation_pins
+                verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            scope = {"pending_ordinary_record" if ordinary else "pending_found_record": record}
+            return _attest_core(
+                journal=Path("/var/db/zapret2/shared-apply"), work_root=WORK,
+                active=COMMON_ACTIVE, child_pidfile=CHILD_PID,
+                monitor_pidfile=MONITOR_PID, runner=subprocess.run, owner_uid=0,
+                learning_schema3=True, **scope)
+
+        proof = attest()
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("prepared_ordinary_learning_owner_required" if ordinary else
+                                    "prepared_found_learning_owner_required")
+        receipts = EpochReceipts(owner_uid=0)
+        workspace = WORK / proof.operation_id
+        first = receipts.verify_learning_stopped_epoch(proof, workspace=workspace)
+        if attest() != proof or receipts.verify_learning_stopped_epoch(
+                proof, workspace=workspace) != first:
+            raise GenerationRefused("prepared_ordinary_learning_epoch_changed" if ordinary else
+                                    "prepared_found_learning_epoch_changed")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if ordinary:
+            # Recheck the same original pins after the final epoch read.
+            from neutral_root_stage import verify_original_operation_pins
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            if SharedApplyOperation(Path("/var/db/zapret2/shared-apply"), owner=0).read() != record:
+                raise GenerationRefused("prepared_ordinary_learning_journal_changed")
+        return proof, hashlib.sha256(_canonical(first)).hexdigest()
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError,
+            subprocess.SubprocessError, ReceiptRefused) as exc:
+        raise GenerationRefused("prepared_ordinary_learning_epoch_not_attested" if ordinary else
+                                "prepared_found_learning_epoch_not_attested") from exc
+
+
+def attest_bound_learning_staged_generation(record: dict, config_fd: int) -> LearningGenerationProof:
+    """Private FD9/FD4 staged candidate; no minute, epoch write or ACK permit."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from voice_ipfw_adapter import require_lifecycle_lock
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or
+            type(config_fd) is not int or config_fd < 3 or config_fd == 9):
+        raise GenerationRefused("native_bound_staged_fd9_fd4_required")
+    try:
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        proof = _attest_core(
+            journal=Path("/var/db/zapret2/shared-apply"), work_root=WORK,
+            active=COMMON_ACTIVE, child_pidfile=CHILD_PID,
+            monitor_pidfile=MONITOR_PID, runner=subprocess.run, owner_uid=0,
+            learning_schema3=True, bound_staged_record=record)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("bound_staged_learning_owner_required")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return proof
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError,
+            subprocess.SubprocessError):
+        raise GenerationRefused("bound_staged_learning_owner_refused") from None
+
+
 def attest_learning_epoch_finalizing_generation(operation_id: str, *,
                                                 journal: Path = Path("/var/db/zapret2/shared-apply"),
                                                 work_root: Path = WORK,
@@ -752,7 +886,9 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
                          child_pidfile: Path, monitor_pidfile: Path,
                          epoch_root: Path, runner, owner_uid: int,
                          allow_transition: bool = False,
-                         learning_schema3: bool = False
+                         learning_schema3: bool = False,
+                         pending_found_record: dict | None = None,
+                         restored_record: dict | None = None
                          ) -> GenerationProof | LearningGenerationProof:
     """Attest the SAME immutable original owner after its process has exited.
 
@@ -768,7 +904,32 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
     record = SharedApplyOperation(journal, owner=owner_uid).read()
     if record is None:
         raise GenerationRefused("stopped_original_committed_owner_required")
-    if record["phase"] == "committed":
+    if pending_found_record is not None:
+        # Private original Found scope only. The public stopped/retirement
+        # attesters do not supply this parameter and gain no authority.
+        from shared_apply_operation import FOUND_FILE_PHASES, FOUND_CONFIG_PHASES, FOUND_RESTORING
+        if (allow_transition or not learning_schema3 or
+                type(pending_found_record) is not dict or record != pending_found_record or
+                record["phase"] not in ({"prepared", FOUND_RESTORING} |
+                                        FOUND_FILE_PHASES | FOUND_CONFIG_PHASES) or
+                "found" not in record or
+                ("manifest" not in record and record["phase"] != "prepared") or
+                record.get("previous_manifest", {}).get("schema") != 2 or
+                type(record.get("previous")) is not dict or
+                record["previous"]["id"] == record["detail"]["id"] or
+                record["previous"]["candidate"] != record["detail"]["base"]):
+            raise GenerationRefused("unqualified_stopped_bound_found_predecessor")
+        owner = record["previous"]
+    elif restored_record is not None:
+        # Only explicit stopped Found admission, never generic Stop/worker.
+        from shared_apply_operation import restored_retired_found_owner
+        from neutral_root_stage import verify_original_operation_pins
+        if (allow_transition or not learning_schema3 or record != restored_record or
+                not restored_retired_found_owner(record)):
+            raise GenerationRefused("stopped_restored_retired_owner_refused")
+        verify_original_operation_pins(record=record, parent=work_root, owner_uid=owner_uid)
+        owner = committed_owner(record)
+    elif record["phase"] == "committed":
         owner = committed_owner(record)
     elif allow_transition and record["phase"] in ("prepared", "activating"):
         # The SAME journal pins one retired predecessor before swapping the
@@ -915,7 +1076,8 @@ def attest_learning_stopped_generation(*,
                                        child_pidfile: Path = CHILD_PID,
                                        monitor_pidfile: Path = MONITOR_PID,
                                        epoch_root: Path = Path("/var/db/zapret2/auto-detect-epochs"),
-                                       runner=subprocess.run) -> LearningGenerationProof:
+                                       runner=subprocess.run,
+                                       restored_record: dict | None = None) -> LearningGenerationProof:
     """STEP 15b3c: optional read-only STOPPED schema3 historical owner.
 
     Existing lifecycle lock, original terminal Apply, sealed source/map,
@@ -932,7 +1094,7 @@ def attest_learning_stopped_generation(*,
             journal=journal, work_root=work_root, active=active,
             child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
             epoch_root=epoch_root, runner=runner, owner_uid=0,
-            learning_schema3=True)
+            learning_schema3=True, restored_record=restored_record)
         if not isinstance(proof, LearningGenerationProof):
             raise GenerationRefused("stopped_learning_owner_not_schema3")
         return proof
@@ -941,6 +1103,36 @@ def attest_learning_stopped_generation(*,
             SharedBundleError, ExclusionError, ReceiptRefused) as exc:
         raise GenerationRefused(
             "stopped_learning_original_owner_not_attested") from exc
+
+
+def attest_bound_found_stopped_learning_predecessor(
+        record: dict, config_fd: int) -> LearningGenerationProof:
+    """Private FD9/FD4 historical owner; no retirement, ACK or worker permission."""
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from auto_detect_epoch_receipts import ReceiptRefused
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(record) is not dict or type(config_fd) is not int or config_fd < 3):
+        raise GenerationRefused("native_bound_found_stopped_fd9_fd4_required")
+    try:
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        proof = _attest_stopped_core(
+            journal=Path("/var/db/zapret2/shared-apply"), work_root=WORK,
+            active=COMMON_ACTIVE, child_pidfile=CHILD_PID,
+            monitor_pidfile=MONITOR_PID,
+            epoch_root=Path("/var/db/zapret2/auto-detect-epochs"),
+            runner=subprocess.run, owner_uid=0, learning_schema3=True,
+            pending_found_record=record)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("bound_found_stopped_learning_owner_required")
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return proof
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError,
+            subprocess.SubprocessError, ReceiptRefused) as exc:
+        raise GenerationRefused("bound_found_stopped_learning_not_attested") from exc
 
 
 def attest_retiring_predecessor(*,

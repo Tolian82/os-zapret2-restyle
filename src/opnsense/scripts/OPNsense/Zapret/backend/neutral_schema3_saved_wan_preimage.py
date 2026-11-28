@@ -88,6 +88,80 @@ def _native_preflight(generation: str, page: str) -> object:
         raise SavedWanPreimageRefused("ORIGINAL_CONFIG_RECEIPT_INVALID") from None
 
 
+def _qualify_ordinary_cold_config(receipt: object, record: dict) -> tuple:
+    """A matched image is not an attestation of the causal save outcome."""
+    detail = record["detail"]
+    if (type(receipt) is not dict or set(receipt) != {
+            "result", "image", "base", "candidate", "snapshot", "enabled",
+            "commit_authorized", "restore_authorized", "save_attested",
+            "runtime_attested"} or
+            receipt["result"] != "read-only-ordinary-config-classification" or
+            receipt["base"] != detail["base"] or
+            receipt["candidate"] != detail["candidate"] or
+            not all(type(receipt[key]) is str and _HEX.fullmatch(receipt[key])
+                    for key in ("base", "candidate", "snapshot")) or
+            receipt["enabled"] not in ("0", "1") or
+            any(receipt[key] is not False for key in (
+                "commit_authorized", "restore_authorized", "save_attested",
+                "runtime_attested"))):
+        raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_RECEIPT_INVALID")
+    base = receipt["snapshot"] == detail["base"]
+    candidate = receipt["snapshot"] == detail["candidate"]
+    image = ("base-equals-candidate" if base and candidate else
+             "base-image" if base else "candidate-image" if candidate else None)
+    phase = record["phase"]
+    if (image is None or receipt["image"] != image or
+            phase not in ("activating", "activated", "config-saved",
+                          "epoch-finalizing", "requires-review") or
+            (phase == "activating" and not base) or
+            (phase in ("config-saved", "epoch-finalizing") and not candidate)):
+        raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_PHASE_IMAGE_MISMATCH")
+    return image, receipt["snapshot"], receipt["enabled"]
+
+
+def attest_ordinary_cold_config_under_fd9(record: dict) -> tuple:
+    """Original pinned ordinary WAL observation, never a phase writer.
+
+    Call before retaining native Config FD4: the existing PHP reader takes
+    its own original Config lock. No queue acquisition, XML repair, save,
+    recovery command or permission to infer runtime from an image match.
+    """
+    import sys
+    from neutral_root_stage import verify_original_operation_pins
+
+    try:
+        if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+                type(record) is not dict or "found" in record or
+                record.get("phase") not in ("activating", "activated", "config-saved",
+                                           "epoch-finalizing", "requires-review") or
+                record.get("manifest", {}).get("schema") not in (1, 2)):
+            raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_SCOPE_REQUIRED")
+        require_lifecycle_lock()
+        store = SharedApplyOperation(DEFAULT_ROOT, owner=0)
+        detail = record["detail"]
+
+        def observe():
+            require_lifecycle_lock()
+            if store.read() != record:
+                raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_JOURNAL_CHANGED")
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            raw = _native_call((_PHP, _CONFIG, "ordinary-cold", detail["id"], detail["page"]))
+            if not raw.endswith(b"\n") or raw.count(b"\n") != 1:
+                raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_RECEIPT_INVALID")
+            image = _qualify_ordinary_cold_config(json.loads(raw), record)
+            verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+            if store.read() != record:
+                raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_JOURNAL_CHANGED")
+            return image
+
+        first = observe()
+        if observe() != first:
+            raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_CHANGED")
+        return first
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError, AttributeError):
+        raise SavedWanPreimageRefused("ORIGINAL_COLD_CONFIG_ATTEST_REFUSED") from None
+
+
 def _native_wan() -> str:
     # "require" is the original WAN-first prerequisite and "device" is
     # the existing same code's physical interface resolver (TUN/OPT allowed).
@@ -104,6 +178,68 @@ def _native_wan() -> str:
             not _DEVICE.fullmatch(text[:-1])):
         raise SavedWanPreimageRefused("ORIGINAL_WAN_DEVICE_INVALID")
     return text[:-1]
+
+
+def _native_wan_locked(config_fd: int) -> str:
+    """Recheck saved WAN under the inherited original Config lock, never relock PHP."""
+    import xml.etree.ElementTree as ET
+    from auto_detect_original_lock_handoff import CONFIG_PATH, assert_inherited_config_fd
+    from shared_apply_seal import FILES
+
+    if type(config_fd) is not int or config_fd < 3 or config_fd == 9:
+        raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_FD_REQUIRED")
+
+    def image():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        before = os.fstat(config_fd)
+        identity = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+        if not 0 < before.st_size <= FILES["candidate.xml"]:
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_CONFIG_SIZE")
+        raw = os.pread(config_fd, before.st_size + 1, 0)
+        if len(raw) != before.st_size or identity(os.fstat(config_fd)) != identity(before):
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_CONFIG_CHANGED")
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return identity(before), raw
+
+    try:
+        before = image()
+        xml = before[1].decode("utf-8")
+        if "<!DOCTYPE" in xml or "<!ENTITY" in xml:
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_CONFIG_INVALID")
+        node = ET.fromstring(xml)
+        if node.tag != "opnsense":
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_CONFIG_INVALID")
+        for tag in ("OPNsense", "Zapret", "general", "waninterface"):
+            nodes = node.findall(tag)
+            if len(nodes) != 1:
+                raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_SELECTION_INVALID")
+            node = nodes[0]
+        logical = (node.text or "").strip()
+        if len(node) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]{0,31}", logical):
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_SELECTION_INVALID")
+        # Reuse the exact original interface resolver (direct devices, primary
+        # address mapping, assigned OPT/TUN fallback), NOT wan_preflight.php,
+        # which would acquire an independent blocking Config::lock(). The
+        # original FD4 remains held and is never inherited by resolver children.
+        result = subprocess.run(("/bin/sh", "-c",
+            '. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/common.sh; '
+            '. /usr/local/opnsense/scripts/OPNsense/Zapret/backend/config.sh; '
+            'config_resolve_interface "$1"', "s10-locked-wan", logical),
+            stdin=subprocess.DEVNULL, capture_output=True, timeout=12, check=False,
+            close_fds=True, pass_fds=(),
+            env={"LC_ALL": "C", "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"})
+        raw = result.stdout
+        if result.returncode != 0 or type(raw) is not bytes or not 0 < len(raw) <= _SIZE:
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_RESOLVER_REFUSED")
+        text = raw.decode("ascii")
+        if (not text.endswith("\n") or text[:-1] in _WAN_STATE_MARKERS or
+                not _DEVICE.fullmatch(text[:-1]) or image() != before):
+            raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_DEVICE_CHANGED")
+        require_lifecycle_lock()
+        return text[:-1]
+    except (OSError, subprocess.SubprocessError, UnicodeError, ET.ParseError):
+        raise SavedWanPreimageRefused("ORIGINAL_LOCKED_WAN_UNAVAILABLE") from None
 
 
 def _qualified_config(receipt: object, detail: dict, enabled: bool) -> tuple:

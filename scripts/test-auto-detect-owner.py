@@ -169,13 +169,18 @@ class OwnerGenerationTests(unittest.TestCase):
         self.ps.args = " ".join(self.argv.split())
 
     def witness(self, *, epoch_finalizing_operation=None,
-                reviewed_operation=None, learning_schema3=False):
+                reviewed_operation=None, learning_schema3=False,
+                pending_found_record=None, pending_ordinary_record=None,
+                bound_staged_record=None):
         return owner_mod._attest_core(
             journal=self.journal, work_root=self.work_root, active=self.active,
             child_pidfile=self.child, monitor_pidfile=self.monitor,
             runner=self.ps, owner_uid=UID,
             epoch_finalizing_operation=epoch_finalizing_operation,
             reviewed_operation=reviewed_operation,
+            pending_found_record=pending_found_record,
+            pending_ordinary_record=pending_ordinary_record,
+            bound_staged_record=bound_staged_record,
             learning_schema3=learning_schema3,
             argv_reader=lambda pid: [EXE, *self.ps.args.split(),
                                      "--sockarg=0x200", "--user=nobody"],
@@ -413,6 +418,56 @@ class OwnerGenerationTests(unittest.TestCase):
             self._write(self.journal / "operation.json",
                         json.dumps(self.record) + "\n")
             self.assertEqual(self.witness(learning_schema3=True), confirmed)
+            # Same actual sealed fixture, now a pending successor in the
+            # one original journal. The private comparison may inspect the
+            # previous owner; the public worker must still refuse.
+            from shared_apply_operation import FOUND_KIND, FOUND_NAMES
+            successor = "f" * 32
+            def pin(detail):
+                return dict(schema=2, generation=detail["id"],
+                            root_sha256="c" * 64, seal_sha256="d" * 64,
+                            candidate_sha256=detail["candidate"])
+            prior = self.record["detail"]
+            detail = dict(id=successor, page="strategies", base=CANDIDATE,
+                          candidate="e" * 64, changed_fields=[])
+            pending = dict(schema=1, phase="prepared", detail=detail,
+                           previous=prior, manifest=pin(detail),
+                           previous_manifest=pin(prior),
+                           found=dict(schema=1, kind=FOUND_KIND,
+                                      plan_sha256="a" * 64,
+                                      sources=list(FOUND_NAMES)))
+            self._write(self.journal / "operation.json", json.dumps(pending))
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(learning_schema3=True)
+            self.assertEqual(self.witness(learning_schema3=True,
+                                          pending_found_record=pending), confirmed)
+            wrong = {**pending, "detail": {**detail, "id": "9" * 32}}
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(learning_schema3=True, pending_found_record=wrong)
+            # Ordinary PREPARED may inspect the same old learning owner,
+            # including a schema1 (List/All) successor. No worker authority.
+            ordinary = {key: value for key, value in pending.items() if key != "found"}
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(learning_schema3=True, pending_ordinary_record=ordinary)
+            for schema in (1, 2):
+                current = {**ordinary, "manifest": {**ordinary["manifest"], "schema": schema}}
+                self._write(self.journal / "operation.json", json.dumps(current))
+                self.assertEqual(self.witness(learning_schema3=True,
+                                              pending_ordinary_record=current), confirmed)
+                for scope in ({}, {"pending_found_record": current},
+                              {"pending_ordinary_record": current, "pending_found_record": current},
+                              {"pending_ordinary_record": current, "bound_staged_record": current},
+                              {"pending_ordinary_record": current, "epoch_finalizing_operation": OP_ID},
+                              {"pending_ordinary_record": current, "reviewed_operation": OP_ID}):
+                    with self.assertRaises(owner_mod.GenerationRefused):
+                        self.witness(learning_schema3=True, **scope)
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    self.witness(pending_ordinary_record=current)
+                stale = {**current, "phase": "activated"}
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    self.witness(learning_schema3=True, pending_ordinary_record=stale)
+            self._write(self.journal / "operation.json",
+                        json.dumps(self.record) + "\n")
         with patch.object(owner_mod.sys, "platform", "linux"):
             with self.assertRaises(owner_mod.GenerationRefused):
                 owner_mod.attest_learning_running_generation()
@@ -436,6 +491,58 @@ class OwnerGenerationTests(unittest.TestCase):
                         held.side_effect = RuntimeError("FD9_missing")
                         with self.assertRaises(RuntimeError):
                             owner_mod.attest_learning_running_generation()
+
+    def test_prepared_ordinary_learning_epoch_private_wrapper(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from auto_detect_epoch_receipts import _canonical
+        prior = {"id": OP_ID, "candidate": CANDIDATE}
+        record = {"phase": "prepared", "previous": prior}
+        proof = owner_mod.LearningGenerationProof(
+            owner_mod.OwnerToken(PID, START, EXE), OP_ID, OP_ID, CANDIDATE,
+            "c" * 64, "d" * 64, ())
+        epoch = {"generation": OP_ID, "files": []}
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(owner_mod.sys, "platform", "freebsd15"))
+            stack.enter_context(patch.object(owner_mod.os, "geteuid", return_value=0))
+            held = stack.enter_context(patch("voice_ipfw_adapter.require_lifecycle_lock"))
+            config = stack.enter_context(patch(
+                "auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            pins = stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            core = stack.enter_context(patch.object(owner_mod, "_attest_core", return_value=proof))
+            store = stack.enter_context(patch.object(owner_mod, "SharedApplyOperation",
+                return_value=Mock(read=Mock(return_value=record))))
+            receipts = stack.enter_context(patch("auto_detect_epoch_receipts.EpochReceipts"))
+            verify = receipts.return_value.verify_learning_stopped_epoch
+            verify.return_value = epoch
+            run = owner_mod.attest_prepared_ordinary_learning_predecessor
+            self.assertEqual(run(record, 4),
+                             (proof, hashlib.sha256(_canonical(epoch)).hexdigest()))
+            self.assertEqual(core.call_count, 2)
+            self.assertEqual(pins.call_count, 3)
+            self.assertEqual(held.call_count, 3)
+            self.assertEqual(config.call_count, 3)
+            self.assertEqual(core.call_args.kwargs["pending_ordinary_record"], record)
+            self.assertNotIn("pending_found_record", core.call_args.kwargs)
+            core.reset_mock()
+            for invalid, fd in ((record, 9), (record, 2), ({**record, "found": {}}, 4)):
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    run(invalid, fd)
+            core.assert_not_called()
+            with self.assertRaises(owner_mod.GenerationRefused):
+                owner_mod.attest_prepared_found_learning_predecessor(record, 4)
+            core.assert_not_called()
+            verify.side_effect = (epoch, {**epoch, "generation": "f" * 32})
+            with self.assertRaises(owner_mod.GenerationRefused):
+                run(record, 4)
+            verify.side_effect = None
+            pins.side_effect = (None, None, ValueError("pin changed"))
+            with self.assertRaises(owner_mod.GenerationRefused):
+                run(record, 4)
+            pins.side_effect = None
+            store.return_value.read.return_value = {**record, "phase": "activated"}
+            with self.assertRaises(owner_mod.GenerationRefused):
+                run(record, 4)
 
     def test_freebsd_kernel_argv_above_ps_limit_and_malformed_refusal(self):
         long_argv = [EXE, "--port=989", "--lua-init=@" + "x" * 2200,
@@ -710,7 +817,7 @@ class OwnerGenerationTests(unittest.TestCase):
         self.ps.stopped = True
         return proof, producer, folder
 
-    def _stopped_learning_witness(self, producer, learning):
+    def _stopped_learning_witness(self, producer, learning, **scope):
         with patch("auto_detect_storage.ROOT", producer):
             with patch.object(owner_mod, "_valid_learning_active",
                               return_value=learning):
@@ -718,7 +825,7 @@ class OwnerGenerationTests(unittest.TestCase):
                     journal=self.journal, work_root=self.work_root,
                     active=self.active, child_pidfile=self.child,
                     monitor_pidfile=self.monitor, epoch_root=self.epochs,
-                    runner=self.ps, owner_uid=UID, learning_schema3=True)
+                    runner=self.ps, owner_uid=UID, learning_schema3=True, **scope)
 
     def test_stopped_learning_original_epoch_and_no_process_reattested(self):
         proof, producer, folder = self._stopped_learning_fixture()
@@ -783,6 +890,121 @@ class OwnerGenerationTests(unittest.TestCase):
         self._write(self.journal / "operation.json",
                     json.dumps(self.record) + "\n")
         refuses()
+
+    def test_bound_staged_learning_owner_private_exact_scope(self):
+        proof, _, _ = self._stopped_learning_fixture()
+        self._write(self.child, str(PID) + "\n")
+        self._write(self.monitor, str(MONITOR_PID) + "\n")
+        self.ps.stopped = False
+        for phase in ("activating", "activated"):
+            current = dict(self.record, phase=phase, manifest={"schema": 2})
+            with patch.object(owner_mod.SharedApplyOperation, "read", return_value=current), \
+                    patch.object(owner_mod, "_valid_learning_active", return_value=proof.learning):
+                self.assertEqual(self.witness(learning_schema3=True,
+                                             bound_staged_record=current), proof)
+                for scope in ({}, {"bound_staged_record": dict(current, phase="prepared")},
+                              {"bound_staged_record": current, "epoch_finalizing_operation": OP_ID},
+                              {"bound_staged_record": current, "pending_found_record": current}):
+                    with self.assertRaises(owner_mod.GenerationRefused):
+                        self.witness(learning_schema3=True, **scope)
+        for current in (dict(self.record, phase="prepared", manifest={"schema": 2}),
+                        dict(self.record, phase="activated", manifest={"schema": 1}),
+                        dict(self.record, phase="activated", manifest={"schema": 2}, found={})):
+            with patch.object(owner_mod.SharedApplyOperation, "read", return_value=current):
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    self.witness(learning_schema3=True, bound_staged_record=current)
+
+    def test_bound_staged_learning_seed_is_read_only_and_refuses_finished_epoch(self):
+        from auto_detect_epoch_receipts import _canonical
+        proof, producer, folder = self._stopped_learning_fixture()
+        epoch = folder / "epoch.json"
+        epoch_bytes = epoch.read_bytes()
+        epoch.unlink()
+        gid = os.getegid() or 65534
+        # Portable fixture with genuine files. Inject only the native
+        # layout/credential reader and exact running P2c owner.
+        queue = DurableInbox(producer, owner_uid=UID, writer_gid=gid)
+        receipts = EpochReceipts(self.epochs, owner_uid=UID, writer_gid=gid)
+        seed = (folder / "pretraffic.json").read_bytes()
+        def read_file(path, **kw):
+            return path.lstat(), path.read_bytes()
+        with patch.object(queue, "_verify"), patch.object(queue, "segments", return_value=[]), \
+                patch.object(owner_mod, "_valid_learning_active", return_value=proof.learning), \
+                patch("auto_detect_debug_window._read_exact", side_effect=read_file), \
+                patch("sys.platform", "linux"):
+            queue._held = True
+            try:
+                def verify():
+                    return receipts.verify_learning_running_pretraffic(
+                        proof, queue, workspace=self.work, attest=lambda: proof)
+                self.assertEqual(verify(), hashlib.sha256(seed).hexdigest())
+                self.assertEqual(set(os.listdir(folder)), {"pretraffic.json"})
+                path = Path(proof.learning[0][2])
+                path.write_bytes(b"native append")
+                self.assertEqual(verify(), hashlib.sha256(seed).hexdigest())
+                moved = path.with_suffix(".old")
+                path.rename(moved)
+                path.write_bytes(b"native append")
+                with self.assertRaises(ReceiptRefused):
+                    verify()
+                path.unlink()
+                moved.rename(path)
+                epoch.write_bytes(epoch_bytes)
+                epoch.chmod(0o600)
+                with self.assertRaises(ReceiptRefused):
+                    verify()
+                self.assertEqual(epoch.read_bytes(), epoch_bytes)
+                epoch.unlink()
+                result = receipts.finish_learning_running(
+                    proof, queue, workspace=self.work, attest=lambda: proof)
+                self.assertEqual(epoch.read_bytes(), _canonical(result))
+                self.assertEqual(epoch.read_bytes(), epoch_bytes)
+            finally:
+                queue._held = False
+
+    def test_stopped_learning_pending_found_private_scope(self):
+        # Only the pending-owner selector is isolated here; the existing
+        # immutable epoch, active release and process census fixture is real.
+        proof, producer, _ = self._stopped_learning_fixture()
+        prior = dict(self.record["detail"])
+        pending = {
+            "phase": "found-config-saving",
+            "previous": prior,
+            "detail": dict(prior, id="f" * 32, base=prior["candidate"]),
+            "found": {}, "manifest": {"schema": 1},
+            "previous_manifest": {"schema": 2},
+        }
+        def witness(**scope):
+            return self._stopped_learning_witness(producer, proof.learning, **scope)
+
+        for phase in ("prepared", "found-files-writing", "found-files-written",
+                      "found-config-saving", "found-config-saved", "found-restoring"):
+            current = dict(pending, phase=phase)
+            with patch.object(owner_mod.SharedApplyOperation, "read", return_value=current):
+                self.assertEqual(witness(pending_found_record=current), proof)
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    witness()
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    witness(pending_found_record=pending if current != pending
+                            else dict(pending, manifest={"schema": 2}))
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    witness(pending_found_record=current, allow_transition=True)
+        for phase in ("activating", "activated", "committed"):
+            current = dict(pending, phase=phase)
+            with patch.object(owner_mod.SharedApplyOperation, "read", return_value=current):
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    witness(pending_found_record=current)
+        for change in ({"previous_manifest": {"schema": 1}},
+                       {"detail": dict(prior)},
+                       {"detail": dict(pending["detail"], base="0" * 64)}):
+            current = dict(pending, **change)
+            with patch.object(owner_mod.SharedApplyOperation, "read", return_value=current):
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    witness(pending_found_record=current)
+        self.ps.stopped = False
+        with patch.object(owner_mod.SharedApplyOperation, "read", return_value=pending):
+            with self.assertRaises(owner_mod.GenerationRefused):
+                witness(pending_found_record=pending)
 
     def test_stopped_learning_public_attester_never_authorizes_cleanup(self):
         proof, _, _ = self._stopped_learning_fixture()

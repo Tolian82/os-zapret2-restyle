@@ -133,7 +133,9 @@ final class SharedConfigCommit
         array $plan,
         string $page,
         object $config,
-        callable $modelFactory
+        callable $modelFactory,
+        ?callable $attestLocked = null,
+        ?callable $confirmLocked = null
     ): array {
         // The original found-file CAS and cold-crash protocol are not yet
         // authorized. Never persist only XML (including a found-only click)
@@ -153,8 +155,18 @@ final class SharedConfigCommit
             $target = SettingsApply::mergeForCommit($current, $plan, $page);
             $targetSnapshot = VoiceSettingsSnapshot::digest($target);
             $changeCount = count($plan['changed_fields']);
+            if ($changeCount > 0) {
+                self::validateOwnedModelFields($model, $target, $plan['changed_fields']);
+            }
+            if ($attestLocked !== null &&
+                $attestLocked(VoiceSettingsSnapshot::digest($current), $targetSnapshot) !== true) {
+                throw new \RuntimeException('Original ordinary Config save witness refused');
+            }
             // Repeated Apply must not manufacture a second Config revision.
             if ($changeCount === 0) {
+                if ($confirmLocked !== null && $confirmLocked($targetSnapshot) !== true) {
+                    throw new \RuntimeException('Original unchanged Config confirmation refused');
+                }
                 return [
                     'result' => 'unchanged',
                     'saved' => false,
@@ -162,7 +174,6 @@ final class SharedConfigCommit
                     'change_count' => 0,
                 ];
             }
-            self::validateOwnedModelFields($model, $target, $plan['changed_fields']);
             if (!$model->serializeToConfig(false, true)) {
                 throw new \RuntimeException(
                     'Native OPNsense model serialization failed'
@@ -193,10 +204,14 @@ final class SharedConfigCommit
             $config->lock();
             try {
                 $saved = $modelFactory()->getNodes();
-                if (!hash_equals($targetSnapshot, VoiceSettingsSnapshot::digest($saved))) {
+                $savedSnapshot = VoiceSettingsSnapshot::digest($saved);
+                if (!hash_equals($targetSnapshot, $savedSnapshot)) {
                     throw new SharedConfigSaveUncertain(
                         'Native Config changed after save; runtime reconciliation required'
                     );
+                }
+                if ($confirmLocked !== null && $confirmLocked($savedSnapshot) !== true) {
+                    throw new SharedConfigSaveUncertain('Original saved Config confirmation refused');
                 }
             } finally {
                 $config->unlock();
@@ -227,8 +242,9 @@ final class SharedConfigCommit
      * Original single-Config-writer INTERNAL cutover for an already durable
      * three-file found WAL. NO native worker/configd/GUI route calls this yet.
      *
-     * $withOriginalP2 is the FUTURE original native Config->P2 lock scope;
-     * it must execute its callback exactly once, releasing P2 before return.
+     * $withOriginalP2 receives its callback and the fresh locked Model
+     * digest (base before serialization, saved candidate on readback).
+     * It must execute its callback exactly once, releasing P2 before return.
      * $attestOriginal must prove FD9, original locked Config FD4, exact
      * sealed release/plan, found-files-written journal and three physical
      * after-images while P2 is held. $recordFoundPhase must fsync the SAME
@@ -267,6 +283,7 @@ final class SharedConfigCommit
         try {
             $model = $modelFactory();
             $live = $model->getNodes();
+            $baseDigest = VoiceSettingsSnapshot::digest($live);
             $target = SettingsApply::mergeForCommit($live, $plan, $page);
             $targetDigest = VoiceSettingsSnapshot::digest($target);
             if ($changeCount > 0) {
@@ -296,7 +313,7 @@ final class SharedConfigCommit
                     self::saveNativeModel($config, 'strategies');
                 }
                 return 'original-config-save-scope-exited';
-            });
+            }, $baseDigest);
             if ($p2Invocations !== 1 || $status !== 'original-config-save-scope-exited') {
                 throw new \RuntimeException('Original Config/P2 owner did not release scope');
             }
@@ -317,7 +334,8 @@ final class SharedConfigCommit
             $config->lock();
             try {
                 $saved = $modelFactory()->getNodes();
-                if (!hash_equals($targetDigest, VoiceSettingsSnapshot::digest($saved))) {
+                $savedDigest = VoiceSettingsSnapshot::digest($saved);
+                if (!hash_equals($targetDigest, $savedDigest)) {
                     throw new SharedConfigSaveUncertain(
                         'Original native Config changed during save/readback'
                     );
@@ -335,7 +353,7 @@ final class SharedConfigCommit
                         throw new \RuntimeException('Original saved Config WAL not durable');
                     }
                     return 'original-config-readback-attested';
-                });
+                }, $savedDigest);
                 if ($postInvocations !== 1 ||
                     $status !== 'original-config-readback-attested') {
                     throw new \RuntimeException('Original saved Config/P2 handoff refused');

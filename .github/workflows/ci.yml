@@ -584,6 +584,9 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-tz6v5-s10c2b-original-shared-source-gate.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-s10-first-restored-archive.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-managed-inode-barrier.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-s10-first-enabled-trace.py
       - name: S08d pure structural fingerprint and detached semantic action refusal
         run: |
           set -euo pipefail

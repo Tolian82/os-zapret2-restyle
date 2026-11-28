@@ -4,6 +4,8 @@
 
 **Источники:** [утверждённое ТЗ v1.1](../architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md), [строгий план G01–G11](../history/stages/lifecycle-2026-11-11/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md), [автономный скрипт](../../scripts/purge-os-zapret2-restyle.sh), [позитивно-негативные source-тесты](../../scripts/test-purge-os-zapret2-restyle.py), [одноразовый native-guest smoke](../../scripts/stage2-opnsense-real-native-purge.py) и [CI workflow](../../.github/workflows/g01-native-disposable-purge.yml).
 
+**Проверка применимости S10 (27 ноября 2026, рабочий кандидат `_242`, не релиз):** исходная и запакованная копии скрипта совпадают. `--dry-run` остаётся read-only; деревья `shared-work`, `shared-apply` и epochs находятся внутри уже выделенного `/var/db/zapret2`. Для полного purge работающего нового bound-owner требуется отдельно подтверждённый штатный Stop и отсутствие процесса/правил до удаления. Текущий `native_lifecycle_gate` намеренно запрещает Stop для immutable bound-owner, поэтому нативную приёмку purge для него нельзя считать пройденной по старым G01 PASS. Не обходить блокировку; после квалификации S10 повторить G01 на точном head и проверить реальный bound-owner, обычное удаление/остатки, `--dry-run` без мутаций, приватный backup, self-delete и сохранность чужих ресурсов. На рабочей OPNsense этот эксперимент не выполнять.
+
 ## Назначение и границы
 
 Независимая от установленного пакета команда очищает **только** Zapret2 Restyle в случаях, когда нужно воспроизвести настоящую первую установку. Поддерживается ситуация «пакет удалён, но модель, upstream, bin/lua, журналы и служебные хвосты остались».

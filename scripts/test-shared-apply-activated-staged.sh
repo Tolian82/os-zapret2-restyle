@@ -22,6 +22,19 @@ old_context = ('        _shared_cold_context=$("${PYTHON_RUNTIME}" \\\n'
                '            "${BACKEND_DIR}/shared_apply_operation.py" remove-prepared-context) || return 69')
 assert s.count(old_context) == 1
 s = s.replace(old_context, '        _shared_cold_context=$(mock_context) || return 69')
+# Only the private native Config transport is substituted in this fixture.
+bound_start = s.index('    # Bound installed-new recovery')
+bound_end = s.index('    # On power loss before native Config save', bound_start)
+s = s[:bound_start] + '''    if [ "$_shared_cold_phase" != config-saved ]; then
+        if mock_bound_installed; then
+            printf "recovered-%s-id=%s\\n" "$_shared_cold_phase" "$_shared_cold_id"
+            return 0
+        else
+            _shared_cold_bound_rc=$?
+        fi
+        [ "$_shared_cold_bound_rc" -eq 3 ] || return 70
+    fi
+''' + s[bound_end:]
 prefix = '        "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
 for cli, replacement in (
     ('finish-remove-saved "$_shared_cold_id" "$_shared_cold_old"',
@@ -35,6 +48,7 @@ for cli, replacement in (
 p.write_text(s)
 PY
 . "$ROOT/recover.sh"
+mock_bound_installed() { return "${BOUND_INSTALLED_RC:-3}"; }
 OLD_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 NEW_ID=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 HASH=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -212,6 +226,21 @@ reset; FINISH_OK=0
 check 70 "$ACTIVATING"
 [ "$STATE" = empty ] && atomic_verify_tree "$ROOT/old/release" "$ACTIVE_DIR" ||
     fail "activating terminal failure erased restored owner"
+# Bound selection must never fall through to the unlocked legacy actor.
+for owner in "$OWNER" "$ACTIVATING"; do
+    reset; BOUND_INSTALLED_RC=69
+    check 70 "$owner"
+    [ "$STATE" = staged ] && ! grep -Eq 'ipfw:(rollback|install|commit)|finished:' "$LOG" ||
+        fail "bound refusal selected the legacy actor"
+    reset; BOUND_INSTALLED_RC=70
+    check 70 "$owner"
+    [ "$STATE" = staged ] && ! grep -Eq 'ipfw:(rollback|install|commit)|finished:' "$LOG" ||
+        fail "bound uncertainty selected the legacy actor"
+    reset; BOUND_INSTALLED_RC=0
+    check 0 "$owner"
+    ! grep -Eq 'ipfw:|finished:' "$LOG" || fail "bound success repeated physical work"
+done
+BOUND_INSTALLED_RC=3
 # Remove's config-saved uses the SAME native atomic/IPFW restore; unlike
 # ordinary recover-saved it must NEVER call apply_runtime_activate.
 SAVED="config-saved $NEW_ID strategies $OLD_ID strategies"

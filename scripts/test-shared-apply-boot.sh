@@ -26,6 +26,13 @@ case "$#" in
             *) exit 1 ;;
         esac
         ;;
+    4)
+        [ "$1" = "$MOCK_BACKEND/shared_apply_operation.py" ] &&
+        [ "$2" = recover-managed ] && [ "$3" = "$MOCK_MANAGED_ID" ] &&
+        [ "$4" = "$MOCK_EXPECTED_ID" ] || exit 1
+        printf '%s\n' "$MOCK_MANAGED_REPLY"
+        exit "$MOCK_MANAGED_RC"
+        ;;
     *) exit 1 ;;
 esac
 MOCKPY
@@ -34,6 +41,7 @@ SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsens
 RUNTIME=$(dirname "$SOURCE")/backend/apply_runtime.sh
 sed -n '/^shared_apply_boot_service()$/,/^}$/p' "$SOURCE" > "$ROOT/boot.sh"
 sed -n '/^shared_apply_boot_receipt_verified_service()$/,/^}$/p' "$SOURCE" >> "$ROOT/boot.sh"
+sed -n '/^shared_apply_recover_managed_cold_service()$/,/^}$/p' "$SOURCE" >> "$ROOT/boot.sh"
 # Test the actual non-observer preflight called during a cold Boot; it
 # refuses spoofed old observer metadata and never pauses the native engine.
 sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/boot.sh"
@@ -222,12 +230,12 @@ shared_apply_recover_prepared_service() {
 }
 shared_apply_recover_activating_pristine_service() {
     echo pristine-recover >> "$LOG"
-    [ "$PRISTINE_OK" = 0 ] || return 69
+    [ "$PRISTINE_OK" = 0 ] || return "${PRISTINE_RC:-69}"
     OWNER="committed $PREVIOUS voice"
 }
 shared_apply_recover_activated_cold_service() {
     echo installed-recover >> "$LOG"
-    [ "$COLD_OK" = 0 ] || return 69
+    [ "$COLD_OK" = 0 ] || return "${COLD_RC:-69}"
     OWNER="committed $PREVIOUS voice"
 }
 shared_apply_recover_activating_parked_service() {
@@ -330,11 +338,23 @@ check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = "pristine-recover common:committed $PREVIOUS voice " ] ||
     fail "pristine activating boot did not restore previous common owner"
 PRISTINE_OK=1
+PRISTINE_RC=70
+OWNER="activating $ID voice $PREVIOUS voice"
+check_route 70 start
+[ "$(cat "$LOG")" = "pristine-recover" ] ||
+    fail "uncertain pristine mutation selected another recovery actuator"
+PRISTINE_RC=69
 OWNER="activating $ID voice $PREVIOUS voice"
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = "pristine-recover installed-recover common:committed $PREVIOUS voice " ] ||
     fail "fully installed activating runtime did not use cold verified recovery"
 COLD_OK=1
+COLD_RC=70
+OWNER="activating $ID voice $PREVIOUS voice"
+check_route 70 start
+[ "$(tr '\n' ' ' < "$LOG")" = "pristine-recover installed-recover " ] ||
+    fail "uncertain installed mutation selected parked recovery"
+COLD_RC=69
 OWNER="activating $ID voice $PREVIOUS voice"
 check_route 69 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'pristine-recover installed-recover parked-recover ' ] ||
@@ -372,6 +392,77 @@ check_route 0 restart
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'shared-guard legacy:start ' ] ||
     fail "no common journal changed ordinary legacy startup"
+# FIRST_BASE must recover a pending transaction even with saved WAN absent,
+# but may never boot a new owner or bypass ordinary WAN validation.
+(
+    HAS_RECORD=1 OWNER_OK=1
+    FIRST_STATE="$ROOT/first-state"
+    FIRST_ID="$ID"
+    FIRST_EVENTS="$LOG"
+    export FIRST_STATE FIRST_ID FIRST_EVENTS
+    PYTHON_RUNTIME="$ROOT/first-python"
+    cat > "$PYTHON_RUNTIME" <<'FIRST_PY'
+#!/bin/sh
+if [ "$1" = --check ]; then exit 0; fi
+[ "$2" = recover-first-activated ] && [ "$3" = "$FIRST_ID" ] || exit 69
+echo first-recover >> "$FIRST_EVENTS"
+[ "$FIRST_RC" = 0 ] || exit "$FIRST_RC"
+printf '%s\n' "$FIRST_FINAL" > "$FIRST_STATE"
+printf '%s\n' "$FIRST_REPLY"
+FIRST_PY
+    chmod 700 "$PYTHON_RUNTIME"
+    shared_apply_inspect_service() { cat "$FIRST_STATE"; }
+    wan_first_service() {
+        if [ "$1" = if-start ]; then
+            _wan_response="$FIRST_WAN"
+            return 0
+        fi
+        _wan_response=wan-required
+        return 64
+    }
+    shared_apply_pending_found_service() { printf '%s' "$FIRST_FOUND"; return "$FIRST_FOUND_RC"; }
+    first_reset() {
+        printf 'activated-first %s strategies\n' "$FIRST_ID" > "$FIRST_STATE"
+        FIRST_RC=0 FIRST_FINAL=restored FIRST_REPLY="first-activated-restored=$FIRST_ID"
+        FIRST_WAN=wan-not-required FIRST_FOUND= FIRST_FOUND_RC=0 PENDING=0
+        export FIRST_RC FIRST_FINAL FIRST_REPLY
+    }
+    first_reset
+    check_route 69 start
+    [ "$(cat "$LOG")" = first-recover ] && [ "$(cat "$FIRST_STATE")" = restored ] ||
+        fail "first base rollback did not use sole original recovery"
+    check_route 64 start
+    [ ! -s "$LOG" ] || fail "restored first owner bypassed WAN"
+    first_reset; FIRST_RC=69
+    check_route 70 start
+    [ "$(cat "$LOG")" = first-recover ] || fail "first refusal fell through"
+    first_reset; FIRST_REPLY=foreign
+    check_route 70 start
+    [ "$(cat "$LOG")" = first-recover ] || fail "foreign first receipt fell through"
+    first_reset; FIRST_FINAL=foreign
+    check_route 70 start
+    [ "$(cat "$LOG")" = first-recover ] || fail "foreign first owner fell through"
+    first_reset; FIRST_WAN=wan-ready
+    check_route 64 start
+    [ ! -s "$LOG" ] || fail "runtime requested bypassed required WAN"
+    first_reset; FIRST_FOUND=foreign
+    check_route 70 start
+    [ ! -s "$LOG" ] || fail "pending Found was recovered through first route"
+    first_reset; FIRST_FOUND_RC=69
+    check_route 70 start
+    [ ! -s "$LOG" ] || fail "unreadable Found state bypassed recovery gate"
+    first_reset; PENDING=1
+    check_route 69 start
+    [ ! -s "$LOG" ] || fail "pending resource transaction bypassed recovery gate"
+    first_reset; printf 'activated-first invalid strategies\n' > "$FIRST_STATE"
+    check_route 70 start
+    [ ! -s "$LOG" ] || fail "malformed first owner reached mutation"
+    first_reset; HAS_RECORD=0
+    check_route 64 start
+    [ ! -s "$LOG" ] || fail "no journal bypassed WAN"
+)
+echo 'PASS: FIRST_BASE recovery only with disabled saved WAN; no legacy Start'
+
 # The original FD9 wrapper delegates compatibility names only after the
 # common journal preflight; owner/marker checks now live in their real adapter.
 for compat_action in telegram-voice-enable telegram-voice-disable; do
@@ -515,10 +606,16 @@ apply_runtime_attest_engine_inventory() { echo census >> "$LOG"; [ "$CENSUS_OK" 
 firewall_shared_runtime() { echo ipfw >> "$LOG"; [ "$IPFW_OK" = 0 ]; }
 launcher_is_running() { echo engine >> "$LOG"; [ "$ENGINE" = 1 ]; }
 supervisor_is_running() { echo supervisor >> "$LOG"; [ "$MONITOR" = 1 ]; }
+shared_apply_bound_pristine_service() {
+  echo bound-pristine >> "$LOG"
+  [ "$BOUND_RC" -eq 0 ] || return "$BOUND_RC"
+  # Simulate the one locked native child, not the legacy rm path.
+  rm -rf "$PRISTINE_STAGE"
+}
 reset_pristine() {
   : > "$LOG"
   TREE_OK=0 STAGE_OK=0 REMOVE_OK=0 CENSUS_OK=0 IPFW_OK=0 ENGINE=0 MONITOR=0
-  TERMINAL_OK=0 GUARD=0 SEAL=0 CONFIG=0
+  TERMINAL_OK=0 GUARD=0 SEAL=0 CONFIG=0 BOUND_RC=3
 }
 pristine_check() {
   wanted="$1"; shift
@@ -551,6 +648,23 @@ pristine_check 0 "activating $CURRENT voice $OLD voice"
 [ ! -e "$PRISTINE_STAGE" ] || fail "sealed stage not removed before terminal recovery"
 grep -Fq stage-remove "$LOG" && grep -Fq terminal-restore "$LOG" ||
     fail "pristine stage recovery skipped removal or journal"
+reset_pristine; BOUND_RC=0
+mkdir -p "$PRISTINE_STAGE"
+pristine_check 0 "activating $CURRENT voice $OLD voice"
+[ ! -e "$PRISTINE_STAGE" ] && grep -Fq bound-pristine "$LOG" ||
+    fail "bound stage did not use locked terminal child"
+! grep -Eq 'stage-remove|terminal-restore' "$LOG" ||
+    fail "bound stage used legacy delete or second terminal writer"
+reset_pristine; BOUND_RC=70
+pristine_check 70 "activating $CURRENT voice $OLD voice"
+! grep -Eq 'stage-remove|terminal-restore' "$LOG" ||
+    fail "uncertain stage-absent bound closure selected legacy writer"
+reset_pristine; BOUND_RC=70
+mkdir -p "$PRISTINE_STAGE"
+pristine_check 70 "activating $CURRENT voice $OLD voice"
+[ -e "$PRISTINE_STAGE" ] && ! grep -Eq 'stage-remove|terminal-restore' "$LOG" ||
+    fail "uncertain bound stage fell through to legacy"
+rm -rf "$PRISTINE_STAGE"
 reset_pristine
 mkdir -p "$PRISTINE_STAGE"
 STAGE_OK=1
@@ -586,6 +700,19 @@ s=p.read_text()
 presence='    [ -x "${PYTHON_RUNTIME}" ] || return 70'
 assert s.count(presence)==1, "production root CLI presence gate missing"
 s=s.replace(presence, '    : # fixed FreeBSD root interpreter mocked')
+# Only the private native Config transport is substituted in this fixture.
+bound_start = s.index('    # Bound installed-new recovery')
+bound_end = s.index('    # On power loss before native Config save', bound_start)
+s = s[:bound_start] + '''    if [ "$_shared_cold_phase" != config-saved ]; then
+        if mock_bound_installed; then
+            printf "recovered-%s-id=%s\\n" "$_shared_cold_phase" "$_shared_cold_id"
+            return 0
+        else
+            _shared_cold_bound_rc=$?
+        fi
+        [ "$_shared_cold_bound_rc" -eq 3 ] || return 70
+    fi
+''' + s[bound_end:]
 prefix = '        "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
 for suffix, phase in (
     ('finish-remove-saved "$_shared_cold_id" "$_shared_cold_old" || return 70',
@@ -601,6 +728,7 @@ for suffix, phase in (
 p.write_text(s)
 PY
 . "$ROOT/activated-cold.sh"
+mock_bound_installed() { return "${BOUND_INSTALLED_RC:-3}"; }
 OLD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 CURRENT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 BACKUP_ROOT="$ROOT/backups"
@@ -704,11 +832,22 @@ from pathlib import Path
 import sys
 p=Path(sys.argv[1]); s=p.read_text()
 old='    [ -x "${PYTHON_RUNTIME}" ] || return 70\n    "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n        finish-activating "$_parked_id" "$_parked_old" || return 70'
+bound_start = s.index('    # Bound parked recovery')
+bound_end = s.index('    atomic_install_tree "$_parked_old_root/release"', bound_start)
+s = s[:bound_start] + '''    if mock_bound_parked; then
+        printf "recovered-parked-id=%s\\n" "$_parked_id"
+        return 0
+    else
+        _parked_bound_rc=$?
+    fi
+    [ "$_parked_bound_rc" -eq 3 ] || return 70
+''' + s[bound_end:]
 assert old in s, "parked recovery CLI phase gate missing"
 s=s.replace(old,'    echo finish-activating-parked >> "$LOG"; [ "$TERMINAL_OK" = 0 ] || return 70')
 p.write_text(s)
 PY
 . "$ROOT/parked.sh"
+mock_bound_parked() { echo bound-parked >> "$LOG"; return "${BOUND_PARKED_RC:-3}"; }
 ACTIVE_DIR="$ROOT/live-parked"
 BACKUP_ROOT="$ROOT/parked-backups"
 stage="$ROOT/.live-parked.stage.$CURRENT"
@@ -757,6 +896,18 @@ reset_parked
 mv "$hold" "$previous"
 parked_check 0 "activating $CURRENT voice $OLD voice"
 [ -d "$stage" ] && [ -d "$previous" ] || fail "backup evidence was consumed"
+reset_parked; BOUND_PARKED_RC=0
+parked_check 0 "activating $CURRENT voice $OLD voice"
+grep -Fqx bound-parked "$LOG" || fail "bound parked dispatch omitted"
+! grep -Eq 'restore-missing-active|finish-activating-parked' "$LOG" ||
+    fail "bound parked recovery repeated legacy work"
+for code in 69 70; do
+    reset_parked; BOUND_PARKED_RC=$code
+    parked_check 70 "activating $CURRENT voice $OLD voice"
+    ! grep -Eq 'restore-missing-active|finish-activating-parked' "$LOG" ||
+        fail "uncertain bound parked recovery selected legacy"
+done
+BOUND_PARKED_RC=3
 reset_parked; mkdir -p "$previous"
 parked_check 69 "activating $CURRENT voice $OLD voice"
 ! grep -Fqx restore-missing-active "$LOG" || fail "ambiguous two owners restored"
@@ -898,5 +1049,44 @@ grep -Fqx 'zapret is running' "$ROOT/status-entry-output" ||
     fail "status ignored unavailable lifecycle lock"
 
 echo 'PASS: generic status separates verified native and genuine legacy'
+
+(
+    MOCK_MANAGED_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    MOCK_MANAGED_REPLY="managed-restored=$MOCK_MANAGED_ID"
+    MOCK_MANAGED_RC=0
+    export MOCK_MANAGED_ID MOCK_MANAGED_REPLY MOCK_MANAGED_RC
+    old="committed $ID voice"
+    live_owner="$old"
+    shared_apply_inspect_service() { printf '%s\n' "$live_owner"; }
+    expect_rc() {
+        if shared_apply_recover_managed_cold_service "$2"; then
+            fail "managed recovery unexpectedly succeeded"
+        else
+            [ "$?" -eq "$1" ] || fail "managed recovery returned the wrong refusal"
+        fi
+    }
+    pending="managed-writing $MOCK_MANAGED_ID strategies $ID voice"
+    [ "$(shared_apply_recover_managed_cold_service "$pending")" = "$old" ] ||
+        fail "managed recovery did not return the verified previous owner"
+    live_owner="committed $MOCK_MANAGED_ID strategies"
+    expect_rc 70 "$pending"
+    live_owner="$old"
+    MOCK_MANAGED_REPLY="managed-restored=$ID"
+    expect_rc 70 "$pending"
+    MOCK_MANAGED_REPLY="managed-restored=$MOCK_MANAGED_ID"
+    MOCK_MANAGED_RC=69
+    expect_rc 70 "$pending"
+    expect_rc 69 "$pending extra"
+    MOCK_MANAGED_RC=0
+    MOCK_MANAGED_REPLY="managed-committed=$MOCK_MANAGED_ID"
+    live_owner="committed $MOCK_MANAGED_ID strategies"
+    expect_rc 70 "$pending"
+    saving="managed-config-saving $MOCK_MANAGED_ID strategies $ID voice"
+    [ "$(shared_apply_recover_managed_cold_service "$saving")" = "$live_owner" ] ||
+        fail "saved candidate was not accepted after exact Config recovery"
+    live_owner="$old"
+    expect_rc 70 "$saving"
+) || fail "managed cold recovery accepted an unknown receipt or predecessor"
+echo 'PASS: managed recovery requires the exact receipt and verified owner'
 
 echo 'PASS: committed native common owner routes boot through sealed release and fresh saved Config'

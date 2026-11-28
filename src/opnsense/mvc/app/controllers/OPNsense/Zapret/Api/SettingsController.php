@@ -362,7 +362,7 @@ class SettingsController extends ApiMutableModelControllerBase
                     'found_error' => ['source' => $match[1], 'line' => (int)$match[2]],
                 ];
             }
-            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|found-intent(?:-config-changed|-upload-(?:metadata|path|directory|inode|missing|reader|changed))?|found-batch|found-source-drift|owned-baseline|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
+            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|found-intent(?:-config-changed|-upload-(?:metadata|path|directory|inode|missing|reader|changed))?|found-batch|found-source-drift|owned-baseline|bundle-verify|config-preflight|runtime-preflight|bound-auto-required|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
                 return [
                     'result' => 'failed', 'applied' => false,
                     'requires_review' => false,

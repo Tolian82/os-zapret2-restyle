@@ -136,13 +136,16 @@ def preview_check(builder, label, candidate, expected_engine=None):
     return result, error
 
 
-def set_guest_lo0():
+def set_guest_lo0(target_mode=None):
+    need(target_mode is None or target_mode in ('all', 'list', 'auto'),
+         'invalid guest-only target mode')
     # Native model save is setup, BEFORE the read-only RUNNING preview.
     php = '''require_once("script/load_phalcon.php");
 $c=\\OPNsense\\Core\\Config::getInstance();$c->lock();try{
 $m=new \\OPNsense\\Zapret\\Zapret();
 $strategy="--filter-tcp=6545\\n--filter-l7=http\\n<HOSTLIST:youtube>\\n--payload=http_req\\n--lua-desync=multisplit:pos=method+2\\n";
-if(!$m->setNodeByReference("general.enabled","1") ||
+if((isset($argv[1]) && !$m->setNodeByReference("hostlist.mode",$argv[1])) ||
+ !$m->setNodeByReference("general.enabled","1") ||
  !$m->setNodeByReference("general.waninterface","lo0") ||
  !$m->setNodeByReference("general.ports","6545") ||
  !$m->setNodeByReference("strategy.trafficargs",$strategy) ||
@@ -150,7 +153,8 @@ if(!$m->setNodeByReference("general.enabled","1") ||
  throw new \\RuntimeException("invalid disposable model");
 $c->save(["description"=>"P5b2b disposable lo0 setup"]);
 }finally{$c->unlock();}'''
-    need(run('/usr/local/bin/php', '-r', php, timeout=30).returncode == 0,
+    args = () if target_mode is None else (target_mode,)
+    need(run('/usr/local/bin/php', '-r', php, *args, timeout=30).returncode == 0,
          'guest-only-model-save-failed')
 
 

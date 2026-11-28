@@ -530,6 +530,88 @@ class EffectiveKnownTests(unittest.TestCase):
                                     "native_original_config_fd9_required"):
             prepare_native_found_intent("a" * 32, 1, "b" * 64)
 
+    def test_native_found_fresh_base_drift_refuses_before_p2_or_wal(self):
+        plan = {"page": "strategies", "result": "prepared", "dependencies": "a" * 64,
+                "found_intent": {"config_revision": "a" * 64, "commit_authorized": False},
+                "found_batch": {}, "changed_fields": []}
+        raw = json.dumps(plan).encode()
+        with patch("sys.platform", "freebsd15"), patch("os.geteuid", return_value=0), \
+                patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"), \
+                patch("shared_apply_seal._stat"), \
+                patch("shared_apply_seal.verify_seal", return_value={
+                    "sha256": {"plan.json": hashlib.sha256(raw).hexdigest()}}), \
+                patch("auto_detect_effective_known._target", return_value=(raw, None)), \
+                patch("auto_detect_effective_known.exclusive_destination_lock") as lock, \
+                patch("shared_apply_operation.SharedApplyOperation") as store:
+            with self.assertRaisesRegex(EffectiveKnownRefused, "native_found_base_config_changed"):
+                prepare_native_found_intent("b" * 32, 4, "c" * 64, runtime_mode="1",
+                                            base_digest="d" * 64, stopped_only=True)
+            lock.assert_not_called()
+            store.assert_not_called()
+
+    def test_private_bound_found_save_uses_fresh_base_and_separate_source_pipe(self):
+        from contextlib import nullcontext
+        from types import SimpleNamespace
+        from auto_detect_effective_known import begin_native_bound_found_save_locked, main
+        from neutral_shared_apply_source_gate import MARKER, OriginalSourceGateRefused
+        operation = "a" * 32
+        base, candidate = "b" * 64, "c" * 64
+        old = {"id": "d" * 32, "candidate": base}
+        record = {"old": old}
+        raw = b"\0".join([MARKER, b"--filter-tcp=443", *([b""] * 9),
+                            b"list", b"989", b"igb0"]) + b"\0"
+        saved = object()
+        ready = lambda: None
+
+        def invoke(frame, queue_fd=None):
+            read_fd, write_fd = os.pipe()
+            source_fd = fcntl.fcntl(read_fd, fcntl.F_DUPFD, 10)
+            os.close(read_fd)
+            try:
+                os.write(write_fd, frame)
+                os.close(write_fd)
+                write_fd = None
+                return begin_native_bound_found_save_locked(
+                    operation, 4, candidate, base_digest=base, runtime_mode="1",
+                    source_fd=source_fd, queue_fd=queue_fd, before_save=ready)
+            finally:
+                os.close(source_fd)
+                if write_fd is not None:
+                    os.close(write_fd)
+
+        with patch("sys.platform", "freebsd15"), patch("os.geteuid", return_value=0), \
+                patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"), \
+                patch("shared_apply_operation.SharedApplyOperation",
+                      return_value=SimpleNamespace(read=lambda: record)), \
+                patch("shared_apply_operation.committed_owner", return_value=old), \
+                patch("shared_apply_operation.committed_manifest", return_value=None) as pin, \
+                patch("auto_detect_destination_commit._bound_found_queue_scope",
+                      side_effect=lambda fd: nullcontext()) as scope, \
+                patch("auto_detect_effective_known.prepare_native_found_intent") as prepare, \
+                patch("auto_detect_destination_commit.shared_apply_bound_found_files_original_fd9",
+                      return_value=saved) as write:
+            with self.assertRaises(OriginalSourceGateRefused):
+                invoke(raw[:-1])
+            prepare.assert_not_called()
+            write.assert_not_called()
+            with self.assertRaises(EffectiveKnownRefused):
+                invoke(raw, 3)  # inert old owner must not acquire a queue
+            pin.return_value = {"schema": 2}
+            with self.assertRaises(EffectiveKnownRefused):
+                invoke(raw)
+            prepare.assert_not_called()
+            write.assert_not_called()
+            self.assertIs(invoke(raw, 3), saved)
+            prepare.assert_called_once_with(operation, 4, candidate, runtime_mode="1",
+                                            base_digest=base, stopped_only=True)
+            write.assert_called_once_with(operation, 4, raw_pipe=raw, config_digest=base,
+                                          before_save=ready, queue_fd=3)
+            self.assertEqual(scope.call_args.args, (3,))
+        # Old/incomplete native begin protocol cannot infer the base.
+        self.assertEqual(main(["begin-found-save-locked", operation, candidate, "1"]), 64)
+
     def test_found_pristine_recovery_has_no_portable_or_cli_entry(self):
         # The first true cold terminal writer must remain import-only until
         # the original PHP Config model/FD9/P2 handoff has native acceptance.

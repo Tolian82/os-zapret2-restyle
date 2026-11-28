@@ -489,9 +489,9 @@ def execute(*, crash: bool = False) -> dict:
     require(before is not None and
             before.findtext("general/enabled") == "0" and
             (before.findtext("general/waninterface") or "") == "" and
-            (before.findtext("hostlist/mode") or "all") == "all" and
+            before.findtext("hostlist/mode") == "list" and
             "<HOSTLIST:youtube>" in (before.findtext("strategy/trafficargs") or ""),
-            "CANARY_DEFAULT_AUTO_LEARNABLE_PROFILE_MISSING")
+            "CANARY_DEFAULT_LIST_LEARNABLE_PROFILE_MISSING")
     baseline_code = (
         "require_once('script/load_phalcon.php');"
         "$m=new \\OPNsense\\Zapret\\Zapret();"

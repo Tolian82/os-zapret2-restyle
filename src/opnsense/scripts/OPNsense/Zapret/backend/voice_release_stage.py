@@ -243,10 +243,13 @@ def stage_common_runtime(output: Path, active_root: Path, content: dict[str, str
         raise VoiceStageError("common candidate must be outside the active runtime")
     if "traffic.conf" not in content:
         raise VoiceStageError("common candidate requires ordinary Traffic Strategy")
+    # The complete candidate XML is already independently sealed by Shared Apply.
+    # Keep its staging digest in compile_bundle metadata, not in the common
+    # runtime plan: a HOSTLIST-only edit must not change the Voice artifact.
     plan = {
         "schema": 1,
         "source": {key: value for key, value in json.loads(content["metadata.json"]).items()
-                   if key not in {"mode", "activation_authorized"}},
+                   if key not in {"mode", "activation_authorized", "saved_xml_sha256"}},
         "profiles": json.loads(content["profile-plan.json"])["profiles"],
         "capture": json.loads(content["capture-plan.json"]),
     }

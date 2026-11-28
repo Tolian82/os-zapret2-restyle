@@ -199,11 +199,20 @@ class EpochReceipts:
                 not isinstance(protect, str) or not HEX32.fullmatch(protect) or
                 type(keep) is not int or not 1 <= keep <= 16):
             raise ReceiptRefused("original_fd9_history_maintenance_owner_required")
+        pinned_prior = None
         if sys.platform.startswith("freebsd"):
             from voice_ipfw_adapter import require_lifecycle_lock
+            from shared_apply_operation import SharedApplyOperation
             require_lifecycle_lock()
+            record = SharedApplyOperation(owner=0).read()
+            if (record is not None and record["phase"] in ("activating", "activated") and
+                    record["detail"]["id"] == protect and
+                    record.get("previous_manifest", {}).get("schema") == 2):
+                pinned_prior = record["previous"]["id"]
         _directory(self.root.parent, self.uid)
         if not self.root.exists() and not self.root.is_symlink():
+            if pinned_prior is not None:
+                raise ReceiptRefused("pinned_previous_learning_history_missing")
             return 0
         _directory(self.root, self.uid)
         all_names = os.listdir(self.root)
@@ -213,6 +222,14 @@ class EpochReceipts:
                          (n.startswith(".gc3-") and HEX32.fullmatch(n[5:])))
                     for n in all_names)):
             raise ReceiptRefused("foreign_historical_epoch_before_reclaim")
+
+        # The in-flight bound predecessor remains rollback evidence even
+        # if a modified directory timestamp would put it outside the last
+        # four. This temporary pin lasts only through the original WAL.
+        if pinned_prior is not None and (
+                pinned_prior not in all_names or ".gc3-" + pinned_prior in all_names or
+                ".gc-" + pinned_prior in all_names):
+            raise ReceiptRefused("pinned_previous_learning_history_missing")
 
         # Finish only exact, already-renamed root-private deletion. A .gc
         # name is never an owner, log or ACK. Its allowed children are
@@ -338,6 +355,8 @@ class EpochReceipts:
         completed.sort()
         removed = 0
         for _, name, kind in completed[:-keep]:
+            if name == pinned_prior:
+                continue
             original = self.root / name
             tombstone = self.root / (
                 (".gc3-" if kind == "learning" else ".gc-") + name)
@@ -713,6 +732,7 @@ class EpochReceipts:
             "files", "learning", "ack_authorized",
         }
         if (not isinstance(seed, dict) or set(seed) != required or
+                seed_raw != _canonical(seed) or
                 type(seed["schema"]) is not int or seed["schema"] != 3 or
                 seed["kind"] != "original-fd9-learning-pretraffic-zero" or
                 seed["generation"] != proof.generation or
@@ -783,16 +803,15 @@ class EpochReceipts:
                 raise ReceiptRefused("learning_epoch_cursor_not_original_zero")
         return folder, seed, seed_raw
 
-    def finish_learning_running(
+    def _attest_learning_running_seed(
         self, proof: LearningGenerationProof, queue: DurableInbox, *,
-        workspace: Path, attest,
-    ) -> dict:
-        """Durably finish *one* schema3 epoch; never grants minute/P2 ACK.
+        workspace: Path, attest, unfinished: bool = False,
+    ) -> tuple[Path, dict]:
+        """One original live seed verifier, before either Config or epoch commit.
 
-        A genuine future original FD9/P2c callback must independently
-        verify shared Apply owner, active release, one actual PID/birth,
-        full kernel argv and monitor, exactly as legacy _attest_core.
-        No such callable is connected to production in this patch.
+        Borrow the caller's existing P2a scope. Never create an epoch here.
+        The native owner callback is independently rechecked around the
+        original immutable pretraffic and all current producer identities.
         """
         from auto_detect_fd import OwnerToken
         from voice_live_inspect import CHILD_EXEC
@@ -856,10 +875,16 @@ class EpochReceipts:
                 "learning": seed["learning"],
                 "ack_authorized": False,
             }
-            if (folder / "cursor-chain-v2").exists():
+            # Before Config commit only the original zero receipt may exist.
+            # During finalization allow an exact already-written epoch for
+            # idempotent retry, never cursor/retirement residue.
+            allowed = {"pretraffic.json"} if unfinished else {"pretraffic.json", "epoch.json"}
+            if set(os.listdir(folder)) - allowed:
                 raise ReceiptRefused("learning_running_cursor_chain_already_exists")
-            _write_once(folder, "epoch.json", _canonical(data), self.uid)
-            return data
+            if (_read(folder / "pretraffic.json", self.uid) != seed_raw or
+                    queue.segments() or attest() != proof):
+                raise ReceiptRefused("learning_running_seed_changed")
+            return folder, data
         except ReceiptRefused:
             raise
         except (OSError, ValueError, TypeError, KeyError, QueueSafetyError,
@@ -868,16 +893,42 @@ class EpochReceipts:
             raise ReceiptRefused("learning_running_epoch_not_attested") from exc
 
 
+    def verify_learning_running_pretraffic(
+        self, proof: LearningGenerationProof, queue: DurableInbox, *,
+        workspace: Path, attest,
+    ) -> str:
+        """Read-only pre-Config proof; never write epoch, cursor or ACK."""
+        _, data = self._attest_learning_running_seed(
+            proof, queue, workspace=workspace, attest=attest, unfinished=True)
+        return data["pretraffic_sha256"]
+
+    def finish_learning_running(
+        self, proof: LearningGenerationProof, queue: DurableInbox, *,
+        workspace: Path, attest, expected_pretraffic_sha256: str | None = None,
+    ) -> dict:
+        """Finish the same original epoch, only after native saved-Config phase."""
+        folder, data = self._attest_learning_running_seed(
+            proof, queue, workspace=workspace, attest=attest)
+        if expected_pretraffic_sha256 is not None and (
+                type(expected_pretraffic_sha256) is not str or
+                not HEX64.fullmatch(expected_pretraffic_sha256) or
+                data["pretraffic_sha256"] != expected_pretraffic_sha256):
+            raise ReceiptRefused("learning_running_pretraffic_pin_changed")
+        _write_once(folder, "epoch.json", _canonical(data), self.uid)
+        return data
+
+
     def verify_learning_stopped_epoch(
         self, proof: LearningGenerationProof, *, workspace: Path,
     ) -> dict:
-        """STEP 15b3c: strict immutable schema3 epoch for STOPPED P2c.
+        """Strict immutable schema3 epoch, originally used by STOPPED P2c.
 
-        This is NOT the schema2 _epoch(), a live native source check or an
-        ACK permit. The original FD9 lifecycle attester separately proves
-        the shared Apply journal, that the real engine is absent, and
-        that no replacement engine/supervisor is running. No producer
-        inode or OLD archive is opened, changed, truncated or removed.
+        The historical method name is retained. This reads the original
+        immutable receipt only, not current producer files or process state.
+        The caller independently proves the required running/stopped owner.
+        It is NOT the schema2 _epoch(), a live native source check, a
+        retirement proof or an ACK permit. No producer inode or OLD archive
+        is opened, changed, truncated or removed.
         """
         from auto_detect_origin_map import ORIGIN_FILE
         from auto_detect_owner import _valid_learning_active

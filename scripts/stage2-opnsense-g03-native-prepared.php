@@ -7,6 +7,7 @@ namespace OPNsense\Zapret\Native;
 
 require_once '/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_request.php';
 require_once '/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php';
+require_once '/usr/local/opnsense/scripts/OPNsense/Zapret/auto_detect_config_snapshot.php';
 
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 
@@ -34,7 +35,7 @@ function image(string $path, bool $canMiss): array {
             'revision'=>hash('sha256',"present\0" . $text), 'content'=>$text];
 }
 
-function stage($config, bool $partial = false, bool $withConfig = false): string {
+function stage($config, bool $partial = false, bool $withConfig = false, bool $secondBatch = false, string $gapMode = ''): string {
     $current = (new \OPNsense\Zapret\Zapret())->getNodes();
     $xml = @file_get_contents('/conf/config.xml');
     required(is_string($xml), 'G03_COLD_CONFIG_UNREADABLE');
@@ -46,10 +47,10 @@ function stage($config, bool $partial = false, bool $withConfig = false): string
         );
         required(in_array($saved, ['off','hourly','daily','weekly','monthly'], true),
                  'G03_CONFIG_NATIVE_SAVED_INTERVAL_INVALID');
-        $next = $saved === 'off' ? 'hourly' : 'off';
+        $nextInterval = $saved === 'off' ? 'hourly' : 'off';
         $prepared = SharedApplyRequest::prepare([
             'page'=>'strategies',
-            'fields'=>['general'=>['autorestart'=>$next]],
+            'fields'=>['general'=>['autorestart'=>$nextInterval]],
             'sync'=>['telegramips_baseline'=>
                 (string)($current['hostlist']['telegramips'] ?? '')],
         ], $current, $xml);
@@ -71,10 +72,16 @@ function stage($config, bool $partial = false, bool $withConfig = false): string
             // Disposable crash fixture: require TWO genuine protected edits.
             $domain = $name === 'youtube'
                 ? 'native-partial-youtube-proof.org' : 'native-partial-user-proof.org';
+            if ($gapMode !== '') {
+                $domain = 'gap-' . $gapMode . '-' . $domain;
+            } elseif ($secondBatch) {
+                $domain = 'next-' . $domain;
+            }
             $draft = rtrim($draft, "\n") . "\n" . $domain . "\n";
         }
         if ($name === 'auto') {
-            $draft .= "native-cold-prepared-proof.org\n";
+            $draft .= ($gapMode !== '' ? 'gap-' . $gapMode . '-' :
+                ($secondBatch ? 'next-' : '')) . "native-cold-prepared-proof.org\n";
         }
         $sources[$name] = ['base'=>$view, 'draft'=>$draft];
     }
@@ -95,9 +102,64 @@ function stage($config, bool $partial = false, bool $withConfig = false): string
     return SharedApplyRequest::materialize($prepared);
 }
 
+/**
+ * TEST ONLY: create a normal three-source Found JSON to be sent as a REAL
+ * multipart HTTP upload. No temporary PHP upload is fabricated here: the
+ * subsequent loopback HTTP request creates it through PHP's upload engine.
+ */
+function originalHttpFoundIntent($config): string {
+    required(getenv('ZAPRET2_G03_FIRST_DISABLED') === '1' &&
+             getenv('ZAPRET2_G03_BOUND_FOUND') === '1',
+             'G03_HTTP_FOUND_DISPOSABLE_ONLY');
+    $current = (new \OPNsense\Zapret\Zapret())->getNodes();
+    $xml = @file_get_contents('/conf/config.xml');
+    required(is_string($xml) &&
+             ($current['general']['enabled'] ?? null) === '0',
+             'G03_HTTP_FOUND_OLD_CONFIG_REQUIRED');
+    $saved = \OPNsense\Zapret\Api\VoiceModelValues::text(
+        $current['general']['autorestart'] ?? 'off');
+    required(in_array($saved, ['off','hourly','daily','weekly','monthly'], true),
+             'G03_HTTP_FOUND_INTERVAL_INVALID');
+    $nextInterval = $saved === 'off' ? 'hourly' : 'off';
+    $prepared = SharedApplyRequest::prepare([
+        'page'=>'strategies',
+        'fields'=>['general'=>['autorestart'=>$nextInterval]],
+        'sync'=>['telegramips_baseline'=>
+            (string)($current['hostlist']['telegramips'] ?? '')],
+    ], $current, $xml);
+    required(($prepared['plan']['changed_fields'] ?? null) === ['general.autorestart'],
+             'G03_HTTP_FOUND_CONFIG_SCOPE_REQUIRED');
+    $sources = [];
+    foreach ([
+        'youtube'=>'/var/db/zapret2/auto-detect-owned/youtube.txt',
+        'user'=>'/var/db/zapret2/auto-detect-owned/user.txt',
+        'auto'=>'/usr/local/etc/zapret2/ipset/auto-domains.txt',
+    ] as $name=>$path) {
+        $before = image($path, $name === 'auto');
+        $draft = rtrim($before['content'], "\n") . "\n" .
+            'native-http-' . $name . '-proof.org' . "\n";
+        $sources[$name] = ['base'=>$before, 'draft'=>$draft];
+    }
+    $json = json_encode([
+        'schema_version'=>1, 'kind'=>'tz6v2-found-form-intent',
+        'config_revision'=>$prepared['plan']['dependencies'],
+        'sources'=>$sources,
+    ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+    $validated = SharedApplyFoundIntent::validateJson(
+        $json, $prepared['plan']['dependencies']);
+    required($validated['commit_authorized'] === false,
+             'G03_HTTP_FOUND_UPLOAD_UNQUALIFIED');
+    return $json;
+}
+
 function durable($config, string $id, string $action = 'durable'): void {
-    $attest = $action !== 'durable';
+    $attest = !in_array($action, ['durable', 'durable-stopped'], true);
     $bind = $action === 'bind';
+    $stoppedPresave = $action === 'stopped-presave';
+    if ($stoppedPresave || $action === 'durable-stopped') {
+        required(getenv('ZAPRET2_G03_FIRST_DISABLED') === '1',
+                 'G03_BOUND_STOPPED_DISPOSABLE_SCOPE_REQUIRED');
+    }
     required(preg_match('/^[a-f0-9]{32}$/D', $id) === 1,
              'G03_COLD_BAD_OPERATION_ID');
     $planFile = "/var/db/zapret2/shared-work/$id/plan.json";
@@ -125,7 +187,10 @@ function durable($config, string $id, string $action = 'durable'): void {
 import json,sys
 sys.path.insert(0,"/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
 from auto_detect_effective_known import prepare_native_found_intent
-receipt=prepare_native_found_intent(sys.argv[1],4,sys.argv[2],runtime_mode="1")
+stopped = sys.argv[4] == "durable-stopped"
+receipt=prepare_native_found_intent(sys.argv[1],4,sys.argv[2],
+    runtime_mode="0" if stopped else "1",
+    base_digest=sys.argv[3] if stopped else None, stopped_only=stopped)
 print(json.dumps(receipt,sort_keys=True,separators=(",",":")))
 PY;
     if ($attest) {
@@ -136,11 +201,14 @@ import json, subprocess, sys
 sys.path.insert(0, "/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
 from shared_apply_operation import SharedApplyOperation
 from neutral_shared_apply_source_gate import (
-    native_attest_found_prepared_fd9, native_bind_found_prepared_fd9,
-    native_plan_found_prepared_fd9, decode_pipe, MAX_PIPE)
+    native_attest_found_prepared_fd9, native_plan_found_prepared_fd9,
+    OriginalSourceGateRefused, decode_pipe, MAX_PIPE)
 from auto_detect_destination_commit import (
-    DestinationRefused, shared_apply_found_files_original_fd9)
+    DestinationRefused, shared_apply_found_files_original_fd9,
+    shared_apply_bound_found_files_original_fd9)
 from shared_apply_operation import committed_manifest, SharedOperationError
+from shared_apply_seal import WORK
+from neutral_root_stage import verify_original_operation_pins
 from voice_ipfw_adapter import require_lifecycle_lock
 op = sys.argv[1]
 require_lifecycle_lock()
@@ -166,24 +234,103 @@ if wire.returncode or not wire.stdout or len(wire.stdout) > MAX_PIPE:
 decode_pipe(wire.stdout)
 action = sys.argv[4]
 store = SharedApplyOperation(owner=0)
+if action == "stopped-presave":
+    # Actual original writer; terminate exactly at the durable before-save
+    # handshake. No Config::save and no alternative P1 writer in this probe.
+    import os
+    if (before.get("phase") != "prepared" or
+            before.get("previous_manifest", {}).get("schema") != 1 or
+            before.get("found", {}).get("runtime_mode") != "0"):
+        raise RuntimeError("G03_BOUND_STOPPED_PREPARED_REQUIRED")
+    def interrupted_before_save():
+        pending = store.read()
+        if (pending.get("phase") != "found-config-saving" or
+                pending.get("previous_manifest") != before["previous_manifest"] or
+                pending.get("previous") != before["previous"] or
+                pending.get("detail") != before["detail"] or
+                pending.get("manifest", {}).get("schema") != 1 or
+                set(pending["found"]["post"]) != {"youtube", "user", "auto"} or
+                set(pending["found"]["stages"]) != {"youtube", "user", "auto"} or
+                any(s["state"] != "installed" for s in pending["found"]["stages"].values())):
+            raise RuntimeError("G03_BOUND_STOPPED_BEFORE_SAVE_PHASE_REQUIRED")
+        verify_original_operation_pins(record=pending, parent=WORK, owner_uid=0)
+        os._exit(73)
+    try:
+        shared_apply_bound_found_files_original_fd9(
+            op, 4, raw_pipe=wire.stdout, config_digest=sys.argv[3],
+            before_save=interrupted_before_save)
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError) as exc:
+        # Only fixed identifiers: no raw Config or arbitrary exception text.
+        import re
+        reasons = []
+        seen = set()
+        while exc is not None and id(exc) not in seen and len(reasons) < 6:
+            seen.add(id(exc))
+            label = str(exc)
+            reasons.append(label if re.fullmatch(r"[A-Za-z0-9_]{1,100}", label)
+                           else type(exc).__name__)
+            exc = exc.__cause__ or exc.__context__
+        print("G03_STOPPED_WRITER_REFUSED_" + "_".join(reasons), flush=True)
+        raise SystemExit(69)
+    raise RuntimeError("G03_BOUND_STOPPED_SAVE_HANDSHAKE_MISSING")
 if action == "bind":
-    witness, staged = native_bind_found_prepared_fd9(
-        op, wire.stdout, 4, config_digest=sys.argv[3])
+    # Observe the actual combined bind, not the standalone attester which
+    # deliberately refuses a pinned predecessor. Only the disposable test
+    # records the unchanged return value of the original function.
+    import neutral_shared_apply_source_gate as gate
+    original_bind = gate.native_bind_found_prepared_fd9
+    save_invoked = [False]
+    bound_receipts = []
+    def forbidden_save():
+        save_invoked[0] = True
+        raise RuntimeError("G03_BOUND_FOUND_UNEXPECTED_CONFIG_SAVE")
+    def observed_bind(*args, **kwargs):
+        receipt = original_bind(*args, **kwargs)
+        bound_receipts.append(receipt)
+        return receipt
+    gate.native_bind_found_prepared_fd9 = observed_bind
+    try:
+        try:
+            shared_apply_bound_found_files_original_fd9(
+                op, 4, raw_pipe=wire.stdout, config_digest=sys.argv[3],
+                before_save=forbidden_save)
+        except OriginalSourceGateRefused as exc:
+            cause = exc.__context__
+            if (str(exc) != "S10_FOUND_SEMANTIC_REFUSED" or
+                    type(cause) is not DestinationRefused or
+                    str(cause) != "bound_found_stopped_inert_owner_required"):
+                raise RuntimeError("G03_BOUND_FOUND_ORIGINAL_WRITER_WRONG_REFUSAL")
+        else:
+            raise RuntimeError("G03_BOUND_FOUND_RUNNING_WRITER_NOT_FENCED")
+    finally:
+        gate.native_bind_found_prepared_fd9 = original_bind
+    if save_invoked[0] or len(bound_receipts) != 1:
+        raise RuntimeError("G03_BOUND_FOUND_WRITER_SAVE_OR_BIND_COUNT")
+    witness, staged = bound_receipts[0]
+    pending = store.read()
+    pin = pending.get("manifest") if type(pending) is dict else None
     expected = dict(before, manifest={
         "schema": 2 if (witness.source.mode == "auto" and
                        witness.source.requested_enabled) else 1,
         "generation": op, "root_sha256": staged.root_sha256,
         "seal_sha256": staged.original_seal_sha256,
         "candidate_sha256": sys.argv[2]})
-    if (store.read() != expected or committed_manifest(expected) is not None or
+    if (pending != expected or committed_manifest(expected) is not None or
             staged.authorization != "NONE" or staged.physical_transition_allowed or
             staged.promotion_allowed or staged.reattest_under_original_fd9 is not True):
         raise RuntimeError("G03_FOUND_NATIVE_BIND_NOT_PREPARED")
+    verify_original_operation_pins(record=pending, parent=WORK, owner_uid=0)
     semantic = native_plan_found_prepared_fd9(witness, 4, config_digest=sys.argv[3])
+    old_pin = before.get("previous_manifest")
+    if old_pin is not None:
+        if (old_pin["schema"] != 1 or witness.source.mode != "list" or
+                semantic.previous_running_epoch_sha256 is not None or
+                semantic.decision.changed_active != ("hostlist-youtube.txt",)):
+            raise RuntimeError("G03_BOUND_FOUND_EXPECTED_MULTI_SOURCE_SEMANTIC_REFUSED")
     if (semantic.previous_state != "ready" or
             semantic.previous_generation != before["previous"]["id"] or
-            semantic.previous_root_sha256 is not None or
-            semantic.candidate_root_sha256 != staged.root_sha256 or
+            semantic.previous_root_sha256 != (None if old_pin is None else old_pin["root_sha256"]) or
+            semantic.candidate_root_sha256 != pin["root_sha256"] or
             semantic.plan_sha256 != witness.plan_sha256 or
             semantic.decision.kind != "RESTART_REQUIRED" or semantic.reload_candidate or
             semantic.authorization != "NONE" or semantic.physical_transition_allowed or
@@ -209,7 +356,7 @@ if action == "bind":
     if store.read() != expected:
         raise RuntimeError("G03_FOUND_NATIVE_FENCE_CHANGED_WAL")
     result = "original-found-prepared-root-bound-only"
-    root_sha = staged.root_sha256
+    root_sha = pin["root_sha256"]
     semantic_kind = semantic.decision.kind
 else:
     witness = native_attest_found_prepared_fd9(op, wire.stdout, 4)
@@ -228,7 +375,8 @@ print(json.dumps({"result":result,
     "source_status":witness.source.status,
     "authorization":witness.authorization,
     "final_reattest":witness.final_original_fd9_reattest_required,
-    "root_sha256":root_sha, "semantic":semantic_kind},
+    "root_sha256":root_sha, "semantic":semantic_kind,
+    "writer_refused_before_p1":action == "bind"},
     sort_keys=True,separators=(",",":")))
 PY;
     }
@@ -248,14 +396,22 @@ PY;
         $rc = proc_close($proc);
         $proc = null;
         $result = is_string($text) ? json_decode($text, true) : null;
-        if ($attest) {
+        if ($stoppedPresave) {
+            if ($rc !== 73 && is_string($text) &&
+                preg_match('/^G03_STOPPED_WRITER_REFUSED_[A-Za-z0-9_]{1,500}\n?$/D', $text)) {
+                throw new \RuntimeException(trim($text));
+            }
+            required($rc === 73 && $text === '',
+                     'G03_BOUND_STOPPED_NOT_INTERRUPTED_BEFORE_SAVE');
+        } elseif ($attest) {
             required($rc === 0 && is_array($result) &&
                      ($result['result'] ?? null) === ($bind
                          ? 'original-found-prepared-root-bound-only'
                          : 'original-found-prepared-source-cas-only') &&
                      (!$bind || (preg_match('/^[a-f0-9]{64}$/D',
                          (string)($result['root_sha256'] ?? '')) === 1 &&
-                         ($result['semantic'] ?? null) === 'RESTART_REQUIRED')) &&
+                         ($result['semantic'] ?? null) === 'RESTART_REQUIRED' &&
+                          ($result['writer_refused_before_p1'] ?? null) === true)) &&
                      ($result['generation'] ?? null) === $id &&
                      ($result['base'] ?? null) === $base &&
                      ($result['candidate'] ?? null) === $candidate &&
@@ -373,7 +529,7 @@ final class G03NativeConfigSaveCrash {
     }
 }
 
-function crashAfterActualConfigSave($config, string $id): void {
+function crashAfterActualConfigSave($config, string $id, bool $bound = false): void {
     required(preg_match('/^[a-f0-9]{32}$/D', $id) === 1,
              'G03_CONFIG_BAD_OPERATION');
     $plan = SharedApplyConfigWorker::readPlan($id);
@@ -382,9 +538,17 @@ function crashAfterActualConfigSave($config, string $id): void {
              isset($plan['found_intent'], $plan['found_batch']) &&
              count($plan['found_batch']) === 3,
              'G03_CONFIG_PLAN_NOT_ACTUAL_NATIVE_CHANGE');
+    if ($bound) {
+        $source = @fstat(STDIN);
+        required(getenv('ZAPRET2_G03_FIRST_DISABLED') === '1' &&
+                 getenv('ZAPRET2_G03_BOUND_FOUND') === '1' &&
+                 ($plan['candidate']['general']['enabled'] ?? null) === '0' &&
+                 is_array($source) && ($source['mode'] & 0170000) === 0010000,
+                 'G03_BOUND_CONFIG_CRASH_SCOPE_REQUIRED');
+    }
     $m = new \ReflectionMethod(SharedApplyConfigWorker::class, 'saveFoundNative');
-    $m->invoke(null, $plan, $id, '1', new G03NativeConfigSaveCrash($config),
-               static fn() => new \OPNsense\Zapret\Zapret());
+    $m->invoke(null, $plan, $id, $bound ? '0' : '1', new G03NativeConfigSaveCrash($config),
+               static fn() => new \OPNsense\Zapret\Zapret(), $bound);
     throw new \RuntimeException('G03_CONFIG_NO_ACTUAL_SAVE_CRASH');
 }
 
@@ -393,22 +557,39 @@ try {
              getenv('GITHUB_ACTIONS') === 'true' &&
              getenv('ZAPRET2_G03_COLD_PREPARED') === '1' &&
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
-             in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config',
-                                         'durable','attest','bind','crash-partial','crash-config-save','stage-ordinary'], true) &&
+             in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config','stage-config-next',
+                                         'stage-config-gap-staged','stage-config-gap-parked',
+                                         'stage-config-gap-backed-up','http-found-intent','durable','durable-stopped','stopped-presave','attest','bind','crash-partial','crash-config-save','crash-bound-config-save','stage-ordinary','bootstrap-known'], true) &&
              count($argv) === (in_array(($argv[1] ?? ''),
-                ['stage','stage-partial','stage-config','stage-ordinary'], true) ? 2 : 3),
+                ['stage','stage-partial','stage-config','stage-config-next',
+                    'stage-config-gap-staged','stage-config-gap-parked',
+                    'stage-config-gap-backed-up','stage-ordinary','bootstrap-known','http-found-intent'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
     SharedApplyLifecycleLock::assertHeld();
     require_once 'script/load_phalcon.php';
     $config = \OPNsense\Core\Config::getInstance();
-    if ($argv[1] === 'crash-config-save') {
+    if ($argv[1] === 'bootstrap-known') {
+        required(getenv('ZAPRET2_G03_BOUND_FOUND') === '1' &&
+                 getenv('ZAPRET2_G03_PRISTINE_FIRST_COMMIT') === '1' &&
+                 !file_exists('/var/db/zapret2/shared-apply/operation.json') &&
+                 !is_link('/var/db/zapret2/shared-apply/operation.json'),
+                 'G03_BOUND_FOUND_BOOTSTRAP_PRISTINE_ONLY');
+        // The original helper takes and revalidates the native Config lock.
+        // Do not nest it inside the existing fixture's Config::lock branch.
+        $digest = VoiceSettingsSnapshot::digest((new \OPNsense\Zapret\Zapret())->getNodes());
+        $state = AutoDetectConfigSnapshot::bootstrapKnownInitial(
+            $config, static fn() => new \OPNsense\Zapret\Zapret(), $digest);
+        echo "original-known-bootstrap=" . $state . "\n";
+    } elseif (in_array($argv[1], ['crash-config-save', 'crash-bound-config-save'], true)) {
         // The original Config lock must be acquired ONCE by the real
         // SharedConfigCommit, via the test-only delegating crash adapter.
-        crashAfterActualConfigSave($config, $argv[2]);
+        crashAfterActualConfigSave($config, $argv[2], $argv[1] === 'crash-bound-config-save');
     } else {
         $config->lock();
         try {
-            if ($argv[1] === 'stage-ordinary') {
+            if ($argv[1] === 'http-found-intent') {
+                echo originalHttpFoundIntent($config), "\n";
+            } elseif ($argv[1] === 'stage-ordinary') {
                 $current = (new \OPNsense\Zapret\Zapret())->getNodes();
                 $xml = @file_get_contents('/conf/config.xml');
                 required(is_string($xml), 'G03_BOUND_NATIVE_CONFIG_UNREADABLE');
@@ -418,9 +599,24 @@ try {
                          $prepared['plan']['page'] === 'strategies',
                          'G03_BOUND_NATIVE_ORDINARY_PLAN_REQUIRED');
                 echo 'prepared-id=' . SharedApplyRequest::materialize($prepared) . "\n";
-            } elseif (in_array($argv[1], ['stage','stage-partial','stage-config'], true)) {
+            } elseif (in_array($argv[1], ['stage','stage-partial','stage-config','stage-config-next',
+                        'stage-config-gap-staged','stage-config-gap-parked',
+                        'stage-config-gap-backed-up'], true)) {
+                $next = $argv[1] === 'stage-config-next';
+                $gap = str_starts_with($argv[1], 'stage-config-gap-')
+                    ? substr($argv[1], strlen('stage-config-gap-')) : '';
+                if ($next || $gap !== '') {
+                    required(getenv('ZAPRET2_G03_FIRST_DISABLED') === '1' &&
+                             getenv('ZAPRET2_G03_BOUND_FOUND') === '1',
+                             'G03_BOUND_NEXT_STAGE_SCOPE_REQUIRED');
+                }
                 echo 'prepared-id=' . stage($config,
-                    $argv[1] !== 'stage', $argv[1] === 'stage-config') . "\n";
+                    $argv[1] !== 'stage', $argv[1] === 'stage-config' || $next || $gap !== '', $next, $gap) . "\n";
+            } elseif (in_array($argv[1], ['durable-stopped', 'stopped-presave'], true)) {
+                durable($config, $argv[2], $argv[1]);
+                echo $argv[1] === 'stopped-presave'
+                    ? "original-bound-found-before-save-interrupted\n"
+                    : "original-found-prepared-durable\n";
             } elseif (in_array($argv[1], ['durable', 'attest', 'bind'], true)) {
                 durable($config, $argv[2], $argv[1]);
                 echo ($argv[1] === 'bind'

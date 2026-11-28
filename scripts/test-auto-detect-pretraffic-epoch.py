@@ -29,6 +29,24 @@ from shared_apply_seal import create_seal
 
 
 class PretrafficEpochTests(unittest.TestCase):
+    def test_learning_epoch_writer_refuses_different_pinned_pretraffic_before_write(self):
+        # Exercise the existing writer boundary without fabricating a native
+        # owner; the actual seed and producer verifier has separate coverage.
+        data = {"pretraffic_sha256": "a" * 64}
+        with patch.object(self.receipts, "_attest_learning_running_seed",
+                          return_value=(self.base, data)), \
+                patch("auto_detect_epoch_receipts._write_once") as write:
+            def finish(pin):
+                return self.receipts.finish_learning_running(None, self.queue,
+                    workspace=self.base, attest=lambda: None,
+                    expected_pretraffic_sha256=pin)
+            for pin in ("b" * 64, True, "invalid"):
+                with self.assertRaises(ReceiptRefused):
+                    finish(pin)
+            write.assert_not_called()
+            self.assertEqual(finish("a" * 64), data)
+            write.assert_called_once()
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory(prefix="p2k8q2-")
         self.addCleanup(temp.cleanup)

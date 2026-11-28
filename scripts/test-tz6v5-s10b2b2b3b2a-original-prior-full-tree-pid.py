@@ -85,6 +85,50 @@ class FullPreviousOwnerReadOnly(unittest.TestCase):
                          return_value=self.prior if native is None else native)
         return a, b
 
+    def test_running_executable_text_vnode_matches_exact_bytes(self):
+        import hashlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "dvtws2"
+            exe.write_bytes(b"engine fixture")
+            exe.chmod(0o700)
+            info = exe.stat()
+            expected = hashlib.sha256(exe.read_bytes()).hexdigest()
+            header = "USER CMD PID FD DEV INUM MODE SZ|DV R/W NAME\n"
+            row = (f"nobody dvtws2 {PID} text {info.st_dev:#x} "
+                   f"{info.st_ino} {info.st_mode:o} {info.st_size} r {exe}\n")
+
+            def runner_for(raw):
+                return Mock(return_value=Mock(returncode=0, stderr="", stdout=raw))
+
+            # The temporary test may run unprivileged. Inject only uid=0
+            # at the stat boundary; preserve actual inode and byte evidence.
+            from types import SimpleNamespace
+            real_fstat, real_lstat = os.fstat, Path.lstat
+
+            def root(info):
+                return SimpleNamespace(**{key: (0 if key == "st_uid" else getattr(info, key))
+                    for key in ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid",
+                                "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns")})
+
+            def run(raw, digest=expected):
+                with patch.object(gate.os, "fstat", side_effect=lambda fd: root(real_fstat(fd))), \
+                     patch.object(Path, "lstat", lambda path: root(real_lstat(path))):
+                    return gate._running_executable_identity(
+                        PID, digest, executable=exe, runner=runner_for(raw))
+
+            self.assertEqual(run(header + row)[:2], (info.st_dev, info.st_ino))
+            for bad in (header, header + row.replace(" text ", " mmap "),
+                        header + row + row, header + row.replace(f" {PID} ", " 999 "),
+                        header + row.replace(f" {info.st_ino} ", " 1 "),
+                        header + row.replace(f" {info.st_dev:#x} ", " 0x999 "),
+                        header + row.replace(f" {exe}\n", " /wrong\n")):
+                with self.assertRaises(gate.PreviousPhysicalRefused):
+                    run(bad)
+            with self.assertRaises(gate.PreviousPhysicalRefused):
+                run(header + row, "0" * 64)
+
     def test_real_complete_sealed_release_matches_all_active_bytes(self):
         original = verify_seal(self.old_work, owner=os.geteuid())
         expect = original["sha256"]["release"]
@@ -274,6 +318,293 @@ class FullPreviousOwnerReadOnly(unittest.TestCase):
                     effective=self.f.f.f.effective, enabled=True)
             saved.assert_not_called()
             tree.assert_not_called()
+
+
+class FinalBoundRuntimeReadOnly(unittest.TestCase):
+    """Existing native readers are injected; actual final IPFW comparison and
+    temporary producer inode identities are exercised. Not FreeBSD acceptance.
+    """
+
+    def test_final_running_epoch_and_kernel_refusals(self):
+        import json
+        import tempfile
+        from contextlib import ExitStack
+        from types import SimpleNamespace
+        from voice_firewall_transaction import TABLE_PREFIX
+
+        generation, digest = "a" * 32, "b" * 64
+        record = {"phase": "config-saved",
+                  "detail": {"id": generation, "candidate": digest},
+                  "manifest": {"schema": 1, "root_sha256": "c" * 64}}
+        root = {"schema": 1, "generation": generation,
+                "service": {"enabled": True, "target_mode": "list"}}
+        manifest = {"rule_base": 19000, "rule_max": 19010,
+                    "rules": {19000: ["divert"]}, "tables": {}}
+        token = gate.PriorRunningToken(PID, BIRTH, MON, MONBIRTH, "d" * 64)
+        adapter = SimpleNamespace(rule_base=19000, rule_max=19099,
+            list_rules=Mock(return_value=manifest["rules"]),
+            get_table=Mock(return_value=None))
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            producer = Path(tmp)
+            pending = producer / "pending"
+            files = []
+            proof = SimpleNamespace(operation_id=generation, generation=generation,
+                                    owner_candidate_sha256=digest,
+                                    owner=SimpleNamespace(pid=PID, started=BIRTH))
+            epoch = Mock(return_value={"files": files, "pretraffic_sha256": "a" * 64})
+            queue = SimpleNamespace(pending=pending, _verify=Mock())
+            # The independent platform, original locks, immutable receipts,
+            # full tree and process readers are qualified separately. Inject
+            # their outcomes here; never turn this test into a native PASS.
+            stack.enter_context(patch("sys.platform", "freebsd15"))
+            stack.enter_context(patch("os.geteuid", return_value=0))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            cfg = stack.enter_context(patch(
+                "auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            stack.enter_context(patch.object(gate, "SharedApplyOperation",
+                return_value=SimpleNamespace(read=lambda: record)))
+            stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root",
+                side_effect=lambda **kw: json.dumps(root).encode()))
+            stack.enter_context(patch.object(gate, "_full_prior_tree", return_value="e" * 64))
+            process = stack.enter_context(patch.object(gate, "_running_native", return_value=token))
+            stack.enter_context(patch("voice_ipfw_adapter.shared_release_manifest",
+                                      return_value=manifest))
+            factory = stack.enter_context(patch("voice_ipfw_adapter.FreeBSDIPFWAdapter",
+                                                return_value=adapter))
+            stack.enter_context(patch("auto_detect_minute.inspect_inert_release",
+                                      return_value="inactive"))
+            stack.enter_context(patch("auto_detect_owner.attest_learning_epoch_finalizing_generation",
+                                      return_value=proof))
+            stack.enter_context(patch("auto_detect_epoch_receipts.EpochReceipts",
+                return_value=SimpleNamespace(verify_learning_stopped_epoch=epoch)))
+            stack.enter_context(patch("pwd.getpwnam", return_value=SimpleNamespace(pw_gid=65534)))
+            stack.enter_context(patch("auto_detect_storage.ROOT", producer))
+            stack.enter_context(patch("auto_detect_storage._secure",
+                                      side_effect=lambda path, **kw: path.lstat()))
+            stack.enter_context(patch("auto_detect_queue.DurableInbox", return_value=queue))
+            actual_uid = producer.stat().st_uid
+            from neutral_schema3_quiescent_preimage import _safe_empty_directory
+            stack.enter_context(patch("neutral_schema3_quiescent_preimage._safe_empty_directory",
+                side_effect=lambda path, uid: _safe_empty_directory(path, actual_uid)))
+            stack.enter_context(patch("neutral_schema3_quiescent_preimage._zero_processes"))
+            stack.enter_context(patch("neutral_schema3_quiescent_preimage._empty_kernel",
+                                      return_value="native-managed-kernel-empty"))
+
+            def run(**kw):
+                args = dict(config_fd=4, config_digest=digest, enabled=True, runtime_mode="1")
+                return gate.attest_bound_candidate_final_under_fd9(record, **(args | kw))
+
+            def refuses(**kw):
+                with self.assertRaises(gate.PreviousPhysicalRefused):
+                    run(**kw)
+
+            result = run()
+            self.assertEqual(result.running, token)
+            self.assertEqual(result.authorization, "NONE")
+            factory.assert_called_with(19000, 19099)
+            adapter.list_rules.assert_called_with(19000, 19099)
+            refuses(config_digest="f" * 64)
+            record["phase"] = "activated"
+            refuses()
+            record["phase"] = "config-saved"
+            adapter.get_table.side_effect = lambda name: [] if name == TABLE_PREFIX + "x_stage" else None
+            refuses()
+            adapter.get_table.side_effect = None
+            adapter.list_rules.return_value = manifest["rules"] | {19099: ["foreign"]}
+            refuses()
+            adapter.list_rules.return_value = manifest["rules"]
+            process.side_effect = [token, replace(token, pid=PID + 1)]
+            refuses()
+            process.side_effect = None
+            cfg.side_effect = RuntimeError("foreign Config")
+            refuses()
+            cfg.side_effect = None
+
+            (producer / "foreign").write_bytes(b"x")
+            refuses()
+            (producer / "foreign").unlink()
+            pending.mkdir(mode=0o700)
+            for name in ("inbox.txt", "debug.log", "learning-" + generation + "-1.txt"):
+                path = producer / name
+                path.write_bytes(b"")
+                st = path.stat()
+                files.append(dict(name=name, device=st.st_dev, inode=st.st_ino,
+                                  nlink=st.st_nlink))
+            record["phase"] = "epoch-finalizing"
+            record["manifest"]["schema"] = root["schema"] = 2
+            root["service"]["target_mode"] = "auto"
+            self.assertRegex(run().epoch_sha256, "^[0-9a-f]{64}$")
+            self.assertEqual(run().pretraffic_sha256, "a" * 64)
+            epoch.side_effect = ValueError("missing epoch")
+            refuses()
+            epoch.side_effect = None
+            proof.owner.pid += 1
+            refuses()
+            proof.owner.pid = PID
+            (pending / "foreign").write_bytes(b"x")
+            refuses()
+            (pending / "foreign").unlink()
+            source = producer / files[0]["name"]
+            source.rename(producer / "old")
+            source.write_bytes(b"")
+            refuses()
+            source.unlink()
+            (producer / "old").rename(source)
+            source.write_bytes(b"allowed append")
+            self.assertRegex(run().epoch_sha256, "^[0-9a-f]{64}$")
+            record["phase"] = "config-saved"
+            record["manifest"]["schema"] = root["schema"] = 1
+            root["service"] = {"enabled": False, "target_mode": "list"}
+            refuses(enabled=False, runtime_mode="0")
+            for row in files:
+                (producer / row["name"]).unlink()
+            pending.rmdir()
+            self.assertEqual(run(enabled=False, runtime_mode="0").kernel_state,
+                             "native-managed-kernel-empty")
+
+    def test_native_terminal_writer_remains_internal(self):
+        from types import SimpleNamespace
+        from shared_apply_operation import SharedApplyOperation, DEFAULT_ROOT
+        generation, digest = "a" * 32, "b" * 64
+        from neutral_schema3_quiescent_preimage import StagedBoundRuntimeReceipt
+        base = "b" * 64
+        record = {"phase": "config-saved",
+                  "detail": {"id": generation, "candidate": digest, "base": base},
+                  "manifest": {"schema": 1, "root_sha256": "c" * 64}}
+        activated = StagedBoundRuntimeReceipt(generation, "c" * 64, base,
+            "d" * 64, None, None, "native-managed-kernel-empty", base)
+        calls = []
+        receipt = gate.FinalBoundRuntimeReceipt(generation, "c" * 64, digest,
+            "d" * 64, None, None, "native-managed-kernel-empty")
+
+        def advance(phase, expected, attest):
+            self.assertEqual((phase, expected), ("committed", record))
+            calls.append("wal-witness")
+            if not attest():
+                raise SharedOperationError("witness refused")
+            return dict(record, phase=phase)
+
+        store = SimpleNamespace(root=DEFAULT_ROOT, owner=0, read=lambda: record,
+                                _advance_bound_ordinary=Mock(side_effect=advance))
+        with patch("sys.platform", "freebsd15"), patch("os.geteuid", return_value=0), \
+                patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                patch("auto_detect_original_lock_handoff.assert_inherited_config_fd"), \
+                patch("os.fsync", side_effect=lambda fd: calls.append(("fsync", fd))), \
+                patch.object(gate, "attest_bound_candidate_final_under_fd9",
+                             return_value=receipt) as physical:
+            def finish():
+                return SharedApplyOperation._finish_native_bound_ordinary(
+                    store, record, config_fd=4, config_digest=digest, enabled=False,
+                    runtime_mode="0", activated_receipt=activated)
+
+            self.assertEqual(finish()["phase"], "committed")
+            self.assertEqual(calls, [("fsync", 4), "wal-witness"])
+            for foreign in (replace(receipt, root_sha256="e" * 64),
+                            replace(receipt, release_sha256="e" * 64),
+                            replace(receipt, running=SimpleNamespace(pid=5433)),
+                            replace(receipt, pretraffic_sha256="f" * 64)):
+                physical.return_value = foreign
+                with self.assertRaises(SharedOperationError):
+                    finish()
+            record["found"] = {"runtime_mode": "0"}
+            calls.clear()
+            with self.assertRaises(SharedOperationError):
+                finish()
+            self.assertEqual(calls, [])
+
+
+class LockedRunningPredecessorReadOnly(unittest.TestCase):
+    def test_exact_bound_running_owner_under_existing_config_lock(self):
+        import json
+        from contextlib import ExitStack
+        from types import SimpleNamespace
+
+        generation, old_id, digest = "a" * 32, "b" * 32, "c" * 64
+        record = {"phase": "prepared", "detail": {"id": generation, "base": digest},
+                  "previous": {"id": old_id, "candidate": digest},
+                  "manifest": {"schema": 1, "root_sha256": "d" * 64},
+                  "previous_manifest": {"schema": 2, "root_sha256": "e" * 64}}
+        preimage = gate.CompletePriorPreimage(
+            generation, "d" * 64, old_id, "f" * 64, "f" * 64, digest, "tun0",
+            PID, BIRTH, MON, MONBIRTH, "1" * 64)
+        token = gate.PriorRunningToken(PID, BIRTH, MON, MONBIRTH, "1" * 64)
+        old_root = {"schema": 2, "generation": old_id,
+                    "service": {"enabled": True, "target_mode": "auto"}}
+        proof = SimpleNamespace(operation_id=old_id, generation=old_id,
+                                owner_candidate_sha256=digest,
+                                owner=SimpleNamespace(pid=PID, started=BIRTH))
+        manifest = {"rule_base": 19000, "rule_max": 19010, "rules": {}, "tables": {}}
+        with ExitStack() as stack:
+            stack.enter_context(patch("sys.platform", "freebsd15"))
+            stack.enter_context(patch("os.geteuid", return_value=0))
+            stack.enter_context(patch.object(gate, "require_lifecycle_lock"))
+            cfg = stack.enter_context(patch(
+                "auto_detect_original_lock_handoff.assert_inherited_config_fd"))
+            store = stack.enter_context(patch.object(gate, "SharedApplyOperation",
+                return_value=Mock(read=Mock(return_value=record))))
+            pins = stack.enter_context(patch("neutral_root_stage.verify_original_operation_pins"))
+            root = stack.enter_context(patch("neutral_root_stage._verify_original_pinned_root",
+                                             return_value=json.dumps(old_root).encode()))
+            tree = stack.enter_context(patch.object(gate, "_full_prior_tree", return_value="f" * 64))
+            proc = stack.enter_context(patch.object(gate, "_running_native", return_value=token))
+            stack.enter_context(patch("voice_ipfw_adapter.shared_release_manifest",
+                                      return_value=manifest))
+            adapter = stack.enter_context(patch("voice_ipfw_adapter.FreeBSDIPFWAdapter"))
+            kernel = stack.enter_context(patch("voice_firewall_transaction.verify_prior_state"))
+            learning = stack.enter_context(patch(
+                "auto_detect_owner.attest_prepared_ordinary_learning_predecessor",
+                return_value=(proof, "2" * 64)))
+            inert = stack.enter_context(patch("auto_detect_minute.inspect_inert_release",
+                                               return_value="inactive"))
+            nested = stack.enter_context(patch.object(gate, "_attest_saved_wan"))
+
+            def run(**kw):
+                args = dict(record=record, preimage=preimage, config_fd=4, config_digest=digest)
+                args.update(kw)
+                return gate.attest_bound_running_predecessor_under_fd9(**args)
+
+            receipt = run()
+            self.assertEqual(receipt.running, token)
+            self.assertEqual(receipt.epoch_sha256, "2" * 64)
+            self.assertFalse(receipt.physical_transition_allowed)
+            self.assertEqual(pins.call_count, 2)
+            self.assertEqual(kernel.call_count, 2)
+            adapter.assert_called_with(19000, 19099)
+            nested.assert_not_called()
+            inert.assert_not_called()
+            self.assertGreaterEqual(cfg.call_count, 4)
+
+            for bad in (dict(config_fd=9), dict(config_digest="3" * 64),
+                        dict(preimage=replace(preimage, prior_pid=PID + 1)),
+                        dict(preimage=replace(preimage, root_sha256="3" * 64))):
+                with self.assertRaises(gate.PreviousPhysicalRefused):
+                    run(**bad)
+            for mock, values in ((tree, ("f" * 64, "3" * 64)),
+                                 (proc, (token, replace(token, monitor_pid=MON + 1))),
+                                 (learning, ((proof, "2" * 64), (proof, "3" * 64))),
+                                 (pins, (None, ValueError("pin drift"))),
+                                 (kernel, (None, ValueError("foreign kernel")))):
+                mock.side_effect = values
+                with self.assertRaises(gate.PreviousPhysicalRefused):
+                    run()
+                mock.side_effect = None
+
+            # A running inert owner uses the same original physical witness,
+            # but must not be confused with a learning epoch.
+            record["previous_manifest"]["schema"] = 1
+            old_root["schema"] = 1
+            old_root["service"]["target_mode"] = "list"
+            root.return_value = json.dumps(old_root).encode()
+            learning.reset_mock()
+            self.assertIsNone(run().epoch_sha256)
+            learning.assert_not_called()
+            inert.assert_called()
+            inert.return_value = "active"
+            with self.assertRaises(gate.PreviousPhysicalRefused):
+                run()
+            nested.assert_not_called()
+            store.return_value.read.assert_called()
 
 
 if __name__ == "__main__":

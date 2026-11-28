@@ -137,14 +137,16 @@ def config_structure_diagnostic(before, after):
 
 
 def verify_approved_lc05_first_config(root):
-    """Strict first-install exception: two approved fields and model defaults."""
+    """Strict first-install exception: three approved fields and model defaults."""
     nodes = root.findall("./OPNsense/Zapret")
     need(len(nodes) == 1, "INITIAL_CONFIG_ROOT_NOT_UNIQUE")
     schema = ET.parse(HERE.parent / "src/opnsense/mvc/app/models/OPNsense"
                       / "Zapret/Zapret.xml").getroot().find("./items")
     native_source = (HERE.parent / "src/opnsense/scripts/OPNsense/Zapret"
                      / "initialize_config.php").read_text(encoding="utf-8")
-    expected = {}
+    expected = {"hostlist.mode": "list"}
+    need(schema.findtext("hostlist/mode/Default") == "list",
+         "INITIAL_CONFIG_TARGET_MODE_DEFAULT_INVALID")
     for name, field in (("TRAFFIC_STRATEGY", "strategy.trafficargs"),
                         ("YOUTUBE_DOMAINS", "hostlist.youtubedomains")):
         match = re.search(r"public const " + name +

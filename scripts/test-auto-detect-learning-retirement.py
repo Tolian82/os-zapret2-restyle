@@ -109,6 +109,31 @@ class StoppedLearningRetirementTests(unittest.TestCase):
         self.assertNotIn("ZAPRET2_TZ6V4_INJECT_RETIRE_CRASH", code)
         self.assertNotIn("os._exit(86)", code)
 
+    def test_readonly_retirement_refuses_unsealed_cursor_without_cleanup(self):
+        from auto_detect_cursor_chain import CHAIN, CursorChainRefused
+        native = self.epoch / CHAIN / "00000000" / "native"
+        native.mkdir(parents=True, mode=0o700)
+        native.parent.chmod(0o700)
+        native.parent.parent.chmod(0o700)
+        staged = native / "001.json"
+        staged.write_bytes(b"{}\n")
+        staged.chmod(0o600)
+        pin = staged.stat()
+        tip = self.tip()
+        cursor = tip["state"][1]["streams"][0]
+        seed = {"learning": [dict(cursor, native_number=1)],
+                "files": [{}, tip["debug"]]}
+        with self.queue.exclusive(), patch.object(
+                CursorChain, "learning_epoch", return_value=(self.epoch, seed, b"epoch")):
+            with self.assertRaises((LearningRetirementRefused, CursorChainRefused)):
+                retired_learning_stopped(
+                    self.receipts, self.queue, self.proof, self.work,
+                    attest=lambda: self.proof, inspect=lambda *a, **k: FDState.DRAINED,
+                    repair=False)
+        self.assertEqual(staged.read_bytes(), b"{}\n")
+        self.assertEqual(staged.stat().st_ino, pin.st_ino)
+        self.assertFalse((self.epoch / "learning-retirement").exists())
+
     def test_terminal_archive_and_readonly_boot_ready(self):
         tip = self.tip()
         self.assertFalse(self.run_retire(repair=False, tip=tip))
@@ -302,7 +327,7 @@ class StoppedLearningRetirementTests(unittest.TestCase):
     def _prune_learning_history(self, tips):
         with self.queue.exclusive(), patch.object(
                 CursorChain, "learning_tip",
-                side_effect=lambda proof, workspace: tips[proof.generation]):
+                side_effect=lambda proof, workspace, **kw: tips[proof.generation]):
             return self.receipts.prune_completed(
                 self.queue, protect="f" * 32, keep=4)
 
@@ -319,6 +344,72 @@ class StoppedLearningRetirementTests(unittest.TestCase):
         self.assertFalse(any(p.name.startswith(".gc3-")
                              for p in self.epoch_root.iterdir()))
 
+    def test_original_bound_history_exact_digest_without_current_producer_rewrite(self):
+        from auto_detect_learning_gc import qualified_completed_learning
+        from auto_detect_epoch_receipts import ReceiptRefused
+        from neutral_schema3_quiescent_preimage import (
+            _verify_idle_producer, QuiescentPreimageRefused)
+        tips = self._completed_learning_history(count=1)
+        gen = next(iter(tips))
+        ready = self.epoch_root / gen / "learning-retirement" / "ready.json"
+        digest = hashlib.sha256(ready.read_bytes()).hexdigest()
+        with self.queue.exclusive(), patch.object(
+                CursorChain, "learning_tip",
+                side_effect=lambda proof, workspace, **kw: tips[proof.generation]) as tip:
+            def verify(**kw):
+                args = dict(expected_candidate="a" * 64, expected_ready_sha256=digest)
+                return qualified_completed_learning(self.receipts, self.queue, gen, **(args | kw))
+            self.assertIsInstance(verify(), int)
+            self.assertEqual(tip.call_args.kwargs, {"reclaim_unsealed": False})
+            with self.assertRaises(ReceiptRefused):
+                verify(expected_candidate="b" * 64)
+            with self.assertRaises(ReceiptRefused):
+                verify(expected_ready_sha256="0" * 64)
+            idle = _verify_idle_producer(self.queue, self.receipts)
+            self.assertEqual(len(idle), 2)
+            self._file(self.root / "debug.log", b"new live bytes\n")
+            # Historical proof remains valid AFTER a new producer starts.
+            self.assertIsInstance(verify(), int)
+            with self.assertRaises(QuiescentPreimageRefused):
+                _verify_idle_producer(self.queue, self.receipts)
+            self._file(self.root / "debug.log", b"")
+            self._file(self.root / "foreign", b"")
+            with self.assertRaises(QuiescentPreimageRefused):
+                _verify_idle_producer(self.queue, self.receipts)
+            (self.root / "foreign").unlink()
+            self.assertEqual(_verify_idle_producer(self.queue, self.receipts), idle)
+
+    def test_inert_original_idle_preimage_borrows_existing_queue_only(self):
+        from neutral_schema3_quiescent_preimage import (
+            _observe_idle_producer, QuiescentPreimageRefused)
+        tips = self._completed_learning_history(count=1)
+        self.assertTrue(tips)
+        with patch("auto_detect_post_drop._original_epoch_queue",
+                   return_value=(self.queue, self.receipts)), \
+                patch.object(self.queue, "exclusive", wraps=self.queue.exclusive) as lock:
+            idle = _observe_idle_producer(self.root, self.uid)
+            self.assertEqual(len(idle), 2)
+            lock.assert_called_once_with(existing_only=True)
+            self._file(self.root / "debug.log", b"unexplained\n")
+            with self.assertRaises(QuiescentPreimageRefused):
+                _observe_idle_producer(self.root, self.uid)
+            self._file(self.root / "debug.log", b"")
+            self.assertEqual(_observe_idle_producer(self.root, self.uid), idle)
+
+    def test_bound_history_pin_survives_original_gc_until_commit(self):
+        tips = self._completed_learning_history()
+        names = list(tips)
+        record = {"phase": "activating", "detail": {"id": "f" * 32},
+                  "previous": {"id": names[0]}, "previous_manifest": {"schema": 2}}
+        with patch("sys.platform", "freebsd15"), \
+                patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                patch("shared_apply_operation.SharedApplyOperation.read", return_value=record):
+            self.assertEqual(self._prune_learning_history(tips), 1)
+            self.assertTrue((self.epoch_root / names[0]).exists())
+            self.assertFalse((self.epoch_root / names[1]).exists())
+        self.assertEqual(self._prune_learning_history(tips), 1)
+        self.assertFalse((self.epoch_root / names[0]).exists())
+
     def test_changed_retired_learning_source_refuses_pruning(self):
         tips = self._completed_learning_history()
         first = next(iter(tips))
@@ -331,7 +422,7 @@ class StoppedLearningRetirementTests(unittest.TestCase):
             from auto_detect_learning_gc import qualified_completed_learning
             with self.queue.exclusive(), patch.object(
                     CursorChain, "learning_tip",
-                    side_effect=lambda proof, workspace: tips[proof.generation]):
+                    side_effect=lambda proof, workspace, **kw: tips[proof.generation]):
                 qualified_completed_learning(self.receipts, self.queue, first)
         self.assertTrue((self.epoch_root / first).exists())
 

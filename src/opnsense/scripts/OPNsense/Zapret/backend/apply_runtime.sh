@@ -64,7 +64,10 @@ apply_runtime_observer_preflight()
 
 apply_runtime_original_launcher_once()
 {
-    [ "$#" -eq 5 ] || [ "$#" -eq 7 ] || return 64
+    [ "$#" -eq 5 ] || [ "$#" -eq 7 ] || [ "$#" -eq 8 ] || return 64
+    if [ "$#" -eq 8 ]; then
+        [ "$8" = --inherited-queue ] || return 64
+    fi
     apply_runtime_observer_preflight "$ACTIVE_DIR" || return 69
     _apply_observer_witness=
     if /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto=' \
@@ -72,7 +75,7 @@ apply_runtime_original_launcher_once()
         # A real active observer MUST carry the independently attested native
         # Config candidate and original shared-work generation. An old-boot/
         # rollback caller with no such provenance refuses before launching.
-        [ "$#" -eq 7 ] || return 69
+        [ "$#" -eq 7 ] || [ "$#" -eq 8 ] || return 69
         case "$6" in ""|*[!a-f0-9]*) return 69 ;; esac
         case "$7" in ""|*[!a-f0-9]*) return 69 ;; esac
         [ "${#6}" -eq 32 ] && [ "${#7}" -eq 64 ] || return 69
@@ -81,6 +84,7 @@ apply_runtime_original_launcher_once()
         # capture carries all N native identities, not a single raw inode.
         case "$_apply_native_schema" in
             2)
+                [ "$#" -eq 7 ] || return 69
                 _apply_producer=$("$PYTHON_RUNTIME" \
                     "$BACKEND_DIR/auto_detect_post_drop.py" prepare) || return 69
                 [ "$_apply_producer" = original-fd9-producer=prepared ] || return 69
@@ -92,15 +96,29 @@ apply_runtime_original_launcher_once()
                 [ "$_apply_observer_seed" = original-fd9-pretraffic=sealed ] || return 69
                 ;;
             3)
-                _apply_producer=$("$PYTHON_RUNTIME" \
-                    "$BACKEND_DIR/auto_detect_post_drop.py" prepare-learning "$ACTIVE_DIR") || return 69
-                [ "$_apply_producer" = original-fd9-learning-producer=prepared ] || return 69
-                _apply_observer_witness=$("$PYTHON_RUNTIME" \
-                    "$BACKEND_DIR/auto_detect_post_drop.py" capture-learning "$ACTIVE_DIR") || return 69
+                if [ "$#" -eq 8 ]; then
+                    # The original coordinator prepared the qualified producer
+                    # and holds P2a before Config. Never initialize or reacquire
+                    # worker.lock under the native Config lock.
+                    _apply_observer_witness=$("$PYTHON_RUNTIME" \
+                        "$BACKEND_DIR/auto_detect_post_drop.py" capture-learning "$ACTIVE_DIR" "$8") || return 69
+                else
+                    _apply_producer=$("$PYTHON_RUNTIME" \
+                        "$BACKEND_DIR/auto_detect_post_drop.py" prepare-learning "$ACTIVE_DIR") || return 69
+                    [ "$_apply_producer" = original-fd9-learning-producer=prepared ] || return 69
+                    _apply_observer_witness=$("$PYTHON_RUNTIME" \
+                        "$BACKEND_DIR/auto_detect_post_drop.py" capture-learning "$ACTIVE_DIR") || return 69
+                fi
                 case "$_apply_observer_witness" in "p2k8i3:$6:"*) ;; *) return 69 ;; esac
-                _apply_observer_seed=$("$PYTHON_RUNTIME" \
-                    "$BACKEND_DIR/auto_detect_post_drop.py" seal-learning-epoch \
-                    "$6" "$7" "$_apply_observer_witness") || return 69
+                if [ "$#" -eq 8 ]; then
+                    _apply_observer_seed=$("$PYTHON_RUNTIME" \
+                        "$BACKEND_DIR/auto_detect_post_drop.py" seal-learning-epoch \
+                        "$6" "$7" "$_apply_observer_witness" "$8") || return 69
+                else
+                    _apply_observer_seed=$("$PYTHON_RUNTIME" \
+                        "$BACKEND_DIR/auto_detect_post_drop.py" seal-learning-epoch \
+                        "$6" "$7" "$_apply_observer_witness") || return 69
+                fi
                 [ "$_apply_observer_seed" = original-fd9-learning-pretraffic=sealed ] || return 69
                 ;;
             *) return 69 ;;
@@ -109,7 +127,12 @@ apply_runtime_original_launcher_once()
         # An ordinary/preview release may never create an active epoch.
         [ "$#" -eq 5 ] || return 69
     fi
-    launcher_start_once "$1" "$2" "$3" "$4" "$5" || return 1
+    if [ "$#" -eq 8 ]; then
+        # The single original engine/daemon must never retain the P2a OFD.
+        launcher_start_once "$1" "$2" "$3" "$4" "$5" 3<&- || return 1
+    else
+        launcher_start_once "$1" "$2" "$3" "$4" "$5" || return 1
+    fi
     if [ -n "$_apply_observer_witness" ]; then
         _apply_observer_pid=$(common_pidfile_read "$CHILD_PIDFILE") || {
             launcher_stop "$CHILD_PIDFILE" 5
@@ -365,8 +388,27 @@ apply_runtime_preflight()
 apply_runtime_restore()
 {
     [ "${APPLY_PHASE:-idle}" != idle ] || return 69
-    supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE"
-    launcher_stop "$CHILD_PIDFILE" 5
+    # Same original Stop boundary as replacement Apply: retain the monitor
+    # PID even if its pidfile disappears, and prove the engine census empty
+    # before touching IPFW, the backup or the previous launcher.
+    _apply_restore_monitor_pid=
+    if supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then
+        _apply_restore_monitor_pid=$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE") || return 70
+    fi
+    supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" || return 70
+    launcher_stop "$CHILD_PIDFILE" 5 || return 70
+    if supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" ||
+       launcher_is_running "$CHILD_PIDFILE" ||
+       { [ -n "$_apply_restore_monitor_pid" ] &&
+         common_process_matches "$_apply_restore_monitor_pid" "$SUPERVISOR_LOOP"; }; then
+        common_error "RESTORE_FAILED: engine or monitor survived stop"
+        return 70
+    fi
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || {
+        common_error "RESTORE_FAILED: orphan engine after stop"
+        return 70
+    }
     if [ "$APPLY_IPFW_INSTALLED" = 1 ]; then
         firewall_shared_runtime rollback "$APPLY_OLD" "$APPLY_NEW" || {
             common_error "RESTORE_FAILED: IPFW rollback"
@@ -431,9 +473,14 @@ apply_runtime_abort()
 
 apply_runtime_activate()
 {
+    APPLY_ACTIVATION_STEP=D14
     APPLY_EARLY_ENGINE_FAILURE=
     APPLY_IPFW_ATTACH_FAILURE=
-    [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || return 64
+    [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || [ "$#" -eq 5 ] || return 64
+    if [ "$#" -eq 5 ]; then
+        [ "$5" = --inherited-queue ] && [ "$2" = 1 ] || return 64
+        ( : <&3 ) 2>/dev/null || return 69
+    fi
     # The optional third argument is already recorded in the durable shared
     # Apply journal before this invocation. Keep normal boot/legacy callers
     # on their original 2-argument API and original PID layout.
@@ -441,11 +488,17 @@ apply_runtime_activate()
         case "$3" in ""|*[!a-f0-9]*) return 64 ;; esac
         [ "${#3}" -eq 32 ] || return 64
     fi
-    if [ "$#" -eq 4 ]; then
+    if [ "$#" -ge 4 ]; then
         case "$4" in ""|*[!a-f0-9]*) return 64 ;; esac
         [ "${#4}" -eq 64 ] || return 64
     fi
     apply_runtime_preflight "$1" "$2" || return $?
+    if [ "$#" -eq 5 ]; then
+        [ "$APPLY_OLD_RUNNING" = 0 ] && [ "$APPLY_NEW_RUNNING" = 1 ] &&
+            /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto=' "$APPLY_CANDIDATE/dvtws.args" ||
+            return 69
+    fi
+    APPLY_ACTIVATION_STEP=D15
     if [ "$#" -ge 3 ]; then
         APPLY_BACKUP=$(atomic_install_tree "$APPLY_CANDIDATE" "$ACTIVE_DIR" "$BACKUP_ROOT" "$3") || {
             apply_runtime_clear
@@ -490,20 +543,29 @@ apply_runtime_activate()
             return 70
         }
     fi
+    APPLY_ACTIVATION_STEP=D16
     if [ "$APPLY_NEW_RUNNING" = 1 ]; then
         APPLY_NEW="$ACTIVE_DIR"
         if /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto=' \
             "$ACTIVE_DIR/dvtws.args"; then
             # Never synthesize a candidate digest from argv or an old owner.
-            [ "$#" -eq 4 ] || {
+            [ "$#" -eq 4 ] || [ "$#" -eq 5 ] || {
                 apply_runtime_abort "original observer candidate unavailable"
                 return $?
             }
-            apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
-                "$CHILD_PIDFILE" "$DVTWS_LOG" 5 "$3" "$4" || {
-                apply_runtime_abort_after_launcher_failure "replacement observer failed"
-                return $?
-            }
+            if [ "$#" -eq 5 ]; then
+                apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
+                    "$CHILD_PIDFILE" "$DVTWS_LOG" 5 "$3" "$4" "$5" || {
+                    apply_runtime_abort_after_launcher_failure "replacement observer failed"
+                    return $?
+                }
+            else
+                apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
+                    "$CHILD_PIDFILE" "$DVTWS_LOG" 5 "$3" "$4" || {
+                    apply_runtime_abort_after_launcher_failure "replacement observer failed"
+                    return $?
+                }
+            fi
         else
             apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
                 "$CHILD_PIDFILE" "$DVTWS_LOG" 5 || {
@@ -512,6 +574,7 @@ apply_runtime_activate()
             }
         fi
     fi
+    APPLY_ACTIVATION_STEP=D17
     if [ "$APPLY_OLD_RUNNING" = 1 ] || [ "$APPLY_NEW_RUNNING" = 1 ]; then
         # The original firewall_shared_runtime() shell function captures
         # only the adapter's exact fixed refusal. Do not use $(...) here:
@@ -538,6 +601,7 @@ apply_runtime_activate()
             return "$_apply_ipfw_abort_rc"
         fi
     fi
+    APPLY_ACTIVATION_STEP=D18
     # Before native Config commit, the staged old IPFW table values are
     # intentional. Ordinary verify is only valid after commit or rollback.
     if [ "$APPLY_IPFW_INSTALLED" = 1 ]; then
@@ -551,15 +615,26 @@ apply_runtime_activate()
             return $?
         }
     fi
+    APPLY_ACTIVATION_STEP=D19
     if [ "$APPLY_NEW_RUNNING" = 1 ]; then
-        supervisor_start "$SUPERVISOR_LOOP" "$SUPERVISOR_DAEMON_PIDFILE" \
-            "$SUPERVISOR_MONITOR_PIDFILE" "$CHILD_PIDFILE" \
-            "$SERVICE_SCRIPT" "$DVTWS_BIN" "$SUPERVISOR_LOG" || {
-            apply_runtime_abort "replacement supervisor failed"
-            return $?
-        }
+        if [ "$#" -eq 5 ]; then
+            supervisor_start "$SUPERVISOR_LOOP" "$SUPERVISOR_DAEMON_PIDFILE" \
+                "$SUPERVISOR_MONITOR_PIDFILE" "$CHILD_PIDFILE" \
+                "$SERVICE_SCRIPT" "$DVTWS_BIN" "$SUPERVISOR_LOG" 3<&- || {
+                apply_runtime_abort "replacement supervisor failed"
+                return $?
+            }
+        else
+            supervisor_start "$SUPERVISOR_LOOP" "$SUPERVISOR_DAEMON_PIDFILE" \
+                "$SUPERVISOR_MONITOR_PIDFILE" "$CHILD_PIDFILE" \
+                "$SERVICE_SCRIPT" "$DVTWS_BIN" "$SUPERVISOR_LOG" || {
+                apply_runtime_abort "replacement supervisor failed"
+                return $?
+            }
+        fi
     fi
     APPLY_PHASE=activated
+    APPLY_ACTIVATION_STEP=D20
     # Not yet committed: previous tree and stage tables remain available.
 }
 
