@@ -373,17 +373,21 @@ def native_first_retry_gate(operation=None, *, sealed=False):
     return paths
 
 
-def _first_retry_candidate(record, operation):
+def _first_retry_candidate(record, operation, *, parent=None, prepared=None):
     from shared_apply_operation import _validate_detail
     from shared_apply_render import regular
     from neutral_root_stage import ROOT_NAME, PENDING_NAME
     import hashlib
-    work = WORK / operation
-    if any(_present(path / name) for path in (work, work / 'release')
-           for name in (ROOT_NAME, PENDING_NAME)):
+    parent = WORK if parent is None else parent
+    work = parent / operation
+    if prepared is not None and 'manifest' in prepared:
+        verify_original_operation_pins(record=prepared, parent=parent, owner_uid=0)
+    elif any(_present(path / name) for path in (work, work / 'release')
+             for name in (ROOT_NAME, PENDING_NAME)):
         raise ArchiveRefused('FIRST_RETRY_UNBOUND_WORK_REQUIRED')
     seal = verify_seal(work, owner=0)
-    workspace, candidate, sources = _learning_release_sources(work / 'release')
+    workspace, candidate, sources = _learning_release_sources(
+        work / 'release', work_parent=parent)
     if workspace != work or not sources:
         raise ArchiveRefused('FIRST_RETRY_SOURCE_REQUIRED')
     plan_path = work / 'plan.json'
@@ -410,6 +414,8 @@ def _first_retry_candidate(record, operation):
     detail = {'id': operation, 'page': 'strategies', 'base': plan['dependencies'],
               'candidate': candidate, 'changed_fields': fields}
     _validate_detail(detail)
+    if prepared is not None and prepared['detail'] != detail:
+        raise ArchiveRefused('FIRST_RETRY_PREPARED_DETAIL_CHANGED')
     if verify_seal(work, owner=0) != seal:
         raise ArchiveRefused('FIRST_RETRY_SEAL_CHANGED')
     return detail, seal
@@ -494,3 +500,160 @@ def native_prepare_first_retry(operation, candidate):
             _relay_first_recovery_trace(reply.stderr)
             raise ArchiveRefused('FIRST_RETRY_NATIVE_RECEIPT_REQUIRED')
         return expected
+
+
+def _retry_prepared_layout(record):
+    """The same PREPARED WAL identifies an interrupted candidate rename."""
+    from shared_apply_operation import _validate_record
+    if (type(record) is not dict or record.get('phase') != 'prepared' or
+            'first_retry_archive' not in record):
+        raise ArchiveRefused('FIRST_RETRY_PREPARED_OWNER_REQUIRED')
+    _validate_record(record)
+    ref = record['first_retry_archive']
+    op = record['detail']['id']
+    old_folder = ARCHIVE_ROOT / ref['id']
+    for path in (ARCHIVE_ROOT, old_folder):
+        _private_dir(path, 0o700, create=False)
+    raw = _read(old_folder / 'restored.json', 0)
+    old = _validate_record(json.loads(raw))
+    if (not restored_first_learning(old) or raw != _canonical(old) or
+            _first_retry_archive_ref(old) != ref or
+            old['detail']['base'] != record['detail']['base']):
+        raise ArchiveRefused('FIRST_RETRY_PREPARED_ARCHIVE_CHANGED')
+    folder = ARCHIVE_ROOT / op
+    parent = folder / 'work'
+    for path in (folder, parent):
+        _private_dir(path, 0o700, create=False)
+    if (_present(folder) and set(os.listdir(folder)) - {'work'}) or (
+            _present(parent) and set(os.listdir(parent)) - {op}):
+        raise ArchiveRefused('FIRST_RETRY_PREPARED_FOREIGN_ARCHIVE')
+    live, parked = WORK / op, parent / op
+    if _present(live) == _present(parked):
+        raise ArchiveRefused('FIRST_RETRY_PREPARED_AMBIGUOUS_WORK')
+    selected = live if _present(live) else parked
+    paths = _first_retry_paths(old, op if selected == live else None)
+    return old, paths, Slot(live, parked), selected
+
+
+def park_prepared_retry(slot, *, uid, attest, scope, after_move=None):
+    """Atomic same-filesystem parking, repeatable after rename before fsync."""
+    if type(slot) is not Slot or not callable(attest) or not callable(scope):
+        raise ArchiveRefused('FIRST_RETRY_PARK_SCOPE_REQUIRED')
+    if (slot.source == slot.archived or slot.source.name != slot.archived.name or
+            slot.source in slot.archived.parents or slot.archived in slot.source.parents):
+        raise ArchiveRefused('FIRST_RETRY_PARK_PATH_REQUIRED')
+
+    def observe():
+        if scope() is not True or _present(slot.source) == _present(slot.archived):
+            raise ArchiveRefused('FIRST_RETRY_PARK_AMBIGUOUS')
+        selected = slot.source if _present(slot.source) else slot.archived
+        st = _stat_dir(selected, uid)
+        parents = tuple(_pin(_stat_dir(path, uid))
+                        for path in (slot.source.parent, slot.archived.parent))
+        if any(pin[0] != st.st_dev for pin in parents):
+            raise ArchiveRefused('FIRST_RETRY_PARK_CROSS_DEVICE')
+        proof = attest(selected)
+        if (proof is None or isinstance(proof, bool) or
+                _pin(_stat_dir(selected, uid)) != _pin(st) or scope() is not True):
+            raise ArchiveRefused('FIRST_RETRY_PARK_CHANGED')
+        return selected, _pin(st), parents, proof
+
+    first = observe()
+    src_fd, src_pin = _open_parent(slot.source.parent, uid)
+    try:
+        dst_fd, dst_pin = _open_parent(slot.archived.parent, uid)
+        try:
+            if (src_pin, dst_pin) != first[2] or observe() != first:
+                raise ArchiveRefused('FIRST_RETRY_PARK_PARENT_CHANGED')
+            if first[0] == slot.source:
+                os.rename(slot.source.name, slot.archived.name,
+                          src_dir_fd=src_fd, dst_dir_fd=dst_fd)
+                if after_move is not None:
+                    after_move()
+            os.fsync(src_fd)
+            os.fsync(dst_fd)
+            if observe() != (slot.archived, *first[1:]):
+                raise ArchiveRefused('FIRST_RETRY_PARK_READBACK_CHANGED')
+        finally:
+            os.close(dst_fd)
+    finally:
+        os.close(src_fd)
+    return first[3]
+
+
+def recover_first_retry_prepared_locked(operation, witness, *, config_fd, queue_fd):
+    """Abort a qualified PREPARED only; restore the original historical WAL."""
+    if (not sys.platform.startswith('freebsd') or os.geteuid() != 0 or
+            not isinstance(operation, str) or not OP_ID.fullmatch(operation) or
+            config_fd != 4 or queue_fd != 3):
+        raise ArchiveRefused('FIRST_RETRY_RECOVERY_NATIVE_REQUIRED')
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    old, paths, slot, selected = _retry_prepared_layout(record)
+    if record['detail']['id'] != operation:
+        raise ArchiveRefused('FIRST_RETRY_RECOVERY_OWNER_REQUIRED')
+
+    def scope():
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if store.read() != record:
+            raise ArchiveRefused('FIRST_RETRY_RECOVERY_WAL_CHANGED')
+        _zero_processes((CHILD_PID, MONITOR_PID, DAEMON_PID))
+        return True
+
+    def attest(work, *, drain=False):
+        scope()
+        if _retry_prepared_layout(record) != (old, paths, slot, work):
+            raise ArchiveRefused('FIRST_RETRY_RECOVERY_LAYOUT_CHANGED')
+        detail, seal = _first_retry_candidate(old, operation, parent=work.parent,
+                                               prepared=record)
+        if witness != _config_observation_witness(detail, seal['sha256']['plan.json'], detail['base']):
+            raise ArchiveRefused('FIRST_RETRY_RECOVERY_CONFIG_CHANGED')
+        kernels = (_empty_kernel(paths[0] / 'release'), _empty_kernel(work / 'release'))
+        evidence = _source_evidence(old, paths, queue_fd, scope, drain=drain)
+        scope()
+        return detail, seal, kernels, evidence
+
+    proof = attest(selected, drain=True)
+    for directory in (slot.archived.parent.parent, slot.archived.parent):
+        _private_dir(directory, 0o700, create=True)
+    if park_prepared_retry(slot, uid=0, attest=attest, scope=scope) != proof:
+        raise ArchiveRefused('FIRST_RETRY_RECOVERY_PARK_CHANGED')
+    if attest(slot.archived, drain=True) != proof:
+        raise ArchiveRefused('FIRST_RETRY_RECOVERY_FINAL_CHANGED')
+    scope()
+    if store._persist_record(old) != old or store.read() != old:
+        raise ArchiveRefused('FIRST_RETRY_RECOVERY_WAL_READBACK')
+    return {'result': 'original-first-retry-restored', 'id': operation}
+
+
+def native_recover_first_retry_prepared(operation):
+    if not sys.platform.startswith('freebsd') or os.geteuid() != 0:
+        raise ArchiveRefused('FIRST_RETRY_RECOVERY_NATIVE_REQUIRED')
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    old, paths, slot, selected = _retry_prepared_layout(record)
+    if record['detail']['id'] != operation:
+        raise ArchiveRefused('FIRST_RETRY_RECOVERY_OWNER_REQUIRED')
+    detail, seal = _first_retry_candidate(old, operation, parent=selected.parent, prepared=record)
+    queue = DurableInbox(paths[2], owner_uid=0, writer_gid=pwd.getpwnam(ENGINE_USER).pw_gid)
+    with queue.exclusive(existing_only=True):
+        if (store.read() != record or _retry_prepared_layout(record) != (old, paths, slot, selected) or
+                _first_retry_candidate(old, operation, parent=selected.parent, prepared=record) != (detail, seal)):
+            raise ArchiveRefused('FIRST_RETRY_RECOVERY_PREIMAGE_CHANGED')
+        fd = queue.locked_fd
+        reply = _run_bound_restore_joined(['/usr/local/bin/php', str(SCRIPT / 'shared_apply_config.php'),
+            'ordinary-first-retry-recover', operation, 'strategies', '--queue-fd=' + str(fd),
+            old['detail']['id']], pass_fds=(9, fd), capture_output=True, budget=180)
+        if (reply.returncode != 0 or type(reply.stdout) is not bytes or len(reply.stdout) > 4096 or
+                reply.stdout.count(b'\n') != 1 or not reply.stdout.endswith(b'\n') or
+                json.loads(reply.stdout) != {'result': 'original-first-retry-restored', 'id': operation} or
+                store.read() != old or _present(slot.source) or
+                _first_retry_paths(old) != paths or
+                _first_retry_candidate(old, operation, parent=slot.archived.parent, prepared=record) != (detail, seal)):
+            _relay_first_recovery_trace(reply.stderr)
+            raise ArchiveRefused('FIRST_RETRY_RECOVERY_NATIVE_RECEIPT_REQUIRED')
+        return old

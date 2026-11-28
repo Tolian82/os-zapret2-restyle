@@ -2625,6 +2625,9 @@ def main(argv: list[str]) -> int:
                     "first_running_sha256" in record and "first_pretraffic_sha256" in record):
                 detail = record["detail"]
                 print(record["phase"] + "-first " + detail["id"] + " " + detail["page"])
+            elif record["phase"] == "prepared" and "first_retry_archive" in record:
+                detail = record["detail"]
+                print("prepared-first-retry " + detail["id"] + " " + detail["page"])
             elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"])
@@ -2672,10 +2675,16 @@ def main(argv: list[str]) -> int:
         elif recovery:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)
-            store.recover_prepared(
-                argv[2],
-                lambda: bool(verify_seal(WORK / argv[2], owner=0)),
-            )
+            record = store.read()
+            if (record is not None and record["phase"] == "prepared" and
+                    "first_retry_archive" in record):
+                from auto_detect_aborted_first import native_recover_first_retry_prepared
+                native_recover_first_retry_prepared(argv[2])
+            else:
+                store.recover_prepared(
+                    argv[2],
+                    lambda: bool(verify_seal(WORK / argv[2], owner=0)),
+                )
             print("prepared-restored")
         elif pristine:
             from shared_apply_seal import verify_seal, WORK

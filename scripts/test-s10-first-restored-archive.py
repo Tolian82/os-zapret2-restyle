@@ -288,4 +288,32 @@ class RetryPreparedTest(unittest.TestCase):
         self.assert_old()
 
 
+class PreparedParkTest(unittest.TestCase):
+    def test_exact_rename_and_resume_after_interruption(self):
+        from auto_detect_aborted_first import park_prepared_retry
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            live, history = base/'live', base/'history'
+            live.mkdir(); history.mkdir()
+            slot = Slot(live/('a'*32), history/('a'*32))
+            slot.source.mkdir()
+            (slot.source/'candidate.xml').write_bytes(b'exact candidate')
+            def proof(path):
+                st = (path/'candidate.xml').stat()
+                return st.st_dev, st.st_ino, (path/'candidate.xml').read_bytes()
+            expected = proof(slot.source)
+            def cut():
+                raise Cut()
+            with self.assertRaises(Cut):
+                park_prepared_retry(slot,uid=os.geteuid(),attest=proof,
+                    scope=lambda:True,after_move=cut)
+            self.assertFalse(slot.source.exists())
+            self.assertEqual(park_prepared_retry(slot,uid=os.geteuid(),
+                attest=proof,scope=lambda:True),expected)
+            self.assertEqual(proof(slot.archived),expected)
+            slot.source.mkdir()
+            with self.assertRaises(ArchiveRefused):
+                park_prepared_retry(slot,uid=os.geteuid(),attest=proof,scope=lambda:True)
+            self.assertEqual(proof(slot.archived),expected)
+
 if __name__=='__main__': unittest.main(verbosity=2)

@@ -4298,6 +4298,18 @@ EOF_FIRST
                    "${PYTHON_RUNTIME}" --check >/dev/null 2>&1 &&
                    _first_pending=$(shared_apply_inspect_service); then
                     case "$_first_pending" in
+                        prepared-first-retry\ *)
+                            _wan_response=
+                            if wan_first_service if-start && [ "$_wan_response" = wan-not-required ]; then
+                                extra_resources_block_pending_start_service || return 69
+                                _first_found_pending=$(shared_apply_pending_found_service) || return 70
+                                [ -z "$_first_found_pending" ] || return 70
+                                [ "$(shared_apply_inspect_service)" = "$_first_pending" ] || return 70
+                                shared_apply_recover_prepared_service "prepared ${_first_pending#prepared-first-retry }" || return 70
+                                [ "$(shared_apply_inspect_service)" = restored ] || return 70
+                                return 69
+                            fi
+                            ;;
                         activated-first\ *)
                             _wan_response=
                             if wan_first_service if-start && [ "$_wan_response" = wan-not-required ]; then
@@ -4430,6 +4442,12 @@ EOF_FIRST
                                 restored) ;;
                                 *) return 69 ;;
                             esac
+                            ;;
+                        prepared-first-retry\ *)
+                            shared_apply_recover_prepared_service "prepared ${_shared_owner#prepared-first-retry }" || return 70
+                            [ "$(shared_apply_inspect_service)" = restored ] || return 70
+                            # Restoring the canceled first owner is not Start.
+                            return 69
                             ;;
                         prepared\ *)
                             shared_apply_recover_prepared_service "$_shared_owner" || return 69

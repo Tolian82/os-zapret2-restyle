@@ -967,6 +967,57 @@ def native_positive():
                  CONFIG.read_bytes() == config_image and images() == before_images,
                  "S10_FIRST_RETRY_GET_MUTATED_PREIMAGE")
             print("S10_FIRST_RETRY=PASS_DIRECT_UNARCHIVED_RESTORED_PREIMAGE", flush=True)
+            # Two distinct cuts of the actual original HTTPS retry, before
+            # any physical activation: durable unbound and bound PREPARED.
+            source_gate = BACKEND / "neutral_shared_apply_source_gate.py"
+            source_bytes = source_gate.read_bytes()
+            retired_ids = set()
+            for cut, boundary in (
+                ("UNBOUND", b"    route, result, actual, semantic = native_coordinate_original_prepared_fd9(operation, raw_pipe)\n"),
+                ("BOUND", b"    semantic = native_plan_original_prepared_fd9(source)\n"
+                          b"    if (type(source) is not SourceGateReceipt or type(semantic) is not OriginalSemanticReceipt or\n"),
+            ):
+                need(source_bytes.count(boundary) == 1, "S10_RETRY_PREPARED_CUT_BOUNDARY_CHANGED")
+                injected = (b'    if "first_retry_archive" in store.read():\n'
+                    b'        raise OriginalSourceGateRefused("S10_FIRST_RETRY_PREPARE_REFUSED")\n' + boundary)
+                source_gate.write_bytes(source_bytes.replace(boundary, injected))
+                try:
+                    fault = web.api("POST", "/api/zapret/settings/apply",
+                                    g04.g04_http_form(fresh) + first_auto)
+                finally:
+                    source_gate.write_bytes(source_bytes)
+                pending_retry = json.loads(WAL.read_bytes())
+                cut_id = pending_retry["detail"]["id"]
+                candidate = work / cut_id
+                need(fault.get("result") != "saved" and pending_retry["phase"] == "prepared" and
+                     ("manifest" in pending_retry) == (cut == "BOUND") and
+                     pending_retry.get("first_retry_archive") == {"id": op,
+                         "sha256": hashlib.sha256((archive / "restored.json").read_bytes()).hexdigest()} and
+                     cut_id != op and cut_id not in retired_ids and
+                     CONFIG.read_bytes() == config_image and candidate.is_dir() and
+                     not any(path.exists() for path in pidfiles),
+                     "S10_RETRY_PREPARED_CUT_REQUIRED")
+                retired_ids.add(cut_id)
+                names = ["candidate.xml", "plan.json", "bundle-seal.json"]
+                if cut == "BOUND":
+                    names.append("manifest.json")
+                def pinned(folder):
+                    return tuple((name, (folder / name).stat().st_dev,
+                                  (folder / name).stat().st_ino,
+                                  (folder / name).read_bytes()) for name in names)
+                before_cut = pinned(candidate)
+                recovered = subprocess.run([str(SERVICE), "start"], capture_output=True, timeout=240)
+                parked = archive.parent / cut_id / "work" / cut_id
+                need(recovered.returncode == 69 and WAL.read_bytes() == wal_image and
+                     CONFIG.read_bytes() == config_image and not candidate.exists() and
+                     parked.is_dir() and pinned(parked) == before_cut and
+                     not any(path.exists() for path in pidfiles) and
+                     subprocess.run(["/sbin/ipfw", "list"], capture_output=True, check=True).stdout == after_kernel,
+                     "S10_RETRY_PREPARED_RECOVERY_REQUIRED")
+                print("S10_RETRY_PREPARED=PASS_REAL_HTTPS_" + cut + "_RECOVERY_ORIGINAL_WAL", flush=True)
+                fresh = web.api("GET", "/api/zapret/settings/get").get("zapret")
+                need(WAL.read_bytes() == wal_image and CONFIG.read_bytes() == config_image,
+                     "S10_RETRY_PREPARED_GET_MUTATED")
             result = web.api("POST", "/api/zapret/settings/apply",
                              g04.g04_http_form(fresh) + first_auto)
             print("S10_FIRST_RETRY_HTTP=" + ("SAVED" if result.get("result") == "saved" else "REFUSED"), flush=True)
@@ -996,7 +1047,7 @@ def native_positive():
                      (retry_lock.st_dev, retry_lock.st_ino) != (old_lock.st_dev, old_lock.st_ino) and
                      not root.exists() and not seed.exists() and old_archive_intact(),
                      "S10_FIRST_RETRY_NEW_OWNER_REQUIRED")
-                print("S10_FIRST_RETRY=PASS_DIRECT_HTTPS_NEW_COMMITTED_ARCHIVE_INTACT", flush=True)
+                print("S10_FIRST_RETRY=PASS_HTTPS_AFTER_PREPARED_RECOVERY_NEW_COMMITTED_ARCHIVE_INTACT", flush=True)
         else:
             need(rec == {**pending, "phase": "committed"} and
                  (epoch / "epoch.json").is_file() and
