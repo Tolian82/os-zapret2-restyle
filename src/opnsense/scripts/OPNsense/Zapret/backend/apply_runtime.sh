@@ -321,8 +321,11 @@ apply_runtime_observer_retirement_preflight()
 # This read-only gate runs BEFORE the replacement Apply journal or tree swap.
 apply_runtime_observer_previous_preflight()
 {
-    [ "$#" -eq 0 ] || return 64
+    case "$#:${1:-}" in 0:|1:--inherited-queue) ;; *) return 64 ;; esac
     case "${_apply_engine:-}" in 0|1) ;; *) return 69 ;; esac
+    if [ "$#" -eq 1 ]; then
+        [ "$_apply_engine" = 0 ] && ( : <&3 ) 2>/dev/null || return 69
+    fi
     # TZ6v4: a RUNNING schema3 generation legitimately owns native
     # --hostlist-auto on learning profiles. Authenticate the existing exact
     # generation/argv and original PID-bound epoch BEFORE routing to the
@@ -349,7 +352,7 @@ apply_runtime_observer_previous_preflight()
         # process-free journal are rechecked, including the single prepared/
         # activating predecessor before ACTIVE_DIR is replaced.
         _apply_retired_ready=$("$PYTHON_RUNTIME" \
-            "$BACKEND_DIR/auto_detect_minute.py" --retired-ready) || return 69
+            "$BACKEND_DIR/auto_detect_minute.py" --retired-ready "$@") || return 69
         [ "$_apply_retired_ready" = auto-detect-retire=ready ] || return 69
         return 0
     fi
@@ -368,9 +371,10 @@ apply_runtime_observer_previous_preflight()
 # prepares pf/ipfw, or touches the durable Apply journal.
 apply_runtime_preflight()
 {
-    apply_runtime_probe "$@" || return $?
+    [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && [ "$3" = --inherited-queue ]; } || return 64
+    apply_runtime_probe "$1" "$2" || return $?
     # Includes a stopped predecessor with retained old-generation data.
-    apply_runtime_observer_previous_preflight || return 69
+    apply_runtime_observer_previous_preflight ${3:+"$3"} || return 69
     # The actual engine activation still repeats all observations after
     # the durable "activating" record (an external actor may change IPFW).
     # Only this second phase is permitted to initialize firewall modules.
@@ -492,7 +496,7 @@ apply_runtime_activate()
         case "$4" in ""|*[!a-f0-9]*) return 64 ;; esac
         [ "${#4}" -eq 64 ] || return 64
     fi
-    apply_runtime_preflight "$1" "$2" || return $?
+    apply_runtime_preflight "$1" "$2" ${5:+"$5"} || return $?
     if [ "$#" -eq 5 ]; then
         [ "$APPLY_OLD_RUNNING" = 0 ] && [ "$APPLY_NEW_RUNNING" = 1 ] &&
             /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto=' "$APPLY_CANDIDATE/dvtws.args" ||

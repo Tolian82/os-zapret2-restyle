@@ -446,16 +446,19 @@ def native_retire_once() -> int:
 
 
 
-def native_retired_ready() -> int:
+def native_retired_ready(*, queue_fd: int | None = None) -> int:
     """Pure read-only old-epoch retirement proof before replacing ACTIVE_DIR.
 
     Both terminal committed and one prepared/activating *predecessor* are
     allowed, but no LIVE old or NEW engine, and no source mutation.
+    The activation caller can borrow its original P2a open description.
     """
     if not sys.platform.startswith('freebsd') or os.geteuid() != 0:
         return 69
     try:
         require_lifecycle_lock()
+        if queue_fd is not None and (type(queue_fd) is not int or queue_fd < 3 or queue_fd in (4, 9)):
+            raise MinuteRefused("invalid_retired_ready_queue_fd")
         mapping_path = COMMON_ACTIVE / MAP_NAME
         if _entry_present(mapping_path):
             mapping = json.loads(_secure_bytes(mapping_path, 1048576, 0))
@@ -473,18 +476,27 @@ def native_retired_ready() -> int:
                 if gid <= 0:
                     raise MinuteRefused("retired_ready_learning_gid_unqualified")
                 proof = attest_retiring_learning_predecessor()
+                workspace = WORK / proof.generation
                 queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
                 receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
-                with queue.exclusive():
+                lock = queue.exclusive() if queue_fd is None else queue.inherited_exclusive(queue_fd)
+                with lock:
+                    if queue_fd is not None:
+                        from neutral_schema3_previous_physical import _full_prior_tree
+                        tree = _full_prior_tree(workspace, COMMON_ACTIVE, 0)
                     if (not retired_learning_stopped(
-                            receipts, queue, proof, WORK / proof.generation,
+                            receipts, queue, proof, workspace,
                             attest=attest_retiring_learning_predecessor,
                             inspect=probe_retiring_learning_pending_fd,
                             repair=False) or
                             attest_retiring_learning_predecessor() != proof):
                         raise MinuteRefused("retired_ready_learning_not_terminal")
+                    if queue_fd is not None and _full_prior_tree(workspace, COMMON_ACTIVE, 0) != tree:
+                        raise MinuteRefused("retired_ready_learning_tree_changed")
                 print("auto-detect-retire=ready")
                 return 0
+        if queue_fd is not None:
+            raise MinuteRefused("inherited_queue_requires_retired_learning_owner")
         previous = attest_retiring_predecessor()
         import pwd
         gid = pwd.getpwnam(ENGINE_USER).pw_gid
@@ -512,4 +524,6 @@ if __name__ == '__main__':
         raise SystemExit(native_retire_once())
     if args == ['--retired-ready']:
         raise SystemExit(native_retired_ready())
+    if args == ['--retired-ready', '--inherited-queue']:
+        raise SystemExit(native_retired_ready(queue_fd=3))
     raise SystemExit(native_minute_once(args))

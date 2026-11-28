@@ -20,7 +20,12 @@ printf 'epoch:%s\n' "$2" >> "$LOG"
 [ "$EPOCH_OK" = 1 ] || exit 69
 case "$2" in
   --pre-retire) echo 'auto-detect-retire=original-learning-running-attested' ;;
-  --retired-ready) echo 'auto-detect-retire=ready' ;;
+  --retired-ready)
+    if [ "${REQUIRE_BORROWED:-0}" = 1 ]; then
+      [ "$#" -eq 3 ] && [ "$3" = --inherited-queue ] && ( : <&3 ) || exit 69
+      printf '%s\n' 'borrowed-p2a' >> "$LOG"
+    fi
+    echo 'auto-detect-retire=ready' ;;
   *) exit 69 ;;
 esac
 MOCK
@@ -55,6 +60,19 @@ refuse 'native auto with no immutable generation'
 printf '%s\n' '{"schema":3}' > "$ACTIVE_DIR/auto-detect-generation.json"
 _apply_engine=0; EPOCH_OK=1
 pass 'STOPPED original completed epoch permitted'
+REQUIRE_BORROWED=1
+export REQUIRE_BORROWED
+: > "$LOG"
+apply_runtime_observer_previous_preflight --inherited-queue 3<"$LOG" || {
+  echo 'FAIL: stopped Auto did not borrow the held queue' >&2; exit 1;
+}
+grep -Fqx borrowed-p2a "$LOG"
+_apply_engine=1
+if apply_runtime_observer_previous_preflight --inherited-queue 3<"$LOG"; then
+  echo 'FAIL: borrowed-queue activation admitted a running owner' >&2; exit 1
+fi
+_apply_engine=0
+REQUIRE_BORROWED=0
 EPOCH_OK=0; refuse 'STOPPED epoch not retired'
 rm "$ACTIVE_DIR/auto-detect-generation.json"
 refuse 'unqualified stopped active auto'

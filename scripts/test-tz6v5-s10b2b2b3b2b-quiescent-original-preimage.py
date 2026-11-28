@@ -1880,7 +1880,7 @@ class OriginalQuiescentTests(unittest.TestCase):
 
     def test_retired_readonly_native_source_still_uses_repair_false(self):
         minute = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_minute.py"
-        text = minute.read_text().split("def native_retired_ready()", 1)[1]
+        text = minute.read_text().split("def native_retired_ready(", 1)[1]
         self.assertIn("repair=False", text)
         self.assertIn("verify_retired(previous, queue)", text)
         self.assertNotIn("retire_stopped(", text)

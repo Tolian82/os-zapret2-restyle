@@ -233,8 +233,10 @@ def stopped_start_projection(generation: str) -> None:
     # installed projection on a detached copy without inventing a new WAL.
     probe = r'''
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 from uuid import uuid4
@@ -256,10 +258,28 @@ if record['phase'] != 'committed' or detail['id'] != sys.argv[2] or record['mani
 previous = WORK / detail['id']
 candidate = detail['candidate']
 queue, receipts = _original_epoch_queue()
+
+def retirement_check(fd):
+    return subprocess.run(
+        ['/bin/sh', '-c', 'exec 3<&"$1"; shift; exec "$@"', 's11-retirement-fd3', str(fd),
+         sys.executable, str(Path(sys.argv[1]) / 'auto_detect_minute.py'),
+         '--retired-ready', '--inherited-queue'],
+        pass_fds=(9, fd), capture_output=True, timeout=35, check=False)
+
 with tempfile.TemporaryDirectory(prefix='s11-start-projection-') as private:
     work = Path(private) / uuid4().hex
     work.mkdir(mode=0o700)
     with queue.exclusive(existing_only=True):
+        ready = retirement_check(queue.locked_fd)
+        if ready.returncode != 0 or ready.stdout != b'auto-detect-retire=ready\n':
+            raise RuntimeError('S11_ORIGINAL_P2A_BORROW_REFUSED:' + str(ready.returncode))
+        separate = os.open(queue.lock, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            refused = retirement_check(separate)
+            if refused.returncode != 69 or refused.stdout:
+                raise RuntimeError('S11_SEPARATE_P2A_DESCRIPTION_ADMITTED')
+        finally:
+            os.close(separate)
         qualified_completed_learning(receipts, queue, detail['id'], expected_candidate=candidate)
         for name in ('plan.json', 'candidate.xml'):
             shutil.copy2(previous / name, work / name)
@@ -269,15 +289,20 @@ with tempfile.TemporaryDirectory(prefix='s11-start-projection-') as private:
         create_seal(work, owner=0)
         verify_learning_start_successor(previous, work, candidate)
         qualified_completed_learning(receipts, queue, detail['id'], expected_candidate=candidate)
+        repeated = retirement_check(queue.locked_fd)
+        if repeated.returncode != 0 or repeated.stdout != b'auto-detect-retire=ready\n':
+            raise RuntimeError('S11_ORIGINAL_P2A_NOT_RETAINED')
         if store.read() != record:
             raise RuntimeError('S11_DETACHED_PROJECTION_CHANGED_OWNER')
+print('S11_NATIVE_RETIREMENT_BORROWED_P2A=PASS')
 print('S11_NATIVE_DETACHED_START_PROJECTION=PASS')
 '''
     result = command("/bin/sh", "-c",
                      'exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
                      "s11-start-projection", str(SERVICE.with_name("python_runtime.sh")),
                      "-c", probe, str(SERVICE.parent / "backend"), generation)
-    require(result.returncode == 0 and result.stdout.splitlines() == ["S11_NATIVE_DETACHED_START_PROJECTION=PASS"],
+    require(result.returncode == 0 and result.stdout.splitlines() == [
+                "S11_NATIVE_RETIREMENT_BORROWED_P2A=PASS", "S11_NATIVE_DETACHED_START_PROJECTION=PASS"],
             "S11_NATIVE_START_PROJECTION_REFUSED:rc=" + str(result.returncode) + ":" + result.stderr[-500:])
     print(result.stdout.strip(), flush=True)
 
@@ -638,6 +663,7 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
         return {"status": "PASS_S11_START_PREFLIGHT", "source_sha": head,
                 "generation": ident, "verified_running_noop": True,
                 "verified_stopped_preimage": True, "verified_detached_projection": True,
+                "verified_borrowed_retirement_queue": True,
                 "physical_start_tested": False}
 
     # A genuine first Auto Apply was not sufficient: reproduce the owner's

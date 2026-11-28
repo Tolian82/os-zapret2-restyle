@@ -56,7 +56,11 @@ firewall_shared_runtime()
 }
 apply_runtime_preflight()
 {
-    [ "$#" -eq 2 ] || return 64
+    if [ "${CHECK_NO_QUEUE_LEAK:-0}" = 1 ]; then
+        [ "$#" -eq 3 ] && [ "$3" = --inherited-queue ] && ( : <&3 ) || return 64
+    else
+        [ "$#" -eq 2 ] || return 64
+    fi
     APPLY_CANDIDATE="$1"
     APPLY_NEW_RUNNING="$2"
     APPLY_OLD_RUNNING=0
