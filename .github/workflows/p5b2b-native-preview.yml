@@ -33,6 +33,7 @@ jobs:
           set -eu
           python3.13 -m py_compile scripts/p5b2b-native-witness.py
           python3.13 scripts/p5b2b-native-witness.py --self-test
+          sh scripts/test-shared-apply-execute.sh
           if GITHUB_ACTIONS=true ZAPRET2_P5B2B_DISPOSABLE_NATIVE=1 \
             python3.13 scripts/p5b2b-native-witness.py --native >/tmp/p5b2b-refusal.log 2>&1; then
               echo '::error::native execution accepted on Linux'

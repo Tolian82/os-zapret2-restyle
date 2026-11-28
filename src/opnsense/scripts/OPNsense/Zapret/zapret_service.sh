@@ -1569,6 +1569,44 @@ shared_apply_execute_bound_stopped_found_service()
     printf 'applied-id=%s\n' "$_bound_id"
 }
 
+# Existing STOPPED ordinary owner, mode-only Strategies Apply: preserve the
+# original pre-S10 transaction. No WAL alone is not evidence of ownership.
+# Never use this route for a clean first enable or an immutable-root owner.
+shared_apply_existing_stopped_legacy_auto_service()
+{
+    [ "${_shared_run_page:-}" = strategies ] &&
+    [ -n "${_shared_run_encoded:-}" ] &&
+    [ "${_shared_prepare_receipt:-}" = "prepared-id=$_shared_apply_id" ] &&
+    [ "${HOSTLIST_MODE:-}" = auto ] &&
+    [ "$_shared_apply_base" != "$_shared_apply_candidate" ] &&
+    [ "$_shared_apply_fields" = hostlist.mode ] &&
+    ! shared_apply_has_record_service || return 69
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+    for _legacy_marker in voice-plan.json manifest.json .manifest.json.pending auto-detect-source-map.json auto-detect-generation.json; do
+        [ ! -e "$ACTIVE_DIR/$_legacy_marker" ] &&
+        [ ! -L "$ACTIVE_DIR/$_legacy_marker" ] || return 69
+    done
+    for _legacy_item in dvtws.args tcp-ports.txt udp-ports.txt; do
+        [ -f "$ACTIVE_DIR/$_legacy_item" ] &&
+        [ ! -L "$ACTIVE_DIR/$_legacy_item" ] || return 69
+    done
+    _legacy_work_parent=${_shared_apply_root%/*}
+    [ -d "$_legacy_work_parent" ] && [ ! -L "$_legacy_work_parent" ] || return 69
+    for _legacy_work in "$_legacy_work_parent"/* "$_legacy_work_parent"/.[!.]* "$_legacy_work_parent"/..?*; do
+        [ -e "$_legacy_work" ] || [ -L "$_legacy_work" ] || continue
+        [ "$_legacy_work" = "$_shared_apply_root" ] || return 69
+    done
+    for _legacy_pid in "$CHILD_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" "$SUPERVISOR_DAEMON_PIDFILE"; do
+        [ -n "$_legacy_pid" ] && [ ! -e "$_legacy_pid" ] &&
+        [ ! -L "$_legacy_pid" ] || return 69
+    done
+    validator_validate_runtime_modes "$ACTIVE_DIR" || return 69
+    apply_runtime_observer_retirement_preflight || return 69
+    # Original candidate validation, full process census and empty IPFW
+    # probes still follow, before PREPARED and any physical mutation.
+    return 0
+}
+
 shared_apply_execute_service()
 {
     [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && { [ "$3" = after-retirement ] || [ "$3" = first-retry ]; }; } || return 64
@@ -1724,7 +1762,8 @@ shared_apply_execute_service()
                     if [ "$_shared_found_scope" != ordinary ] ||
                        [ "$_shared_apply_page" != strategies ] ||
                        [ "$#" -ne 2 ] ||
-                       ! preflight_shared_apply_journal common-existing-unbound-auto; then
+                       { ! preflight_shared_apply_journal common-existing-unbound-auto &&
+                         ! shared_apply_existing_stopped_legacy_auto_service; }; then
                         printf '%s\n' preflight-rejected=bound-auto-required
                         return 0
                     fi

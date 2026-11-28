@@ -1,9 +1,6 @@
 name: TZ6v5 S05b2a genuine post-ready engine exit original FD9 receipt
 
 on:
-  # Temporary exact-head repair check, remove before the replacement PR.
-  push:
-    branches: [draft/tz6v5-s10-integration-repair]
   pull_request:
     paths:
       - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh

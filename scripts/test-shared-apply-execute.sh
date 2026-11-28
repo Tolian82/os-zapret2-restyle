@@ -8,7 +8,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 RUNTIME=$(dirname "$SOURCE")/backend/apply_runtime.sh
 sed -n '/^shared_apply_execute_service()$/,/^}$/p' "$SOURCE" > "$ROOT/executor.sh"
-for entry in shared_apply_unbound_root_preflight_service shared_apply_record_current_service shared_apply_activate_and_commit_service; do
+for entry in shared_apply_unbound_root_preflight_service shared_apply_record_current_service shared_apply_activate_and_commit_service shared_apply_existing_stopped_legacy_auto_service; do
     sed -n "/^$entry()$/,/^}$/p" "$SOURCE" >> "$ROOT/executor.sh"
 done
 sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/executor.sh"
@@ -305,3 +305,47 @@ expect_status 0 'bundle:verify '
 grep -Fqx 'preflight-rejected=observer-generation' "$ROOT/response.txt" ||
     fail "invalid original epoch map reached runtime mutation"
 echo 'PASS: original FD9 Apply fault matrix and unqualified observer refusal'
+
+# The observed no-WAL STOPPED ordinary route is not permission to adopt
+# first enable, unknown work, native observers or immutable roots.
+(
+    LEGACY_ROOT="$ROOT/legacy-scope"
+    mkdir -p "$LEGACY_ROOT/work/$ID" "$LEGACY_ROOT/active"
+    ACTIVE_DIR="$LEGACY_ROOT/active"
+    _shared_apply_root="$LEGACY_ROOT/work/$ID"
+    _shared_apply_id="$ID"
+    _shared_run_page=strategies
+    _shared_run_encoded=fixture
+    _shared_prepare_receipt="prepared-id=$ID"
+    HOSTLIST_MODE=auto
+    _shared_apply_base=a
+    _shared_apply_candidate=b
+    _shared_apply_fields=hostlist.mode
+    SUPERVISOR_DAEMON_PIDFILE="$LEGACY_ROOT/daemon.pid"
+    printf '%s\n' '--filter-tcp=80' > "$ACTIVE_DIR/dvtws.args"
+    : > "$ACTIVE_DIR/tcp-ports.txt"
+    : > "$ACTIVE_DIR/udp-ports.txt"
+    shared_apply_has_record_service() { [ "${HAS_RECORD:-0}" = 1 ]; }
+    validator_validate_runtime_modes() { [ "$1" = "$ACTIVE_DIR" ]; }
+    shared_apply_existing_stopped_legacy_auto_service || fail "old stopped ordinary route refused"
+    HAS_RECORD=1
+    if shared_apply_existing_stopped_legacy_auto_service; then fail "old route accepted WAL"; fi
+    HAS_RECORD=0
+    _shared_apply_fields=general.enabled,hostlist.mode
+    if shared_apply_existing_stopped_legacy_auto_service; then fail "old route accepted first enable"; fi
+    _shared_apply_fields=hostlist.mode
+    for marker in voice-plan.json manifest.json .manifest.json.pending auto-detect-source-map.json auto-detect-generation.json; do
+        ln -s missing "$ACTIVE_DIR/$marker"
+        if shared_apply_existing_stopped_legacy_auto_service; then fail "old route accepted $marker"; fi
+        rm "$ACTIVE_DIR/$marker"
+    done
+    mkdir "$LEGACY_ROOT/work/foreign"
+    if shared_apply_existing_stopped_legacy_auto_service; then fail "old route accepted foreign work"; fi
+    rmdir "$LEGACY_ROOT/work/foreign"
+    : > "$SUPERVISOR_DAEMON_PIDFILE"
+    if shared_apply_existing_stopped_legacy_auto_service; then fail "old route accepted PID residue"; fi
+    rm "$SUPERVISOR_DAEMON_PIDFILE"
+    printf '%s\n' '--hostlist-auto=/foreign' > "$ACTIVE_DIR/dvtws.args"
+    if shared_apply_existing_stopped_legacy_auto_service; then fail "old route accepted native observer"; fi
+    echo "PASS: existing stopped ordinary Auto route and immutable-root refusals"
+)
