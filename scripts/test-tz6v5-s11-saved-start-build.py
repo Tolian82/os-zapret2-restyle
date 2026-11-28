@@ -9,7 +9,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] /
     "src/opnsense/scripts/OPNsense/Zapret/backend"))
 from shared_apply_operation import (
-    _saved_start_plan_scope, SharedOperationError, native_bound_saved_start_build_gate)
+    _saved_start_plan_scope, SharedOperationError,
+    native_bound_saved_start_build_gate, native_bound_saved_start_sealed_gate)
 
 digest = "b" * 64
 candidate = {"general": {"enabled": "1"}, "hostlist": {"mode": "auto"}}
@@ -42,4 +43,10 @@ with patch("shared_apply_operation.sys.platform", "linux"):
         pass
     else:
         raise AssertionError("S11 non-native admission was allowed")
+    try:
+        native_bound_saved_start_sealed_gate("a" * 32)
+    except SharedOperationError:
+        pass
+    else:
+        raise AssertionError("S11 non-native sealed successor was allowed")
 print("S11_SAVED_START_BUILD_READONLY_SOURCE=PASS")

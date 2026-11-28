@@ -2571,6 +2571,63 @@ def native_bound_saved_start_build_gate(operation: str) -> None:
         raise SharedOperationError("saved Start build preimage raced")
 
 
+
+def native_bound_saved_start_sealed_gate(operation: str) -> None:
+    """Verify one rebuilt sealed saved-Config generation before any WAL write.
+
+    The original shell has already used the protected detached PHP candidate,
+    source parity and the ONE existing bundle seal. It may present that
+    *inert* artifact only if the native release equals the exact historical
+    stopped Auto generation with generation identity rebinding. This is not
+    a physical Start permit; its sole effect is a bounded read-only result.
+    """
+    from auto_detect_origin_map import verify_learning_start_successor
+    from neutral_root_stage import verify_original_operation_pins
+    from shared_apply_seal import WORK, verify_seal
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation)):
+        raise SharedOperationError("sealed Start successor requires original native FD9")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    pin = committed_manifest(record)
+    prior = committed_owner(record)
+    if (type(record) is not dict or record.get("phase") != "committed" or
+            "failure" in record or "found" in record or type(prior) is not dict or
+            pin is None or pin["schema"] != 2 or
+            prior["page"] != "strategies" or
+            operation in (prior["id"], record.get("previous", {}).get("id"))):
+        raise SharedOperationError("sealed Start successor lacks original stopped owner")
+    old = WORK / prior["id"]
+    new = WORK / operation
+
+    def observe() -> tuple:
+        require_lifecycle_lock()
+        if store.read() != record:
+            raise SharedOperationError("sealed Start successor journal changed")
+        verify_original_operation_pins(record=record, parent=WORK, owner_uid=0)
+        from shared_apply_render import regular
+        regular(new, 0, directory=True)
+        qualified = verify_seal(new, owner=0)
+        plan = json.loads((new / "plan.json").read_bytes())
+        _saved_start_plan_scope(plan, prior["candidate"])
+        # A release copied from a previous generation without the newly
+        # qualified original PHP plan/XML/seal cannot pass both checks.
+        verify_learning_start_successor(old, new, prior["candidate"])
+        if store.read() != record:
+            raise SharedOperationError("sealed Start successor original owner raced")
+        return qualified
+
+    if native_bound_start_preflight(prior["id"], "strategies") != "stopped":
+        raise SharedOperationError("sealed Start successor requires STOPPED")
+    initial = observe()
+    if (observe() != initial or
+            native_bound_start_preflight(prior["id"], "strategies") != "stopped"):
+        raise SharedOperationError("sealed Start successor changed during witness")
+
+
 def restored_first_learning(record: dict | None) -> bool:
     """Recognize only an aborted first bound Auto owner; never a live owner."""
     return (type(record) is dict and record.get("phase") == "restored" and
@@ -2673,6 +2730,9 @@ def main(argv: list[str]) -> int:
     bound_saved_start_build_request = (
         len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-saved-start-build"] and
         bool(OP_ID.fullmatch(argv[3])))
+    bound_saved_start_sealed_request = (
+        len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-saved-start-sealed"] and
+        bool(OP_ID.fullmatch(argv[3])))
     bound_auto_stop_request = (
         len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-auto-stop"] and
         bool(OP_ID.fullmatch(argv[3])))
@@ -2735,7 +2795,7 @@ def main(argv: list[str]) -> int:
     cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or retry_context or retry_stage or retry_work or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_saved_start_build_request or bound_auto_stop_request or
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or retry_context or retry_stage or retry_work or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_saved_start_build_request or bound_saved_start_sealed_request or bound_auto_stop_request or
             bound_gui_stage_request or bound_gui_execute_request or bound_start_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
@@ -2789,6 +2849,9 @@ def main(argv: list[str]) -> int:
         elif bound_saved_start_build_request:
             native_bound_saved_start_build_gate(argv[3])
             print("bound-saved-start-build=qualified")
+        elif bound_saved_start_sealed_request:
+            native_bound_saved_start_sealed_gate(argv[3])
+            print("bound-saved-start-sealed=qualified")
         elif retry_context:
             record = SharedApplyOperation(owner=0).read()
             print(record["detail"]["id"] if restored_first_learning(record) else "none")

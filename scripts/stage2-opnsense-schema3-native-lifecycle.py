@@ -327,7 +327,7 @@ print('S11_NATIVE_DETACHED_START_PROJECTION=PASS')
 
 
 
-def stopped_saved_start_build_admission(generation: str, saved_config: bytes) -> None:
+def stopped_saved_start_build_admission(generation: str, saved_config: bytes) -> str:
     """Qualified PHP saved-unchanged staging; never advances the original WAL."""
     probe = r'''
 import os
@@ -355,18 +355,22 @@ native_bound_saved_start_build_gate(operation)
 if store.read() != old:
     raise RuntimeError('S11_SAVED_BUILD_MODIFIED_ORIGINAL_WAL')
 print('S11_NATIVE_SAVED_UNCHANGED_BUILD_ADMISSION=PASS')
+print('qualified-id=' + operation)
 '''
     check = command(
         "/bin/sh", "-c",
         'exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
         "s11-saved-build-admission", str(SERVICE.with_name("python_runtime.sh")),
         "-c", probe, str(SERVICE.parent / "backend"), generation, timeout=120)
-    require(check.returncode == 0 and
-            check.stdout.strip() == "S11_NATIVE_SAVED_UNCHANGED_BUILD_ADMISSION=PASS" and
+    lines = check.stdout.splitlines()
+    require(check.returncode == 0 and len(lines) == 2 and
+            lines[0] == "S11_NATIVE_SAVED_UNCHANGED_BUILD_ADMISSION=PASS" and
+            re.fullmatch(r"qualified-id=[a-f0-9]{32}", lines[1]) and
             CONFIG.read_bytes() == saved_config,
             "S11_NATIVE_SAVED_BUILD_ADMISSION_REFUSED:rc=" +
             str(check.returncode) + ":" + check.stderr[-600:])
-    print(check.stdout.strip(), flush=True)
+    print(lines[0], flush=True)
+    return lines[1].split("=", 1)[1]
 
 
 def owner_service_environment() -> dict[str, str]:
@@ -712,7 +716,18 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
         stopped_rules = g04_runtime.owned_rules()
         stopped_journal = JOURNAL.read_bytes()
         stopped_start_projection(ident)
-        stopped_saved_start_build_admission(ident, config_image)
+        candidate_id = stopped_saved_start_build_admission(ident, config_image)
+        # Real root FD9 shell builder; must produce only a new sealed
+        # generation, not a WAL write or a replacement of the old runtime.
+        candidate_build = command(str(SERVICE), "shared-apply-prepare", candidate_id, timeout=210)
+        require(candidate_build.returncode == 0 and
+                JOURNAL.read_bytes() == stopped_journal and
+                CONFIG.read_bytes() == config_image and
+                not PID.exists(),
+                "S11_NATIVE_SAVED_BUILD_CHANGED_STOPPED_OWNER:rc=" +
+                str(candidate_build.returncode) + ":" +
+                (candidate_build.stdout + candidate_build.stderr)[-700:])
+        print("S11_NATIVE_SAVED_BUILD_SEALED_SUCCESSOR=PASS", flush=True)
         result = subprocess.run([str(SERVICE), "start"], env=owner_service_environment(),
                                 capture_output=True, text=True, timeout=180, check=False)
         require(result.returncode == 69 and not result.stdout.strip() and

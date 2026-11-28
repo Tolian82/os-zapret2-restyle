@@ -2577,13 +2577,20 @@ shared_apply_prepare_service()
         *[!a-f0-9]*|"") return 64 ;;
     esac
     [ "${#1}" -eq 32 ] || return 64
-    # A bound terminal owner may only authorize a fresh detached build.
-    # The old Apply/Start/Stop/Lab fences and physical route stay closed.
+    # The original FD9 has three distinct private build admissions:
+    # unbound ordinary, disabled stopped Found, and *saved-unchanged*
+    # sealed STOPPED Auto successor. The last is only an inert build; public
+    # Start, generic record and runtime activation remain fenced.
+    _shared_saved_start_build=0
     if [ "${2:-}" = first-retry ]; then
         preflight_shared_apply_journal common-first-retry-prepare "$1" || return 69
+    elif preflight_shared_apply_journal common-apply >/dev/null 2>&1; then
+        :
+    elif preflight_shared_apply_journal common-bound-prepare "$1" >/dev/null 2>&1; then
+        :
     else
-        preflight_shared_apply_journal common-apply ||
-            preflight_shared_apply_journal common-bound-prepare "$1" || return 69
+        preflight_shared_apply_journal common-bound-saved-start-build "$1" || return 69
+        _shared_saved_start_build=1
     fi
     [ -x "${PYTHON_RUNTIME}" ] || return 69
     _shared_work="/var/db/zapret2/shared-work/$1"
@@ -2754,6 +2761,16 @@ shared_apply_prepare_service()
         }
     else
         shared_apply_original_source_gate "$1" --sealed || {
+            _shared_prepare_receipt=preflight-rejected=seal
+            printf '%s\n' "$_shared_prepare_receipt"
+            return 0
+        }
+    fi
+    if [ "$_shared_saved_start_build" = 1 ]; then
+        # The same original FD9 must verify the finished seal against the
+        # completed predecessor projection before exposing ANY build receipt.
+        # A failed projection remains inert, without WAL or launcher fallback.
+        preflight_shared_apply_journal common-bound-saved-start-sealed "$1" || {
             _shared_prepare_receipt=preflight-rejected=seal
             printf '%s\n' "$_shared_prepare_receipt"
             return 0
