@@ -752,6 +752,19 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
                 (ACTIVE / "dvtws.args").read_bytes() == installed_args and
                 g04_runtime.owned_rules() == stopped_rules,
                 "S11_STOPPED_START_PREFLIGHT_CHANGED_OWNER")
+        # /conf/config.xml is the original native Config, NOT an
+        # exclusively private (0600) detached PHP candidate. Check it
+        # independently without downgrading its root/inode/write safety.
+        config_stat = CONFIG.lstat()
+        def config_identity(info):
+            return (info.st_dev, info.st_ino, info.st_size,
+                    info.st_mtime_ns, info.st_ctime_ns,
+                    info.st_mode, info.st_uid, info.st_nlink)
+        require(stat.S_ISREG(config_stat.st_mode) and
+                config_stat.st_uid == 0 and config_stat.st_nlink == 1 and
+                not config_stat.st_mode & 0o022,
+                "S11_NATIVE_CANONICAL_CONFIG_UNTRUSTED")
+        config_identity_before = config_identity(config_stat)
         # A PREPARED journal must come from the original single FD9 writer,
         # after the independently attested full sealed projection. Verify
         # the immutable predecessor pin, no process/IPFW change, unchanged
@@ -774,6 +787,7 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
                 prepared == {"schema": 1, "phase": "prepared", "detail": expected_detail,
                              "previous": old["detail"], "previous_manifest": old["manifest"]} and
                 CONFIG.read_bytes() == config_image and
+                config_identity(CONFIG.lstat()) == config_identity_before and
                 g04_runtime.owned_rules() == stopped_rules and
                 (ACTIVE / "dvtws.args").read_bytes() == installed_args and
                 not PID.exists(),
