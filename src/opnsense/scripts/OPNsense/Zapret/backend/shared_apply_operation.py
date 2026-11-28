@@ -2628,6 +2628,101 @@ def native_bound_saved_start_sealed_gate(operation: str) -> None:
         raise SharedOperationError("sealed Start successor changed during witness")
 
 
+def native_bound_saved_start_record_prepared(operation: str) -> dict:
+    """The ONE original FD9 WAL PREPARED transition for sealed stopped Auto.
+
+    The immutable source is independently checked twice before the first
+    fsynced journal write. No second writer, Config save, P2a acquisition,
+    launcher, IPFW change or implicit ACTIVATING follows from this method.
+    After a successful PREPARED fsync, all ordinary lifecycle paths remain
+    blocked until the qualified original coordinator takes over.
+    """
+    from auto_detect_original_lock_handoff import CONFIG_PATH
+    from neutral_root_stage import verify_original_operation_pins
+    from neutral_schema3_saved_wan_preimage import _native_preflight
+    from shared_apply_render import regular
+    from shared_apply_seal import WORK, verify_seal
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            type(operation) is not str or not OP_ID.fullmatch(operation)):
+        raise SharedOperationError("saved Start PREPARED requires original root FD9")
+    require_lifecycle_lock()
+    store = SharedApplyOperation(owner=0)
+    predecessor = store.read()
+    prior = committed_owner(predecessor)
+    pin = committed_manifest(predecessor)
+    if (type(predecessor) is not dict or predecessor.get("phase") != "committed" or
+            type(prior) is not dict or pin is None or pin.get("schema") != 2 or
+            prior["page"] != "strategies" or "found" in predecessor or
+            "failure" in predecessor or operation in (
+                prior["id"], predecessor.get("previous", {}).get("id"))):
+        raise SharedOperationError("saved Start PREPARED requires terminal Auto predecessor")
+    work = WORK / operation
+
+    def observe() -> tuple:
+        require_lifecycle_lock()
+        if store.read() != predecessor:
+            raise SharedOperationError("saved Start PREPARED original owner changed")
+        native_bound_saved_start_sealed_gate(operation)
+        verify_original_operation_pins(record=predecessor, parent=WORK, owner_uid=0)
+        # PHP owns the original Config lock and is the ONLY settings digest
+        # reader. Bracket the exact Config bytes with the same native probe;
+        # reading the existing file does not introduce another Config writer.
+        before = _native_preflight(operation, "strategies")
+        expected = {"base": prior["candidate"], "candidate": prior["candidate"],
+                    "enabled": "1", "fields": []}
+        if (type(before) is not dict or any(before.get(k) != v
+                for k, v in expected.items())):
+            raise SharedOperationError("saved Start PREPARED native Config differs")
+        def snap(path: Path) -> tuple:
+            fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            try:
+                st = os.fstat(fd)
+                named = regular(path, 0)
+                if (not stat.S_ISREG(st.st_mode) or
+                        (st.st_dev, st.st_ino) != (named.st_dev, named.st_ino) or
+                        st.st_size > 16 * 1024 * 1024 or st.st_size <= 0):
+                    raise SharedOperationError("saved Start PREPARED XML inode differs")
+                data = os.read(fd, st.st_size + 1)
+                if (len(data) != st.st_size or os.fstat(fd) != st or
+                        regular(path, 0) != named):
+                    raise SharedOperationError("saved Start PREPARED XML changed")
+                return data, (st.st_dev, st.st_ino, st.st_size,
+                              st.st_mtime_ns, st.st_ctime_ns)
+            finally:
+                os.close(fd)
+        original_bytes, original_inode = snap(CONFIG_PATH)
+        candidate_bytes, candidate_inode = snap(work / "candidate.xml")
+        if original_bytes != candidate_bytes:
+            raise SharedOperationError("saved Start PREPARED candidate XML changed")
+        after = _native_preflight(operation, "strategies")
+        if after != before or store.read() != predecessor:
+            raise SharedOperationError("saved Start PREPARED Config or WAL raced")
+        seal = verify_seal(work, owner=0)
+        return (hashlib.sha256(original_bytes).hexdigest(), original_inode,
+                candidate_inode, seal)
+
+    first = observe()
+    if observe() != first or store.read() != predecessor:
+        raise SharedOperationError("saved Start PREPARED source raced")
+    detail = {"id": operation, "page": "strategies",
+              "base": prior["candidate"], "candidate": prior["candidate"],
+              "changed_fields": []}
+    # This is exactly the existing original journal's fsync writer. Its
+    # PREPARED pin remains old-generation-only until S11-B qualifies the
+    # separate native bound root binding and physical activation.
+    written = store.advance("prepared", detail)
+    expected = {"schema": SCHEMA, "phase": "prepared", "detail": detail,
+                "previous": prior, "previous_manifest": pin}
+    if written != expected or store.read() != expected:
+        raise SharedOperationError("saved Start PREPARED post-fsync WAL changed")
+    verify_original_operation_pins(record=expected, parent=WORK, owner_uid=0)
+    if verify_seal(work, owner=0) != first[3]:
+        raise SharedOperationError("saved Start PREPARED sealed successor changed")
+    return written
+
+
 def restored_first_learning(record: dict | None) -> bool:
     """Recognize only an aborted first bound Auto owner; never a live owner."""
     return (type(record) is dict and record.get("phase") == "restored" and
@@ -2733,6 +2828,9 @@ def main(argv: list[str]) -> int:
     bound_saved_start_sealed_request = (
         len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-saved-start-sealed"] and
         bool(OP_ID.fullmatch(argv[3])))
+    bound_saved_start_record_request = (
+        len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-saved-start-record"] and
+        bool(OP_ID.fullmatch(argv[3])))
     bound_auto_stop_request = (
         len(argv) == 4 and argv[1:3] == ["native-gate", "common-bound-auto-stop"] and
         bool(OP_ID.fullmatch(argv[3])))
@@ -2795,7 +2893,7 @@ def main(argv: list[str]) -> int:
     cold_restore = (len(argv) == 4 or cold_bound_only) and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:4])
-    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or retry_context or retry_stage or retry_work or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_saved_start_build_request or bound_saved_start_sealed_request or bound_auto_stop_request or
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or early_start or ipfw_attach or runtime_record or runtime_clear or recovery or archive_first or retry_context or retry_stage or retry_work or first_pristine or managed_recovery or finish or pristine or cold_restore or native_gate_request or bound_prepare_request or bound_saved_start_build_request or bound_saved_start_sealed_request or bound_saved_start_record_request or bound_auto_stop_request or
             bound_gui_stage_request or bound_gui_execute_request or bound_start_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
@@ -2852,6 +2950,11 @@ def main(argv: list[str]) -> int:
         elif bound_saved_start_sealed_request:
             native_bound_saved_start_sealed_gate(argv[3])
             print("bound-saved-start-sealed=qualified")
+        elif bound_saved_start_record_request:
+            committed = native_bound_saved_start_record_prepared(argv[3])
+            if committed["phase"] != "prepared":
+                raise SharedOperationError("saved Start PREPARED did not become durable")
+            print("bound-saved-start-record=prepared")
         elif retry_context:
             record = SharedApplyOperation(owner=0).read()
             print(record["detail"]["id"] if restored_first_learning(record) else "none")

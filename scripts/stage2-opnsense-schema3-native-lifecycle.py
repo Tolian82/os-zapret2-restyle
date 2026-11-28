@@ -752,10 +752,54 @@ def execute(*, crash: bool = False, start_preflight: bool = False) -> dict:
                 (ACTIVE / "dvtws.args").read_bytes() == installed_args and
                 g04_runtime.owned_rules() == stopped_rules,
                 "S11_STOPPED_START_PREFLIGHT_CHANGED_OWNER")
+        # A PREPARED journal must come from the original single FD9 writer,
+        # after the independently attested full sealed projection. Verify
+        # the immutable predecessor pin, no process/IPFW change, unchanged
+        # saved Config and precise single native WAL record.
+        record_result = command(
+            "/bin/sh", "-c",
+            'exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
+            "s11-record-prepared", str(SERVICE.with_name("python_runtime.sh")),
+            str(SERVICE.parent / "backend/shared_apply_operation.py"),
+            "native-gate", "common-bound-saved-start-record", candidate_id,
+            timeout=120)
+        prepared = json.loads(JOURNAL.read_bytes())
+        old = json.loads(stopped_journal)
+        expected_detail = {"id": candidate_id, "page": "strategies",
+                           "base": old["detail"]["candidate"],
+                           "candidate": old["detail"]["candidate"],
+                           "changed_fields": []}
+        require(record_result.returncode == 0 and
+                record_result.stdout.splitlines() == ["bound-saved-start-record=prepared"] and
+                prepared == {"schema": 1, "phase": "prepared", "detail": expected_detail,
+                             "previous": old["detail"], "previous_manifest": old["manifest"]} and
+                CONFIG.read_bytes() == config_image and
+                g04_runtime.owned_rules() == stopped_rules and
+                (ACTIVE / "dvtws.args").read_bytes() == installed_args and
+                not PID.exists(),
+                "S11_NATIVE_SAVED_START_PREPARED_WAL_REFUSED:rc=" +
+                str(record_result.returncode) + ":" +
+                (record_result.stdout + record_result.stderr)[-600:])
+        # A duplicate PREPARED attempt cannot manufacture another successor
+        # or silently treat this as an authorized physical Start.
+        duplicate = command(
+            "/bin/sh", "-c",
+            'exec 9</var/run/zapret2-lifecycle.lock; /usr/bin/lockf -s -t 0 9 && exec "$@"',
+            "s11-duplicate-prepared", str(SERVICE.with_name("python_runtime.sh")),
+            str(SERVICE.parent / "backend/shared_apply_operation.py"),
+            "native-gate", "common-bound-saved-start-record", candidate_id,
+            timeout=30)
+        require(duplicate.returncode == 69 and not duplicate.stdout.strip() and
+                json.loads(JOURNAL.read_bytes()) == prepared and
+                CONFIG.read_bytes() == config_image and
+                g04_runtime.owned_rules() == stopped_rules and not PID.exists(),
+                "S11_NATIVE_DUPLICATE_PREPARED_ALLOWED")
+        print("S11_NATIVE_SAVED_START_ORIGINAL_WAL_PREPARED=PASS", flush=True)
         return {"status": "PASS_S11_START_PREFLIGHT", "source_sha": head,
                 "generation": ident, "verified_running_noop": True,
                 "verified_stopped_preimage": True, "verified_detached_projection": True,
                 "verified_borrowed_retirement_queue": True,
+                "verified_original_saved_prepared_wal": True,
                 "physical_start_tested": False}
 
     # A genuine first Auto Apply was not sufficient: reproduce the owner's
